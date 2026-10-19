@@ -2,7 +2,8 @@
 /// MODULE.md.
 library;
 
-export 'src/account/account_service.dart' show AccountService, LinkConfirm, LinkProposal, NewDeviceLink;
+export 'src/account/account_service.dart'
+    show AccountService, LinkConfirm, LinkProposal, NewDeviceLink;
 export 'src/account/device_service.dart' show DeviceService;
 export 'src/account/session_token_store.dart' show DbSessionTokenStore;
 export 'src/backup/backup_service.dart' show BackupService;

@@ -127,15 +127,16 @@ final class DeviceTransferJob {
       now: now,
     );
     var done = 0;
-    void progress(HistoryTransferPhase phase, {BackupFailure? failure}) => _onProgress(
-      TransferProgress(
-        transferId: id,
-        role: TransferRole.sending,
-        phase: phase,
-        done: done,
-        failure: failure,
-      ),
-    );
+    void progress(HistoryTransferPhase phase, {BackupFailure? failure}) =>
+        _onProgress(
+          TransferProgress(
+            transferId: id,
+            role: TransferRole.sending,
+            phase: phase,
+            done: done,
+            failure: failure,
+          ),
+        );
     progress(HistoryTransferPhase.preparing);
     final uploaded = <String>[];
     try {
@@ -433,7 +434,8 @@ final class DeviceTransferJob {
         // The user paused: keep the chunks and what was applied.
         await _ledger.updateIncoming(
           id,
-          (o) => o.copyWith(phase: HistoryTransferPhase.waiting, clearError: true),
+          (o) =>
+              o.copyWith(phase: HistoryTransferPhase.waiting, clearError: true),
           now: _ctx.now(),
         );
         progress(
@@ -458,7 +460,9 @@ final class DeviceTransferJob {
         await _ledger.updateIncoming(
           id,
           (o) => o.copyWith(
-            phase: transient ? HistoryTransferPhase.waiting : HistoryTransferPhase.failed,
+            phase: transient
+                ? HistoryTransferPhase.waiting
+                : HistoryTransferPhase.failed,
             error: code.name,
           ),
           now: _ctx.now(),
@@ -477,7 +481,9 @@ final class DeviceTransferJob {
           }
         }
         progress(
-          transient ? HistoryTransferPhase.waiting : HistoryTransferPhase.failed,
+          transient
+              ? HistoryTransferPhase.waiting
+              : HistoryTransferPhase.failed,
           0,
           offer?.total ?? 0,
           code,
@@ -491,12 +497,14 @@ final class DeviceTransferJob {
     }
   }
 
-  Future<IncomingOffer> _setPhase(String id, HistoryTransferPhase phase) async =>
-      (await _ledger.updateIncoming(
-        id,
-        (o) => o.copyWith(phase: phase, clearError: true),
-        now: _ctx.now(),
-      ))!;
+  Future<IncomingOffer> _setPhase(
+    String id,
+    HistoryTransferPhase phase,
+  ) async => (await _ledger.updateIncoming(
+    id,
+    (o) => o.copyWith(phase: phase, clearError: true),
+    now: _ctx.now(),
+  ))!;
 
   Future<void> _checkLive(String id, CancellationToken token) async {
     final current = (await _ledger.incoming())[id];

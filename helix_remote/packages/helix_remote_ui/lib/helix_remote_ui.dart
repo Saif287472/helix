@@ -401,10 +401,7 @@ abstract final class HelixThemes {
   /// The operator console: the same components on slate cards with a blue
   /// accent. See [HelixConsoleColors].
   static ThemeData console() {
-    final base = _theme(
-      Brightness.light,
-      seed: HelixColorTokens.signInBlue,
-    );
+    final base = _theme(Brightness.light, seed: HelixColorTokens.signInBlue);
     const border = BorderSide(color: HelixConsoleColors.border);
     return base.copyWith(
       scaffoldBackgroundColor: HelixConsoleColors.background,

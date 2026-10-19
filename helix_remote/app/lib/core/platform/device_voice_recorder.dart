@@ -161,14 +161,9 @@ final class DeviceVoiceRecorder implements VoiceRecorder {
       await _temp.delete(path);
       throw const VoiceRecorderUnavailable();
     }
-    _ampSub = _backend
-        .amplitudes(sampleEvery)
-        .listen(
-          (db) {
-            if (_phase == VoicePhase.recording) _decibels.add(db);
-          },
-          onError: (_) {},
-        );
+    _ampSub = _backend.amplitudes(sampleEvery).listen((db) {
+      if (_phase == VoicePhase.recording) _decibels.add(db);
+    }, onError: (_) {});
     _enter(VoicePhase.recording);
   }
 

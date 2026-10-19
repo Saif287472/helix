@@ -32,9 +32,7 @@ class WebRtcAudioOutputs {
   Future<Set<WebRtcAudioOutput>> available() async {
     try {
       final devices = await webrtc.Helper.audiooutputs;
-      return {
-        for (final device in devices) ?_ids[device.deviceId],
-      };
+      return {for (final device in devices) ?_ids[device.deviceId]};
     } on Object {
       return const {};
     }

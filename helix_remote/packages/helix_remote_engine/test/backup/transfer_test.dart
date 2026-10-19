@@ -82,7 +82,10 @@ void main() {
       60,
       reason: 'search follows the import',
     );
-    expect((await alice2.backup.offers()).single.phase, HistoryTransferPhase.done);
+    expect(
+      (await alice2.backup.offers()).single.phase,
+      HistoryTransferPhase.done,
+    );
     // The chunks are gone once applied.
     expect(await alice2.db.transfersDao.chunks(id), isEmpty);
 
@@ -97,7 +100,10 @@ void main() {
     await s2.cancel();
     expect(
       sender,
-      containsAllInOrder([HistoryTransferPhase.preparing, HistoryTransferPhase.offered]),
+      containsAllInOrder([
+        HistoryTransferPhase.preparing,
+        HistoryTransferPhase.offered,
+      ]),
     );
     expect(
       receiver,
@@ -251,7 +257,10 @@ void main() {
     world.relay.objects.remove(ids[1]);
     final e = await failureOf(alice2.backup.acceptOffer(id));
     expect(e.failure, BackupFailure.expired);
-    expect((await alice2.backup.offers()).single.phase, HistoryTransferPhase.failed);
+    expect(
+      (await alice2.backup.offers()).single.phase,
+      HistoryTransferPhase.failed,
+    );
   });
 
   test('the sender withdraws an offer: the relay is emptied and the '
@@ -275,7 +284,10 @@ void main() {
     await start(messages: 6);
     final id = await offer();
     await alice2.backup.declineOffer(id);
-    expect((await alice2.backup.offers()).single.phase, HistoryTransferPhase.declined);
+    expect(
+      (await alice2.backup.offers()).single.phase,
+      HistoryTransferPhase.declined,
+    );
     await alice2.engine.drainOutbox();
     await alice.engine.syncOnce();
     await alice.engine.runMaintenance();
