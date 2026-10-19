@@ -446,6 +446,11 @@ pending your review:
 - [x] Batch 6: people (`ContactScreen`, `SafetyNumberScreen`,
   `ScanCodeScreen` with `OrbitScanFrame`, `PeopleSearchScreen`). 17 keys,
   0.8% to 4.6% in Orbit.
+- [x] Batch 7: groups (`NewGroupScreen` and `MemberPicker`,
+  `GroupInfoScreen`, `GroupSettingsScreen`, `InviteLinksScreen`,
+  `JoinRequestsScreen`, `BannedPeopleScreen`, `AddMembersScreen`,
+  `JoinGroupScreen`), with `OrbitExtendedFab`. 26 keys, 0.6% to 5.0% in
+  Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

@@ -289,3 +289,16 @@ The port follows the prototype, so these changed the prototype itself:
 - **`MuteFor` is shared** with Home (one enum with its labels) rather than
   the second copy the contract mentions.
   - **Owner:** pending (batch 6).
+
+## Phase 4 batch 7 (groups)
+
+- **The invite link's buttons wrap** onto a second line when the text is too
+  large for one, where the prototype's row would overflow.
+  - **Owner:** pending (batch 7).
+- **`OrbitExtendedFab` has no blue shadow in Orbit.** `.xfab` first asks for
+  one, but the later `.btn.primary, .fab, .xfab { box-shadow: var(--glow) }`
+  wins, and Orbit's glow is none. The port does what the prototype draws.
+  - **Owner:** pending (batch 7).
+- **Group results return sentences in the contract** (`GroupResult`); the
+  screens take plain callbacks until the wiring adds the toasts.
+  - **Owner:** pending (batch 7).

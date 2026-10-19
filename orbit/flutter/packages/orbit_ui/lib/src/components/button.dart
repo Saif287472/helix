@@ -32,6 +32,7 @@ class OrbitButton extends StatelessWidget {
     this.height = OrbitSpace.target,
     this.padding = 20,
     this.fontSize = OrbitType.small,
+    this.tint,
   });
 
   final String label;
@@ -48,11 +49,14 @@ class OrbitButton extends StatelessWidget {
   final double padding;
   final double fontSize;
 
+  /// The label's colour in place of the kind's (Revoke's `--danger` ghost).
+  final Color? tint;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final disabled = onPressed == null;
-    final (bg, fg, edge) = switch (kind) {
+    final (bg, kindFg, edge) = switch (kind) {
       OrbitButtonKind.primary => (t.accent, t.onAccent, Colors.transparent),
       OrbitButtonKind.ink => (t.inverse, t.onInverse, Colors.transparent),
       OrbitButtonKind.secondary => (t.surface, t.ink, t.line),
@@ -63,6 +67,7 @@ class OrbitButton extends StatelessWidget {
       ),
       OrbitButtonKind.danger => (t.dangerSoft, t.danger, Colors.transparent),
     };
+    final fg = tint ?? kindFg;
     final hover = switch (kind) {
       OrbitButtonKind.primary => t.accentInk,
       OrbitButtonKind.ghost => t.accentSoft,
