@@ -372,3 +372,43 @@ The port follows the prototype, so these changed the prototype itself:
   where they use `OrbitPage` or `OrbitYouPage`; a few pages with their own
   frame still fill the pane.
   - **Owner:** pending (batch 10).
+
+## Part B batch 1 (sign-in and the entry screens, wired into the app)
+
+All 30 sign-in and 17 entry states score exactly as at Review 4 after the
+changes below, so none of them moved a pixel in the compared states.
+
+- **Behaviour-only hooks added to `orbit_ui`**: `OrbitTextField` takes
+  autofill hints, input filters and a submit callback; the sign-in screen
+  takes the real legal documents (`legal`), hides the Terms where the app
+  does not ask for them (`showTerms`, a personal server), pastes into the
+  code field, and keeps the setup and SMS fields in step with the model.
+  The hidden corner counts taps with a timer, not the wall clock.
+  - **Owner:** pending (Part B batch 1).
+- **The server badge shows on every personal-server step** (SMS code,
+  password, name, take-over), as the app does; the prototype draws it on
+  the phone step only. Helix Global steps never show it. (Contract
+  "keep" row.)
+  - **Owner:** pending (Part B batch 1).
+- **Tap targets report their real size.** `OrbitTapArea` already answered
+  taps across 48px; it now also tells accessibility services that size,
+  and a text field's touchable area is its whole box. The sign-in page
+  passes the app's tap-target and label guidelines.
+  - **Owner:** pending (Part B batch 1).
+- **Restore keeps the app's states**: offer rows show progress and the
+  app's buttons (Accept, Decline, Pause, Resume, Try again) on the same
+  card, and a failed or locked restore shows the app's sentence under a
+  short title.
+  - **Owner:** pending (Part B batch 1).
+- **Link this device draws the real QR code** (`OrbitQr.matrix`), and its
+  "did not work" page shows the app's reason.
+  - **Owner:** pending (Part B batch 1).
+- **"Orbit could not start" still offers the reset after a retry has failed
+  too** (`ResetModel.offerReset`), below Try again, with the same DELETE
+  confirmation. The approved design offers only Try again; without this a
+  failure that never passes would leave the phone stuck. Not shown in any
+  prototype state.
+  - **Owner:** pending (Part B batch 1). Say if you want it removed.
+- **No separate high-contrast theme**: the app always shows the Orbit
+  theme, as Part B step 3 says.
+  - **Owner:** pending (Part B batch 1).

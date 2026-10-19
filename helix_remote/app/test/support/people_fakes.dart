@@ -20,7 +20,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart'
     show PhoneBookSyncResult;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ReportCategory;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'orbit_theme.dart';
 
 /// 2026-10-03 12:00 UTC: the clock every people test runs on.
 final DateTime testNow = DateTime.utc(2026, 10, 3, 12);
@@ -451,7 +451,7 @@ Future<ProviderContainer> pumpPeople(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp.router(
-        theme: HelixThemes.light(),
+        theme: orbitTestTheme(),
         routerConfig: router,
         builder: (context, app) => MediaQuery(
           data: MediaQuery.of(context).copyWith(

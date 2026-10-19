@@ -29,7 +29,7 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show EngineConfig;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'orbit_theme.dart';
 
 /// Fakes for the settings-side features (Phase A3b).
 ///
@@ -915,7 +915,8 @@ Future<GoRouter> pumpRoutes(
     UncontrolledProviderScope(
       container: scope,
       child: MaterialApp.router(
-        theme: HelixThemes.light(),
+        theme: orbitTestTheme(),
+        builder: orbitTestBuilder,
         themeMode: ThemeMode.light,
         routerConfig: router,
       ),

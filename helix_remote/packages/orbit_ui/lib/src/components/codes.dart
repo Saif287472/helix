@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:orbit_ui/src/components/page_parts.dart';
+import 'package:orbit_ui/src/models/view_models.dart';
 import 'package:orbit_ui/src/theme/motion.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
@@ -259,23 +260,35 @@ class _QrCorners extends CustomPainter {
 /// matrix with three finder squares and the rest from a seeded generator,
 /// on white with 2 cells of margin, dark cells `#0E1220`.
 ///
-/// It draws the same cells as the prototype for the same [seed]; the real
-/// code comes from an encoder in Part B (`DEVIATIONS.md`).
+/// It draws the same cells as the prototype for the same [seed]. The app
+/// passes a real code as [matrix] (an encoder's modules), drawn the same
+/// way.
 class OrbitQr extends StatelessWidget {
-  const OrbitQr({super.key, required this.seed, this.size = 200});
+  const OrbitQr({super.key, this.seed = '', this.matrix, this.size = 200});
 
   final String seed;
+  final HelixQrMatrix? matrix;
   final double size;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    image: true,
-    label: 'QR code',
-    child: CustomPaint(
-      size: Size.square(size),
-      painter: _QrPainter(orbitQrCells(seed)),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final q = matrix;
+    return Semantics(
+      image: true,
+      label: 'QR code',
+      child: CustomPaint(
+        size: Size.square(size),
+        painter: _QrPainter(
+          q == null
+              ? orbitQrCells(seed)
+              : [
+                  for (var y = 0; y < q.size; y++)
+                    [for (var x = 0; x < q.size; x++) q.at(x, y)],
+                ],
+        ),
+      ),
+    );
+  }
 }
 
 /// The prototype's matrix for [seed]: FNV-1a over the seed, then xorshift32,

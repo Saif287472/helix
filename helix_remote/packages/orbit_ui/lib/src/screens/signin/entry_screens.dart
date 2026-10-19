@@ -11,6 +11,7 @@ import 'package:orbit_ui/src/components/spinner.dart';
 import 'package:orbit_ui/src/components/you_parts.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
+import 'package:orbit_ui/src/models/view_models.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
@@ -144,12 +145,33 @@ class OrbitTransferCard extends StatelessWidget {
 /// Where a restore is (`contracts/signin.md`).
 enum RestoreStatus { idle, running, nothing, locked, failed, done }
 
-/// One history offer from another device.
+/// One history offer from another device: the shared transfer row
+/// (`contracts/devices_backup.md`), drawn as the restore step's card.
 class RestoreOfferModel {
-  const RestoreOfferModel({required this.title, required this.status});
+  const RestoreOfferModel({
+    required this.title,
+    required this.status,
+    this.id = '',
+    this.progress,
+    this.buttons = const ['Accept', 'Decline'],
+    this.busy = false,
+  });
 
+  final String id;
   final String title;
+
+  /// Where it has got to, or why it stopped.
   final String status;
+
+  /// The bar while it is receiving; null for none.
+  final double? progress;
+
+  /// The buttons that make sense now (Accept, Decline, Pause, Resume, Try
+  /// again); [RestoreActions.onOfferAction] gets the label.
+  final List<String> buttons;
+
+  /// An accept or decline is in flight.
+  final bool busy;
 }
 
 /// `RestoreModel` (`contracts/signin.md`).
@@ -161,6 +183,8 @@ class RestoreModel {
     this.addedSoFar,
     this.doneTitle = 'Restored 2,318 messages',
     this.offers = const [],
+    this.failureTitle,
+    this.failureText,
   });
 
   final bool afterSignIn;
@@ -173,6 +197,11 @@ class RestoreModel {
   final String? addedSoFar;
   final String doneTitle;
   final List<RestoreOfferModel> offers;
+
+  /// The failed or locked state's title and sentence (the app's problem,
+  /// under a short title); null for the prototype's own words.
+  final String? failureTitle;
+  final String? failureText;
 }
 
 /// `RestoreActions` (`contracts/signin.md`).
@@ -185,6 +214,7 @@ class RestoreActions {
     this.onAcceptOffer,
     this.onDeclineOffer,
     this.onBack,
+    this.onOfferAction,
   });
 
   final VoidCallback? onRestore;
@@ -194,6 +224,9 @@ class RestoreActions {
   final ValueChanged<int>? onAcceptOffer;
   final ValueChanged<int>? onDeclineOffer;
   final VoidCallback? onBack;
+
+  /// A button on an offer: its id and the button's label.
+  final void Function(String id, String action)? onOfferAction;
 }
 
 /// `restore` (`restorePage` in `js/screens/signin.js`): bring your chats
@@ -244,13 +277,15 @@ class RestoreScreen extends StatelessWidget {
       ),
       RestoreStatus.locked => (
         const OrbitStatusRing(state: OrbitRingState.bad),
-        'This backup could not be opened',
-        'It needs a key this device does not have. Try your recovery secret.',
+        m.failureTitle ?? 'This backup could not be opened',
+        m.failureText ??
+            'It needs a key this device does not have. Try your recovery '
+                'secret.',
       ),
       RestoreStatus.failed => (
         const OrbitStatusRing(state: OrbitRingState.bad),
-        'No backup was found',
-        'Back up on your other phone first, then try again',
+        m.failureTitle ?? 'No backup was found',
+        m.failureText ?? 'Back up on your other phone first, then try again',
       ),
       RestoreStatus.done => (
         const OrbitStatusRing(state: OrbitRingState.ok),
@@ -274,22 +309,28 @@ class RestoreScreen extends StatelessWidget {
               top: i == 0 ? 0 : 10,
               title: o.title,
               status: o.status,
+              progress: o.progress,
               actions: [
-                OrbitButton(
-                  label: 'Accept',
-                  height: 38,
-                  padding: 14,
-                  fontSize: 13,
-                  onPressed: () => a.onAcceptOffer?.call(i),
-                ),
-                OrbitButton(
-                  label: 'Decline',
-                  kind: OrbitButtonKind.secondary,
-                  height: 38,
-                  padding: 14,
-                  fontSize: 13,
-                  onPressed: () => a.onDeclineOffer?.call(i),
-                ),
+                for (final label in o.buttons)
+                  OrbitButton(
+                    label: label,
+                    kind: switch (label) {
+                      'Accept' ||
+                      'Resume' ||
+                      'Try again' => OrbitButtonKind.primary,
+                      _ => OrbitButtonKind.secondary,
+                    },
+                    height: 38,
+                    padding: 14,
+                    fontSize: 13,
+                    onPressed: o.busy && label != 'Pause'
+                        ? null
+                        : () {
+                            a.onOfferAction?.call(o.id, label);
+                            if (label == 'Accept') a.onAcceptOffer?.call(i);
+                            if (label == 'Decline') a.onDeclineOffer?.call(i);
+                          },
+                  ),
               ],
             ),
           const OrbitGroupTitle('From your backup'),
@@ -388,6 +429,8 @@ class LinkThisDeviceModel {
   const LinkThisDeviceModel({
     this.phase = LinkThisDevicePhase.waiting,
     this.qrPayload = 'link-this-device',
+    this.qr,
+    this.failureText,
     this.checkNumber = '72 914',
     this.expiresIn = '9:45',
     this.maskedPhone = '+880 17•• ••0001',
@@ -398,6 +441,12 @@ class LinkThisDeviceModel {
 
   final LinkThisDevicePhase phase;
   final String qrPayload;
+
+  /// The real code; the preview draws [qrPayload]'s stand-in instead.
+  final HelixQrMatrix? qr;
+
+  /// Why it did not work, in the app's words, under "That did not work".
+  final String? failureText;
   final String checkNumber;
 
   /// "9:45", counting down to the code's expiry.
@@ -466,12 +515,13 @@ class LinkThisDeviceScreen extends StatelessWidget {
                 title: m.maskedPhone,
                 sub: 'Phone number, shown in part',
               ),
-              OrbitListRow(
-                icon: OrbitIcons.at,
-                iconColor: 1,
-                title: m.helixName,
-                sub: 'Orbit name',
-              ),
+              if (m.helixName.isNotEmpty)
+                OrbitListRow(
+                  icon: OrbitIcons.at,
+                  iconColor: 1,
+                  title: m.helixName,
+                  sub: 'Orbit name',
+                ),
             ],
           ),
           OrbitCodeBox(
@@ -519,7 +569,8 @@ class LinkThisDeviceScreen extends StatelessWidget {
             sub: declined
                 ? 'You said this is not your account, so this device was not '
                       'linked'
-                : 'The other device’s approval could not be checked',
+                : m.failureText ??
+                      'The other device’s approval could not be checked',
           ),
           OrbitSectionFoot(
             declined
@@ -634,7 +685,7 @@ class LinkThisDeviceScreen extends StatelessWidget {
                           child: OrbitSpinner(size: 30, color: t.accent),
                         ),
                       )
-                    : OrbitQr(seed: m.qrPayload, size: 220),
+                    : OrbitQr(seed: m.qrPayload, matrix: m.qr, size: 220),
               ),
             ),
           ),
@@ -673,12 +724,19 @@ class ResetModel {
     this.typed = '',
     this.busy = false,
     this.failed = false,
+    this.offerReset = false,
   });
 
   final ResetKind kind;
   final String typed;
   final bool busy;
   final bool failed;
+
+  /// [ResetKind.start] after a retry failed as well: the app then offers to
+  /// delete the data and sign in again, under the Try again button, so a
+  /// failure that does not pass cannot leave the phone stuck
+  /// (`DEVIATIONS.md`, Part B).
+  final bool offerReset;
 }
 
 /// `ResetActions` (`contracts/signin.md`).
@@ -721,6 +779,31 @@ class ResetScreen extends StatelessWidget {
         ),
       ),
     );
+    final ok = m.typed == 'DELETE';
+    // "Type DELETE to confirm", the reset button and its error.
+    final confirm = [
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: OrbitTextField(
+          label: 'Type DELETE to confirm',
+          hint: 'DELETE',
+          initialValue: m.typed,
+          mono: true,
+          onChanged: a.onTyped,
+        ),
+      ),
+      Opacity(
+        opacity: ok ? 1 : 0.5,
+        child: OrbitButton(
+          label: m.busy ? 'Deleting…' : 'Reset Orbit',
+          kind: ok ? OrbitButtonKind.danger : OrbitButtonKind.secondary,
+          block: true,
+          onPressed: ok && !m.busy ? a.onReset ?? _none : _none,
+        ),
+      ),
+      if (m.failed && !m.busy)
+        const _InlineError('The reset did not finish. Try again.'),
+    ];
     switch (m.kind) {
       case ResetKind.window:
         return page(
@@ -739,27 +822,48 @@ class ResetScreen extends StatelessWidget {
           ),
         );
       case ResetKind.start:
-        return page(
-          'Orbit',
-          OrbitCenterPage(
-            icon: OrbitIcons.warning,
-            iconColor: t.warning,
-            iconBackground: t.warningSoft,
-            title: 'Orbit could not start',
-            text:
-                'Something went wrong while opening your data. Nothing was '
-                'changed.',
-            children: [
+        // With the delete offered it is a longer page, so it scrolls from
+        // the top as the reset page does.
+        final start = OrbitCenterPage(
+          top: m.offerReset,
+          icon: OrbitIcons.warning,
+          iconColor: t.warning,
+          iconBackground: t.warningSoft,
+          title: 'Orbit could not start',
+          text:
+              'Something went wrong while opening your data. Nothing was '
+              'changed.',
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: OrbitButton(
+                label: 'Try again',
+                icon: OrbitIcons.arrowsClockwise,
+                onPressed: a.onTryAgain ?? _none,
+              ),
+            ),
+            if (m.offerReset) ...[
               Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: OrbitButton(
-                  label: 'Try again',
-                  icon: OrbitIcons.arrowsClockwise,
-                  onPressed: a.onTryAgain ?? _none,
+                padding: const EdgeInsets.only(top: 18),
+                child: OrbitText(
+                  'If Orbit still cannot start, you can delete the data on '
+                  'this phone and sign in again. Every message and key '
+                  'stored here will be lost.',
+                  textAlign: TextAlign.center,
+                  style: t.font.style(
+                    size: OrbitType.small,
+                    color: t.ink3,
+                    height: 1.5,
+                  ),
                 ),
               ),
+              ...confirm,
             ],
-          ),
+          ],
+        );
+        return page(
+          'Orbit',
+          m.offerReset ? SingleChildScrollView(child: start) : start,
         );
       case ResetKind.fine:
         return page(
@@ -783,7 +887,6 @@ class ResetScreen extends StatelessWidget {
         );
       case ResetKind.keyMissing:
       case ResetKind.cannotDecrypt:
-        final ok = m.typed == 'DELETE';
         return page(
           'Reset required',
           SingleChildScrollView(
@@ -800,31 +903,7 @@ class ResetScreen extends StatelessWidget {
                   : 'Your local database could not be decrypted. Orbit never '
                         'opens it without its key, so a destructive reset is '
                         'required to continue.',
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: OrbitTextField(
-                    label: 'Type DELETE to confirm',
-                    hint: 'DELETE',
-                    initialValue: m.typed,
-                    mono: true,
-                    onChanged: a.onTyped,
-                  ),
-                ),
-                Opacity(
-                  opacity: ok ? 1 : 0.5,
-                  child: OrbitButton(
-                    label: m.busy ? 'Deleting…' : 'Reset Orbit',
-                    kind: ok
-                        ? OrbitButtonKind.danger
-                        : OrbitButtonKind.secondary,
-                    block: true,
-                    onPressed: ok ? a.onReset ?? _none : _none,
-                  ),
-                ),
-                if (m.failed && !m.busy)
-                  const _InlineError('The reset did not finish. Try again.'),
-              ],
+              children: confirm,
             ),
           ),
         );

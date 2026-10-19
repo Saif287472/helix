@@ -19,13 +19,14 @@ import 'package:helix_remote/shared/navigation/chat_locations.dart';
 import 'package:helix_remote/shared/widgets/qr_scanner_view.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/a3b_fakes.dart' hide settle, stubRoute;
 import '../support/call_support.dart';
 import '../support/chat_harness.dart';
 import '../support/group_support.dart';
 import '../support/people_fakes.dart' hide pumpPeople, testNow;
+import '../support/orbit_theme.dart';
+import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 
 /// A group chat with the roster of [testGroup], in the chat database.
 final class JourneyGroupsPort extends FakeGroupsPort {
@@ -130,6 +131,8 @@ final class Journey {
     final auth = StreamController<AppAuthState>.broadcast();
 
     final container = newContainer([
+      // main() loads the Orbit theme before the first frame.
+      orbitTokensProvider.overrideWithValue(orbitTestTokens),
       ...a3bOverrides(
         now: testNow,
         devices: devices,
@@ -197,7 +200,8 @@ final class Journey {
         container: container,
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
-            theme: HelixThemes.light(),
+            theme: orbitTestTheme(),
+            builder: orbitTestBuilder,
             routerConfig: ref.watch(appRouterProvider),
           ),
         ),

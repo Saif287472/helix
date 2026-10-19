@@ -163,6 +163,7 @@ class RestoreFlowState {
   const RestoreFlowState({
     this.stage = RestoreStage.idle,
     this.phase,
+    this.step = 0,
     this.added = 0,
     this.existing = 0,
     this.problem,
@@ -172,6 +173,10 @@ class RestoreFlowState {
 
   /// A sentence for what is happening now.
   final String? phase;
+
+  /// Which of the four phases [phase] is (0 looking, 1 downloading, 2
+  /// unlocking, 3 adding), for the ring's 1/4 to 4/4.
+  final int step;
   final int added;
   final int existing;
   final BackupProblem? problem;
@@ -206,6 +211,12 @@ final class RestoreFlowController extends Notifier<RestoreFlowState> {
           RestorePhase.decrypting => 'Unlocking it...',
           RestorePhase.importing => 'Adding messages...',
           RestorePhase.done || RestorePhase.failed => null,
+        },
+        step: switch (p.phase) {
+          RestorePhase.downloading => 1,
+          RestorePhase.decrypting => 2,
+          RestorePhase.importing || RestorePhase.done => 3,
+          RestorePhase.failed => state.step,
         },
         added: p.added,
         existing: p.existing,

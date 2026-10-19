@@ -55,7 +55,10 @@ SignInModel _m(
         ? SetupCodeKind.invite
         : SetupCodeKind.none,
     isRecovery: recovery,
-    serverBadge: 'chat.rahman.family (Rahman Family)',
+    // The badge is a personal server's; Helix Global steps have none.
+    serverBadge: step == SignInStep.serverPhone
+        ? 'chat.rahman.family (Rahman Family)'
+        : null,
     pendingServerHost: 'chat.rahman.family',
     error: error == null ? null : _errors[error],
     showRecoveryOffer: error == 'taken',

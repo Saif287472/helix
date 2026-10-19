@@ -262,7 +262,7 @@ void main() {
 
       backup.holdRestore!.complete();
       await settle(tester);
-      expect(find.text('Restored 120 messages.'), findsOneWidget);
+      expect(find.text('Restored 120 messages'), findsOneWidget);
       expect(find.text('Continue'), findsOneWidget);
     });
 
@@ -283,14 +283,19 @@ void main() {
         await tester.tap(find.text('Restore from my backup'));
         await settle(tester);
         expect(find.text(backupProblemText(problem)), findsOneWidget);
-        expect(find.text('Try again'), findsOneWidget);
+        // A backup this account cannot open is its own state (`restore-locked`),
+        // whose button is the restore itself.
+        final retry = problem == BackupProblem.wrongKey
+            ? 'Restore from my backup'
+            : 'Try again';
+        expect(find.text(retry), findsOneWidget);
         // Whatever went wrong, the person can still carry on.
         expect(find.text('Skip for now'), findsOneWidget);
 
         backup.restoreFails = null;
-        await tester.tap(find.text('Try again'));
+        await tester.tap(find.text(retry));
         await settle(tester);
-        expect(find.text('Restored 120 messages.'), findsOneWidget);
+        expect(find.text('Restored 120 messages'), findsOneWidget);
       });
     }
 

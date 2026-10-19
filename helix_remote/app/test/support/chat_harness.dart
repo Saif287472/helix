@@ -11,7 +11,7 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show Mention, MessageRef, PresenceResponse;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'orbit_theme.dart';
 
 /// "Now" in every chat test: 3 October 2026, 14:30 local.
 final DateTime testNow = DateTime(2026, 10, 3, 14, 30);
@@ -273,7 +273,11 @@ Widget chatApp(
     clockProvider.overrideWithValue(() => testNow),
     ...overrides,
   ],
-  child: MaterialApp(theme: HelixThemes.light(), home: home),
+  child: MaterialApp(
+    theme: orbitTestTheme(),
+    builder: orbitTestBuilder,
+    home: home,
+  ),
 );
 
 /// Takes the app out of the tree and lets drift's stream clean-up timers run,

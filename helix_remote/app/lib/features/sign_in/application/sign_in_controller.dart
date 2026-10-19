@@ -10,6 +10,7 @@ import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
+import 'package:helix_remote/features/sign_in/application/sign_in_countries.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
@@ -138,6 +139,12 @@ final class SignInController extends Notifier<SignInState> {
   void updateDigits(String value) =>
       state = state.copyWith(digits: value, clearError: true);
 
+  /// The country picker. Only a code from [signInCountries] is taken.
+  void setCountryCode(String code) {
+    if (!signInCountries.any((c) => c.code == code)) return;
+    state = state.copyWith(countryCode: code, clearError: true);
+  }
+
   void updatePassword(String value) =>
       state = state.copyWith(password: value, clearError: true);
 
@@ -177,8 +184,9 @@ final class SignInController extends Notifier<SignInState> {
             clearError: true,
           );
         }
+      // The SMS code is already used, so Back from the password goes to the
+      // number, not to the take-over step (Review 1, Orbit port).
       case SignInPage.password:
-        state = state.copyWith(page: SignInPage.name, clearError: true);
       case SignInPage.otp:
       case SignInPage.name:
         state = state.copyWith(page: SignInPage.phone, clearError: true);
@@ -316,6 +324,11 @@ final class SignInController extends Notifier<SignInState> {
   Future<bool> submitPhone() async {
     final number = state.e164;
     if (number == null) return _fail(SignInCopy.badPhoneNumber);
+    // Checked here so a short number is never sent (Review 1, Orbit port).
+    final national = number.length - state.countryCode.length;
+    if (national < signInMinDigits(state.countryCode)) {
+      return _fail(SignInCopy.phoneTooShort);
+    }
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {

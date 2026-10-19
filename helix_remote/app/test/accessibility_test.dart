@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
-import 'package:helix_remote/features/sign_in/presentation/widgets/sign_in_frame.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+
+import 'support/orbit_theme.dart';
 
 /// The accessibility guarantees Flutter itself knows how to check.
 ///
@@ -96,28 +97,9 @@ void main() {
     await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
   });
 
-  testWidgets('the high-contrast theme meets the contrast guideline', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [runtimeFactoryProvider.overrideWithValue(_unreachable)],
-    );
-    addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          theme: HelixThemes.highContrastLight(),
-          home: const SignInScreen(),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    await expectLater(tester, meetsGuideline(textContrastGuideline));
-  });
-
-  testWidgets('the high-contrast theme meets them when the OS asks for it', (
+  // There is no separate high-contrast theme any more (Orbit port, Part B):
+  // the chosen theme always shows, and it has to pass on its own.
+  testWidgets('the Orbit theme meets them when the OS asks for high contrast', (
     tester,
   ) async {
     tester.platformDispatcher.accessibilityFeaturesTestValue =
@@ -161,11 +143,16 @@ void main() {
     }
   });
 
-  test('the advanced-mode corner is 56 high, inside the 48 px floor', () {
+  testWidgets('the advanced-mode corner is 56 high, inside the 48 px floor', (
+    tester,
+  ) async {
     // The corner is a hidden target, but once revealed it holds a real button,
     // so it is held to the same floor as everything else.
-    expect(AdvancedModeCorner.tapWindow, const Duration(seconds: 2));
-    expect(AdvancedModeCorner.tapsToReveal, 3);
+    await pumpSignIn(tester);
+    final corner = tester.getSize(
+      find.byKey(const ValueKey('advanced-mode-corner')),
+    );
+    expect(corner.height, greaterThanOrEqualTo(48));
   });
 }
 
@@ -182,9 +169,11 @@ class HelixRemoteAppHarness extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Helix Remote',
-    theme: HelixThemes.light(),
-    highContrastTheme: HelixThemes.highContrastLight(),
+    // The app's theme (`main.dart`): Orbit, with no separate high-contrast
+    // theme, so the chosen theme always shows.
+    theme: orbitTestTheme(),
     themeMode: ThemeMode.light,
+    builder: orbitTestBuilder,
     home: home,
   );
 }

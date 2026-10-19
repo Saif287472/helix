@@ -525,6 +525,18 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   carries an Orbit glyph and a tone. The fonts are in the dependency
   register; the generators write to the new place and leave `dart format`
   output. The preview depends on it by path.
+- [x] Step 2, batch 1 (pending your review): sign-in, the restore step
+  (also You > Backup > Restore history), link this device, reset and the
+  app lock now draw the Orbit screens, through connectors on the existing
+  controllers. The app loads the Orbit theme at start
+  (`core/theme/orbit_app_theme.dart`) and `MaterialApp` uses it. Review 1
+  items done here: the country-code picker, the length check, Back from the
+  password to the number, Terms on take-over, "Use a recovery code
+  instead", the resend toast, the restore ring's 1/4 to 4/4, the declined
+  link page, the countdown expiring at zero, the reset's error line and
+  "Not unlocked. Try again." Left for later batches: the "Opening Orbit…"
+  startup screen and the signed-in link toast (with Home). Tests: app 834,
+  orbit_ui 179, helix_remote_ui 184, all passing.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

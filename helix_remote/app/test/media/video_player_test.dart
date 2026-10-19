@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/core/platform/video_player.dart';
 import 'package:helix_remote/features/conversation/presentation/video_player_view.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/media_fakes.dart';
+import '../support/orbit_theme.dart';
 
 void main() {
   Widget app(
@@ -17,7 +17,7 @@ void main() {
   }) => ProviderScope(
     overrides: [videoPlayersProvider.overrideWithValue(players)],
     child: MaterialApp(
-      theme: HelixThemes.light(),
+      theme: orbitTestTheme(),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(
           context,

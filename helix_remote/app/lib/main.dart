@@ -16,12 +16,13 @@ import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_registration.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
+import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/shared/widgets/app_link_listener.dart';
 import 'package:helix_remote/shared/widgets/phone_book_sync_host.dart';
 import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote/shared/widgets/app_text_scale.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart';
 
 /// The app entry point.
 ///
@@ -48,10 +49,16 @@ Future<void> main(List<String> args) async {
       registerPushBackgroundHandler();
       await LocalNotifications.init();
       await CallNotifications.init();
+      // The theme is read before the first frame, so no screen ever draws
+      // without its tokens.
+      final orbit = await loadOrbitTokens();
 
       // Every screen below is a ConsumerWidget, so the scope is the root.
       runApp(
-        ProviderScope(child: HelixRemoteApp(initialLink: _initialLink(args))),
+        ProviderScope(
+          overrides: [orbitTokensProvider.overrideWithValue(orbit)],
+          child: HelixRemoteApp(initialLink: _initialLink(args)),
+        ),
       );
     },
     (error, stack) {
@@ -134,14 +141,14 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
+    final orbit = ref.watch(orbitTokensProvider);
 
     // The lock lives above the navigator, so it reads the account's setting
     // through a provider rather than being handed the runtime.
     return MaterialApp.router(
       title: 'Helix Remote',
       debugShowCheckedModeBanner: false,
-      theme: HelixThemes.light(),
-      highContrastTheme: HelixThemes.highContrastLight(),
+      theme: OrbitTheme.of(orbit),
       themeMode: ThemeMode.light,
       routerConfig: router,
       builder: (context, child) => AppLifecycleHost(
@@ -152,7 +159,14 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
             child: AppLockGate(
               child: AppLinkListener(
                 child: UnconfirmedMemberHost(
-                  child: AppTextScale(child: child ?? const SizedBox.shrink()),
+                  // The Orbit screens draw on the theme's page colour with
+                  // no Scaffold of their own, as in the preview.
+                  child: AppTextScale(
+                    child: Material(
+                      color: orbit.bg,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                  ),
                 ),
               ),
             ),

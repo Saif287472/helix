@@ -48,6 +48,9 @@ class OrbitTextField extends StatefulWidget {
     this.bottom = 14,
     this.big = false,
     this.onPrefixTap,
+    this.autofillHints,
+    this.inputFormatters = const [],
+    this.onSubmitted,
   });
 
   final String label;
@@ -90,6 +93,16 @@ class OrbitTextField extends StatefulWidget {
   /// The prefix is a button (`.fld-country`: the country code with a 12px
   /// bold caret in `--ink-3`, at least 48px tall).
   final VoidCallback? onPrefixTap;
+
+  /// What the platform may fill in (a phone number, a one-time code, a new
+  /// password). Behaviour only; it draws nothing.
+  final Iterable<String>? autofillHints;
+
+  /// Filters applied before [maxLength]'s (digits only for a code).
+  final List<TextInputFormatter> inputFormatters;
+
+  /// The keyboard's done or next key.
+  final ValueChanged<String>? onSubmitted;
 
   @override
   State<OrbitTextField> createState() => _OrbitTextFieldState();
@@ -191,18 +204,27 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
       keyboardType: rows != null ? TextInputType.multiline : w.keyboardType,
       minLines: rows ?? 1,
       maxLines: rows ?? 1,
+      autofillHints: w.autofillHints,
       inputFormatters: [
+        ...w.inputFormatters,
         if (w.maxLength != null) LengthLimitingTextInputFormatter(w.maxLength),
       ],
       onChanged: w.onChanged,
+      onSubmitted: w.onSubmitted,
       textAlign: w.big ? TextAlign.center : TextAlign.start,
       style: text,
       cursorColor: t.accent,
       cursorHeight: OrbitType.body * 1.2,
-      decoration: InputDecoration.collapsed(
-        hintText: w.hint,
-        hintStyle: text.copyWith(color: t.ink4),
-      ).copyWith(isDense: true),
+      // The box's vertical padding is the input's own, so the whole box
+      // height is the touchable (and announced) field, at least 48px.
+      decoration:
+          InputDecoration.collapsed(
+            hintText: w.hint,
+            hintStyle: text.copyWith(color: t.ink4),
+          ).copyWith(
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(vertical: w.big ? 12 : 14),
+          ),
     );
     final edge = hasError
         ? t.danger
@@ -228,12 +250,7 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
       child: Row(
         children: [
           if (w.prefix.isNotEmpty) _prefix(t),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: w.big ? 12 : 14),
-              child: input,
-            ),
-          ),
+          Expanded(child: input),
           if (w.eye)
             OrbitIconButton(
               icon: _shown ? OrbitIcons.eyeSlash : OrbitIcons.eye,

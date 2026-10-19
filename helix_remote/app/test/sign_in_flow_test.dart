@@ -8,8 +8,10 @@ import 'package:helix_remote/features/sign_in/application/sign_in_controller.dar
 import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
-import 'package:helix_remote/features/sign_in/presentation/widgets/sign_in_frame.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
+import 'package:orbit_ui/orbit_ui.dart' show OrbitTokens;
+
+import 'support/orbit_theme.dart';
 
 /// The sign-in product rules (AGENTS.md, plan §7).
 ///
@@ -30,7 +32,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          theme: HelixThemes.light(),
+          theme: orbitTestTheme(),
+          builder: orbitTestBuilder,
           home: const SignInScreen(),
         ),
       ),
@@ -61,7 +64,7 @@ void main() {
       await pumpScreen(tester);
 
       expect(find.text('Sign in'), findsOneWidget);
-      expect(find.byKey(const ValueKey('phone-field')), findsOneWidget);
+      expect(find.byKey(const ValueKey('phone')), findsOneWidget);
       expect(find.text('Next'), findsOneWidget);
       expect(find.text('Terms & Privacy'), findsOneWidget);
       // There is nothing before this page, so a back arrow would lie.
@@ -71,16 +74,11 @@ void main() {
       expect(find.text('Advanced mode'), findsNothing);
     });
 
-    testWidgets('is a Helix Themes.signIn page', (tester) async {
+    testWidgets('is drawn in the Orbit theme', (tester) async {
       await pumpScreen(tester);
 
-      final context = tester.element(find.byKey(const ValueKey('phone-field')));
-      expect(Theme.of(context).colorScheme.primary, isNotNull);
-      expect(
-        Theme.of(context).colorScheme.primary,
-        HelixColorTokens.signInBlue,
-        reason: 'sign-in uses the app icon blue, the rest of the app does not',
-      );
+      final context = tester.element(find.byKey(const ValueKey('phone')));
+      expect(OrbitTokens.of(context).meta.id, orbitTestTokens.meta.id);
     });
   });
 
@@ -104,7 +102,7 @@ void main() {
       await tester.tap(find.text('Advanced mode'));
       await tester.pumpAndSettle();
       expect(find.text('Personal server'), findsOneWidget);
-      expect(find.byKey(const ValueKey('code-field')), findsOneWidget);
+      expect(find.byKey(const ValueKey('setup')), findsOneWidget);
     });
 
     testWidgets('taps too far apart do not accumulate', (tester) async {
@@ -115,7 +113,7 @@ void main() {
       await tester.tap(corner);
       // The window closes: both the count and the revealed state reset.
       await tester.pump(
-        AdvancedModeCorner.tapWindow + const Duration(milliseconds: 100),
+        const Duration(seconds: 2) + const Duration(milliseconds: 100),
       );
       await tester.tap(corner);
       await tester.pump();
@@ -127,7 +125,7 @@ void main() {
       expect(find.text('Advanced mode'), findsOneWidget);
       // And it hides again if the fourth tap does not come in time.
       await tester.pump(
-        AdvancedModeCorner.tapWindow + const Duration(milliseconds: 100),
+        const Duration(seconds: 2) + const Duration(milliseconds: 100),
       );
       expect(find.text('Advanced mode'), findsNothing);
     });
@@ -303,7 +301,7 @@ void main() {
       container.read(signInControllerProvider.notifier).forgotPassword();
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('terms-checkbox')), findsOneWidget);
+      expect(find.text(_termsBox), findsOneWidget);
       expect(find.text('Read the Terms and Privacy Policy'), findsOneWidget);
     });
 
@@ -314,7 +312,67 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(container.read(signInControllerProvider).page, SignInPage.name);
-      expect(find.byKey(const ValueKey('terms-checkbox')), findsNothing);
+      expect(find.text(_termsBox), findsNothing);
+    });
+  });
+
+  group('Orbit port, Review 1', () {
+    test('the country picker takes only listed codes', () {
+      final notifier = _container().read(signInControllerProvider.notifier);
+      notifier.setCountryCode('+44');
+      expect(notifier.state.countryCode, '+44');
+      notifier.setCountryCode('+999');
+      expect(notifier.state.countryCode, '+44');
+    });
+
+    test(
+      'a number that is too short is refused before anything is sent',
+      () async {
+        final notifier = _container().read(signInControllerProvider.notifier);
+        notifier.updateDigits('1711 00');
+        // The runtime factory throws if reached, so a false here means the
+        // check came first.
+        expect(await notifier.submitPhone(), isFalse);
+        expect(notifier.state.errorMessage, SignInCopy.phoneTooShort);
+      },
+    );
+
+    test('Back from the password goes to the number', () {
+      final container = _container();
+      final notifier = container.read(signInControllerProvider.notifier);
+      notifier.state = notifier.state.copyWith(page: SignInPage.password);
+      notifier.goBack();
+      expect(notifier.state.page, SignInPage.phone);
+    });
+
+    test('the model follows the state', () {
+      const global = SignInState();
+      final m = signInModel(global);
+      expect(m.step, orbit.SignInStep.phone);
+      expect(m.countries.first, ('+880', 'Bangladesh'));
+      expect(m.serverBadge, isNull);
+      expect(m.showTerms, isTrue);
+      expect(m.legal.terms.version, SignInState.termsVersion);
+
+      final server = global.copyWith(
+        mode: SignInMode.advanced,
+        page: SignInPage.code,
+        pendingServerHost: 'chat.example.org',
+        serverName: 'Example',
+      );
+      expect(signInModel(server).step, orbit.SignInStep.serverConfirm);
+      expect(signInModel(server).serverBadge, 'chat.example.org (Example)');
+      expect(signInModel(server).showTerms, isFalse);
+
+      final takeOver = global.copyWith(
+        page: SignInPage.name,
+        accountExists: true,
+      );
+      expect(signInModel(takeOver).step, orbit.SignInStep.takeOver);
+      expect(
+        signInModel(global.copyWith(codeString: 'HLX-REC-1')).setupCodeKind,
+        orbit.SetupCodeKind.recovery,
+      );
     });
   });
 
@@ -331,6 +389,8 @@ void main() {
     expect(kHelixRecoveryPrefix, 'HLX-REC-');
   });
 }
+
+const _termsBox = 'I agree to the Orbit Terms of Service and Privacy Policy';
 
 ProviderContainer _container() {
   final container = ProviderContainer(

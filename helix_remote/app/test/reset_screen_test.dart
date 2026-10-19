@@ -6,7 +6,7 @@ import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/shared/widgets/reset_screen.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'support/orbit_theme.dart';
 
 /// The screen the app falls back to when it cannot open its own data.
 ///
@@ -34,7 +34,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          theme: HelixThemes.light(),
+          theme: orbitTestTheme(),
+          builder: orbitTestBuilder,
           home: const ResetScreen(),
         ),
       ),
@@ -49,7 +50,7 @@ void main() {
     await settle(tester);
   }
 
-  final resetButton = find.text('Reset Helix Remote');
+  final resetButton = find.text('Reset Orbit');
 
   group('a key that is gone or wrong', () {
     resetTest('is offered the reset at once, and says what is lost', (
@@ -57,7 +58,8 @@ void main() {
     ) async {
       await show(tester, const KeyUnavailable());
 
-      expect(find.text('Reset required'), findsOneWidget);
+      // The bar's title and the page's.
+      expect(find.text('Reset required'), findsNWidgets(2));
       expect(find.textContaining('encryption key is not'), findsOneWidget);
       expect(resetButton, findsOneWidget);
       // Retrying cannot help a missing key, so it is not offered.
@@ -70,7 +72,8 @@ void main() {
         const DbEncryptionException('the database does not decrypt'),
       );
 
-      expect(find.text('Reset required'), findsOneWidget);
+      // The bar's title and the page's.
+      expect(find.text('Reset required'), findsNWidgets(2));
       expect(find.textContaining('could not be decrypted'), findsOneWidget);
       expect(resetButton, findsOneWidget);
     });
@@ -95,8 +98,8 @@ void main() {
       // was not ready yet, a schema step that would not run.
       await show(tester, StateError('the file could not be locked'));
 
-      expect(find.text('Helix could not start'), findsOneWidget);
-      expect(find.textContaining('Nothing has been deleted'), findsOneWidget);
+      expect(find.text('Orbit could not start'), findsOneWidget);
+      expect(find.textContaining('Nothing was changed'), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
     });
 
@@ -135,7 +138,7 @@ void main() {
 
     resetTest('a startup that works shows the data is fine', (tester) async {
       await show(tester, StateError('the file could not be locked'));
-      expect(find.text('Helix could not start'), findsOneWidget);
+      expect(find.text('Orbit could not start'), findsOneWidget);
 
       final healthy = ProviderContainer(
         overrides: [
@@ -149,14 +152,15 @@ void main() {
         UncontrolledProviderScope(
           container: healthy,
           child: MaterialApp(
-            theme: HelixThemes.light(),
+            theme: orbitTestTheme(),
+            builder: orbitTestBuilder,
             home: const ResetScreen(),
           ),
         ),
       );
       await settle(tester);
 
-      expect(find.text('Your local data is fine.'), findsOneWidget);
+      expect(find.text('Your local data is fine'), findsOneWidget);
       expect(resetButton, findsNothing);
     });
   });

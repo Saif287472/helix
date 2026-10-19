@@ -7,7 +7,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'support/orbit_theme.dart';
 
 /// H1: the app lock engages on a cold start, and "Lock again" means something.
 void main() {
@@ -59,7 +59,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          theme: HelixThemes.light(),
+          theme: orbitTestTheme(),
+          builder: orbitTestBuilder,
           home: const AppLockGate(child: Scaffold(body: Text('secret chats'))),
         ),
       ),
@@ -67,7 +68,7 @@ void main() {
     return container;
   }
 
-  final locked = find.text('Helix Remote is locked');
+  final locked = find.text('Orbit is locked');
 
   testWidgets('a remembered session locks on start, before content shows', (
     tester,

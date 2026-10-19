@@ -7,9 +7,9 @@ import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/shared/route_paths.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/a3b_fakes.dart';
+import '../support/orbit_theme.dart';
 
 /// The restore step wired into the real router: signing in on a new device
 /// shows "restore or skip" once, before the home tabs, and never otherwise.
@@ -40,7 +40,8 @@ void main() {
         container: container,
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
-            theme: HelixThemes.light(),
+            theme: orbitTestTheme(),
+            builder: orbitTestBuilder,
             routerConfig: ref.watch(appRouterProvider),
           ),
         ),
@@ -90,7 +91,7 @@ void main() {
     await tester.tap(find.text('Restore from my backup'));
     await settle(tester);
     expect(backup.calls, contains('restoreHistory'));
-    expect(find.text('Restored 120 messages.'), findsOneWidget);
+    expect(find.text('Restored 120 messages'), findsOneWidget);
 
     await tester.tap(find.text('Continue'));
     await settle(tester);

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show immutable;
 ///
 /// Helix Global is the default and the only one advertised; a personal server
 /// is behind the hidden corner or a shared link. See
-/// `presentation/widgets/sign_in_frame.dart` for how the corner works.
+/// the screen (`orbit_ui` `SignInScreen`) for how the corner works.
 enum SignInMode { global, advanced }
 
 /// The pages, in the order a Global sign-in walks through them.

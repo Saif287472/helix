@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart';
 import 'package:local_auth/local_auth.dart';
 
 /// The app lock: a device-authentication prompt when the app comes back.
@@ -313,56 +314,42 @@ class _LockScreen extends ConsumerStatefulWidget {
 }
 
 class _LockScreenState extends ConsumerState<_LockScreen> {
+  /// The last prompt was cancelled or failed: "Not unlocked. Try again."
+  var _failed = false;
+
   @override
   void initState() {
     super.initState();
     // Ask straight away: the person opened the app to use it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(_unlockAction)();
+      if (mounted) _unlock();
     });
+  }
+
+  Future<void> _unlock() async {
+    final ok = await ref.read(_unlockAction)();
+    if (mounted) setState(() => _failed = !ok);
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ColoredBox(
-      color: scheme.surface,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.lock_outline, size: 56, color: scheme.primary),
-            const SizedBox(height: HelixSpace.md),
-            Text(
-              'Helix Remote is locked',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: HelixSpace.xs),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: HelixSpace.xl),
-              child: Text(
-                'Unlock with your fingerprint, face or phone PIN.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(height: HelixSpace.lg),
-            FilledButton.icon(
-              onPressed: () => ref.read(_unlockAction)(),
-              icon: const Icon(Icons.fingerprint),
-              label: const Text('Unlock'),
-            ),
-          ],
+    final orbit = OrbitTokens.of(context);
+    // The lock sits above the navigator, so it brings its own Material.
+    return Material(
+      color: orbit.bg,
+      child: LockScreen(
+        model: LockModel(
+          unlockWith: Platform.isWindows
+              ? 'Windows Hello (your face, fingerprint or PIN)'
+              : 'your fingerprint, face or phone PIN',
+          failed: _failed,
         ),
+        actions: LockActions(onUnlock: _unlock),
       ),
     );
   }
 }
 
-final _unlockAction = Provider<void Function()>((ref) {
-  return () async {
-    await AppLock.unlock('Unlock Helix Remote');
-  };
+final _unlockAction = Provider<Future<bool> Function()>((ref) {
+  return () => AppLock.unlock('Unlock Orbit');
 });

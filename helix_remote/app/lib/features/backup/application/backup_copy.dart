@@ -4,6 +4,25 @@ import 'package:helix_remote/features/backup/application/backup_models.dart';
 ///
 /// Nothing here names a key, a code, a host or an exception: the engine's
 /// failures carry none of those, and this keeps it that way.
+/// 2318 as "2,318", for "Restored 2,318 messages".
+String messageCount(int n) =>
+    '$n'.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+
+/// A short title for [problem], over [backupProblemText] (the restore step's
+/// failed card).
+String backupProblemTitle(BackupProblem problem) => switch (problem) {
+  BackupProblem.noBackup => 'No backup was found',
+  BackupProblem.wrongKey ||
+  BackupProblem.accountMismatch => 'This backup could not be opened',
+  BackupProblem.corrupt => 'The backup is damaged',
+  BackupProblem.newerFormat => 'Update the app first',
+  BackupProblem.rolledBack => 'An older backup was refused',
+  BackupProblem.offline => 'You are offline',
+  BackupProblem.conflict => 'Another device is backing up',
+  BackupProblem.notAllowed => 'Not on mobile data',
+  _ => 'The restore did not finish',
+};
+
 String backupProblemText(BackupProblem problem) => switch (problem) {
   BackupProblem.noBackup =>
     'No backup was found for this account. Back up on your other phone '

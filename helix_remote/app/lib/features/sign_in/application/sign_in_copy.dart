@@ -54,6 +54,9 @@ abstract final class SignInCopy {
   // ----------------------------------------------------------- the phone page
   static const badPhoneNumber = 'Enter a valid phone number.';
 
+  static const phoneTooShort =
+      'This number looks too short. Check it and try again.';
+
   static const phoneAlreadyRegistered =
       'This phone number already has an account on this server. Ask your '
       'server admin for a recovery code to sign back in.';

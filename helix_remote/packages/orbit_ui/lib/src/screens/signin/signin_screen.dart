@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:orbit_ui/src/brand/orbit_mark.dart';
 import 'package:orbit_ui/src/components/button.dart';
@@ -65,6 +66,8 @@ class SignInModel {
     this.busy = false,
     this.error,
     this.showRecoveryOffer = false,
+    this.showTerms = true,
+    this.legal = LegalDocumentsModel.preview,
   });
 
   final SignInStep step;
@@ -96,6 +99,15 @@ class SignInModel {
   /// "Use a recovery code instead" under the error (a number that already
   /// has an account on a personal server).
   final bool showRecoveryOffer;
+
+  /// The Terms checkbox on the name and take-over steps. Helix Global asks
+  /// for them; a personal server has its own policies (the app's
+  /// `SignInState.showsTerms`).
+  final bool showTerms;
+
+  /// The documents the Terms and Privacy sheet shows: the app's real ones,
+  /// or the prototype's placeholder text in the preview.
+  final LegalDocumentsModel legal;
 
   bool get canGoBack => step != SignInStep.phone;
   bool get showAdvancedCorner =>
@@ -188,9 +200,34 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   var _taps = 0;
-  DateTime? _lastTap;
+  Timer? _window;
   var _reveal = false;
   Timer? _hide;
+
+  // The two fields the model can change from outside: a link fills the setup
+  // code, and a resend clears the SMS code.
+  late final _setup = TextEditingController(text: widget.model.setupCode);
+  late final _sms = TextEditingController(text: widget.model.smsCode);
+
+  @override
+  void didUpdateWidget(SignInScreen old) {
+    super.didUpdateWidget(old);
+    final m = widget.model;
+    if (m.setupCode != old.model.setupCode && m.setupCode != _setup.text) {
+      _setup.text = m.setupCode;
+    }
+    if (m.smsCode != old.model.smsCode && m.smsCode != _sms.text) {
+      _sms.text = m.smsCode;
+    }
+  }
+
+  /// Paste on the code field: the clipboard's text goes in as typed.
+  Future<void> _paste() async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+    if (text == null || text.isEmpty || !mounted) return;
+    _setup.text = text;
+    widget.actions.onSetupCodeChanged?.call(text);
+  }
 
   @override
   void initState() {
@@ -207,10 +244,13 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   void dispose() {
     _hide?.cancel();
+    _window?.cancel();
+    _setup.dispose();
+    _sms.dispose();
     super.dispose();
   }
 
-  void _legal() => showOrbitLegalSheet(context);
+  void _legal() => showOrbitLegalSheet(context, docs: widget.model.legal);
 
   void _countries() {
     final m = widget.model;
@@ -235,12 +275,12 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   void _corner() {
-    final now = DateTime.now();
-    final last = _lastTap;
-    _taps = last != null && now.difference(last).inMilliseconds < 2000
-        ? _taps + 1
-        : 1;
-    _lastTap = now;
+    // A tap counts when it comes within 2 s of the last one. A timer rather
+    // than the wall clock, so the window follows the app's clock (and a
+    // test's).
+    _window?.cancel();
+    _taps++;
+    _window = Timer(const Duration(seconds: 2), () => _taps = 0);
     if (_taps >= 3) {
       setState(() => _reveal = true);
       _hide?.cancel();
@@ -404,7 +444,11 @@ class _SignInScreenState extends State<SignInScreen> {
                       width: 152,
                       height: 56,
                       child: GestureDetector(
+                        key: const ValueKey('advanced-mode-corner'),
                         behavior: HitTestBehavior.opaque,
+                        // A hidden entry: nothing to announce until it is
+                        // revealed, and then the button is announced.
+                        excludeFromSemantics: true,
                         onTap: _corner,
                         child: Padding(
                           padding: const EdgeInsets.only(right: 12),
@@ -448,7 +492,10 @@ class _SignInScreenState extends State<SignInScreen> {
       hint: '1711 000001',
       keyboardType: TextInputType.phone,
       helper: helper,
+      autofillHints: const [AutofillHints.telephoneNumberNational],
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 -]'))],
       onChanged: a.onPhoneChanged,
+      onSubmitted: (_) => a.onPhoneNext?.call(),
     );
     Widget ghost(
       String label,
@@ -471,20 +518,22 @@ class _SignInScreenState extends State<SignInScreen> {
       ),
     );
     final terms = [
-      OrbitCheckbox(
-        label: 'I agree to the Orbit Terms of Service and Privacy Policy',
-        on: m.termsAccepted,
-        onChanged: a.onTermsChanged,
-      ),
-      Transform.translate(
-        offset: const Offset(0, -2),
-        child: ghost(
-          'Read the Terms and Privacy Policy',
-          OrbitIcons.bookOpenText,
-          _legal,
-          margin: 10 - 2,
+      if (m.showTerms) ...[
+        OrbitCheckbox(
+          label: 'I agree to the Orbit Terms of Service and Privacy Policy',
+          on: m.termsAccepted,
+          onChanged: a.onTermsChanged,
         ),
-      ),
+        Transform.translate(
+          offset: const Offset(0, -2),
+          child: ghost(
+            'Read the Terms and Privacy Policy',
+            OrbitIcons.bookOpenText,
+            _legal,
+            margin: 10 - 2,
+          ),
+        ),
+      ],
     ];
     TextSpan plain(String s) => TextSpan(text: s);
     switch (m.step) {
@@ -517,11 +566,14 @@ class _SignInScreenState extends State<SignInScreen> {
         return _Step(
           title: 'Enter the code',
           sub: plain('We sent a 6-digit code by SMS to $phoneLine.'),
+          badge: true,
           fields: [
             OrbitTextField(
               key: const ValueKey('code'),
               label: 'Enter code',
-              initialValue: m.smsCode,
+              controller: _sms,
+              autofillHints: const [AutofillHints.oneTimeCode],
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               hint: '••••••',
               keyboardType: TextInputType.number,
               maxLength: 6,
@@ -546,13 +598,16 @@ class _SignInScreenState extends State<SignInScreen> {
         return _Step(
           title: 'Welcome back',
           sub: plain(phoneLine),
+          badge: true,
           fields: [
             OrbitTextField(
               key: const ValueKey('password'),
               label: 'Password',
               obscure: true,
               eye: true,
+              autofillHints: const [AutofillHints.password],
               onChanged: a.onPasswordChanged,
+              onSubmitted: (_) => a.onSignIn?.call(),
             ),
             Transform.translate(
               offset: const Offset(0, -4),
@@ -585,12 +640,14 @@ class _SignInScreenState extends State<SignInScreen> {
         return _Step(
           title: 'Your name',
           sub: plain('This is how your contacts will see you.'),
+          badge: true,
           fields: [
             OrbitTextField(
               key: const ValueKey('name'),
               label: 'Your name',
               initialValue: m.displayName,
               maxLength: 80,
+              autofillHints: const [AutofillHints.name],
               onChanged: a.onNameChanged,
             ),
             ...terms,
@@ -610,6 +667,7 @@ class _SignInScreenState extends State<SignInScreen> {
               key: const ValueKey('newPassword'),
               label: 'Password (optional)',
               eye: true,
+              autofillHints: const [AutofillHints.newPassword],
               onChanged: a.onNewPasswordChanged,
             ),
           ],
@@ -622,6 +680,7 @@ class _SignInScreenState extends State<SignInScreen> {
         return _Step(
           title: 'Welcome back',
           sub: plain('Accept the terms to continue to your account.'),
+          badge: true,
           fields: [
             const _WarningNotice(
               'Continuing moves your account to this phone and signs your '
@@ -658,10 +717,10 @@ class _SignInScreenState extends State<SignInScreen> {
             OrbitTextField(
               key: const ValueKey('setup'),
               label: 'Invite or recovery code',
-              initialValue: m.setupCode,
+              controller: _setup,
               hint: 'HLX-INV-… or HLX-REC-…',
               mono: true,
-              onPaste: () {},
+              onPaste: _paste,
               onChanged: a.onSetupCodeChanged,
             ),
             Transform.translate(
@@ -912,9 +971,9 @@ class _FootLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
-    return Semantics(
-      button: true,
-      child: OrbitTapArea(
+    return OrbitTapArea(
+      child: Semantics(
+        button: true,
         child: Material(
           type: MaterialType.transparency,
           borderRadius: BorderRadius.circular(t.rPill),

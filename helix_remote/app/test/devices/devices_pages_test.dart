@@ -17,7 +17,7 @@ import 'package:helix_remote/features/devices/presentation/security_activity_pag
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote_api/v2.dart' show NetworkException;
 import 'package:helix_remote_crypto/v2.dart' show LinkCode;
-import 'package:helix_remote_ui/helix_remote_ui.dart' show HelixQrDisplay;
+import 'package:orbit_ui/orbit_ui.dart' show OrbitQr;
 
 import '../support/a3b_fakes.dart';
 
@@ -378,7 +378,7 @@ void main() {
       await settle(tester);
 
       expect(devices.calls, contains('beginLink'));
-      expect(find.byType(HelixQrDisplay), findsOneWidget);
+      expect(find.byType(OrbitQr), findsOneWidget);
       expect(find.text('482 913'), findsOneWidget);
       // The restore step is asked for before the engine signs in, so the
       // router needs no second hop.
@@ -390,8 +390,8 @@ void main() {
       expect(find.text('Is this your account?'), findsOneWidget);
       expect(find.text('+88017*****01'), findsOneWidget);
       expect(find.text('~anna.k'), findsOneWidget);
-      expect(find.text('a1b2 c3d4 e5f6 a7b8 c9d0'), findsOneWidget);
-      expect(find.byType(HelixQrDisplay), findsNothing);
+      expect(_codeText('a1b2 c3d4 e5f6 a7b8 c9d0'), findsOneWidget);
+      expect(find.byType(OrbitQr), findsNothing);
       expect(devices.session!.signedIn, isFalse);
 
       await tester.tap(find.text('Yes, this is my account'));
@@ -420,13 +420,13 @@ void main() {
 
       devices.session!.approval.complete(FakeLinkSession.proposal);
       await settle(tester);
-      await tester.tap(find.text('No, cancel'));
+      await tester.tap(find.text('No, this is not my account'));
       await settle(tester);
 
       expect(devices.session!.answer, isFalse);
       expect(devices.session!.signedIn, isFalse);
       expect(find.textContaining('not your account'), findsOneWidget);
-      expect(find.textContaining('nothing was kept'), findsOneWidget);
+      expect(find.text('Nothing was kept'), findsOneWidget);
       // The restore step that was asked for in advance is taken back.
       expect(container.read(postSignInProvider), PostSignInStep.none);
 
@@ -452,7 +452,7 @@ void main() {
       devices.session!.approval.complete(FakeLinkSession.proposal);
       await settle(tester);
 
-      await tester.tap(find.byTooltip('Cancel'));
+      await tester.tap(find.byTooltip('Close'));
       await settle(tester);
 
       expect(devices.session!.answer, isFalse);
@@ -566,7 +566,7 @@ void main() {
       expect(find.text('Yes, this is my account'), findsOneWidget);
       expect(tester.takeException(), isNull);
       // Answering ends the question (and its timer).
-      await tester.tap(find.text('No, cancel'));
+      await tester.tap(find.text('No, this is not my account'));
       await settle(tester);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 2));
@@ -663,3 +663,11 @@ class _AutoScanState extends State<_AutoScan> {
   @override
   Widget build(BuildContext context) => const Text('fake camera');
 }
+
+/// A code as the Orbit code box draws it: it may break between any two
+/// characters, so zero-width spaces sit between them.
+Finder _codeText(String code) => find.byWidgetPredicate(
+  (w) =>
+      w is Text &&
+      (w.data ?? w.textSpan?.toPlainText() ?? '').replaceAll('​', '') == code,
+);

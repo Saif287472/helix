@@ -373,6 +373,7 @@ class LinkThisDeviceState {
     this.error,
     this.expired = false,
     this.proposal,
+    this.problem,
   });
 
   final LinkThisStep step;
@@ -387,6 +388,10 @@ class LinkThisDeviceState {
   /// While [step] is `confirming`: the account the approval offers, for "Is
   /// this your account?". Nothing is kept until the person confirms.
   final LinkProposalView? proposal;
+
+  /// What went wrong, when the engine said (a declined account shows its own
+  /// page; anything else is the error sentence).
+  final LinkProblem? problem;
 }
 
 /// How long "Is this your account?" waits for an answer before it counts as
@@ -556,6 +561,7 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
     state = LinkThisDeviceState(
       step: LinkThisStep.failed,
       error: linkProblemText(problem),
+      problem: problem,
       expired:
           problem == LinkProblem.expired ||
           problem == LinkProblem.declined ||

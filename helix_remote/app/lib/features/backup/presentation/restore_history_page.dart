@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:helix_remote/features/backup/application/backup_copy.dart';
 import 'package:helix_remote/features/backup/application/backup_models.dart';
 import 'package:helix_remote/features/backup/application/backup_providers.dart';
 import 'package:helix_remote/features/backup/application/restore_step.dart';
-import 'package:helix_remote/features/backup/presentation/transfer_tile.dart';
+import 'package:helix_remote/features/backup/application/transfer_rows.dart';
 import 'package:helix_remote/shared/route_paths.dart';
-import 'package:helix_remote/shared/widgets/inline_notice.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart';
 
-/// Restores the history backup onto this phone.
+/// Restores the history backup onto this phone: the Orbit `RestoreScreen`
+/// on the app's restore flow and history offers.
 ///
 /// Shown in two places. With [afterSignIn] it is the last step of signing in on
 /// a new device: restore, or skip, and then the home tabs. Without it, it is
-/// Settings > Backup > Restore history, and it simply goes back when done.
+/// You > Backup > Restore history, and it simply goes back when done.
 /// Either way a restore adds what is missing and never replaces what is here,
 /// so running it twice is safe.
 class RestoreHistoryPage extends ConsumerWidget {
@@ -30,11 +31,10 @@ class RestoreHistoryPage extends ConsumerWidget {
         if (!o.isFinished) o,
     ];
     final offerActions = ref.watch(offerActionsProvider);
-    final theme = Theme.of(context);
-    final running = flow.stage == RestoreStage.running;
 
     void leave() {
       if (afterSignIn) {
+        // Leaving the step clears it, or the router keeps sending you back.
         ref.read(restoreStepProvider).finish();
         context.go(RoutePaths.home);
       } else {
@@ -42,120 +42,87 @@ class RestoreHistoryPage extends ConsumerWidget {
       }
     }
 
+    void onOffer(String id, String action) {
+      final offer = ref.read(offerActionsProvider.notifier);
+      switch (action) {
+        case 'Accept' || 'Resume' || 'Try again':
+          offer.accept(id);
+        case 'Decline':
+          offer.decline(id);
+        case 'Pause':
+          offer.pause(id);
+      }
+    }
+
     return PopScope(
+      // System Back does nothing on the step after sign-in.
       canPop: !afterSignIn,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(afterSignIn ? 'Restore your chats' : 'Restore history'),
-          automaticallyImplyLeading: !afterSignIn,
-        ),
-        body: ListView(
-          children: [
-            PageIntro(
-              title: afterSignIn ? 'Welcome back' : null,
-              text:
-                  'If you backed up on another phone, your text messages can '
-                  'come back here. Photos, videos and files are not in the '
-                  'backup. Messages already on this phone are kept as they '
-                  'are.',
-            ),
-            if (offers.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  HelixSpace.md,
-                  HelixSpace.md,
-                  HelixSpace.md,
-                  0,
-                ),
-                child: Text(
-                  'From your other devices',
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              for (final offer in offers)
-                TransferTile(
-                  view: offer,
-                  busy: offerActions.busy.contains(offer.id),
-                  error: offerActions.errorFor(offer.id),
-                  onAccept: () =>
-                      ref.read(offerActionsProvider.notifier).accept(offer.id),
-                  onDecline: () =>
-                      ref.read(offerActionsProvider.notifier).decline(offer.id),
-                  onPause: () =>
-                      ref.read(offerActionsProvider.notifier).pause(offer.id),
-                ),
-              const Divider(),
-            ],
-            if (running)
-              Padding(
-                padding: const EdgeInsets.all(HelixSpace.md),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(flow.phase ?? 'Working...'),
-                      const SizedBox(height: HelixSpace.xs),
-                      const LinearProgressIndicator(),
-                      if (flow.added > 0 || flow.existing > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: HelixSpace.xs),
-                          child: Text('${flow.added} messages added so far'),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            if (flow.stage == RestoreStage.failed)
-              InlineNotice(kind: InlineNoticeKind.error, message: flow.error!),
-            if (flow.stage == RestoreStage.done)
-              InlineNotice(
-                kind: InlineNoticeKind.success,
-                message: flow.added == 0
-                    ? 'Your backup is already on this phone. Nothing new to '
-                          'add.'
-                    : 'Restored ${flow.added} messages.',
-              ),
-            if (flow.stage == RestoreStage.done)
-              BusyFilledButton(
-                label: afterSignIn ? 'Continue' : 'Done',
-                onPressed: leave,
-              )
-            else ...[
-              BusyFilledButton(
-                label: flow.stage == RestoreStage.failed
-                    ? 'Try again'
-                    : 'Restore from my backup',
-                icon: Icons.download_for_offline_outlined,
-                busy: running,
-                onPressed: () =>
-                    ref.read(restoreFlowProvider.notifier).restore(),
-              ),
-              BusyFilledButton(
-                label: 'I have a recovery secret',
-                tonal: true,
-                onPressed: running
-                    ? null
-                    : () => context.push(RoutePaths.backupRecovery),
-              ),
-              if (afterSignIn)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: HelixSpace.md,
-                  ),
-                  child: TextButton(
-                    onPressed: running ? null : leave,
-                    child: const Text('Skip for now'),
-                  ),
-                ),
-            ],
-            if (afterSignIn)
-              const PageIntro(
-                text: 'You can restore later from Settings, Backup.',
+      child: RestoreScreen(
+        model: restoreModel(
+          flow,
+          afterSignIn: afterSignIn,
+          offers: [
+            for (final o in offers)
+              (
+                transferRow(o, error: offerActions.errorFor(o.id)),
+                offerActions.busy.contains(o.id),
               ),
           ],
+        ),
+        actions: RestoreActions(
+          onRestore: () => ref.read(restoreFlowProvider.notifier).restore(),
+          onRecoverySecret: () => context.push(RoutePaths.backupRecovery),
+          onSkip: leave,
+          onContinue: leave,
+          onBack: afterSignIn ? null : () => context.pop(),
+          onOfferAction: onOffer,
         ),
       ),
     );
   }
+}
+
+/// The screen's model for [flow] (`orbit/contracts/signin.md`, Restore).
+@visibleForTesting
+RestoreModel restoreModel(
+  RestoreFlowState flow, {
+  required bool afterSignIn,
+  List<(TransferRow, bool)> offers = const [],
+}) {
+  final problem = flow.problem;
+  final status = switch (flow.stage) {
+    RestoreStage.idle => RestoreStatus.idle,
+    RestoreStage.running => RestoreStatus.running,
+    RestoreStage.done when flow.added == 0 => RestoreStatus.nothing,
+    RestoreStage.done => RestoreStatus.done,
+    RestoreStage.failed
+        when problem == BackupProblem.wrongKey ||
+            problem == BackupProblem.accountMismatch =>
+      RestoreStatus.locked,
+    RestoreStage.failed => RestoreStatus.failed,
+  };
+  return RestoreModel(
+    afterSignIn: afterSignIn,
+    status: status,
+    step: flow.step,
+    addedSoFar: flow.added > 0 || flow.existing > 0
+        ? '${messageCount(flow.added)} messages added so far'
+        : null,
+    doneTitle: 'Restored ${messageCount(flow.added)} messages',
+    failureTitle: problem == null
+        ? 'The restore did not finish'
+        : backupProblemTitle(problem),
+    failureText: flow.error ?? 'That did not work. Try again.',
+    offers: [
+      for (final (row, busy) in offers)
+        RestoreOfferModel(
+          id: row.id,
+          title: row.title,
+          status: row.status,
+          progress: row.progress,
+          buttons: row.buttons,
+          busy: busy,
+        ),
+    ],
+  );
 }

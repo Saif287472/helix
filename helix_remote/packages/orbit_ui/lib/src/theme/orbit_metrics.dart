@@ -112,4 +112,17 @@ class _RenderTapArea extends RenderProxyBox {
 
   /// The area a test can measure: the tap target, not the drawn size.
   Size get tapSize => _area.size;
+
+  // One semantics node for the control, as large as the area that answers
+  // taps, so a screen reader (and the 48px guideline check) is told what a
+  // finger gets rather than what is drawn. The control's own semantics
+  // (button, label, tap) merge into it.
+  @override
+  Rect get semanticBounds => _area;
+
+  @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config.isSemanticBoundary = true;
+  }
 }

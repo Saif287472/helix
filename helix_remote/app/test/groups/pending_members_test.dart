@@ -11,12 +11,12 @@ import 'package:helix_remote/features/groups/presentation/group_info_screen.dart
 import 'package:helix_remote/shared/widgets/pending_members_prompt.dart';
 import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../chat_logic_test.dart' show row;
 import '../support/chat_harness.dart' as chat;
 import '../support/group_support.dart';
 import '../support/harness.dart';
+import '../support/orbit_theme.dart';
 
 /// Members the server's roster added without an announcement: the notice in
 /// the chat, the "Confirm NAME?" prompt in the group info and the
@@ -332,7 +332,7 @@ void main() {
             ),
           ],
           child: MaterialApp.router(
-            theme: HelixThemes.light(),
+            theme: orbitTestTheme(),
             routerConfig: router,
             builder: (context, child) => UnconfirmedMemberHost(child: child!),
           ),
