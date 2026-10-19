@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/people/people_names.dart';
+import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/core/platform/profile_image_source.dart';
@@ -37,15 +37,8 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
 
   @override
   Widget build(BuildContext context) {
-    final runtimeAsync = ref.watch(runtimeProvider);
-    if (runtimeAsync.isLoading || runtimeAsync.hasError) {
-      return const orbit.HomeScreen(
-        model: HomeModel(me: HelixAvatarModel(name: 'Helix')),
-        actions: HomeActions(),
-      );
-    }
-    final self = ref.watch(home_providers.selfAccountProvider).value;
-    final avatarBytes = ref.watch(profileAvatarProvider).value;
+    final self = ref.watch(home_providers.selfAccountProvider).asData?.value;
+    final avatarBytes = ref.watch(profileAvatarProvider).asData?.value;
     final me = HelixAvatarModel(
       name: (self == null || self.displayName.isEmpty)
           ? 'Helix'
@@ -59,7 +52,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
     // ---- chats
     final chatListAsync = ref.watch(chatListProvider);
     final archivedAsync = ref.watch(archivedChatListProvider);
-    final typing = ref.watch(chatTypingProvider).value ?? const {};
+    final typing = ref.watch(chatTypingProvider).asData?.value ?? const {};
     final rawChats = chatListAsync.value ?? const <HelixChatListItem>[];
     final chats = [
       for (final c in rawChats)
@@ -124,9 +117,10 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
     );
 
     // ---- calls
-    final callEntries = ref.watch(callLogProvider).value ?? const [];
+    final callEntries = ref.watch(callLogProvider).asData?.value ?? const [];
     final peopleDir =
-        ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+        ref.watch(peopleDirectoryProvider).asData?.value ??
+        PeopleDirectory.empty;
     final calls = [
       for (final e in callEntries)
         HelixCallLogItem(
@@ -200,7 +194,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
         peopleActions.startCall(id, video: video);
 
     final actions = HomeActions(
-      onOpenYou: () => context.push('/settings'),
+      onOpenYou: () => context.push(AppRoutes.settings),
       onTabChanged: (_) {},
       onOpenChat: (id, {messageId}) {
         context.push(chatLocation(id, messageId: messageId));
@@ -219,10 +213,9 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
           ref.read(chatSearchQueryProvider.notifier).set(text),
       onOpenCall: (id) => context.push(CallRoutes.detail(id)),
       onCallBack: (id) async {
-        final entry = callEntries.firstWhere(
-          (e) => e.id == id,
-          orElse: () => callEntries.first,
-        );
+        // Never fall back to another row: that would call the wrong person.
+        final entry = callEntries.where((e) => e.id == id).firstOrNull;
+        if (entry == null) return 'That call is no longer in the list.';
         final outcome = await callActions.callBack(
           entry.peer,
           video: entry.video,
@@ -248,7 +241,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
         onLookUp: () {
           final parsed = PeopleQuery.parse(
             searchQuery,
-            callingCode: ref.read(ownCallingCodeProvider).value,
+            callingCode: ref.read(ownCallingCodeProvider).asData?.value,
           );
           ref.read(peopleLookupProvider.notifier).lookUp(parsed);
         },
@@ -295,13 +288,16 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
     PeopleSearchMode mode, {
     required bool contactPermission,
   }) {
+    // People search runs only while something is typed, as the old Home's
+    // panel did: an empty field reads nothing from the people feature.
+    if (text.trim().isEmpty) return PeoplePanelModel(mode: mode);
     final query = PeopleQuery.parse(
       text,
-      callingCode: ref.read(ownCallingCodeProvider).value,
+      callingCode: ref.read(ownCallingCodeProvider).asData?.value,
     );
     final resultsAsync = ref.watch(peopleSearchProvider(text));
     final results = resultsAsync.value;
-    final permission = ref.watch(contactsPermissionProvider).value;
+    final permission = ref.watch(contactsPermissionProvider).asData?.value;
     final sync = ref.watch(phoneBookSyncProvider);
     final lookupState = ref.watch(peopleLookupProvider);
 

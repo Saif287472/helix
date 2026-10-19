@@ -537,19 +537,14 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   "Not unlocked. Try again." Left for later batches: the "Opening Orbit…"
   startup screen and the signed-in link toast (with Home). Tests: app 834,
   orbit_ui 179, helix_remote_ui 184, all passing.
-- [x] Step 2, batch 2 (pending your review): `HomeScreen` (Chats tab,
-  Calls tab, dock, filters, ⋮ menu, both searches, people panel, selection,
-  swipe actions, quick row, dial pad) and `ArchivedChatsScreen` now draw
-  the Orbit screens, through `OrbitHomeConnector` (`shared/widgets/`) over
-  `chatListProvider`, `archivedChatListProvider`, `chatTypingProvider`,
-  `chatSearchQueryProvider`/`chatSearchResultsProvider`, `callLogProvider`,
-  `peopleDirectoryProvider`, `peopleSearchProvider`, `peopleLookupProvider`,
-  `contactsPermissionProvider`, `phoneBookSyncProvider`,
-  `profileAvatarProvider` and `home_providers.selfAccountProvider`.
-  Batch 1 leftovers done: the "Opening Orbit…" startup screen
-  (`/startup` route, `startupDone` anti-bounce flag so personal-server
-  re-auth never bounces back), signed-in link toast in `AppLinkListener`.
-  All 26 Home compare keys match Review 4 exactly. Tests: see report.
+- [x] Step 2, batch 2 (pending your review): Home (Chats and Calls tabs,
+  dock, filters, the ⋮ menu, both searches and the people panel, selection,
+  swipes, the quick row, the dial pad) and archived chats draw the Orbit
+  screens through `OrbitHomeConnector` (`shared/widgets/`). Batch 1
+  leftovers done: "Opening Orbit…" on a cold start and the signed-in link
+  toast. Known gap until the window batch: no chat beside the list on a wide
+  window. Tests: app 834, orbit_ui 179, helix_remote_ui 184, all passing;
+  27 Home states unchanged from Review 4.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

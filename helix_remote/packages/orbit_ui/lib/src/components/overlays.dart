@@ -873,7 +873,8 @@ Timer? _toastTimer;
 
 /// `App.snack` (`js/app.js`): a toast over the bottom of the screen, gone
 /// after 2.8s (4s for an [error]), or kept up when [stay] (for a shot of the
-/// state). A new toast replaces the one showing.
+/// state). A new toast replaces the one showing. [overlay] is for a caller
+/// above the navigator (the app's link listener), which has none to find.
 void showOrbitToast(
   BuildContext context,
   String text, {
@@ -881,10 +882,11 @@ void showOrbitToast(
   String? actionLabel,
   VoidCallback? onAction,
   bool stay = false,
+  OverlayState? overlay,
 }) {
   _toastTimer?.cancel();
   _toast?.remove();
-  final overlay = Overlay.of(context);
+  overlay ??= Overlay.of(context);
   final tokens = OrbitTokens.of(context);
   final motion = OrbitMotion.allowed(context);
   late final OverlayEntry entry;

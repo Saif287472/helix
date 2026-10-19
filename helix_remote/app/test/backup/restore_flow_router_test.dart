@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/shared/route_paths.dart';
@@ -18,7 +19,7 @@ void main() {
   late FakeBackupGateway backup;
   late ProviderContainer container;
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(WidgetTester tester, {bool finishRestore = true}) async {
     useTallWindow(tester, height: 1600);
     auth = StreamController<AppAuthState>.broadcast();
     backup = FakeBackupGateway();
@@ -35,6 +36,10 @@ void main() {
     ]);
     addTearDown(container.dispose);
     addTearDown(() => unawaited(auth.close()));
+    // What main() does once the remembered server has been read.
+    if (finishRestore) {
+      container.read(sessionRestoreProvider.notifier).finish(restored: false);
+    }
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -152,5 +157,31 @@ void main() {
     // Dispose the page's timers before the test ends.
     container.read(appRouterProvider).go('/sign-in');
     await settle(tester);
+  });
+
+  testWidgets('a cold start shows "Opening Orbit…" until the server is read, '
+      'and never again', (tester) async {
+    await pump(tester, finishRestore: false);
+    // The remembered server is not read yet: no flash of sign-in.
+    expect(find.text('Sign in'), findsNothing);
+    expect(
+      container
+          .read(appRouterProvider)
+          .routerDelegate
+          .currentConfiguration
+          .uri
+          .toString(),
+      AppRoutes.startup,
+    );
+
+    container.read(sessionRestoreProvider.notifier).finish(restored: false);
+    await settle(tester);
+    expect(find.text('Sign in'), findsWidgets);
+
+    // A later rebuild of the runtime (a personal-server sign-in) reports
+    // "starting" again; sign-in stays up.
+    auth.add(AppAuthState.starting);
+    await settle(tester);
+    expect(find.text('Sign in'), findsWidgets);
   });
 }

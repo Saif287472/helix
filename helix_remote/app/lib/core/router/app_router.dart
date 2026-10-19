@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/features/backup/backup_routes.dart';
 import 'package:helix_remote/features/devices/devices_routes.dart';
@@ -34,6 +35,9 @@ abstract final class AppRoutes {
   static const home = '/home';
   static const reset = '/reset';
   static const startup = '/startup';
+
+  /// Your profile and settings (the prototype's You), opened from Home.
+  static const settings = '/settings';
 }
 
 /// The app's router.
@@ -50,6 +54,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   void poke() => refresh.value++;
   ref.listen(authStateProvider, (_, _) => poke());
   ref.listen(postSignInProvider, (_, _) => poke());
+  ref.listen(sessionRestoreProvider, (_, _) => poke());
   ref.onDispose(refresh.dispose);
 
   // Once the app has left the "Opening Orbit…" screen it never goes back to
@@ -86,7 +91,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const HomeScreen(),
       ),
       GoRoute(
-        path: '/settings',
+        path: AppRoutes.settings,
         builder: (context, state) => const SettingsTab(),
       ),
       ...chatsRoutes,
@@ -136,14 +141,20 @@ String? _redirectFor(
 
   if (auth.hasError) return AppRoutes.reset;
   final state = auth.value;
-  if (state == null) {
-    // Still opening the database: show the startup screen on a cold start,
-    // but never again once the app has left it.
-    if (startupDone) return null;
-    return at == AppRoutes.startup ? null : AppRoutes.startup;
+  // A cold start shows "Opening Orbit…" until the remembered server has been
+  // read and the database has opened, so a signed-in device never flashes
+  // sign-in. Once the app has left it, it never comes back (a personal-server
+  // sign-in rebuilds the runtime and reports "starting" again).
+  if (!startupDone) {
+    final restoring =
+        ref.read(sessionRestoreProvider) == SessionRestore.pending &&
+        state != AppAuthState.ready;
+    if (state == null || state == AppAuthState.starting || restoring) {
+      return at == AppRoutes.startup ? null : AppRoutes.startup;
+    }
+    setStartupDone(true);
   }
-  // The database has opened: from now on the startup screen never shows.
-  setStartupDone(true);
+  if (state == null) return null; // Still opening the database.
   if (state == AppAuthState.ready) {
     // The step after signing in on a new device comes before the tabs, once.
     final step = ref.read(postSignInProvider);

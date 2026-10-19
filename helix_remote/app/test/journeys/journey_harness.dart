@@ -27,6 +27,7 @@ import '../support/group_support.dart';
 import '../support/people_fakes.dart' hide pumpPeople, testNow;
 import '../support/orbit_theme.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 
 /// A group chat with the roster of [testGroup], in the chat database.
 final class JourneyGroupsPort extends FakeGroupsPort {
@@ -173,6 +174,8 @@ final class Journey {
       ),
     ]);
     _active = container;
+    // What main() does once the remembered server has been read.
+    container.read(sessionRestoreProvider.notifier).finish(restored: false);
     addTearDown(() => unawaited(auth.close()));
 
     if (wholeApp) {

@@ -40,6 +40,7 @@ void main() {
     // Back to the list: the new last message is the preview.
     app.router.go('/home');
     await settle(tester, rounds: 10);
-    expect(find.text('You: yes, see you there'), findsOneWidget);
+    // The Orbit row shows your own message with its tick, not "You:".
+    expect(find.text('yes, see you there'), findsOneWidget);
   });
 }

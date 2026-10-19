@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/router/app_router.dart';
-import 'package:helix_remote/shared/navigation/group_paths.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' show OrbitCallLogTile, PeoplePanel;
 
 import '../support/chat_harness.dart' show settle, testNow;
 import 'journey_harness.dart';
@@ -32,10 +33,14 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Mum');
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, rounds: 10);
-    expect(find.text('Mum'), findsWidgets);
+    final person = find.descendant(
+      of: find.byType(PeoplePanel),
+      matching: find.text('Mum'),
+    );
+    expect(person, findsOneWidget);
 
     // Tapping the result starts the conversation and opens it.
-    await tapAndSettle(tester, find.byType(HelixPersonTile));
+    await tapAndSettle(tester, person);
     expect(app.people.calls, contains('openChat:mum'));
     expect(find.byTooltip('Voice call'), findsOneWidget);
 
@@ -59,9 +64,11 @@ void main() {
     // Back to the home tabs, the Calls tab: the call is in the log.
     app.router.go('/home');
     await settle(tester, rounds: 10);
-    await tapAndSettle(tester, find.text('Calls').last);
+    // Home keeps the search open while you were away; close it first.
+    await tapAndSettle(tester, find.byTooltip('Close search'));
+    await tapAndSettle(tester, find.byTooltip('Calls'));
     expect(find.text('Mum'), findsWidgets);
-    expect(find.byType(HelixCallLogTile), findsOneWidget);
+    expect(find.byType(OrbitCallLogTile), findsOneWidget);
   });
 
   journeyTest('the conversation header places a call and shows why it could '
@@ -126,8 +133,8 @@ void main() {
     ];
     await app.signIn(tester);
 
-    app.router.go(GroupPaths.create);
-    await settle(tester, rounds: 10);
+    await tapAndSettle(tester, find.byTooltip('More options').first);
+    await tapAndSettle(tester, find.text('New group'));
     expect(find.text('New group'), findsWidgets);
 
     await tapAndSettle(tester, find.text('Mum'));
@@ -151,8 +158,8 @@ void main() {
     final app = await Journey.start(tester);
     await app.signIn(tester);
 
-    app.router.go('/settings');
-    await settle(tester, rounds: 10);
+    // Settings is behind your picture on Home (the prototype's You).
+    await tapAndSettle(tester, find.byTooltip('Your profile and settings'));
     await tapAndSettle(tester, find.text('Devices'));
     expect(find.text('Pixel 8'), findsOneWidget);
     expect(find.text('Office laptop'), findsOneWidget);
@@ -192,5 +199,34 @@ void main() {
     await tapAndSettle(tester, find.text('Open group'));
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('Book club'), findsWidgets);
+  });
+
+  journeyTest('an invite link while signed in says so and changes nothing', (
+    tester,
+  ) async {
+    final app = await Journey.start(tester, wholeApp: true);
+    await app.signIn(tester);
+
+    // The phone hands a running app a link the way MainActivity does.
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'com.helix.remote/links',
+      const StandardMethodCodec().encodeMethodCall(
+        const MethodCall(
+          'open',
+          'https://helix.agiletechbd.com/open#HLX-INV-AAAA-BBBB-CCCC',
+        ),
+      ),
+      (_) {},
+    );
+    await settle(tester, rounds: 10);
+
+    expect(find.textContaining("You're already signed in"), findsOneWidget);
+    expect(app.container.read(pendingLinkProvider), isNull);
+    expect(find.text('Chats'), findsWidgets);
+
+    // The toast goes by itself.
+    await tester.pump(const Duration(seconds: 4));
+    await settle(tester);
+    expect(find.textContaining("You're already signed in"), findsNothing);
   });
 }

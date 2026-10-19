@@ -65,12 +65,20 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
       // applied by the next sign-in after a sign-out: drop it.
       if (_signedIn) {
         pending.set(null);
-        if (context.mounted) {
+        // The listener sits above the navigator, so the toast goes into the
+        // navigator's overlay.
+        final overlay = ref
+            .read(appRouterProvider)
+            .routerDelegate
+            .navigatorKey
+            .currentState
+            ?.overlay;
+        if (overlay != null && overlay.mounted) {
           orbit.showOrbitToast(
-            context,
+            overlay.context,
+            overlay: overlay,
             "You're already signed in. Invite and recovery links are "
             "for setting up a new device.",
-            stay: true,
           );
         }
         return;
