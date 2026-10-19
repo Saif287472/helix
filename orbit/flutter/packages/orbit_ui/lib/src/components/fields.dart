@@ -31,6 +31,7 @@ class OrbitTextField extends StatefulWidget {
     this.controller,
     this.hint = '',
     this.helper = '',
+    this.helperOk = false,
     this.error = '',
     this.prefix = '',
     this.obscure = false,
@@ -54,6 +55,10 @@ class OrbitTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String hint;
   final String helper;
+
+  /// The helper is good news: `--success` with a filled tick (the ~name
+  /// that looks right).
+  final bool helperOk;
   final String error;
   final String prefix;
 
@@ -306,11 +311,27 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
                 const SizedBox(height: 6),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: OrbitText(
-                    w.helper,
+                  child: OrbitText.rich(
+                    TextSpan(
+                      children: [
+                        if (w.helperOk) ...[
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: OrbitIcon(
+                              OrbitIcons.checkCircle,
+                              weight: OrbitIconWeight.fill,
+                              size: OrbitType.caption,
+                              color: t.success,
+                            ),
+                          ),
+                          const TextSpan(text: ' '),
+                        ],
+                        TextSpan(text: w.helper),
+                      ],
+                    ),
                     style: t.font.style(
                       size: OrbitType.caption,
-                      color: t.ink3,
+                      color: w.helperOk ? t.success : t.ink3,
                       height: 1.45,
                     ),
                   ),
@@ -343,11 +364,15 @@ class OrbitSegmented<T> extends StatelessWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    this.small = false,
   });
 
   final List<OrbitSegment<T>> options;
   final T value;
   final ValueChanged<T>? onChanged;
+
+  /// `.seg.sm`: 36px segments at 12.5px (the choices under a setting).
+  final bool small;
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +405,7 @@ class OrbitSegmented<T> extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: change == null ? null : () => change(o.value),
         child: Container(
-          height: 40,
+          height: small ? 36 : 40,
           decoration: BoxDecoration(
             color: on ? t.surface : null,
             borderRadius: BorderRadius.circular(10),
@@ -406,7 +431,7 @@ class OrbitSegmented<T> extends StatelessWidget {
               OrbitText(
                 o.label,
                 style: t.font.style(
-                  size: OrbitType.small,
+                  size: small ? 12.5 : OrbitType.small,
                   weight: 560,
                   color: ink,
                 ),

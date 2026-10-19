@@ -302,3 +302,24 @@ The port follows the prototype, so these changed the prototype itself:
 - **Group results return sentences in the contract** (`GroupResult`); the
   screens take plain callbacks until the wiring adds the toasts.
   - **Owner:** pending (batch 7).
+
+## Phase 4 batch 8 (You, Edit profile, Appearance, the topic pages)
+
+- **The settings pages answer at once.** Privacy, Notifications and Chats
+  keep their own copy of the choices, change it on a tap and tell the
+  connector, as the prototype's shared prefs do; a new model from the app
+  replaces the copy.
+  - **Owner:** pending (batch 8).
+- **Shadow order.** CSS draws a `box-shadow` list first-on-top and Flutter
+  last-on-top; the planet's page-colour ring and the call screen's picture
+  ring are listed last so they stay on top, as drawn.
+  - **Owner:** pending (batch 8).
+- **"Live preview" sits in a body-text line box** in the prototype (an
+  inline eyebrow), so the port moves it 4px down and leaves 10px under it.
+  - **Owner:** pending (batch 8).
+- **A hero pill's text shrinks to an ellipsis** when it is wider than its
+  row (large text); the prototype would overflow.
+  - **Owner:** pending (batch 8).
+- **The theme JSON's swatches are read** into `OrbitThemeMeta.swatches` for
+  Appearance's hero.
+  - **Owner:** pending (batch 8).

@@ -267,12 +267,18 @@ class OrbitPills extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                   ],
-                  Text(
-                    p.text,
-                    style: t.font.style(
-                      size: OrbitType.caption,
-                      weight: weight,
-                      color: ink,
+                  // Shrinks to an ellipsis rather than overflowing a pill
+                  // wider than the row (large text).
+                  Flexible(
+                    child: Text(
+                      p.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.font.style(
+                        size: OrbitType.caption,
+                        weight: weight,
+                        color: ink,
+                      ),
                     ),
                   ),
                 ],

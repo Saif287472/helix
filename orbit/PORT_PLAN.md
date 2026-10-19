@@ -451,6 +451,12 @@ pending your review:
   `JoinRequestsScreen`, `BannedPeopleScreen`, `AddMembersScreen`,
   `JoinGroupScreen`), with `OrbitExtendedFab`. 26 keys, 0.6% to 5.0% in
   Orbit.
+- [x] Batch 8: You (`YouScreen` with `OrbitProfileOrbit`, the checkup,
+  tiles, search and the share sheet), `ProfileEditScreen`,
+  `AppearanceScreen` (every theme's card drawn in its own theme), and the
+  topic pages `PrivacyScreen`, `NotificationsScreen`,
+  `ChatsSettingsScreen`, `StorageScreen`, `AccountScreen`, with
+  `OrbitSegRow`. 17 keys, 0.8% to 5.6% in Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

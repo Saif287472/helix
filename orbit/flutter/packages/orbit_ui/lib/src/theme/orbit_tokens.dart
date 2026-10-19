@@ -164,6 +164,11 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
       dark: json['dark'] == true,
       icon: str('icon') ?? '',
       effects: effects,
+      swatches: [
+        for (final s in (json['swatches'] as List?) ?? const [])
+          if (s is String && s.startsWith('#') && s.length == 7)
+            Color(0xFF000000 | int.parse(s.substring(1), radix: 16)),
+      ],
     );
   }
 
@@ -269,6 +274,7 @@ final class OrbitThemeMeta {
     required this.dark,
     required this.icon,
     required this.effects,
+    this.swatches = const [],
   });
 
   final String id;
@@ -285,6 +291,9 @@ final class OrbitThemeMeta {
   /// The theme's effects, in the order the prototype draws them. The registry
   /// in `lib/src/theme/effects.dart` reads these by name.
   final List<OrbitEffect> effects;
+
+  /// The four colours Appearance shows for the theme.
+  final List<Color> swatches;
 
   bool has(String kind) => effects.any((e) => e.kind == kind);
   OrbitEffect? effect(String kind) {

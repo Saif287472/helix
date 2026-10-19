@@ -445,14 +445,15 @@ class _CallScreenState extends State<CallScreen>
           DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(112 * 0.34),
+              // CSS's first shadow is on top; Flutter's last is.
               boxShadow: const [
-                BoxShadow(color: Color(0x38FFFFFF), spreadRadius: 4),
                 BoxShadow(
                   color: Color(0x8C08143C),
                   offset: Offset(0, 18),
                   blurRadius: 40,
                   spreadRadius: -12,
                 ),
+                BoxShadow(color: Color(0x38FFFFFF), spreadRadius: 4),
               ],
             ),
             child: OrbitAvatar(avatar: m.avatar, size: 112, cornerPct: 34),

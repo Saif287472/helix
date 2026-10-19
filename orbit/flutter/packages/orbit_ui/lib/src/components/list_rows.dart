@@ -77,7 +77,13 @@ class OrbitCard extends StatelessWidget {
                           c,
                           Positioned(
                             top: 0,
-                            left: dividerIndent,
+                            // Next to a `.segrow` the rule runs the full
+                            // width (its `border-top`).
+                            left:
+                                c is OrbitFullWidthRule ||
+                                    children[i - 1] is OrbitFullWidthRule
+                                ? 0
+                                : dividerIndent,
                             right: 0,
                             height: 1,
                             child: ColoredBox(color: rule),
@@ -176,6 +182,7 @@ class OrbitListRow extends StatelessWidget {
     this.iconInk,
     this.titleInk,
     this.subInk,
+    this.minHeight = 60,
   });
 
   final String title;
@@ -217,6 +224,9 @@ class OrbitListRow extends StatelessWidget {
   /// The sub line's colour ("Verified" in `--success`).
   final Color? subInk;
 
+  /// `min-height` (52 on Edit profile's who-sees-what rows).
+  final double minHeight;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -249,7 +259,7 @@ class OrbitListRow extends StatelessWidget {
       if (end == OrbitRowEnd.toggle) OrbitSwitch(on: on),
     ];
     final row = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 60),
+      constraints: BoxConstraints(minHeight: minHeight),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
@@ -430,3 +440,7 @@ class OrbitDangerZone extends StatelessWidget {
     ],
   );
 }
+
+/// A card child whose rules run the full width of the card rather than
+/// from the icon's edge (`.segrow`).
+abstract interface class OrbitFullWidthRule {}

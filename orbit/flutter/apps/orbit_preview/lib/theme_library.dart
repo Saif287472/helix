@@ -44,8 +44,14 @@ final class OrbitThemeLibrary {
         OrbitTokens.fromThemeJson(jsonDecode(raw) as Map<String, Object?>),
       );
     }
-    return OrbitThemeLibrary._({for (final t in themes) t.meta.id: t}, themes);
+    return loaded = OrbitThemeLibrary._({
+      for (final t in themes) t.meta.id: t,
+    }, themes);
   }
+
+  /// The library the app loaded, for previews that show every theme
+  /// (Appearance).
+  static OrbitThemeLibrary? loaded;
 
   final Map<String, OrbitTokens> _byId;
 
