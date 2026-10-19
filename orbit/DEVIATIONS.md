@@ -254,3 +254,21 @@ The port follows the prototype, so these changed the prototype itself:
   contract returns a sentence or a result (`Future<String?>`); those return
   types arrive when each page is wired in Part B.
   - **Owner:** pending (batch 4).
+
+## Phase 4 batch 5 (calls)
+
+- **Every `<button>` keeps the browser's 1px of padding above and below**
+  on the call screen (the control tiles, End, the round actions on Call
+  details); the port adds it there so the tray and rows line up.
+  - **Owner:** pending (batch 5).
+- **The tray's shadow is drawn only outside it** (`OrbitOuterShadow`), as
+  CSS does, so the see-through glass does not darken over its own shadow.
+  - **Owner:** pending (batch 5).
+- **The pulsing rings and Answer's nudge animate in the app** and sit still
+  with reduce motion, as the prototype does under
+  `prefers-reduced-motion`. The ring timing follows `@keyframes halo`; the
+  nudge is not built yet.
+  - **Owner:** pending (batch 5).
+- **The video and camera pictures are slots** (`remoteVideo`, `localVideo`);
+  the preview draws the prototype's gradients there.
+  - **Owner:** pending (batch 5).

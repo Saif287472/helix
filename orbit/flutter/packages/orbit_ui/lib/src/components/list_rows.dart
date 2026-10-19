@@ -173,6 +173,8 @@ class OrbitListRow extends StatelessWidget {
     this.leading,
     this.subLeading,
     this.titleWidget,
+    this.iconInk,
+    this.titleInk,
   });
 
   final String title;
@@ -205,6 +207,12 @@ class OrbitListRow extends StatelessWidget {
   /// In place of the title text (a link set in mono).
   final Widget? titleWidget;
 
+  /// The icon's colour on the plain `--field` tile (`style="--av-ink:…"`).
+  final Color? iconInk;
+
+  /// The title's colour, where a row tints only its title.
+  final Color? titleInk;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -214,13 +222,13 @@ class OrbitListRow extends StatelessWidget {
     final (tileBg, tileInk) = danger
         ? (t.dangerSoft, t.danger)
         : iconColor == null
-        ? (t.field, t.ink2)
+        ? (t.field, iconInk ?? t.ink2)
         : OrbitAvatar.palette(t, iconColor!);
     final titleInk = danger
         ? t.danger
         : accent
         ? t.accentInk
-        : t.ink;
+        : this.titleInk ?? t.ink;
     final change = onChanged;
     final tap = end == OrbitRowEnd.toggle && change != null
         ? () => change(!on)

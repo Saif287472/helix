@@ -20,6 +20,10 @@ abstract final class OrbitNight {
   static const text = Color(0xFFEAEEF8);
   static const muted = Color(0xFF9099B2);
 
+  /// `--call-accept` and `--call-end`: Answer and End on a call.
+  static const callAccept = Color(0xFF18A867);
+  static const callEnd = Color(0xFFE5484D);
+
   /// The viewer's sentences ("This file is not on your device yet.").
   static const viewerText = Color(0xFFC9D0DF);
 

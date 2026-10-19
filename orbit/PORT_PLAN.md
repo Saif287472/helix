@@ -440,6 +440,9 @@ pending your review:
   `SendFilesScreen`, `SharedMediaScreen`, `ChatSettingsScreen`), with the
   shared `OrbitProfileHero`, `OrbitTabs`, `OrbitPick`, `OrbitBottomBar` and
   `OrbitNight`. 25 keys, 0.6% to 3.1% in Orbit.
+- [x] Batch 5: calls (`CallScreen` with incoming, dialing, live,
+  reconnecting, ended, notices, audio outputs and the video layout;
+  `CallDetailScreen`). 24 keys, 0.8% to 3.9% in Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

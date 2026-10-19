@@ -96,3 +96,38 @@ class OrbitNotchClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(OrbitNotchClipper oldClipper) => oldClipper.notch != notch;
 }
+
+/// Shadows drawn the way CSS draws a `box-shadow`: only outside the box, so
+/// a see-through fill (the call tray's glass) never shows its own shadow
+/// through it. Put it behind the box with `CustomPaint(painter: ...)`.
+class OrbitOuterShadow extends CustomPainter {
+  const OrbitOuterShadow({required this.radius, required this.shadows});
+
+  final BorderRadius radius;
+  final List<BoxShadow> shadows;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final box = radius.toRRect(Offset.zero & size);
+    canvas
+      ..save()
+      ..clipPath(
+        Path.combine(
+          PathOperation.difference,
+          Path()..addRect((Offset.zero & size).inflate(128)),
+          Path()..addRRect(box),
+        ),
+      );
+    for (final s in shadows) {
+      canvas.drawRRect(
+        box.shift(s.offset).inflate(s.spreadRadius),
+        s.toPaint(),
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(OrbitOuterShadow old) =>
+      old.radius != radius || old.shadows != shadows;
+}
