@@ -122,12 +122,16 @@ application/
   people_search.dart     PeopleQuery.parse, searchPeople (pure), lookup controller,
                          PeopleActions (open chat / start call)
   phone_book_sync.dart   contactsPermissionProvider, phoneBookSyncProvider
-  contact_info.dart      ContactPerson (TrustState), mute/disappearing/report types,
-                         ContactInfoActions (rename, block, report, verify, ...)
+  contact_info.dart      ContactPerson (TrustState), disappearing/report types (mute
+                         is shared/widgets/mute_choice.dart's MuteFor),
+                         contactBlocksMeProvider (they blocked you, ADR-030),
+                         ContactInfoActions (rename, block, report, verify, the
+                         scanned code's check, ...)
   people_failures.dart   PeopleFailure: rateLimited / offline / other
-presentation/
-  contact_info_screen.dart, safety_number_screen.dart, safety_scan_screen.dart,
-  people_search_screen.dart, widgets/ (key-changed banner, mute/disappearing/report sheets)
+presentation/            connectors for orbit_ui's pages: contact_info_screen.dart
+                         (ContactScreen), safety_number_screen.dart, safety_scan_screen.dart
+                         (ScanCodeScreen over the scanner), people_search_screen.dart
+                         (the people panel of shared/widgets/orbit_people_panel.dart)
 people_routes.dart       /home/people, /search, /:id, /:id/safety, /:id/scan
 ```
 

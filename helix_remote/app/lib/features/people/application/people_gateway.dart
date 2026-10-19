@@ -138,6 +138,10 @@ abstract interface class PeopleGateway {
   Stream<List<GroupSummary>> watchGroups();
   Stream<List<GroupSummary>> watchCommonGroups(String accountId);
 
+  /// Whether [accountId] has blocked this account (ADR-030: the server tells
+  /// the blocked person at once).
+  Stream<bool> watchBlocksMe(String accountId);
+
   /// Null until a key has been pinned (nothing has been exchanged yet).
   Future<SafetyNumberData?> safetyNumber(String accountId);
 
@@ -226,6 +230,10 @@ final class EnginePeopleGateway implements PeopleGateway {
         }
         return common;
       });
+
+  @override
+  Stream<bool> watchBlocksMe(String accountId) =>
+      _engine.people.watchBlocksMe(accountId);
 
   @override
   Future<SafetyNumberData?> safetyNumber(String accountId) async {

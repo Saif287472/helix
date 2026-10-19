@@ -643,3 +643,48 @@ All 24 call states score exactly as at Review 4 after the changes below.
   to make calls…"; the preview says Orbit). They change with the app-wide
   rename (Part B step 3).
   - **Owner:** pending (Part B batch 5).
+
+## Part B batch 6 (people, wired into the app)
+
+All 25 compared states (Contact info, Safety number, Scan code, People,
+and the Group info and Chat settings states that share the profile hero)
+score exactly as at Review 4 after the changes below.
+
+- **Behaviour-only hooks added to `orbit_ui`:**
+  - **Contact info answers its actions**: Rename shows "Saved.", "Saved,
+    and updated in your contacts." or "Saved in Orbit. Your phone did not
+    let Orbit change your contacts.", and asks "Save in your phone
+    contacts too?" (the prototype's dialog) only when the phone's
+    permission is missing, never on Windows (the app's rule; the prototype
+    asks whenever there is a number). A call that cannot start, shared
+    media that cannot open, a block, unblock or report that does not go
+    through each say so; Blocked., Unblocked. and Reported. as the
+    prototype does. "This person could not be loaded." offers Try again.
+  - **The report sheet says the note is sent too**: "Orbit learns who you
+    reported, why, and your note. No messages are sent with the report."
+    (the contract's suggestion; the prototype said "who and why" only).
+  - **Safety number** draws the app's QR code (the modules it computed),
+    labelled "QR code for the safety number with <name>" for a screen
+    reader.
+  - **Scan code** takes the app's camera, checks one code at a time, says
+    "Verified. Your chat is private." and goes back on a match, and shows
+    the prototype's "That code does not match" (do not trust this chat
+    until compared in person) on a mismatch, then scans on. The
+    prototype's "Simulate" buttons show only without a real camera.
+  - **People** can draw the whole people panel (the same component as the
+    Chats search: people, the look-up, the contacts card, groups), opens
+    ready to type, and looks up on Enter (the contract keeps the app's
+    page; the prototype draws only the people).
+  - **The profile hero** tells a screen reader whose picture it is and
+    makes the name a heading (Contact info, Chat settings, Group info).
+  - **Owner:** pending (Part B batch 6).
+- **The derive items are built** (`application/`): "<name> has blocked
+  you." under the name, with no call tiles (`contactBlocksMeProvider`,
+  `PeopleGateway.watchBlocksMe`); the scanned code's check moved from the
+  screen into `ContactInfoActions.checkScannedCode`; one mute enum (the
+  shared `MuteFor`, "Always" is the year 9999; the people feature had its
+  own of 100 years).
+  - **Owner:** pending (Part B batch 6).
+- **Scan someone's code (contact mode) is not wired**: there is no route
+  for it yet; it depends on the code format of `you.md` (batch 8).
+  - **Owner:** pending (Part B batch 6).

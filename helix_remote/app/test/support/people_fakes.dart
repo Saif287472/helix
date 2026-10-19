@@ -266,6 +266,13 @@ final class FakePeopleGateway implements PeopleGateway {
     ],
   );
 
+  /// The accounts that have blocked this one.
+  final Set<String> blocksMe = {};
+
+  @override
+  Stream<bool> watchBlocksMe(String accountId) =>
+      _live(() => blocksMe.contains(accountId));
+
   @override
   Future<SafetyNumberData?> safetyNumber(String accountId) async =>
       safety[accountId];
@@ -301,9 +308,13 @@ final class FakePeopleGateway implements PeopleGateway {
     put(people[accountId]!.copyWith(identityVerified: verified));
   }
 
+  /// Thrown by block and unblock when set (offline).
+  Object? blockError;
+
   @override
   Future<void> block(String accountId) async {
     calls.add('block:$accountId');
+    if (blockError != null) throw blockError!;
     put(people[accountId]!.copyWith(blocked: true));
   }
 

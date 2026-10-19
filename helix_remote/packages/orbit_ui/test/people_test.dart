@@ -62,7 +62,10 @@ void main() {
       ContactScreen(
         model: contact(),
         actions: ContactActions(
-          onCall: ({required bool video}) => placed = video,
+          onCall: ({required bool video}) async {
+            placed = video;
+            return null;
+          },
           onOpenGroup: (g) => group = g,
         ),
       ),
@@ -102,7 +105,12 @@ void main() {
       tester,
       ContactScreen(
         model: contact(),
-        actions: ContactActions(onRename: (v) => name = v),
+        actions: ContactActions(
+          onRename: (v) async {
+            name = v;
+            return RenameResult.saved;
+          },
+        ),
       ),
     );
     await tester.tap(find.text('Rename'));
@@ -111,6 +119,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(name, 'Nadi');
+    expect(find.text('Saved.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('the safety number shows 60 digits and toggles verified', (
@@ -180,5 +190,125 @@ void main() {
     await tester.enterText(find.byType(EditableText), 'zz');
     await tester.pump();
     expect(find.text('No matches'), findsOneWidget);
+  });
+
+  group("the app's hooks", () {
+    testWidgets('a rename that needs the phone asks, then saves there', (
+      tester,
+    ) async {
+      final saved = <String>[];
+      await show(
+        tester,
+        ContactScreen(
+          model: contact(),
+          actions: ContactActions(
+            onRename: (v) async => RenameResult.needsPhonePermission,
+            onSaveToPhoneContacts: (v) async {
+              saved.add(v);
+              return RenameResult.savedEverywhere;
+            },
+          ),
+        ),
+      );
+      await tester.tap(find.text('Rename'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(EditableText), 'Nadi');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.text('Save in your phone contacts too?'), findsOneWidget);
+      await tester.tap(find.text('Allow'));
+      await tester.pumpAndSettle();
+      expect(saved, ['Nadi']);
+      expect(find.text('Saved, and updated in your contacts.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a block that fails says so; a call refused says why', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        ContactScreen(
+          model: contact(),
+          actions: ContactActions(
+            onBlock: () async => false,
+            onCall: ({required video}) async => 'You are already in a call.',
+          ),
+        ),
+      );
+      await tester.tap(find.text('Voice call'));
+      await tester.pumpAndSettle();
+      expect(find.text('You are already in a call.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.scrollUntilVisible(find.text('Block Nadia Rahman'), 200);
+      await tester.tap(find.text('Block Nadia Rahman'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Block'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('That did not work'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a scanned code is checked: a mismatch says so', (
+      tester,
+    ) async {
+      final codes = <String>[];
+      late ValueChanged<String> read;
+      await show(
+        tester,
+        ScanCodeScreen(
+          model: const ScanCodeModel(),
+          actions: ScanCodeActions(
+            onCode: (text) async {
+              codes.add(text);
+              return false;
+            },
+          ),
+          camera: (context, onCode) {
+            read = onCode;
+            return const SizedBox.expand();
+          },
+        ),
+      );
+      // No demo buttons over a real camera.
+      expect(find.text('Simulate a match'), findsNothing);
+      read('wrong');
+      // A second code while the first is checked waits.
+      read('again');
+      await tester.pumpAndSettle();
+      expect(codes, ['wrong']);
+      expect(find.text('That code does not match'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      read('next');
+      await tester.pumpAndSettle();
+      expect(codes, ['wrong', 'next']);
+    });
+
+    testWidgets('people search can draw the whole people panel', (
+      tester,
+    ) async {
+      final typed = <String>[];
+      var looked = 0;
+      await show(
+        tester,
+        PeopleSearchScreen(
+          model: const PeopleSearchModel(
+            panel: PeoplePanelModel(mode: PeopleSearchMode.chats),
+          ),
+          actions: PeopleSearchActions(
+            panel: PeoplePanelActions(
+              onQueryChanged: typed.add,
+              onLookUp: () => looked++,
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(find.byType(EditableText), '~nadia');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(typed, ['~nadia']);
+      expect(looked, 1);
+    });
   });
 }

@@ -71,16 +71,28 @@ class OrbitProfileHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 18, 24, 4),
       child: Column(
         children: [
-          OrbitAvatar(avatar: avatar, size: size),
+          // A screen reader hears whose picture it is, then the name as the
+          // page's heading.
+          Semantics(
+            container: true,
+            image: true,
+            label: 'Picture of $name',
+            excludeSemantics: true,
+            child: OrbitAvatar(avatar: avatar, size: size),
+          ),
           const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Flexible(
-                child: OrbitText(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: t.display(size: 24),
+                child: Semantics(
+                  container: true,
+                  header: true,
+                  child: OrbitText(
+                    name,
+                    textAlign: TextAlign.center,
+                    style: t.display(size: 24),
+                  ),
                 ),
               ),
               if (verified) ...[

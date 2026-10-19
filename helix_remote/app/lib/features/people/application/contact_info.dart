@@ -6,6 +6,7 @@ import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/people/application/people_gateway.dart';
 import 'package:helix_remote/features/people/application/phone_book_sync.dart';
 import 'package:helix_remote/shared/navigation/conversation_seams.dart';
+import 'package:helix_remote/shared/widgets/mute_choice.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' show PersonRow;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ReportCategory;
@@ -146,6 +147,14 @@ final contactChatProvider = StreamProvider.autoDispose
           );
     });
 
+/// Whether they have blocked you: the page then says so and offers no call.
+final contactBlocksMeProvider = StreamProvider.autoDispose.family<bool, String>(
+  (ref, accountId) async* {
+    final gateway = await ref.watch(peopleGatewayProvider.future);
+    yield* gateway.watchBlocksMe(accountId);
+  },
+);
+
 /// The groups both of you are in.
 final commonGroupsProvider = StreamProvider.autoDispose
     .family<List<GroupSummary>, String>((ref, accountId) async* {
@@ -165,18 +174,6 @@ final safetyNumberProvider = FutureProvider.autoDispose
       final gateway = await ref.watch(peopleGatewayProvider.future);
       return gateway.safetyNumber(accountId);
     });
-
-/// How long a chat stays muted.
-enum MuteFor {
-  eightHours('8 hours', Duration(hours: 8)),
-  oneWeek('1 week', Duration(days: 7)),
-  always('Always', Duration(days: 365 * 100));
-
-  const MuteFor(this.label, this.duration);
-
-  final String label;
-  final Duration duration;
-}
 
 /// The disappearing-message timers offered.
 enum DisappearAfter {
@@ -297,27 +294,46 @@ final class ContactInfoActions {
   Future<void> setVerified(String accountId, {required bool verified}) async =>
       (await _gateway).setVerified(accountId, verified: verified);
 
-  Future<void> block(String accountId) async =>
-      (await _gateway).block(accountId);
+  /// Blocks them (the server is told). False when it did not work, for
+  /// example offline.
+  Future<bool> block(String accountId) =>
+      _tried(() async => (await _gateway).block(accountId));
 
-  Future<void> unblock(String accountId) async =>
-      (await _gateway).unblock(accountId);
+  Future<bool> unblock(String accountId) =>
+      _tried(() async => (await _gateway).unblock(accountId));
 
   /// Tells the server's operators about this account. No message content is
-  /// sent, only the account, the reason and the person's own note.
-  Future<void> report(String accountId, PersonReport report) async =>
-      (await _gateway).report(
-        accountId,
-        report.reason.category,
-        note: report.note,
-      );
+  /// sent, only the account, the reason and the person's own note. False
+  /// when it could not be sent.
+  Future<bool> report(String accountId, PersonReport report) => _tried(
+    () async => (await _gateway).report(
+      accountId,
+      report.reason.category,
+      note: report.note,
+    ),
+  );
+
+  /// A code scanned from their safety-number screen: true when it is the
+  /// one this chat expects, and the chat is then marked verified.
+  Future<bool> checkScannedCode(String accountId, String text) async {
+    final number = await (await _gateway).safetyNumber(accountId);
+    if (number == null || !number.matchesQrText(text)) return false;
+    await setVerified(accountId, verified: true);
+    return true;
+  }
+
+  static Future<bool> _tried(Future<void> Function() action) async {
+    try {
+      await action();
+      return true;
+    } on Object {
+      return false;
+    }
+  }
 
   Future<void> mute(String accountId, MuteFor? duration) async {
     final now = _ref.read(clockProvider)();
-    await (await _gateway).setMutedUntil(
-      accountId,
-      duration == null ? null : now.add(duration.duration),
-    );
+    await (await _gateway).setMutedUntil(accountId, duration?.until(now));
   }
 
   Future<void> setDisappearing(String accountId, DisappearAfter after) async =>

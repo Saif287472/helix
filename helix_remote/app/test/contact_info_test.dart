@@ -8,9 +8,19 @@ import 'package:helix_remote/features/people/application/people_gateway.dart';
 import 'package:helix_remote/features/people/presentation/contact_info_screen.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' show Value;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart'
+    show OrbitDialogPanel, OrbitIcon, OrbitIcons, OrbitQr;
 
 import 'support/people_fakes.dart';
+
+/// A widget test that ends by taking the app down and letting the last
+/// Orbit toast (4s at most) go, so no timer is left pending.
+void contactTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
 
 /// The contact info screen: who, how to rename them (and the phone's contacts
 /// with them), how the chat behaves, whether the keys have been checked, and
@@ -73,10 +83,14 @@ void main() {
   }
 
   Finder inDialog(Finder finder) =>
-      find.descendant(of: find.byType(AlertDialog), matching: finder);
+      find.descendant(of: find.byType(OrbitDialogPanel), matching: finder);
+
+  /// A section title: Orbit sets it in capitals.
+  Finder section(String title) =>
+      find.textContaining(RegExp(RegExp.escape(title), caseSensitive: false));
 
   group('who they are', () {
-    testWidgets('shows the name, number, ~name and about line', (tester) async {
+    contactTest('shows the name, number, ~name and about line', (tester) async {
       await open(tester);
       expect(find.text('Mum'), findsWidgets);
       expect(find.text('+880 1711000001'), findsWidgets);
@@ -85,19 +99,19 @@ void main() {
       expect(find.text('Phone number'), findsOneWidget);
     });
 
-    testWidgets('reads their profile when it opens', (tester) async {
+    contactTest('reads their profile when it opens', (tester) async {
       await open(tester);
       expect(gateway.calls, contains('refreshProfile:$id'));
     });
 
-    testWidgets('a person with only a number is shown by it', (tester) async {
+    contactTest('a person with only a number is shown by it', (tester) async {
       gateway.put(personRow('new', phone: '+8801711000555'));
       await open(tester, account: 'new');
       expect(find.text('+8801711000555'), findsWidgets);
       expect(find.text('Rename'), findsWidgets);
     });
 
-    testWidgets('a person this device has no row for is still shown', (
+    contactTest('a person this device has no row for is still shown', (
       tester,
     ) async {
       await open(tester, account: 'ghost');
@@ -105,7 +119,7 @@ void main() {
       expect(find.text('Available after your first message'), findsOneWidget);
     });
 
-    testWidgets('a blocked person says so and offers to unblock', (
+    contactTest('a blocked person says so and offers to unblock', (
       tester,
     ) async {
       gateway.put(gateway.people[id]!.copyWith(blocked: true));
@@ -124,7 +138,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('saves the nickname, and the phone-book name follows', (
+    contactTest('saves the nickname, and the phone-book name follows', (
       tester,
     ) async {
       await open(tester);
@@ -136,7 +150,7 @@ void main() {
       expect(find.text('Mum'), findsNothing);
     });
 
-    testWidgets('the dialog starts from the current nickname', (tester) async {
+    contactTest('the dialog starts from the current nickname', (tester) async {
       gateway.put(gateway.people[id]!.copyWith(nickname: const Value('Ma')));
       await open(tester);
       await tester.tap(find.text('Rename').first);
@@ -147,7 +161,7 @@ void main() {
       );
     });
 
-    testWidgets('cancelling changes nothing', (tester) async {
+    contactTest('cancelling changes nothing', (tester) async {
       await open(tester);
       await tester.tap(find.text('Rename').first);
       await tester.pumpAndSettle();
@@ -156,7 +170,7 @@ void main() {
       expect(gateway.calls.where((c) => c.startsWith('setNickname')), isEmpty);
     });
 
-    testWidgets('an empty name removes the nickname', (tester) async {
+    contactTest('an empty name removes the nickname', (tester) async {
       gateway.put(gateway.people[id]!.copyWith(nickname: const Value('Ma')));
       await open(tester);
       await rename(tester, '');
@@ -164,7 +178,7 @@ void main() {
       expect(find.text('Saved.'), findsOneWidget);
     });
 
-    testWidgets('without the phone permission it asks first, then writes', (
+    contactTest('without the phone permission it asks first, then writes', (
       tester,
     ) async {
       contacts.state = ContactsPermission.notAsked;
@@ -185,7 +199,7 @@ void main() {
       expect(contacts.state, ContactsPermission.granted);
     });
 
-    testWidgets('declining the phone leaves the name in Helix only', (
+    contactTest('declining the phone leaves the name in Orbit only', (
       tester,
     ) async {
       contacts.state = ContactsPermission.notAsked;
@@ -197,7 +211,7 @@ void main() {
       expect(find.text('Saved.'), findsOneWidget);
     });
 
-    testWidgets('a system refusal is explained', (tester) async {
+    contactTest('a system refusal is explained', (tester) async {
       contacts
         ..state = ContactsPermission.notAsked
         ..grantOnRequest = false;
@@ -205,43 +219,43 @@ void main() {
       await rename(tester, 'Mother');
       await tester.tap(find.text('Allow'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('did not let Helix change'), findsOneWidget);
+      expect(find.textContaining('did not let Orbit change'), findsOneWidget);
     });
 
-    testWidgets('a phone that refuses the write is explained', (tester) async {
+    contactTest('a phone that refuses the write is explained', (tester) async {
       contacts.refuseWrites = true;
       await open(tester);
       await rename(tester, 'Mother');
-      expect(find.textContaining('did not let Helix change'), findsOneWidget);
+      expect(find.textContaining('did not let Orbit change'), findsOneWidget);
       // Still saved in Helix, and shown by the nickname rung of the order
       // only when there is no phone-book name: here the old one wins.
       expect(gateway.people[id]!.nickname, 'Mother');
     });
 
-    testWidgets('a person with no number is never offered the phone', (
+    contactTest('a person with no number is never offered the phone', (
       tester,
     ) async {
       contacts.state = ContactsPermission.notAsked;
       gateway.put(personRow('named', helix: 'named_one', identityKey: key(3)));
       await open(tester, account: 'named');
-      expect(find.textContaining('phone\'s contacts'), findsNothing);
+      expect(find.textContaining('phone’s contacts'), findsNothing);
       await rename(tester, 'Dana');
       expect(find.text('Save in your phone contacts too?'), findsNothing);
       expect(find.text('Saved.'), findsOneWidget);
       expect(find.text('Dana'), findsWidgets);
     });
 
-    testWidgets('says that renaming also renames in the phone', (tester) async {
+    contactTest('says that renaming also renames in the phone', (tester) async {
       await open(tester);
       expect(
-        find.text('Renaming also saves the name in your phone\'s contacts.'),
+        find.text('Renaming also saves the name in your phone’s contacts.'),
         findsOneWidget,
       );
     });
   });
 
   group('the chat', () {
-    testWidgets('message and call buttons use the seams', (tester) async {
+    contactTest('message and call buttons use the seams', (tester) async {
       await open(tester);
       await tester.tap(find.text('Message'));
       await tester.pump();
@@ -253,7 +267,7 @@ void main() {
       expect(seams.calls, ['voice:$id', 'video:$id']);
     });
 
-    testWidgets('a refused call and unopenable shared media say so', (
+    contactTest('a refused call and unopenable shared media say so', (
       tester,
     ) async {
       seams
@@ -269,7 +283,7 @@ void main() {
       expect(seams.media, ['direct:$id']);
     });
 
-    testWidgets('muting offers durations and unmuting is one tap', (
+    contactTest('muting offers durations and unmuting is one tap', (
       tester,
     ) async {
       await open(tester);
@@ -294,7 +308,7 @@ void main() {
       expect(find.textContaining('Until '), findsNothing);
     });
 
-    testWidgets('muting for ever reads "Always"', (tester) async {
+    contactTest('muting for ever reads "Always"', (tester) async {
       await open(tester);
       await tester.tap(find.text('Mute notifications'));
       await tester.pumpAndSettle();
@@ -303,20 +317,26 @@ void main() {
       expect(find.text('Always'), findsOneWidget);
     });
 
-    testWidgets('the disappearing timer shows the current choice and sets '
+    contactTest('the disappearing timer shows the current choice and sets '
         'a new one', (tester) async {
       await open(tester);
       expect(find.text('Off'), findsOneWidget);
       await tester.tap(find.text('Disappearing messages'));
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.check), findsOneWidget);
+      // The current choice is ticked.
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is OrbitIcon && w.glyph == OrbitIcons.check,
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('7 days'));
       await tester.pumpAndSettle();
       expect(gateway.calls, contains('disappearing:$id:604800'));
       expect(find.text('7 days'), findsOneWidget);
     });
 
-    testWidgets('lists the groups you have in common', (tester) async {
+    contactTest('lists the groups you have in common', (tester) async {
       gateway.groups.addAll(const [
         GroupSummary(id: 'g1', title: 'Family'),
         GroupSummary(id: 'g2', title: 'Work'),
@@ -324,7 +344,7 @@ void main() {
       gateway.members['g1'] = {id, 'self-account'};
       gateway.members['g2'] = {'self-account'};
       await open(tester);
-      expect(find.text('1 group in common'), findsOneWidget);
+      expect(section('1 group in common'), findsOneWidget);
       expect(find.text('Family'), findsOneWidget);
       expect(find.text('Work'), findsNothing);
       await tester.tap(find.text('Family'));
@@ -332,26 +352,26 @@ void main() {
       expect(seams.opened, ['group:g1']);
     });
 
-    testWidgets('no common groups, no section', (tester) async {
+    contactTest('no common groups, no section', (tester) async {
       await open(tester);
-      expect(find.textContaining('in common'), findsNothing);
+      expect(section('in common'), findsNothing);
     });
   });
 
   group('trust', () {
-    testWidgets('an unverified key says so', (tester) async {
+    contactTest('an unverified key says so', (tester) async {
       await open(tester);
       expect(find.text('Not verified'), findsOneWidget);
       expect(find.text('Safety number changed'), findsNothing);
     });
 
-    testWidgets('a verified key says so', (tester) async {
+    contactTest('a verified key says so', (tester) async {
       gateway.put(gateway.people[id]!.copyWith(identityVerified: true));
       await open(tester);
       expect(find.text('Verified'), findsOneWidget);
     });
 
-    testWidgets('a changed key is a warning, with a way to review it', (
+    contactTest('a changed key is a warning, with a way to review it', (
       tester,
     ) async {
       gateway.put(
@@ -369,7 +389,7 @@ void main() {
       expect(find.text('Mark as verified'), findsOneWidget);
     });
 
-    testWidgets('a key verified after the change is verified, not a '
+    contactTest('a key verified after the change is verified, not a '
         'warning', (tester) async {
       gateway.put(
         gateway.people[id]!.copyWith(
@@ -382,7 +402,7 @@ void main() {
       expect(find.text('Verified'), findsOneWidget);
     });
 
-    testWidgets('before any message there is nothing to verify', (
+    contactTest('before any message there is nothing to verify', (
       tester,
     ) async {
       gateway.put(personRow('fresh', phonebook: 'Fresh'));
@@ -400,19 +420,22 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('shows the digits, a QR code and the way to verify', (
+    contactTest('shows the digits, a QR code and the way to verify', (
       tester,
     ) async {
       await openSafety(tester);
-      expect(find.byType(HelixSafetyNumberView), findsOneWidget);
-      expect(find.byType(HelixQrDisplay), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('QR code for the safety number with Mum'),
+        findsOneWidget,
+      );
+      expect(find.byType(OrbitQr), findsOneWidget);
       expect(find.text('10000'), findsOneWidget);
       expect(find.text('Scan their code'), findsOneWidget);
       expect(find.text('Mark as verified'), findsOneWidget);
       expect(find.text('Verified'), findsNothing);
     });
 
-    testWidgets('marking verified, and un-verifying, go to the engine', (
+    contactTest('marking verified, and un-verifying, go to the engine', (
       tester,
     ) async {
       await openSafety(tester);
@@ -426,7 +449,7 @@ void main() {
       expect(find.text('Mark as verified'), findsOneWidget);
     });
 
-    testWidgets('scanning the matching code verifies and closes', (
+    contactTest('scanning the matching code verifies and closes', (
       tester,
     ) async {
       await openSafety(tester);
@@ -441,7 +464,7 @@ void main() {
       expect(find.text('Verified. Your chat is private.'), findsOneWidget);
     });
 
-    testWidgets('a code that does not match verifies nothing', (tester) async {
+    contactTest('a code that does not match verifies nothing', (tester) async {
       await openSafety(tester);
       for (final wrong in ['not-a-code', '!!!', '']) {
         scannedCode = wrong;
@@ -459,7 +482,7 @@ void main() {
       expect(gateway.calls.where((c) => c.startsWith('setVerified')), isEmpty);
     });
 
-    testWidgets('a code from somebody else\'s keys does not match', (
+    contactTest('a code from somebody else\'s keys does not match', (
       tester,
     ) async {
       await openSafety(tester);
@@ -475,7 +498,7 @@ void main() {
       expect(find.text('That code does not match'), findsOneWidget);
     });
 
-    testWidgets('no key yet is an explanation, not a crash', (tester) async {
+    contactTest('no key yet is an explanation, not a crash', (tester) async {
       gateway.safety.remove(id);
       await open(tester);
       GoRouter.of(
@@ -504,12 +527,12 @@ void main() {
   });
 
   group('blocking and reporting', () {
-    testWidgets('blocking asks first and does not tell them', (tester) async {
+    contactTest('blocking asks first and says they are told', (tester) async {
       await open(tester);
       await tester.tap(find.text('Block Mum'));
       await tester.pumpAndSettle();
       expect(find.text('Block Mum?'), findsOneWidget);
-      expect(find.textContaining('will not be told'), findsOneWidget);
+      expect(find.textContaining('Orbit tells them'), findsOneWidget);
       await tester.tap(inDialog(find.text('Block')));
       await tester.pumpAndSettle();
       expect(gateway.calls, contains('block:$id'));
@@ -517,7 +540,30 @@ void main() {
       expect(find.text('Unblock Mum'), findsOneWidget);
     });
 
-    testWidgets('cancelling the block does nothing', (tester) async {
+    contactTest('a block that does not go through says so', (tester) async {
+      gateway.blockError = StateError('offline');
+      await open(tester);
+      await tester.tap(find.text('Block Mum'));
+      await tester.pumpAndSettle();
+      await tester.tap(inDialog(find.text('Block')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('That did not work'), findsOneWidget);
+      expect(find.text('Block Mum'), findsOneWidget);
+    });
+
+    contactTest('someone who blocked you: no call tiles, and why', (
+      tester,
+    ) async {
+      gateway.blocksMe.add(id);
+      await open(tester);
+      await settle(tester);
+      expect(find.text('Voice call'), findsNothing);
+      expect(find.text('Video call'), findsNothing);
+      expect(find.text('Message'), findsOneWidget);
+      expect(find.textContaining('Mum has blocked you.'), findsOneWidget);
+    });
+
+    contactTest('cancelling the block does nothing', (tester) async {
       await open(tester);
       await tester.tap(find.text('Block Mum'));
       await tester.pumpAndSettle();
@@ -526,7 +572,7 @@ void main() {
       expect(gateway.calls.where((c) => c.startsWith('block')), isEmpty);
     });
 
-    testWidgets('unblocking is one tap', (tester) async {
+    contactTest('unblocking is one tap', (tester) async {
       gateway.put(gateway.people[id]!.copyWith(blocked: true));
       await open(tester);
       await tester.tap(find.text('Unblock Mum'));
@@ -535,7 +581,7 @@ void main() {
       expect(find.text('Block Mum'), findsOneWidget);
     });
 
-    testWidgets('a report is a category and a note, confirmed, and sends no '
+    contactTest('a report is a category and a note, confirmed, and sends no '
         'messages', (tester) async {
       await open(tester);
       await tester.tap(find.text('Report Mum'));
@@ -553,7 +599,7 @@ void main() {
       );
     });
 
-    testWidgets('the note is optional', (tester) async {
+    contactTest('the note is optional', (tester) async {
       await open(tester);
       await tester.tap(find.text('Report Mum'));
       await tester.pumpAndSettle();
@@ -564,7 +610,7 @@ void main() {
       expect(gateway.calls, contains('report:$id:abuse:null'));
     });
 
-    testWidgets('dismissing the report sheet sends nothing', (tester) async {
+    contactTest('dismissing the report sheet sends nothing', (tester) async {
       await open(tester);
       await tester.tap(find.text('Report Mum'));
       await tester.pumpAndSettle();
@@ -575,7 +621,7 @@ void main() {
   });
 
   group('accessibility', () {
-    testWidgets('48 px targets and labelled buttons at 2x text', (
+    contactTest('48 px targets and labelled buttons at 2x text', (
       tester,
     ) async {
       final handle = tester.ensureSemantics();
@@ -585,7 +631,7 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('the header is a heading and the picture is described', (
+    contactTest('the header is a heading and the picture is described', (
       tester,
     ) async {
       final handle = tester.ensureSemantics();

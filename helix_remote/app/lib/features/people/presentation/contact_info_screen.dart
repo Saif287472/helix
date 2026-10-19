@@ -1,20 +1,19 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/people/application/contact_info.dart';
 import 'package:helix_remote/features/people/application/people_gateway.dart';
-import 'package:helix_remote/features/people/presentation/widgets/key_changed_banner.dart';
-import 'package:helix_remote/features/people/presentation/widgets/person_sheets.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/shared/widgets/mute_choice.dart' as app;
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// Everything about one person: who they are, how to reach them, how this chat
-/// behaves, whether its keys have been checked, and how to block or report
-/// them.
+/// Connector: everything about one person, who they are, how to reach them,
+/// how this chat behaves, whether its keys have been checked, and how to
+/// block or report them, drawn by `orbit_ui`'s Contact info
+/// (`contracts/people_groups.md`).
 ///
 /// Reached from a long press in people search, from the conversation header
-/// (A2a) and from a group's member list (A3a) at
-/// `PeoplePaths.person(accountId)`.
+/// and from a group's member list at `PeoplePaths.person(accountId)`.
 class ContactInfoScreen extends ConsumerStatefulWidget {
   const ContactInfoScreen({super.key, required this.accountId});
 
@@ -27,118 +26,60 @@ class ContactInfoScreen extends ConsumerStatefulWidget {
 class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
   String get _id => widget.accountId;
 
+  ContactInfoActions get _actions => ref.read(contactInfoActionsProvider);
+
   @override
   void initState() {
     super.initState();
     // Their profile (name, about) is read once when the screen opens, when
     // this device already has their profile key.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(contactInfoActionsProvider).refreshProfile(_id);
+      if (mounted) _actions.refreshProfile(_id);
     });
   }
 
-  void _say(String message) {
-    if (mounted) showHelixSnackBar(context, message);
-  }
+  static orbit.TrustState _trustOf(TrustState t) => switch (t) {
+    TrustState.noKey => orbit.TrustState.noKey,
+    TrustState.unverified => orbit.TrustState.unverified,
+    TrustState.verified => orbit.TrustState.verified,
+    TrustState.keyChanged => orbit.TrustState.keyChanged,
+  };
 
-  Future<void> _rename(ContactPerson person) async {
-    final actions = ref.read(contactInfoActionsProvider);
-    final entered = await showHelixTextInputDialog(
-      context,
-      title: 'Rename',
-      label: 'Name',
-      initialValue: person.name.names.nickname ?? '',
-      maxLength: 60,
-    );
-    if (entered == null || !mounted) return;
-    var outcome = await actions.rename(_id, entered);
-    if (!mounted) return;
-    if (outcome == RenameOutcome.needsPhonePermission) {
-      final allow = await showHelixConfirmDialog(
-        context,
-        title: 'Save in your phone contacts too?',
-        message:
-            'Helix can also save this name in your phone\'s contacts, so it '
-            'shows up the same everywhere. This needs permission to change '
-            'your contacts.',
-        confirmLabel: 'Allow',
-        cancelLabel: 'Not now',
-      );
-      if (!mounted) return;
-      if (allow) {
-        outcome = await actions.savePhoneName(_id, entered);
-        if (!mounted) return;
-      }
-    }
-    _say(switch (outcome) {
-      RenameOutcome.savedEverywhere => 'Saved, and updated in your contacts.',
-      RenameOutcome.phoneRefused =>
-        'Saved in Helix. Your phone did not let Helix change your contacts.',
-      RenameOutcome.savedInHelix ||
-      RenameOutcome.needsPhonePermission => 'Saved.',
-    });
-  }
+  static orbit.DisappearAfter _disappearingOf(DisappearAfter d) => switch (d) {
+    DisappearAfter.off => orbit.DisappearAfter.off,
+    DisappearAfter.day => orbit.DisappearAfter.day,
+    DisappearAfter.week => orbit.DisappearAfter.week,
+    DisappearAfter.ninety => orbit.DisappearAfter.days90,
+  };
 
-  Future<void> _mute(bool on) async {
-    final actions = ref.read(contactInfoActionsProvider);
-    if (!on) return actions.mute(_id, null);
-    final choice = await showMuteSheet(context);
-    if (choice != null) await actions.mute(_id, choice);
-  }
+  static DisappearAfter _appDisappearingOf(orbit.DisappearAfter d) =>
+      switch (d) {
+        orbit.DisappearAfter.off => DisappearAfter.off,
+        orbit.DisappearAfter.day => DisappearAfter.day,
+        orbit.DisappearAfter.week => DisappearAfter.week,
+        orbit.DisappearAfter.days90 => DisappearAfter.ninety,
+      };
 
-  Future<void> _disappearing(int? current) async {
-    final choice = await showDisappearingSheet(
-      context,
-      selected: DisappearAfter.of(current),
-    );
-    if (choice == null) return;
-    await ref.read(contactInfoActionsProvider).setDisappearing(_id, choice);
-  }
+  static app.MuteFor _muteOf(orbit.MuteFor m) => switch (m) {
+    orbit.MuteFor.eightHours => app.MuteFor.eightHours,
+    orbit.MuteFor.week => app.MuteFor.oneWeek,
+    orbit.MuteFor.always => app.MuteFor.always,
+  };
 
-  Future<void> _block(ContactPerson person) async {
-    final actions = ref.read(contactInfoActionsProvider);
-    if (person.name.blocked) {
-      await actions.unblock(_id);
-      _say('Unblocked.');
-      return;
-    }
-    final confirmed = await showHelixConfirmDialog(
-      context,
-      title: 'Block ${person.name.display}?',
-      message:
-          'They will not be able to message or call you, and will not be told '
-          'that you blocked them.',
-      confirmLabel: 'Block',
-    );
-    if (!confirmed || !mounted) return;
-    await actions.block(_id);
-    _say('Blocked.');
-  }
+  static ReportReason _reasonOf(orbit.ReportReason r) => switch (r) {
+    orbit.ReportReason.spam => ReportReason.spam,
+    orbit.ReportReason.abuse => ReportReason.abuse,
+    orbit.ReportReason.impersonation => ReportReason.impersonation,
+    orbit.ReportReason.other => ReportReason.other,
+  };
 
-  Future<void> _report(ContactPerson person) async {
-    final report = await showReportSheet(context, name: person.name.display);
-    if (report == null || !mounted) return;
-    try {
-      await ref.read(contactInfoActionsProvider).report(_id, report);
-      _say('Reported. No messages were sent with the report.');
-    } on Object {
-      _say('The report could not be sent. Try again in a moment.');
-    }
-  }
-
-  Future<void> _call({required bool video}) async {
-    final failure = await ref
-        .read(contactInfoActionsProvider)
-        .startCall(_id, video: video);
-    if (failure != null) _say(failure);
-  }
-
-  Future<void> _sharedMedia() async {
-    final opened = await ref
-        .read(contactInfoActionsProvider)
-        .openSharedMedia(_id);
-    if (!opened) _say('Shared media could not be opened.');
-  }
+  static orbit.RenameResult _renamedOf(RenameOutcome r) => switch (r) {
+    RenameOutcome.savedEverywhere => orbit.RenameResult.savedEverywhere,
+    RenameOutcome.savedInHelix => orbit.RenameResult.saved,
+    RenameOutcome.needsPhonePermission =>
+      orbit.RenameResult.needsPhonePermission,
+    RenameOutcome.phoneRefused => orbit.RenameResult.phoneRefused,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -147,301 +88,59 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
     final chat = ref.watch(contactChatProvider(_id)).value;
     final groups =
         ref.watch(commonGroupsProvider(_id)).value ?? const <GroupSummary>[];
-    final person = async.value;
-
-    return HelixSettingsScaffold(
-      title: 'Contact info',
-      body: async.when(
-        loading: () => const HelixAsyncPanel(loading: true, child: SizedBox()),
-        error: (_, _) => const HelixErrorState(
-          message: 'This person could not be loaded. Go back and try again.',
-        ),
-        data: (_) => _content(
-          person ??
-              // A person this device has no row for: say what is known.
-              ContactPerson.unknown(_id),
-          about,
-          chat,
-          groups,
-        ),
-      ),
-    );
-  }
-
-  Widget _content(
-    ContactPerson person,
-    String? about,
-    ContactChatSettings? chat,
-    List<GroupSummary> groups,
-  ) {
+    final blocksMe = ref.watch(contactBlocksMeProvider(_id)).value ?? false;
+    // A person this device has no row for: say what is known.
+    final person = async.value ?? ContactPerson.unknown(_id);
     final name = person.name;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final secondary = person.numberLabel ?? name.names.secondary;
-
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            HelixSpace.lg,
-            HelixSpace.md,
-            HelixSpace.lg,
-            HelixSpace.md,
-          ),
-          child: Column(
-            children: [
-              // The big picture of the v1 contact page: the extra-large avatar
-              // drawn at 112 logical pixels.
-              SizedBox.square(
-                dimension: 112,
-                child: FittedBox(
-                  child: HelixAvatar(
-                    model: name.avatar,
-                    size: HelixAvatarSize.xl,
-                    semanticLabel: 'Picture of ${name.display}',
-                  ),
-                ),
-              ),
-              const SizedBox(height: HelixSpace.md),
-              Semantics(
-                header: true,
-                child: Text(
-                  name.display,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-              if (secondary != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: HelixSpace.xxs),
-                  child: Text(
-                    secondary,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              if (name.blocked)
-                Padding(
-                  padding: const EdgeInsets.only(top: HelixSpace.xxs),
-                  child: Text('Blocked', style: TextStyle(color: scheme.error)),
-                ),
-              if (about != null && about.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: HelixSpace.xs),
-                  child: Text(about, textAlign: TextAlign.center),
-                ),
-            ],
+    final actions = _actions;
+    return orbit.ContactScreen(
+      model: orbit.ContactModel(
+        accountId: _id,
+        name: name.display,
+        avatar: name.avatar,
+        secondary: person.numberLabel ?? name.names.secondary,
+        about: about == null || about.trim().isEmpty ? null : about,
+        trust: _trustOf(person.trust),
+        blocked: name.blocked,
+        blockedByThem: blocksMe,
+        nickname: name.names.nickname,
+        numberLabel: person.numberLabel,
+        helixName: name.helixName,
+        muted: chat?.muted ?? false,
+        muteLabel: chat?.muteLabel,
+        disappearing: _disappearingOf(
+          DisappearAfter.of(chat?.disappearingSeconds),
+        ),
+        commonGroups: [for (final g in groups) (id: g.id, title: g.title)],
+        loading: async.isLoading && !async.hasValue,
+        loadFailed: async.hasError && !async.hasValue,
+      ),
+      actions: orbit.ContactActions(
+        onMessage: () => actions.openChat(_id),
+        onCall: ({required video}) => actions.startCall(_id, video: video),
+        onRename: (value) async => _renamedOf(await actions.rename(_id, value)),
+        onSaveToPhoneContacts: (value) async =>
+            _renamedOf(await actions.savePhoneName(_id, value)),
+        onMute: (length) =>
+            actions.mute(_id, length == null ? null : _muteOf(length)),
+        onSetDisappearing: (after) =>
+            actions.setDisappearing(_id, _appDisappearingOf(after)),
+        onOpenSharedMedia: () => actions.openSharedMedia(_id),
+        onOpenSafetyNumber: () => context.push(PeoplePaths.safetyNumber(_id)),
+        onOpenGroup: (groupId) {
+          final group = groups.where((g) => g.id == groupId).firstOrNull;
+          if (group != null) actions.openGroup(group);
+        },
+        onBlock: () => actions.block(_id),
+        onUnblock: () => actions.unblock(_id),
+        onReport: (report) => actions.report(
+          _id,
+          PersonReport(
+            reason: _reasonOf(report.reason),
+            note: report.note.isEmpty ? null : report.note,
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            HelixSpace.md,
-            0,
-            HelixSpace.md,
-            HelixSpace.sm,
-          ),
-          child: Row(
-            children: [
-              _ActionButton(
-                icon: Icons.chat_bubble_outline,
-                label: 'Message',
-                onTap: () => ref.read(contactInfoActionsProvider).openChat(_id),
-              ),
-              const SizedBox(width: HelixSpace.sm),
-              _ActionButton(
-                icon: Icons.call_outlined,
-                label: 'Voice call',
-                onTap: () => _call(video: false),
-              ),
-              const SizedBox(width: HelixSpace.sm),
-              _ActionButton(
-                icon: Icons.videocam_outlined,
-                label: 'Video call',
-                onTap: () => _call(video: true),
-              ),
-            ],
-          ),
-        ),
-        if (person.trust == TrustState.keyChanged)
-          KeyChangedBanner(
-            name: name.display,
-            onReview: () => context.push(PeoplePaths.safetyNumber(_id)),
-          ),
-        HelixSettingsSection(
-          title: 'Name',
-          footer: person.hasNumber
-              ? 'Renaming also saves the name in your phone\'s contacts.'
-              : null,
-          children: [
-            HelixSettingsTile(
-              icon: Icons.edit_outlined,
-              title: 'Rename',
-              subtitle: name.names.nickname ?? 'Choose a name only you see',
-              showChevron: true,
-              onTap: () => _rename(person),
-            ),
-            if (person.numberLabel != null)
-              HelixSettingsTile(
-                icon: Icons.phone_outlined,
-                title: person.numberLabel!,
-                subtitle: 'Phone number',
-              ),
-            if (name.helixName != null)
-              HelixSettingsTile(
-                icon: Icons.alternate_email,
-                title: '~${name.helixName}',
-                subtitle: 'Helix name',
-              ),
-          ],
-        ),
-        HelixSettingsSection(
-          title: 'Chat',
-          children: [
-            HelixSettingsTile(
-              icon: Icons.photo_library_outlined,
-              title: 'Media, links and docs',
-              showChevron: true,
-              onTap: _sharedMedia,
-            ),
-            HelixSettingsSwitchTile(
-              icon: Icons.notifications_off_outlined,
-              title: 'Mute notifications',
-              subtitle: chat?.muteLabel,
-              value: chat?.muted ?? false,
-              onChanged: _mute,
-            ),
-            HelixSettingsTile(
-              icon: Icons.timer_outlined,
-              title: 'Disappearing messages',
-              subtitle: DisappearAfter.of(chat?.disappearingSeconds).label,
-              showChevron: true,
-              onTap: () => _disappearing(chat?.disappearingSeconds),
-            ),
-          ],
-        ),
-        HelixSettingsSection(
-          title: 'Encryption',
-          footer:
-              'Messages and calls with ${name.display} are end-to-end '
-              'encrypted. Only the two of you can read them.',
-          children: [
-            HelixSettingsTile(
-              icon: switch (person.trust) {
-                TrustState.verified => Icons.verified_user,
-                TrustState.keyChanged => Icons.warning_amber_rounded,
-                _ => Icons.verified_user_outlined,
-              },
-              title: 'Verify safety number',
-              subtitle: switch (person.trust) {
-                TrustState.verified => 'Verified',
-                TrustState.keyChanged => 'Safety number changed',
-                TrustState.unverified => 'Not verified',
-                TrustState.noKey => 'Available after your first message',
-              },
-              showChevron: true,
-              onTap: person.trust == TrustState.noKey
-                  ? () => _say(
-                      'Send a message first. A safety number needs both of '
-                      'your keys.',
-                    )
-                  : () => context.push(PeoplePaths.safetyNumber(_id)),
-            ),
-          ],
-        ),
-        if (groups.isNotEmpty)
-          HelixSettingsSection(
-            title: groups.length == 1
-                ? '1 group in common'
-                : '${groups.length} groups in common',
-            children: [
-              for (final group in groups)
-                HelixSettingsTile(
-                  icon: Icons.group_outlined,
-                  title: group.title,
-                  showChevron: true,
-                  onTap: () =>
-                      ref.read(contactInfoActionsProvider).openGroup(group),
-                ),
-            ],
-          ),
-        HelixSettingsSection(
-          children: [
-            HelixSettingsTile(
-              icon: name.blocked ? Icons.lock_open : Icons.block,
-              title: name.blocked
-                  ? 'Unblock ${name.display}'
-                  : 'Block ${name.display}',
-              destructive: !name.blocked,
-              onTap: () => _block(person),
-            ),
-            HelixSettingsTile(
-              icon: Icons.flag_outlined,
-              title: 'Report ${name.display}',
-              destructive: true,
-              onTap: () => _report(person),
-            ),
-          ],
-        ),
-        const SizedBox(height: HelixSpace.lg),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        onTap: onTap,
-        child: ExcludeSemantics(
-          // The v1 header action: an outlined rounded tile, icon over label.
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onTap,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 76),
-              padding: const EdgeInsets.symmetric(vertical: HelixSpace.xs),
-              decoration: BoxDecoration(
-                border: Border.all(color: scheme.outlineVariant),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: scheme.primary, size: 28),
-                  const SizedBox(height: HelixSpace.xxs),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+        onRetry: () => ref.invalidate(contactPersonProvider(_id)),
       ),
     );
   }

@@ -586,6 +586,17 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   and the call parts are deleted. Tests: app 848, orbit_ui 196,
   helix_remote_ui 184, rules 20, all passing; the 24 compared call states
   unchanged from Review 4, and the call window shots unchanged from batch 10.
+- [x] Step 2, batch 6 (pending your review): people draw the Orbit pages
+  through the connectors in `features/people/presentation/`: Contact info
+  (rename with the phone-contacts question, mute, the timer, groups in
+  common, block and report with their toasts, "<name> has blocked you."
+  with no call tiles), Safety number (the app's QR code, verify, retry),
+  Scan code (the app's camera, one code at a time, match and mismatch),
+  and the people search page (the same people panel as the Chats search,
+  now in `shared/widgets/orbit_people_panel.dart`). The old banner and
+  sheets are deleted. Tests: app 852, orbit_ui 200, helix_remote_ui
+  184, rules 20, all passing; the 25 compared states unchanged from
+  Review 4.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

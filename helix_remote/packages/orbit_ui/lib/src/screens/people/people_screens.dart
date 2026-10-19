@@ -15,7 +15,9 @@ import 'package:orbit_ui/src/components/state_kit.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
 import 'package:orbit_ui/src/models/view_models.dart';
-import 'package:orbit_ui/src/screens/home/home_models.dart' show MuteFor;
+import 'package:orbit_ui/src/screens/home/home_models.dart'
+    show MuteFor, PeoplePanelActions, PeoplePanelModel;
+import 'package:orbit_ui/src/screens/home/people_panel.dart';
 import 'package:orbit_ui/src/screens/signin/entry_screens.dart'
     show OrbitButtonRow;
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
@@ -52,6 +54,21 @@ class PersonReport {
 
   final ReportReason reason;
   final String note;
+}
+
+/// What a rename did (`RenameOutcome` in the app).
+enum RenameResult {
+  /// Saved here and in the phone's contacts.
+  savedEverywhere,
+
+  /// Saved here only (no number, or not asked).
+  saved,
+
+  /// Saved here; the phone's contacts need permission first.
+  needsPhonePermission,
+
+  /// Saved here; the phone refused to change its contacts.
+  phoneRefused,
 }
 
 /// A missing action does nothing, rather than drawing its button disabled.
@@ -125,6 +142,7 @@ class ContactActions {
     this.onMessage,
     this.onCall,
     this.onRename,
+    this.onSaveToPhoneContacts,
     this.onMute,
     this.onSetDisappearing,
     this.onOpenSharedMedia,
@@ -137,20 +155,31 @@ class ContactActions {
   });
 
   final VoidCallback? onMessage;
-  final void Function({required bool video})? onCall;
+
+  /// Null when the call started, else the sentence to show.
+  final Future<String?> Function({required bool video})? onCall;
 
   /// Blank clears the nickname.
-  final ValueChanged<String>? onRename;
+  final Future<RenameResult> Function(String name)? onRename;
+
+  /// After "Allow": asks the phone for permission, then saves there too.
+  final Future<RenameResult> Function(String name)? onSaveToPhoneContacts;
 
   /// Null unmutes.
   final ValueChanged<MuteFor?>? onMute;
   final ValueChanged<DisappearAfter>? onSetDisappearing;
-  final VoidCallback? onOpenSharedMedia;
+
+  /// False when it could not open.
+  final Future<bool> Function()? onOpenSharedMedia;
   final VoidCallback? onOpenSafetyNumber;
   final ValueChanged<String>? onOpenGroup;
-  final VoidCallback? onBlock;
-  final VoidCallback? onUnblock;
-  final ValueChanged<PersonReport>? onReport;
+
+  /// False when it did not work (offline).
+  final Future<bool> Function()? onBlock;
+  final Future<bool> Function()? onUnblock;
+
+  /// False when the report could not be sent.
+  final Future<bool> Function(PersonReport report)? onReport;
   final VoidCallback? onRetry;
 }
 
@@ -167,6 +196,95 @@ class ContactScreen extends StatelessWidget {
   final ContactModel model;
   final ContactActions actions;
 
+  static const _failed =
+      'That did not work. Check your connection and try again.';
+
+  void _say(BuildContext context, String? text, {bool error = false}) {
+    if (text != null && context.mounted) {
+      showOrbitToast(context, text, error: error);
+    }
+  }
+
+  static String _renamed(RenameResult r) => switch (r) {
+    RenameResult.savedEverywhere => 'Saved, and updated in your contacts.',
+    RenameResult.phoneRefused =>
+      'Saved in Orbit. Your phone did not let Orbit change your contacts.',
+    RenameResult.saved || RenameResult.needsPhonePermission => 'Saved.',
+  };
+
+  /// Saves the name; when the phone's contacts need permission, asks first
+  /// ("Not now" keeps it in Orbit only).
+  Future<void> _rename(BuildContext context, String name) async {
+    final rename = actions.onRename;
+    if (rename == null) return;
+    final result = await rename(name);
+    if (!context.mounted) return;
+    if (result != RenameResult.needsPhonePermission) {
+      _say(context, _renamed(result));
+      return;
+    }
+    await showOrbitDialog(
+      context,
+      title: 'Save in your phone contacts too?',
+      text:
+          'Orbit needs permission to change your contacts to keep this name '
+          'there as well.',
+      actions: [
+        OrbitDialogAction('Not now', onPressed: () => _say(context, 'Saved.')),
+        OrbitDialogAction(
+          'Allow',
+          kind: OrbitButtonKind.primary,
+          onPressed: () async {
+            final save = actions.onSaveToPhoneContacts;
+            final again = save == null ? RenameResult.saved : await save(name);
+            if (context.mounted) _say(context, _renamed(again));
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _call(BuildContext context, {required bool video}) async {
+    final refusal = await actions.onCall?.call(video: video);
+    if (context.mounted) _say(context, refusal, error: true);
+  }
+
+  Future<void> _sharedMedia(BuildContext context) async {
+    final open = actions.onOpenSharedMedia;
+    if (open == null) return;
+    if (!await open() && context.mounted) {
+      _say(context, 'Shared media could not be opened.', error: true);
+    }
+  }
+
+  Future<void> _block(BuildContext context, {required bool block}) async {
+    final run = block ? actions.onBlock : actions.onUnblock;
+    if (run == null) return;
+    final ok = await run();
+    if (!context.mounted) return;
+    if (ok) {
+      _say(context, block ? 'Blocked.' : 'Unblocked.');
+    } else {
+      _say(context, _failed, error: true);
+    }
+  }
+
+  Future<void> _report(BuildContext context, PersonReport report) async {
+    final send = actions.onReport;
+    if (send == null) return;
+    final ok = await send(report);
+    if (!context.mounted) return;
+    if (ok) {
+      _say(context, 'Reported. No messages were sent with the report.');
+    } else {
+      _say(
+        context,
+        'The report could not be sent. Try again in a moment.',
+        error: true,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -181,7 +299,7 @@ class ContactScreen extends StatelessWidget {
             const OrbitPageLoading(),
           ] else
             OrbitLoadFailed(
-              title: 'This contact could not be loaded.',
+              title: 'This person could not be loaded.',
               onRetry: a.onRetry,
             ),
         ],
@@ -250,7 +368,7 @@ class ContactScreen extends StatelessWidget {
                   child: _Tile(
                     OrbitIcons.phone,
                     'Voice call',
-                    () => a.onCall?.call(video: false),
+                    () => _call(context, video: false),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -258,7 +376,7 @@ class ContactScreen extends StatelessWidget {
                   child: _Tile(
                     OrbitIcons.videoCamera,
                     'Video call',
-                    () => a.onCall?.call(video: true),
+                    () => _call(context, video: true),
                   ),
                 ),
               ],
@@ -286,7 +404,7 @@ class ContactScreen extends StatelessWidget {
                 title: 'Rename',
                 label: 'Name',
                 value: (m.nickname ?? '').isNotEmpty ? m.nickname! : n,
-                onConfirm: (v) => a.onRename?.call(v.trim()),
+                onConfirm: (v) => _rename(context, v.trim()),
               ),
             ),
             if (number != null)
@@ -317,7 +435,7 @@ class ContactScreen extends StatelessWidget {
               iconColor: 2,
               title: 'Media, links and docs',
               end: OrbitRowEnd.chevron,
-              onTap: a.onOpenSharedMedia,
+              onTap: () => _sharedMedia(context),
             ),
             OrbitListRow(
               icon: OrbitIcons.bellSlash,
@@ -436,7 +554,7 @@ class ContactScreen extends StatelessWidget {
               OrbitListRow(
                 icon: OrbitIcons.prohibit,
                 title: 'Unblock $n',
-                onTap: a.onUnblock,
+                onTap: () => _block(context, block: false),
               )
             else
               OrbitListRow(
@@ -454,7 +572,7 @@ class ContactScreen extends StatelessWidget {
                     OrbitDialogAction(
                       'Block',
                       kind: OrbitButtonKind.primary,
-                      onPressed: a.onBlock,
+                      onPressed: () => _block(context, block: true),
                     ),
                   ],
                 ),
@@ -466,9 +584,10 @@ class ContactScreen extends StatelessWidget {
               onTap: () => showOrbitSheet(
                 context,
                 title: 'Report $n',
+                // The note is sent too (`contracts/people_groups.md`).
                 text:
-                    'Orbit only learns who you reported and why. No messages '
-                    'are sent with the report.',
+                    'Orbit learns who you reported, why, and your note. No '
+                    'messages are sent with the report.',
                 items: [
                   for (final r in ReportReason.values)
                     OrbitMenuItem(
@@ -481,7 +600,7 @@ class ContactScreen extends StatelessWidget {
                         maxLength: 500,
                         confirmLabel: 'Report',
                         onConfirm: (note) =>
-                            a.onReport?.call(PersonReport(r, note)),
+                            _report(context, PersonReport(r, note.trim())),
                       ),
                     ),
                 ],
@@ -548,6 +667,7 @@ class SafetyNumberModel {
     this.trust = TrustState.unverified,
     this.groups,
     this.qrSeed,
+    this.qr,
     this.loading = false,
     this.loadFailed = false,
   });
@@ -558,8 +678,11 @@ class SafetyNumberModel {
   /// Twelve groups of five digits; null when there is no number yet.
   final List<String>? groups;
 
-  /// What the QR code is drawn from (the app's matrix arrives in Part B).
+  /// The preview's stand-in for the code.
   final String? qrSeed;
+
+  /// The app's code: the modules to draw.
+  final HelixQrMatrix? qr;
   final bool loading;
   final bool loadFailed;
 }
@@ -623,7 +746,15 @@ class SafetyNumberScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: 18, bottom: 6),
           child: Center(
-            child: OrbitQrCard(child: OrbitQr(seed: m.qrSeed ?? m.name)),
+            child: Semantics(
+              container: true,
+              image: true,
+              label: 'QR code for the safety number with ${m.name}',
+              excludeSemantics: true,
+              child: OrbitQrCard(
+                child: OrbitQr(seed: m.qrSeed ?? m.name, matrix: m.qr),
+              ),
+            ),
           ),
         ),
         Container(
@@ -738,19 +869,37 @@ class ScanCodeModel {
 }
 
 class ScanCodeActions {
-  const ScanCodeActions({this.onOpenSettings, this.onMatch, this.onMismatch});
+  const ScanCodeActions({
+    this.onOpenSettings,
+    this.onMatch,
+    this.onMismatch,
+    this.onCode,
+  });
 
   final VoidCallback? onOpenSettings;
 
   /// The preview's stand-ins for a code the camera read.
   final VoidCallback? onMatch;
   final VoidCallback? onMismatch;
+
+  /// A code the camera read (safety number): true when it matches, and the
+  /// chat is then marked verified.
+  final Future<bool> Function(String text)? onCode;
 }
+
+/// The live camera inside the frame; it reports each code it reads to
+/// [onCode].
+typedef ScanCameraSlot =
+    Widget Function(BuildContext context, ValueChanged<String> onCode);
 
 /// `scan`: a night page. The camera in a rounded frame with four corner
 /// marks and a sweeping line, and what to point it at. Without a camera, or
 /// when it was refused, it says what to do instead.
-class ScanCodeScreen extends StatelessWidget {
+///
+/// A code is checked one at a time: a match says "Verified. Your chat is
+/// private." and goes back to the safety number; a mismatch says so, and
+/// scanning goes on.
+class ScanCodeScreen extends StatefulWidget {
   const ScanCodeScreen({
     super.key,
     required this.model,
@@ -762,16 +911,51 @@ class ScanCodeScreen extends StatelessWidget {
   final ScanCodeActions actions;
 
   /// The live camera, inside the frame.
-  final WidgetBuilder? camera;
+  final ScanCameraSlot? camera;
 
+  @override
+  State<ScanCodeScreen> createState() => _ScanCodeScreenState();
+}
+
+class _ScanCodeScreenState extends State<ScanCodeScreen> {
   static const _bg = Color(0xFF06080F);
   static const _hint = Color(0xFFD6DCEA);
+
+  /// A code is being checked: new ones wait.
+  var _busy = false;
+
+  Future<void> _code(String text) async {
+    final check = widget.actions.onCode;
+    if (check == null || _busy) return;
+    _busy = true;
+    try {
+      final match = await check(text);
+      if (!mounted) return;
+      if (match) {
+        showOrbitToast(context, 'Verified. Your chat is private.');
+        await Navigator.maybePop(context);
+        return;
+      }
+      await showOrbitDialog(
+        context,
+        title: 'That code does not match',
+        text:
+            'The code on their phone is not the one Orbit expects for this '
+            'chat. Do not trust this chat until you have compared the numbers '
+            'with them in person.',
+        actions: const [OrbitDialogAction('OK', kind: OrbitButtonKind.primary)],
+      );
+    } finally {
+      _busy = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
-    final m = model;
-    final a = actions;
+    final m = widget.model;
+    final a = widget.actions;
+    final camera = widget.camera;
     final top = MediaQuery.paddingOf(context).top;
     final contact = m.mode == ScanMode.contact;
     final hint = t.font.style(size: 14, color: _hint, height: 1.5);
@@ -809,7 +993,7 @@ class ScanCodeScreen extends StatelessWidget {
       body = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          OrbitScanFrame(child: camera?.call(context)),
+          OrbitScanFrame(child: camera?.call(context, _code)),
           const SizedBox(height: 22),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 260),
@@ -821,15 +1005,18 @@ class ScanCodeScreen extends StatelessWidget {
               style: hint,
             ),
           ),
-          const SizedBox(height: 22),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _NightPill('Simulate a match', a.onMatch),
-              const SizedBox(width: 10),
-              _NightPill('Simulate a mismatch', a.onMismatch),
-            ],
-          ),
+          // The prototype's demo buttons, where there is no real camera.
+          if (camera == null) ...[
+            const SizedBox(height: 22),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _NightPill('Simulate a match', a.onMatch),
+                const SizedBox(width: 10),
+                _NightPill('Simulate a mismatch', a.onMismatch),
+              ],
+            ),
+          ],
         ],
       );
     }
@@ -1028,16 +1215,24 @@ class _OrbitScanFrameState extends State<OrbitScanFrame>
 // ------------------------------------------------------------ people search
 
 class PeopleSearchModel {
-  const PeopleSearchModel({this.people = const []});
+  const PeopleSearchModel({this.people = const [], this.panel});
 
   /// Everyone you know on Orbit, not blocked.
   final List<HelixPersonItem> people;
+
+  /// The app's whole people panel (the people, the lookup, the contacts
+  /// card and the groups, the same component as on Chats and Calls), drawn
+  /// under the field in place of [people] (`contracts/home.md`).
+  final PeoplePanelModel? panel;
 }
 
 class PeopleSearchActions {
-  const PeopleSearchActions({this.onOpenPerson});
+  const PeopleSearchActions({this.onOpenPerson, this.panel});
 
   final ValueChanged<String>? onOpenPerson;
+
+  /// The panel's actions; Enter in the field is its look-up.
+  final PeoplePanelActions? panel;
 }
 
 /// `people`: search the people you know, from a contact link.
@@ -1062,6 +1257,8 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final top = MediaQuery.paddingOf(context).top;
+    final panel = widget.model.panel;
+    final panelActions = widget.actions.panel ?? const PeoplePanelActions();
     final q = _q.toLowerCase();
     final found = [
       for (final p in widget.model.people)
@@ -1079,75 +1276,90 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
                 height: 44,
                 child: OrbitSearchField(
                   hint: 'Name, number or ~Orbit name',
-                  onChanged: (v) => setState(() => _q = v),
+                  // The app's page opens ready to type.
+                  autofocus: panel != null,
+                  onChanged: (v) {
+                    setState(() => _q = v);
+                    panelActions.onQueryChanged?.call(v);
+                  },
+                  onSubmitted: (_) => panelActions.onLookUp?.call(),
                 ),
               ),
             ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 30),
-                children: [
-                  OrbitListLabel(_q.isEmpty ? 'People on Orbit' : 'People'),
-                  if (found.isEmpty)
-                    OrbitEmptyState(
-                      icon: OrbitIcons.magnifyingGlass,
-                      title: 'No matches',
-                      text: 'Nobody you know matches “$_q”.',
-                    ),
-                  for (final p in found)
-                    InkWell(
-                      onTap: () => widget.actions.onOpenPerson?.call(p.id),
-                      hoverColor: t.hover,
-                      splashFactory: NoSplash.splashFactory,
-                      child: SizedBox(
-                        height: orbitRowHeight,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: OrbitSpace.gutter,
-                          ),
-                          child: Row(
-                            children: [
-                              OrbitAvatar(avatar: p.avatar, size: 52),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    OrbitText(
-                                      p.names.display,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: t.font.style(
-                                        size: OrbitType.headline,
-                                        weight: 600,
-                                        color: t.ink,
-                                        letterSpacingEm: -0.01,
-                                      ),
-                                    ),
-                                    if ((p.names.secondary ?? '').isNotEmpty)
-                                      const SizedBox(height: 3),
-                                    if ((p.names.secondary ?? '').isNotEmpty)
+            if (panel != null)
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 30),
+                  children: [PeoplePanel(model: panel, actions: panelActions)],
+                ),
+              )
+            else
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 30),
+                  children: [
+                    OrbitListLabel(_q.isEmpty ? 'People on Orbit' : 'People'),
+                    if (found.isEmpty)
+                      OrbitEmptyState(
+                        icon: OrbitIcons.magnifyingGlass,
+                        title: 'No matches',
+                        text: 'Nobody you know matches “$_q”.',
+                      ),
+                    for (final p in found)
+                      InkWell(
+                        onTap: () => widget.actions.onOpenPerson?.call(p.id),
+                        hoverColor: t.hover,
+                        splashFactory: NoSplash.splashFactory,
+                        child: SizedBox(
+                          height: orbitRowHeight,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: OrbitSpace.gutter,
+                            ),
+                            child: Row(
+                              children: [
+                                OrbitAvatar(avatar: p.avatar, size: 52),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
                                       OrbitText(
-                                        p.names.secondary!,
+                                        p.names.display,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: t.mono.style(
-                                          size: 12,
-                                          color: t.ink3,
+                                        style: t.font.style(
+                                          size: OrbitType.headline,
+                                          weight: 600,
+                                          color: t.ink,
+                                          letterSpacingEm: -0.01,
                                         ),
                                       ),
-                                  ],
+                                      if ((p.names.secondary ?? '').isNotEmpty)
+                                        const SizedBox(height: 3),
+                                      if ((p.names.secondary ?? '').isNotEmpty)
+                                        OrbitText(
+                                          p.names.secondary!,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: t.mono.style(
+                                            size: 12,
+                                            color: t.ink3,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
