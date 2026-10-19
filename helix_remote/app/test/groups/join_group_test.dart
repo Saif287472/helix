@@ -36,7 +36,7 @@ void main() {
     return port;
   }
 
-  testWidgets('a shared link shows the group before anything is joined', (
+  groupTest('a shared link shows the group before anything is joined', (
     tester,
   ) async {
     final port = await pump(tester);
@@ -49,20 +49,20 @@ void main() {
     expect(port.calls, ['preview']);
   });
 
-  testWidgets('Join joins, and Open group goes to the group', (tester) async {
+  groupTest('Join joins, and Open group goes to the group', (tester) async {
     final port = await pump(tester);
 
     await tester.tap(find.text('Join group'));
     await tester.pumpAndSettle();
     expect(port.calls, ['preview', 'join']);
-    expect(find.text('You joined "Book club"'), findsOneWidget);
+    expect(find.text('You joined “Book club”'), findsOneWidget);
 
     await tester.tap(find.text('Open group'));
     await tester.pumpAndSettle();
     expect(find.text('group page'), findsOneWidget);
   });
 
-  testWidgets('an approval link asks, and says an admin must approve', (
+  groupTest('an approval link asks, and says an admin must approve', (
     tester,
   ) async {
     final port = FakeGroupsPort()
@@ -86,7 +86,7 @@ void main() {
     expect(find.textContaining('has to approve you'), findsOneWidget);
   });
 
-  testWidgets('a group you are already in offers to open it', (tester) async {
+  groupTest('a group you are already in offers to open it', (tester) async {
     final port = FakeGroupsPort(group: testGroup());
     await pump(tester, port: port);
 
@@ -97,7 +97,7 @@ void main() {
     expect(find.text('group page'), findsOneWidget);
   });
 
-  testWidgets('a link whose key did not open the preview still lets you ask', (
+  groupTest('a link whose key did not open the preview still lets you ask', (
     tester,
   ) async {
     final port = FakeGroupsPort()
@@ -109,12 +109,13 @@ void main() {
       );
     await pump(tester, port: port);
 
-    expect(find.text('Group'), findsOneWidget);
+    // Orbit's name for a group whose name did not open.
+    expect(find.text('A group on Orbit'), findsOneWidget);
     expect(find.textContaining('may be cut off'), findsOneWidget);
     expect(find.text('Join group'), findsOneWidget);
   });
 
-  testWidgets('a dead link says so, with a way to try another', (tester) async {
+  groupTest('a dead link says so, with a way to try another', (tester) async {
     final port = FakeGroupsPort()
       ..failWith = const ApiException(status: 404, code: ErrorCode.notFound);
     await pump(tester, port: port);
@@ -126,7 +127,7 @@ void main() {
     expect(find.text('Group link'), findsOneWidget);
   });
 
-  testWidgets('a banned person is refused plainly', (tester) async {
+  groupTest('a banned person is refused plainly', (tester) async {
     final port = await pump(tester);
     port.failWith = const ApiException(status: 403, code: ErrorCode.forbidden);
 
@@ -136,7 +137,7 @@ void main() {
     expect(find.text('You cannot join this group.'), findsOneWidget);
   });
 
-  testWidgets('a full group says so', (tester) async {
+  groupTest('a full group says so', (tester) async {
     final port = await pump(tester);
     port.failWith = const ApiException(status: 409, code: ErrorCode.groupFull);
 
@@ -146,7 +147,7 @@ void main() {
     expect(find.textContaining('This group is full'), findsOneWidget);
   });
 
-  testWidgets('a malformed link never reaches the server as text', (
+  groupTest('a malformed link never reaches the server as text', (
     tester,
   ) async {
     final port = FakeGroupsPort()
@@ -157,7 +158,7 @@ void main() {
     expect(find.textContaining('HLX-GRP'), findsNothing);
   });
 
-  testWidgets('with no link the person pastes one', (tester) async {
+  groupTest('with no link the person pastes one', (tester) async {
     final port = await pump(tester, initial: null);
     expect(find.text('Group link'), findsOneWidget);
 
@@ -169,7 +170,7 @@ void main() {
     expect(find.text('Book club'), findsOneWidget);
   });
 
-  testWidgets('holds at 2x text and meets the guidelines', (tester) async {
+  groupTest('holds at 2x text and meets the guidelines', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 2;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await pump(tester);
@@ -203,7 +204,7 @@ void main() {
       expect(link?.code, 'HLX-GRP-AbC.dEf');
     });
 
-    testWidgets('routing a group link opens the join screen with the code', (
+    groupTest('routing a group link opens the join screen with the code', (
       tester,
     ) async {
       late GoRouter router;

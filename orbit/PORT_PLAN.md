@@ -597,6 +597,17 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   sheets are deleted. Tests: app 852, orbit_ui 200, helix_remote_ui
   184, rules 20, all passing; the 25 compared states unchanged from
   Review 4.
+- [x] Step 2, batch 7 (pending your review): groups draw the Orbit pages
+  through the connectors in `features/groups/presentation/`: New group
+  (the name error on Create, an unusable picture, who could not be added),
+  the shared member picker (look-up, pictures, the app's filter), Group
+  info (members, pending cards, the admin tools, picture, name and
+  description, the timer, leave and delete, every answer as a toast),
+  Group settings, Invite with a link, Join requests, Banned people, Add
+  members and Join a group (the link check, paste). The old member picker,
+  group avatar and pending-members prompt are deleted. Tests: app 852,
+  orbit_ui 204, helix_remote_ui 184, rules 20, all passing; the compared
+  group, search and pending-card states unchanged from Review 4.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

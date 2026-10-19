@@ -8,10 +8,9 @@ import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/presentation/group_info_screen.dart';
-import 'package:helix_remote/shared/widgets/pending_members_prompt.dart';
 import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:orbit_ui/orbit_ui.dart' show OrbitButton;
+import 'package:orbit_ui/orbit_ui.dart' show OrbitButton, OrbitDialogPanel;
 
 import '../chat_logic_test.dart' show row;
 import '../support/chat_harness.dart' as chat;
@@ -110,14 +109,15 @@ void main() {
       return port;
     }
 
-    testWidgets('shows nothing when nobody is waiting', (tester) async {
+    groupTest('shows nothing when nobody is waiting', (tester) async {
       await pump(tester);
-      expect(find.byType(PendingMembersPrompt), findsOneWidget);
+      // The page is up, with no card to confirm anyone.
+      expect(find.text('Group info'), findsOneWidget);
       expect(find.textContaining('Confirm '), findsNothing);
       expect(find.text('Not confirmed'), findsNothing);
     });
 
-    testWidgets('asks "Confirm Bob?" and explains why, in plain English', (
+    groupTest('asks "Confirm Bob?" and explains why, in plain English', (
       tester,
     ) async {
       await pump(tester, pending: [bobWaiting]);
@@ -131,13 +131,13 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('stays unreadable to them'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Confirm'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Remove'), findsOneWidget);
+      expect(find.widgetWithText(OrbitButton, 'Confirm'), findsOneWidget);
+      expect(find.widgetWithText(OrbitButton, 'Remove'), findsOneWidget);
       // The roster row says so too.
       expect(find.textContaining('Not confirmed'), findsOneWidget);
     });
 
-    testWidgets('a member who joined by the link is explained as such', (
+    groupTest('a member who joined by the link is explained as such', (
       tester,
     ) async {
       await pump(tester, pending: [carolByLink]);
@@ -148,12 +148,12 @@ void main() {
       );
     });
 
-    testWidgets('Confirm calls confirmMember and the prompt goes away', (
+    groupTest('Confirm calls confirmMember and the prompt goes away', (
       tester,
     ) async {
       final port = await pump(tester, pending: [bobWaiting]);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.tap(find.widgetWithText(OrbitButton, 'Confirm'));
       await tester.pumpAndSettle();
 
       expect(port.calls, contains('confirm bob'));
@@ -162,10 +162,10 @@ void main() {
       expect(find.text('Not confirmed'), findsNothing);
     });
 
-    testWidgets('Remove asks first, then removes the member', (tester) async {
+    groupTest('Remove asks first, then removes the member', (tester) async {
       final port = await pump(tester, pending: [bobWaiting]);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Remove'));
+      await tester.tap(find.widgetWithText(OrbitButton, 'Remove'));
       await tester.pumpAndSettle();
       expect(find.text('Remove Bob?'), findsOneWidget);
       // Backing out removes nobody.
@@ -173,14 +173,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(port.calls, isNot(contains('remove bob')));
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Remove'));
+      await tester.tap(find.widgetWithText(OrbitButton, 'Remove'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OrbitDialogPanel),
+          matching: find.text('Remove'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(port.calls, contains('remove bob'));
     });
 
-    testWidgets('an admin may remove an ordinary member, not another admin', (
+    groupTest('an admin may remove an ordinary member, not another admin', (
       tester,
     ) async {
       // Self is an admin; Ada is the owner (the fixture), Bob a member.
@@ -200,7 +205,7 @@ void main() {
       expect(
         find.descendant(
           of: bobCard,
-          matching: find.widgetWithText(OutlinedButton, 'Remove'),
+          matching: find.widgetWithText(OrbitButton, 'Remove'),
         ),
         findsOneWidget,
       );
@@ -208,7 +213,7 @@ void main() {
       expect(
         find.descendant(
           of: adaCard,
-          matching: find.widgetWithText(OutlinedButton, 'Remove'),
+          matching: find.widgetWithText(OrbitButton, 'Remove'),
         ),
         findsNothing,
       );
@@ -221,7 +226,7 @@ void main() {
       );
     });
 
-    testWidgets('a plain member only sees the warning and Confirm', (
+    groupTest('a plain member only sees the warning and Confirm', (
       tester,
     ) async {
       final port = await pump(
@@ -231,31 +236,31 @@ void main() {
       );
 
       expect(find.text('Confirm Bob?'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Remove'), findsNothing);
+      expect(find.widgetWithText(OrbitButton, 'Remove'), findsNothing);
       expect(find.textContaining('Only an admin can remove'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Confirm'), findsOneWidget);
+      expect(find.widgetWithText(OrbitButton, 'Confirm'), findsOneWidget);
       expect(port.calls, isNot(contains('remove bob')));
     });
 
-    testWidgets('a refusal is a sentence, not an exception', (tester) async {
+    groupTest('a refusal is a sentence, not an exception', (tester) async {
       final port = await pump(tester, pending: [bobWaiting]);
       port.failWith = StateError('server said no');
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.tap(find.widgetWithText(OrbitButton, 'Confirm'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
       expect(find.text('Confirm Bob?'), findsOneWidget);
     });
 
-    testWidgets('a member who is no longer waiting is said, not an error', (
+    groupTest('a member who is no longer waiting is said, not an error', (
       tester,
     ) async {
       final port = await pump(tester, pending: [bobWaiting]);
       // Confirmed on another device in the meantime: the engine says false.
       port.pending = const [];
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.tap(find.widgetWithText(OrbitButton, 'Confirm'));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('no longer waiting for confirmation'),
@@ -263,7 +268,7 @@ void main() {
       );
     });
 
-    testWidgets('the engine event shows a snackbar here', (tester) async {
+    groupTest('the engine event shows a snackbar here', (tester) async {
       final port = await pump(tester);
       port.signal(
         const GroupMemberUnconfirmedArrived(
@@ -278,7 +283,7 @@ void main() {
       expect(find.textContaining('added by the server roster'), findsOneWidget);
     });
 
-    testWidgets('prompts fit at 2x text with no overflow', (tester) async {
+    groupTest('prompts fit at 2x text with no overflow', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await pump(tester, pending: [bobWaiting, carolByLink]);
@@ -286,25 +291,28 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the buttons are at least 48 px tall', (tester) async {
-      await pump(tester, pending: [bobWaiting]);
-      for (final label in ['Confirm', 'Remove']) {
-        final size = tester.getSize(
-          find.ancestor(
-            of: find.text(label),
-            matching: find.byWidgetPredicate(
-              (w) => w is FilledButton || w is OutlinedButton,
-            ),
-          ),
-        );
-        expect(size.height, greaterThanOrEqualTo(48), reason: label);
-        expect(size.width, greaterThanOrEqualTo(48), reason: label);
+    groupTest('the buttons are at least 48 px tall', (tester) async {
+      final port = await pump(tester, pending: [bobWaiting]);
+      // Drawn 38px high; their target reaches 48px, so a touch 4px above
+      // each still lands on it.
+      Future<void> above(String label) async {
+        final rect = tester.getRect(find.widgetWithText(OrbitButton, label));
+        expect(rect.width, greaterThanOrEqualTo(48), reason: label);
+        await tester.tapAt(rect.topCenter - const Offset(0, 4));
+        await tester.pumpAndSettle();
       }
+
+      await above('Remove');
+      expect(find.text('Remove Bob?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await above('Confirm');
+      expect(port.calls, contains('confirm bob'));
     });
   });
 
   group('the app-wide banner', () {
-    testWidgets('names the person and the group and opens the group info', (
+    groupTest('names the person and the group and opens the group info', (
       tester,
     ) async {
       tall(tester);
@@ -424,7 +432,8 @@ void main() {
         ),
       );
       await chat.settle(tester, rounds: 8);
-      expect(find.byType(PendingMembersPrompt), findsNothing);
+      // A direct chat has no members to confirm.
+      expect(find.text('Confirm Bob?'), findsNothing);
       expect(find.textContaining('Confirm '), findsNothing);
     });
   });

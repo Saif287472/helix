@@ -53,7 +53,10 @@ void main() {
         ),
         actions: NewGroupActions(
           picker: MemberPickerActions(onToggle: (id) => toggled = id),
-          onCreate: () => created++,
+          onCreate: () async {
+            created++;
+            return null;
+          },
         ),
       ),
     );
@@ -72,14 +75,23 @@ void main() {
       NewGroupScreen(
         model: NewGroupModel(picker: MemberPickerModel(candidates: people)),
         actions: NewGroupActions(
-          picker: MemberPickerActions(onLookup: (q) => looked = q),
+          picker: MemberPickerActions(
+            onLookup: (q) async {
+              looked = q;
+              return (found: null, error: 'Nobody has that number.');
+            },
+          ),
         ),
       ),
     );
     await tester.enterText(find.byType(EditableText).last, '+8801999');
     await tester.pump();
     await tester.tap(find.text('Find “+8801999” on Orbit'));
+    await tester.pump();
     expect(looked, '+8801999');
+    // A look-up that finds nobody says why.
+    expect(find.text('Nobody has that number.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   GroupInfoModel info({bool admin = true, bool owner = false}) =>
@@ -116,7 +128,12 @@ void main() {
       tester,
       GroupInfoScreen(
         model: info(),
-        actions: GroupInfoActions(onMemberAction: (a, x) => acted = (a, x)),
+        actions: GroupInfoActions(
+          onMemberAction: (a, x) async {
+            acted = (a, x);
+            return 'Rumana Apu is an admin now.';
+          },
+        ),
       ),
     );
     expect(find.text('Group settings'), findsOneWidget);
@@ -129,6 +146,9 @@ void main() {
     await tester.tap(find.text('Make admin'));
     await tester.pumpAndSettle();
     expect(acted, ('rumana', MemberAction.makeAdmin));
+    // The answer is said.
+    expect(find.text('Rumana Apu is an admin now.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('group info: a member sees no admin pages; owner can delete', (
@@ -177,8 +197,14 @@ void main() {
           ],
         ),
         actions: JoinRequestsActions(
-          onApprove: (a) => done.add('+$a'),
-          onReject: (a) => done.add('-$a'),
+          onApprove: (a) async {
+            done.add('+$a');
+            return null;
+          },
+          onReject: (a) async {
+            done.add('-$a');
+            return null;
+          },
         ),
       ),
     );
@@ -214,5 +240,125 @@ void main() {
     );
     expect(find.text('Open group'), findsOneWidget);
     expect(find.text('You are already in this group.'), findsOneWidget);
+  });
+
+  group("the app's hooks", () {
+    testWidgets('a member menu offers only what the app allows', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        const GroupInfoScreen(
+          model: GroupInfoModel(
+            groupId: 'family',
+            title: 'Family',
+            avatar: HelixAvatarModel(name: 'Family', isGroup: true),
+            memberCountLabel: '2 members',
+            isOwner: true,
+            canAdminister: true,
+            members: [
+              GroupMemberView(
+                account: 'rumana',
+                title: 'Rumana Apu',
+                avatar: HelixAvatarModel(name: 'Rumana Apu'),
+                canAct: true,
+                actions: {MemberAction.makeAdmin, MemberAction.remove},
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.scrollUntilVisible(
+        find.byTooltip('Actions for Rumana Apu'),
+        200,
+      );
+      await tester.tap(find.byTooltip('Actions for Rumana Apu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Make admin'), findsOneWidget);
+      expect(find.text('Remove from group'), findsOneWidget);
+      expect(find.text('Make owner'), findsNothing);
+      expect(find.text('Remove and ban'), findsNothing);
+    });
+
+    testWidgets('adding nobody explains why and stays', (tester) async {
+      await show(
+        tester,
+        AddMembersScreen(
+          model: AddMembersModel(
+            picker: MemberPickerModel(
+              candidates: people,
+              selected: const ['arif'],
+            ),
+          ),
+          actions: AddMembersActions(
+            onAdd: () async =>
+                (ok: false, message: 'Arif Hossain could not be added.'),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Add 1'));
+      await tester.pumpAndSettle();
+      expect(find.text('No one was added'), findsOneWidget);
+      expect(find.text('Arif Hossain could not be added.'), findsOneWidget);
+    });
+
+    testWidgets('a new group explains who was not added, then opens', (
+      tester,
+    ) async {
+      String? opened;
+      await show(
+        tester,
+        NewGroupScreen(
+          model: NewGroupModel(
+            name: 'Trip',
+            picker: MemberPickerModel(
+              candidates: people,
+              selected: const ['arif'],
+            ),
+          ),
+          actions: NewGroupActions(
+            onCreate: () async => (
+              groupId: 'g1',
+              conversationId: 'group:g1',
+              notAddedNames: const ['Arif Hossain'],
+            ),
+            onOpenGroupChat: (g, c) => opened = c,
+          ),
+        ),
+      );
+      await tester.tap(find.text('Create with 1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Some people were not added'), findsOneWidget);
+      expect(opened, isNull);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(opened, 'group:g1');
+    });
+
+    testWidgets('a wrong link stays on the field and says so', (tester) async {
+      String? continued;
+      await show(
+        tester,
+        JoinGroupScreen(
+          model: const JoinGroupModel(),
+          actions: JoinGroupActions(
+            linkLooksRight: (l) => l.contains('HLX-GRP-'),
+            onContinue: (l) => continued = l,
+          ),
+        ),
+      );
+      await tester.enterText(find.byType(EditableText), 'hello');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(continued, isNull);
+      expect(find.textContaining('not an Orbit group link'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.enterText(
+        find.byType(EditableText),
+        'https://x/open#HLX-GRP-1',
+      );
+      await tester.tap(find.text('Continue'));
+      expect(continued, 'https://x/open#HLX-GRP-1');
+    });
   });
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_errors.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_picture.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart' show HelixPersonItem;
 
 /// The longest group name.
 const kGroupNameMaxLength = 100;
@@ -20,6 +22,29 @@ final groupCandidatesProvider =
           for (final c in all)
             if (!c.blocked) c,
         ],
+      );
+    });
+
+/// The candidates as picker rows: by name, with their pictures.
+final groupCandidateItemsProvider =
+    Provider.autoDispose<AsyncValue<List<HelixPersonItem>>>((ref) {
+      final candidates = ref.watch(groupCandidatesProvider);
+      final names =
+          ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+      return candidates.whenData(
+        (list) =>
+            [
+              for (final c in list)
+                HelixPersonItem(
+                  id: c.account,
+                  names: c.names,
+                  image: names.imageOf(c.account),
+                ),
+            ]..sort(
+              (a, b) => a.names.display.toLowerCase().compareTo(
+                b.names.display.toLowerCase(),
+              ),
+            ),
       );
     });
 
@@ -69,6 +94,7 @@ final class CreateGroupState {
     this.picture,
     this.creating = false,
     this.error,
+    this.nameError = false,
   });
 
   final String name;
@@ -80,6 +106,14 @@ final class CreateGroupState {
   final Uint8List? picture;
   final bool creating;
   final String? error;
+
+  /// Create was tapped without a usable name.
+  final bool nameError;
+
+  /// "Enter a group name of 1 to 100 characters." while [nameError].
+  String? get nameErrorText => nameError
+      ? 'Enter a group name of 1 to $kGroupNameMaxLength characters.'
+      : null;
 
   bool get nameValid {
     final trimmed = name.trim();
@@ -97,12 +131,14 @@ final class CreateGroupState {
     bool? creating,
     String? error,
     bool clearError = false,
+    bool? nameError,
   }) => CreateGroupState(
     name: name ?? this.name,
     selected: selected ?? this.selected,
     picture: clearPicture ? null : picture ?? this.picture,
     creating: creating ?? this.creating,
     error: clearError ? null : error ?? this.error,
+    nameError: nameError ?? this.nameError,
   );
 }
 
@@ -116,7 +152,7 @@ final class CreateGroupController extends Notifier<CreateGroupState> {
   CreateGroupState build() => const CreateGroupState();
 
   void setName(String name) =>
-      state = state.copyWith(name: name, clearError: true);
+      state = state.copyWith(name: name, clearError: true, nameError: false);
 
   void toggle(String account) {
     final selected = [...state.selected];
@@ -132,9 +168,16 @@ final class CreateGroupController extends Notifier<CreateGroupState> {
     state = state.copyWith(selected: selected, clearError: true);
   }
 
-  Future<void> pickPicture() async {
-    final bytes = await ref.read(groupPicturePickerProvider).pick();
-    if (bytes != null) state = state.copyWith(picture: bytes);
+  /// Chooses the picture; the sentence to show when the file could not be
+  /// used.
+  Future<String?> pickPicture() async {
+    try {
+      final bytes = await ref.read(groupPicturePickerProvider).pick();
+      if (bytes != null) state = state.copyWith(picture: bytes);
+      return null;
+    } on UnusablePicture {
+      return UnusablePicture.message;
+    }
   }
 
   void clearPicture() => state = state.copyWith(clearPicture: true);
@@ -143,7 +186,12 @@ final class CreateGroupController extends Notifier<CreateGroupState> {
   /// set. People kept out by their privacy settings come back in
   /// [CreatedGroupInfo.rejected]: the group exists, and they need a link.
   Future<CreatedGroupInfo?> create() async {
-    if (!state.canCreate) return null;
+    if (state.creating) return null;
+    if (!state.nameValid) {
+      // Create stays tappable; a missing name is said under the field.
+      state = state.copyWith(nameError: true);
+      return null;
+    }
     state = state.copyWith(creating: true, clearError: true);
     try {
       final port = await ref.read(groupsPortProvider.future);

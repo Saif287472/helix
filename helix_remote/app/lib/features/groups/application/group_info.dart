@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show ImageProvider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
@@ -31,6 +32,7 @@ final class GroupMemberView {
     required this.actions,
     this.server,
     this.unconfirmed = false,
+    this.image,
   });
 
   final String account;
@@ -52,6 +54,9 @@ final class GroupMemberView {
   /// (see `group_pending.dart`): they get no keys from this device yet.
   final bool unconfirmed;
 
+  /// Their picture, when this device has one.
+  final ImageProvider? image;
+
   String get title => isSelf ? 'You' : names.display;
 
   /// The line under the name: the role, the server and the number or
@@ -66,11 +71,13 @@ final class GroupMemberView {
   HelixAvatarModel get avatar => HelixAvatarModel(
     name: names.display,
     colorIndex: HelixAvatarModel.colorIndexFor(account),
+    image: image,
   );
 
   @override
   bool operator ==(Object other) =>
       other is GroupMemberView &&
+      other.image == image &&
       other.account == account &&
       other.names == names &&
       other.role == role &&
@@ -82,6 +89,28 @@ final class GroupMemberView {
   @override
   int get hashCode =>
       Object.hash(account, names, role, isSelf, server, unconfirmed);
+}
+
+/// The default disappearing-message timers a group offers, in seconds.
+const kGroupDisappearingChoices = <(String, int?)>[
+  ('Off', null),
+  ('24 hours', 86400),
+  ('7 days', 604800),
+  ('90 days', 7776000),
+];
+
+/// What a timer of [seconds] is called, also one set elsewhere ("3 days").
+String disappearingLabel(int? seconds) {
+  if (seconds == null || seconds <= 0) return 'Off';
+  for (final (label, value) in kGroupDisappearingChoices) {
+    if (value == seconds) return label;
+  }
+  final days = seconds ~/ 86400;
+  if (days >= 1 && seconds % 86400 == 0) {
+    return days == 1 ? '1 day' : '$days days';
+  }
+  final hours = seconds ~/ 3600;
+  return hours >= 1 ? '$hours hours' : '$seconds seconds';
 }
 
 /// A group, ready to draw.
@@ -163,6 +192,7 @@ GroupInfoView buildGroupInfo(
         actions: _actionsFor(snapshot.selfRole, m),
         server: m.server,
         unconfirmed: unconfirmed.contains(m.account),
+        image: names.imageOf(m.account),
       ),
   ];
   int rank(GroupMemberView m) => switch (m.role) {

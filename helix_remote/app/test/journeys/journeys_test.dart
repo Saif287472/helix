@@ -6,7 +6,8 @@ import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:orbit_ui/orbit_ui.dart' show OrbitCallLogTile, PeoplePanel;
+import 'package:orbit_ui/orbit_ui.dart'
+    show OrbitCallLogTile, OrbitExtendedFab, PeoplePanel;
 
 import '../support/chat_harness.dart' show settle, testNow;
 import '../support/orbit_theme.dart' show findMessageText;
@@ -138,7 +139,7 @@ void main() {
     await tapAndSettle(tester, find.text('Mum'));
     await tester.enterText(find.byType(TextField).first, 'Book club');
     await tester.pump();
-    await tapAndSettle(tester, find.byType(FloatingActionButton));
+    await tapAndSettle(tester, find.byType(OrbitExtendedFab));
     expect(app.groups.calls, ['create Book club [mum]']);
 
     // The group's chat opened (the conversation route is registered); its

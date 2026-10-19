@@ -77,13 +77,30 @@ String orbitTransform(String text, OrbitTextTransform transform) =>
 /// switch), so the 48px rule holds without moving anything on screen. The
 /// extra area only works where the parent's own box reaches.
 class OrbitTapArea extends SingleChildRenderObjectWidget {
-  const OrbitTapArea({super.key, super.child});
+  const OrbitTapArea({super.key, super.child, this.merge = false});
+
+  /// Merges a child that makes its own semantics node (a text field) into
+  /// the area's one node.
+  final bool merge;
 
   @override
-  RenderObject createRenderObject(BuildContext context) => _RenderTapArea();
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderTapArea()..merge = merge;
+
+  @override
+  void updateRenderObject(BuildContext context, RenderObject renderObject) =>
+      (renderObject as _RenderTapArea).merge = merge;
 }
 
 class _RenderTapArea extends RenderProxyBox {
+  bool _merge = false;
+
+  set merge(bool value) {
+    if (value == _merge) return;
+    _merge = value;
+    markNeedsSemanticsUpdate();
+  }
+
   Rect get _area {
     final w = size.width < OrbitSpace.target ? OrbitSpace.target : size.width;
     final h = size.height < OrbitSpace.target ? OrbitSpace.target : size.height;
@@ -124,5 +141,6 @@ class _RenderTapArea extends RenderProxyBox {
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
     config.isSemanticBoundary = true;
+    if (_merge) config.isMergingSemanticsOfDescendants = true;
   }
 }

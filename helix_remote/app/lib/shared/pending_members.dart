@@ -7,8 +7,8 @@ import 'package:orbit_ui/orbit_ui.dart' show PendingMemberItem;
 /// conversation draws them above the messages ("Confirm NAME?").
 ///
 /// The groups feature owns the logic; the conversation may not import it
-/// (`test/architecture_test.dart`), so the two meet here, as they do in
-/// `widgets/pending_members_prompt.dart` for the group's info page.
+/// (`test/architecture_test.dart`), so the two meet here; the group's info
+/// page draws the same cards from it.
 final pendingMemberItemsProvider = Provider.autoDispose
     .family<List<PendingMemberItem>, String>((ref, groupId) {
       final pending =

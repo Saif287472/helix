@@ -61,7 +61,12 @@ final class GroupActions {
   /// Chooses a picture from the phone and sets it; ok with no message when the
   /// person chose nothing.
   Future<GroupResult> chooseAndSetPicture(String groupId) async {
-    final bytes = await _ref.read(groupPicturePickerProvider).pick();
+    final Uint8List? bytes;
+    try {
+      bytes = await _ref.read(groupPicturePickerProvider).pick();
+    } on UnusablePicture {
+      return const GroupResult.failed(UnusablePicture.message);
+    }
     if (bytes == null) return const GroupResult.ok();
     return setPicture(groupId, bytes);
   }

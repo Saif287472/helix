@@ -12,6 +12,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' show OrbitDialogPanel, OrbitExtendedFab;
 
 import '../support/group_support.dart';
 import '../support/harness.dart';
@@ -66,20 +67,22 @@ void main() {
       return port;
     }
 
-    testWidgets('lists people, and the button waits for a name', (
-      tester,
-    ) async {
-      await pump(tester);
+    groupTest('lists people, and the button waits for a name', (tester) async {
+      final port = await pump(tester);
 
       expect(find.text('Ada Lovelace'), findsOneWidget);
       expect(find.text('Bob'), findsOneWidget);
-      final button = tester.widget<FloatingActionButton>(
-        find.byType(FloatingActionButton),
+      // Without a name Create says what is missing and makes nothing.
+      await tester.tap(find.byType(OrbitExtendedFab));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter a group name of 1 to 100 characters.'),
+        findsOneWidget,
       );
-      expect(button.onPressed, isNull);
+      expect(port.calls, isEmpty);
     });
 
-    testWidgets('chosen people become chips and are created with the group', (
+    groupTest('chosen people become chips and are created with the group', (
       tester,
     ) async {
       final port = await pump(tester);
@@ -87,12 +90,12 @@ void main() {
       await tester.tap(find.text('Ada Lovelace'));
       await tester.tap(find.text('Bob'));
       await tester.pumpAndSettle();
-      expect(find.byType(InputChip), findsNWidgets(2));
+      expect(find.byTooltip('Remove from selection'), findsNWidgets(2));
       expect(find.text('Create with 2'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField).first, '  Book club ');
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byType(OrbitExtendedFab));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['create Book club [ada,bob]']);
@@ -100,9 +103,7 @@ void main() {
       expect(find.text('info'), findsOneWidget);
     });
 
-    testWidgets('a chosen person can be un-chosen from the chip', (
-      tester,
-    ) async {
+    groupTest('a chosen person can be un-chosen from the chip', (tester) async {
       final port = await pump(tester);
       await tester.tap(find.text('Ada Lovelace'));
       await tester.pumpAndSettle();
@@ -110,25 +111,25 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'Solo');
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byType(OrbitExtendedFab));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['create Solo []']);
     });
 
-    testWidgets('with the conversation route registered the chat opens', (
+    groupTest('with the conversation route registered the chat opens', (
       tester,
     ) async {
       await pump(tester, chat: (id) => '/home/chat/$id');
       await tester.enterText(find.byType(TextField).first, 'Solo');
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byType(OrbitExtendedFab));
       await tester.pumpAndSettle();
 
       expect(find.text('chat'), findsOneWidget);
     });
 
-    testWidgets('search filters by name, number and ~name', (tester) async {
+    groupTest('search filters by name, number and ~name', (tester) async {
       await pump(tester);
       await tester.enterText(find.byType(TextField).last, '0002');
       await tester.pumpAndSettle();
@@ -137,7 +138,7 @@ void main() {
       expect(find.text('Ada Lovelace'), findsNothing);
     });
 
-    testWidgets('a number nobody here knows can be looked up and chosen', (
+    groupTest('a number nobody here knows can be looked up and chosen', (
       tester,
     ) async {
       final port = FakeGroupsPort()
@@ -150,27 +151,27 @@ void main() {
 
       await tester.enterText(find.byType(TextField).last, '+8801799999999');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('lookup')));
+      await tester.tap(find.textContaining('on Orbit'));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['lookup +8801799999999']);
-      expect(find.byType(InputChip), findsOneWidget);
+      expect(find.byTooltip('Remove from selection'), findsOneWidget);
     });
 
-    testWidgets('a number that is nobody says so', (tester) async {
+    groupTest('a number that is nobody says so', (tester) async {
       final port = FakeGroupsPort()..candidates = people;
       await pump(tester, port: port);
 
       await tester.enterText(find.byType(TextField).last, '+8801700000000');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('lookup')));
+      await tester.tap(find.textContaining('on Orbit'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Nobody on Helix matches'), findsOneWidget);
-      expect(find.byType(InputChip), findsNothing);
+      expect(find.byTooltip('Remove from selection'), findsNothing);
     });
 
-    testWidgets('a picture chosen from the phone goes with the group', (
+    groupTest('a picture chosen from the phone goes with the group', (
       tester,
     ) async {
       final port = await pump(tester, picker: FakePicker(tinyPng));
@@ -178,13 +179,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'With picture');
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byType(OrbitExtendedFab));
       await tester.pumpAndSettle();
 
       expect(port.calls.single, contains('+picture'));
     }, skip: false);
 
-    testWidgets('people kept out by their privacy settings are named, and the '
+    groupTest('people kept out by their privacy settings are named, and the '
         'group is still made', (tester) async {
       final port = FakeGroupsPort()
         ..candidates = people
@@ -197,33 +198,30 @@ void main() {
       await tester.tap(find.text('Bob'));
       await tester.enterText(find.byType(TextField).first, 'Club');
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byType(OrbitExtendedFab));
       await tester.pumpAndSettle();
 
       expect(find.text('Some people were not added'), findsOneWidget);
-      expect(
-        find.textContaining('Bob only lets people they know'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Bob could not be added'), findsOneWidget);
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
       expect(find.text('info'), findsOneWidget);
     });
 
-    testWidgets('a failure shows why and keeps the form', (tester) async {
+    groupTest('a failure shows why and keeps the form', (tester) async {
       final port = FakeGroupsPort()..candidates = people;
       await pump(tester, port: port);
       await tester.enterText(find.byType(TextField).first, 'Club');
       await tester.pumpAndSettle();
       port.failWith = const NetworkException();
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byType(OrbitExtendedFab));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('offline'), findsOneWidget);
       expect(find.text('Club'), findsOneWidget);
     });
 
-    testWidgets('holds at 2x text', (tester) async {
+    groupTest('holds at 2x text', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await pump(tester);
@@ -249,9 +247,7 @@ void main() {
       return port;
     }
 
-    testWidgets('shows who may do what, and an admin changes it', (
-      tester,
-    ) async {
+    groupTest('shows who may do what, and an admin changes it', (tester) async {
       final port = await pump(tester, testGroup());
       expect(find.text('Only admins'), findsNWidgets(2));
       expect(find.text('Everyone'), findsOneWidget);
@@ -266,7 +262,7 @@ void main() {
       ]);
     });
 
-    testWidgets('a member sees the settings and cannot change them', (
+    groupTest('a member sees the settings and cannot change them', (
       tester,
     ) async {
       final port = await pump(tester, testGroup(role: GroupMemberRole.member));
@@ -280,7 +276,7 @@ void main() {
       expect(port.calls, isEmpty);
     });
 
-    testWidgets('a refusal is shown', (tester) async {
+    groupTest('a refusal is shown', (tester) async {
       final port = await pump(tester, testGroup());
       port.failWith = const ApiException(
         status: 403,
@@ -314,7 +310,7 @@ void main() {
       return (port, sharer);
     }
 
-    testWidgets('makes a link, shares it through the share sheet', (
+    groupTest('makes a link, shares it through the share sheet', (
       tester,
     ) async {
       final (port, sharer) = await pump(tester);
@@ -331,7 +327,7 @@ void main() {
       expect(sharer.shared.single, startsWith('Book club|https://'));
     });
 
-    testWidgets('approval mode is chosen before the link is made', (
+    groupTest('approval mode is chosen before the link is made', (
       tester,
     ) async {
       final (port, _) = await pump(tester);
@@ -344,7 +340,7 @@ void main() {
       expect(find.text('Admins approve new members'), findsNWidgets(2));
     });
 
-    testWidgets('copying puts it on the clipboard and says so', (tester) async {
+    groupTest('copying puts it on the clipboard and says so', (tester) async {
       final (_, sharer) = await pump(tester);
       await tester.tap(find.text('Create link'));
       await tester.pumpAndSettle();
@@ -355,21 +351,26 @@ void main() {
       expect(find.text('Link copied.'), findsOneWidget);
     });
 
-    testWidgets('revoking asks first and removes the link', (tester) async {
+    groupTest('revoking asks first and removes the link', (tester) async {
       final (port, _) = await pump(tester);
       await tester.tap(find.text('Create link'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Revoke'));
       await tester.pumpAndSettle();
       expect(find.text('Revoke this link?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Revoke'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OrbitDialogPanel),
+          matching: find.text('Revoke'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(port.calls.last, startsWith('revoke '));
       expect(find.textContaining('HLX-GRP-secret'), findsNothing);
     });
 
-    testWidgets('a refusal when making a link is shown', (tester) async {
+    groupTest('a refusal when making a link is shown', (tester) async {
       final (port, _) = await pump(tester);
       port.failWith = const GroupException(GroupFailure.notAllowed);
       await tester.tap(find.text('Create link'));
@@ -401,14 +402,12 @@ void main() {
       createdAt: DateTime.now(),
     );
 
-    testWidgets('nobody waiting says so', (tester) async {
+    groupTest('nobody waiting says so', (tester) async {
       await pump(tester);
       expect(find.text('No one is waiting'), findsOneWidget);
     });
 
-    testWidgets('approve lets the person in and clears the row', (
-      tester,
-    ) async {
+    groupTest('approve lets the person in and clears the row', (tester) async {
       final port = await pump(tester, requests: [request]);
       expect(find.text('Ada Lovelace'), findsOneWidget);
 
@@ -420,7 +419,7 @@ void main() {
       expect(find.text('No one is waiting'), findsOneWidget);
     });
 
-    testWidgets('reject turns the person away', (tester) async {
+    groupTest('reject turns the person away', (tester) async {
       final port = await pump(tester, requests: [request]);
 
       await tester.tap(find.byTooltip('Reject Ada Lovelace'));
@@ -429,7 +428,7 @@ void main() {
       expect(port.calls, ['reject r1']);
     });
 
-    testWidgets('a request another admin already answered shows the reason', (
+    groupTest('a request another admin already answered shows the reason', (
       tester,
     ) async {
       final port = await pump(tester, requests: [request]);
@@ -441,7 +440,7 @@ void main() {
       expect(find.textContaining('could not be found'), findsOneWidget);
     });
 
-    testWidgets('a non-admin sees an error, not the list', (tester) async {
+    groupTest('a non-admin sees an error, not the list', (tester) async {
       final port = FakeGroupsPort(
         group: testGroup(role: GroupMemberRole.member),
       )..failRequests = const GroupException(GroupFailure.notAllowed);
@@ -458,7 +457,7 @@ void main() {
   });
 
   group('banned people', () {
-    testWidgets('lists bans made here, and unban lets the person back', (
+    groupTest('lists bans made here, and unban lets the person back', (
       tester,
     ) async {
       final port = FakeGroupsPort(group: testGroup())
@@ -525,7 +524,7 @@ void main() {
       return port;
     }
 
-    testWidgets('people already in the group are not offered', (tester) async {
+    groupTest('people already in the group are not offered', (tester) async {
       await pump(tester);
 
       expect(find.text('Erin'), findsOneWidget);
@@ -533,7 +532,7 @@ void main() {
       expect(find.text('Bob'), findsNothing);
     });
 
-    testWidgets('adds the chosen people and says how many', (tester) async {
+    groupTest('adds the chosen people and says how many', (tester) async {
       final port = await pump(
         tester,
         outcome: const AddMembersOutcome(added: ['erin'], rejected: {}),
@@ -546,7 +545,7 @@ void main() {
       expect(port.calls, ['add erin']);
     });
 
-    testWidgets('a privacy refusal is named and points to an invite link', (
+    groupTest('a privacy refusal is named and points to an invite link', (
       tester,
     ) async {
       final port = await pump(
@@ -569,7 +568,7 @@ void main() {
       );
     });
 
-    testWidgets('a group that only admins add to refuses plainly', (
+    groupTest('a group that only admins add to refuses plainly', (
       tester,
     ) async {
       final port = await pump(tester);

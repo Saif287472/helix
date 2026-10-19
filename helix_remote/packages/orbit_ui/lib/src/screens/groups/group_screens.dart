@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:orbit_ui/src/components/avatar.dart';
 import 'package:orbit_ui/src/components/bars.dart';
@@ -30,6 +31,18 @@ import 'package:orbit_ui/src/theme/pattern_painter.dart';
 
 /// A missing action does nothing, rather than drawing its button disabled.
 void _none() {}
+
+/// What a group change answered: the sentence to show, or null for none
+/// (`GroupResult.message` in the app).
+typedef GroupAnswer = Future<String?>;
+
+/// Shows [answer]'s sentence, if any, as a toast.
+Future<void> _tell(BuildContext context, GroupAnswer? answer) async {
+  final text = await answer;
+  if (text != null && text.isNotEmpty && context.mounted) {
+    showOrbitToast(context, text);
+  }
+}
 
 /// A page with an app bar over its own column (the prototype's
 /// `UI.appbar(...)` followed by a `.scroll` and a floating button).
@@ -165,8 +178,12 @@ class MemberPickerActions {
 
   final ValueChanged<String>? onToggle;
 
-  /// Looks up a number or ~name; the picker shows "Find … on Orbit".
-  final ValueChanged<String>? onLookup;
+  /// Looks up a number or ~name ("Find … on Orbit"): the person found, or
+  /// the sentence that says why not.
+  final Future<({HelixPersonItem? found, String? error})> Function(
+    String query,
+  )?
+  onLookup;
   final VoidCallback? onRetry;
 }
 
@@ -192,7 +209,69 @@ class MemberPicker extends StatefulWidget {
 }
 
 class _MemberPickerState extends State<MemberPicker> {
+  final _query = TextEditingController();
   var _q = '';
+  var _looking = false;
+
+  /// People found by a look-up, until the candidates catch up with them.
+  final Map<String, HelixPersonItem> _found = {};
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  /// The name, number, ~name, nickname or phone-book name has [q] in it.
+  static bool _matches(HelixPersonItem p, String q, String digits) {
+    if (q.isEmpty) return true;
+    final n = p.names;
+    return n.display.toLowerCase().contains(q) ||
+        (n.number ?? '').contains(q) ||
+        (digits.isNotEmpty &&
+            (n.number ?? '').replaceAll(RegExp(r'\D'), '').contains(digits)) ||
+        (n.helixName ?? '').toLowerCase().contains(q) ||
+        (n.nickname ?? '').toLowerCase().contains(q) ||
+        (n.phoneBookName ?? '').toLowerCase().contains(q);
+  }
+
+  /// A phone number (7 or more of its characters) or a `~name`: worth
+  /// looking up.
+  bool get _lookable {
+    final text = _q.trim();
+    if (text.startsWith('~')) return text.length > 1;
+    return RegExp(r'^\+?[\d\s\-().]{7,}$').hasMatch(text);
+  }
+
+  Future<void> _lookup() async {
+    final look = widget.actions.onLookup;
+    if (look == null || _looking) return;
+    setState(() => _looking = true);
+    final result = await look(_q.trim());
+    if (!mounted) return;
+    setState(() => _looking = false);
+    final found = result.found;
+    if (found == null) {
+      showOrbitToast(
+        context,
+        result.error ?? 'Nobody matches that.',
+        error: true,
+      );
+      return;
+    }
+    if (widget.model.exclude.contains(found.id)) {
+      showOrbitToast(context, 'That person is already in this group.');
+      return;
+    }
+    setState(() {
+      _found[found.id] = found;
+      _query.clear();
+      _q = '';
+    });
+    if (!widget.model.selected.contains(found.id)) {
+      widget.actions.onToggle?.call(found.id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,18 +280,13 @@ class _MemberPickerState extends State<MemberPicker> {
     final a = widget.actions;
     final q = _q.trim().toLowerCase();
     final qDigits = q.replaceAll(RegExp(r'\D'), '');
+    final all = {..._found, for (final p in m.candidates) p.id: p};
     final people = [
-      for (final p in m.candidates)
-        if (!m.exclude.contains(p.id) &&
-            (q.isEmpty ||
-                p.names.display.toLowerCase().contains(q) ||
-                (p.names.number ?? '')
-                    .replaceAll(RegExp(r'\D'), '')
-                    .contains(qDigits.isEmpty ? 'x' : qDigits)))
-          p,
+      for (final p in all.values)
+        if (!m.exclude.contains(p.id) && _matches(p, q, qDigits)) p,
     ];
-    final lookup = RegExp(r'^[+~\d]').hasMatch(q) && q.length > 2;
-    final byId = {for (final p in m.candidates) p.id: p};
+    final lookup = _lookable && people.isEmpty;
+    final byId = all;
     final children = <Widget>[
       if (m.selected.isNotEmpty)
         Padding(
@@ -238,11 +312,16 @@ class _MemberPickerState extends State<MemberPicker> {
           OrbitSpace.gutter,
           6,
         ),
-        child: SizedBox(
-          height: 46,
-          child: OrbitSearchField(
-            hint: 'Search name, number or ~name',
-            onChanged: (v) => setState(() => _q = v),
+        // The 46px field answers across 48px, from the padding around it.
+        child: OrbitTapArea(
+          merge: true,
+          child: SizedBox(
+            height: 46,
+            child: OrbitSearchField(
+              hint: 'Search name, number or ~name',
+              controller: _query,
+              onChanged: (v) => setState(() => _q = v),
+            ),
           ),
         ),
       ),
@@ -257,7 +336,7 @@ class _MemberPickerState extends State<MemberPicker> {
               borderRadius: BorderRadius.circular(44 * t.avatarR / 100),
             ),
             child: Center(
-              child: widget.looking
+              child: widget.looking || _looking
                   ? OrbitSpinner(size: 19, color: t.accent)
                   : OrbitIcon(
                       OrbitIcons.userPlus,
@@ -269,7 +348,7 @@ class _MemberPickerState extends State<MemberPicker> {
           ),
           title: 'Find “${_q.trim()}” on Orbit',
           height: orbitRowHeight,
-          onTap: () => a.onLookup?.call(_q.trim()),
+          onTap: _lookup,
         ),
       if (m.loading)
         const Padding(
@@ -278,18 +357,21 @@ class _MemberPickerState extends State<MemberPicker> {
         )
       else if (m.loadFailed)
         OrbitLoadFailed(
-          title: 'Your contacts could not be loaded.',
+          title: 'Your people could not be loaded.',
           onRetry: a.onRetry,
         )
       else if (people.isNotEmpty)
         for (final p in people)
-          _row(
-            t,
-            leading: OrbitAvatar(avatar: p.avatar, size: 44),
-            title: p.names.display,
-            sub: p.names.secondary ?? '',
-            trailing: OrbitPick(on: m.selected.contains(p.id)),
-            onTap: () => a.onToggle?.call(p.id),
+          Semantics(
+            selected: m.selected.contains(p.id),
+            child: _row(
+              t,
+              leading: OrbitAvatar(avatar: p.avatar, size: 44),
+              title: p.names.display,
+              sub: p.names.secondary ?? '',
+              trailing: OrbitPick(on: m.selected.contains(p.id)),
+              onTap: () => a.onToggle?.call(p.id),
+            ),
           )
       else if (!lookup && q.isNotEmpty)
         const OrbitSectionFoot('No results')
@@ -350,8 +432,9 @@ class _MemberPickerState extends State<MemberPicker> {
     onTap: onTap,
     hoverColor: t.hover,
     splashFactory: NoSplash.splashFactory,
-    child: SizedBox(
-      height: height,
+    // [height], taller only when large text needs it.
+    child: ConstrainedBox(
+      constraints: BoxConstraints(minHeight: height),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: OrbitSpace.gutter),
         child: Row(
@@ -425,13 +508,27 @@ class NewGroupActions {
     this.onRemovePicture,
     this.picker = const MemberPickerActions(),
     this.onCreate,
+    this.onOpenGroupChat,
   });
 
   final ValueChanged<String>? onNameChanged;
-  final VoidCallback? onChoosePicture;
+
+  /// Opens the phone's picker; the sentence when the file could not be
+  /// used.
+  final GroupAnswer Function()? onChoosePicture;
   final VoidCallback? onRemovePicture;
   final MemberPickerActions picker;
-  final VoidCallback? onCreate;
+
+  /// Makes the group: null when it failed (the model's error says why),
+  /// else the group and the names of anyone who could not be added.
+  final Future<
+    ({String groupId, String conversationId, List<String> notAddedNames})?
+  >
+  Function()?
+  onCreate;
+
+  /// Replaces this page with the new group's chat.
+  final void Function(String groupId, String conversationId)? onOpenGroupChat;
 }
 
 /// `group-new`: a picture circle and the name, then Members (the picker),
@@ -445,6 +542,38 @@ class NewGroupScreen extends StatelessWidget {
 
   final NewGroupModel model;
   final NewGroupActions actions;
+
+  Future<void> _choosePicture(BuildContext context) =>
+      _tell(context, actions.onChoosePicture?.call());
+
+  /// Creates the group, explains anyone who could not be added, then opens
+  /// the group's chat.
+  Future<void> _create(BuildContext context) async {
+    final create = actions.onCreate;
+    if (create == null || model.creating) return;
+    final made = await create();
+    if (made == null || !context.mounted) return;
+    void open() =>
+        actions.onOpenGroupChat?.call(made.groupId, made.conversationId);
+    final names = made.notAddedNames;
+    if (names.isEmpty) {
+      open();
+      return;
+    }
+    final who = names.length == 1
+        ? names.single
+        : '${names.sublist(0, names.length - 1).join(', ')} and '
+              '${names.last}';
+    await showOrbitDialog(
+      context,
+      title: 'Some people were not added',
+      text:
+          '$who could not be added. The group was created; send them an '
+          'invite link from the group\u2019s page.',
+      actions: const [OrbitDialogAction('OK', kind: OrbitButtonKind.primary)],
+    );
+    open();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +596,7 @@ class NewGroupScreen extends StatelessWidget {
                     OrbitMenuItem(
                       icon: OrbitIcons.image,
                       label: 'Choose another picture',
-                      onTap: a.onChoosePicture,
+                      onTap: () => _choosePicture(context),
                     ),
                     OrbitMenuItem(
                       icon: OrbitIcons.trash,
@@ -477,7 +606,7 @@ class NewGroupScreen extends StatelessWidget {
                     ),
                   ],
                 )
-              : a.onChoosePicture,
+              : () => _choosePicture(context),
           child: CustomPaint(
             foregroundPainter: _DashedRRect(
               color: t.accentLine,
@@ -544,7 +673,7 @@ class NewGroupScreen extends StatelessWidget {
         icon: OrbitIcons.check,
         label: n > 0 ? 'Create with $n' : 'Create group',
         busy: m.creating,
-        onPressed: a.onCreate,
+        onPressed: () => _create(context),
       ),
     );
   }
@@ -599,6 +728,7 @@ class GroupMemberView {
     this.notConfirmed = false,
     this.isAdmin = false,
     this.canAct = false,
+    this.actions,
   });
 
   final String account;
@@ -617,6 +747,10 @@ class GroupMemberView {
 
   /// You may change their role or remove them.
   final bool canAct;
+
+  /// What you may do to them, when the app decides it (an admin may not
+  /// make an owner); null is the prototype's whole menu.
+  final Set<MemberAction>? actions;
 }
 
 class GroupInfoModel {
@@ -635,6 +769,9 @@ class GroupInfoModel {
     this.joinRequestCount = 0,
     this.members = const [],
     this.pending = const [],
+    this.hasPicture = true,
+    this.note,
+    this.disappearingLabel,
   });
 
   final String groupId;
@@ -651,6 +788,15 @@ class GroupInfoModel {
   final int joinRequestCount;
   final List<GroupMemberView> members;
   final List<PendingMemberItem> pending;
+
+  /// The group has a picture to remove.
+  final bool hasPicture;
+
+  /// A line under the name ("The group's name is still arriving.").
+  final String? note;
+
+  /// The timer's name when it is none of the four choices ("3 days").
+  final String? disappearingLabel;
 }
 
 class GroupInfoActions {
@@ -673,20 +819,25 @@ class GroupInfoActions {
     this.onBack,
   });
 
-  final VoidCallback? onChoosePicture;
-  final VoidCallback? onRemovePicture;
-  final void Function(String name, String description)? onSaveInfo;
-  final ValueChanged<DisappearAfter>? onSetDisappearing;
-  final void Function(String account, MemberAction action)? onMemberAction;
-  final ValueChanged<String>? onConfirmPending;
-  final ValueChanged<String>? onRemovePending;
+  // Each change answers with the sentence to show (`GroupAnswer`).
+  final GroupAnswer Function()? onChoosePicture;
+  final GroupAnswer Function()? onRemovePicture;
+  final GroupAnswer Function(String name, String description)? onSaveInfo;
+  final GroupAnswer Function(DisappearAfter after)? onSetDisappearing;
+  final GroupAnswer Function(String account, MemberAction action)?
+  onMemberAction;
+  final GroupAnswer Function(String account)? onConfirmPending;
+  final GroupAnswer Function(String account)? onRemovePending;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onOpenInviteLinks;
   final VoidCallback? onOpenJoinRequests;
   final VoidCallback? onOpenBanned;
   final VoidCallback? onAddMembers;
-  final VoidCallback? onLeave;
-  final VoidCallback? onDelete;
+
+  /// Leaving and deleting go back to Chats when they work; the app does
+  /// that and says so.
+  final GroupAnswer Function()? onLeave;
+  final GroupAnswer Function()? onDelete;
   final VoidCallback? onRetry;
   final VoidCallback? onBack;
 }
@@ -763,39 +914,60 @@ class GroupInfoScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 18, 24, 4),
       child: Column(
         children: [
-          GestureDetector(
-            onTap: m.canEditInfo
-                ? () => showOrbitSheet(
-                    context,
-                    title: 'Group picture',
-                    items: [
-                      OrbitMenuItem(
-                        icon: OrbitIcons.image,
-                        label: 'Choose a picture',
-                        onTap: a.onChoosePicture,
-                      ),
-                      OrbitMenuItem(
-                        icon: OrbitIcons.trash,
-                        label: 'Remove picture',
-                        danger: true,
-                        onTap: a.onRemovePicture,
-                      ),
-                    ],
-                  )
-                : null,
-            child: OrbitAvatar(avatar: m.avatar, size: 112),
+          Semantics(
+            container: true,
+            button: m.canEditInfo,
+            label: m.canEditInfo ? 'Change group picture' : 'Group picture',
+            excludeSemantics: true,
+            child: GestureDetector(
+              onTap: m.canEditInfo
+                  ? () => showOrbitSheet(
+                      context,
+                      title: 'Group picture',
+                      items: [
+                        OrbitMenuItem(
+                          icon: OrbitIcons.image,
+                          label: 'Choose a picture',
+                          onTap: () =>
+                              _tell(context, a.onChoosePicture?.call()),
+                        ),
+                        if (m.hasPicture)
+                          OrbitMenuItem(
+                            icon: OrbitIcons.trash,
+                            label: 'Remove picture',
+                            danger: true,
+                            onTap: () =>
+                                _tell(context, a.onRemovePicture?.call()),
+                          ),
+                      ],
+                    )
+                  : null,
+              child: OrbitAvatar(avatar: m.avatar, size: 112),
+            ),
           ),
           const SizedBox(height: 14),
-          OrbitText(
-            title,
-            textAlign: TextAlign.center,
-            style: t.display(size: 24),
+          Semantics(
+            container: true,
+            header: true,
+            child: OrbitText(
+              title,
+              textAlign: TextAlign.center,
+              style: t.display(size: 24),
+            ),
           ),
           const SizedBox(height: 4),
           OrbitText(
             m.memberCountLabel,
             style: t.mono.style(size: 12.5, color: t.ink3),
           ),
+          if (m.note != null) ...[
+            const SizedBox(height: 8),
+            OrbitText(
+              m.note!,
+              textAlign: TextAlign.center,
+              style: t.font.style(size: OrbitType.caption, color: t.ink3),
+            ),
+          ],
           if ((m.description ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
             ConstrainedBox(
@@ -834,7 +1006,7 @@ class GroupInfoScreen extends StatelessWidget {
             icon: OrbitIcons.timer,
             iconColor: 5,
             title: 'Disappearing messages',
-            value: m.disappearing.label,
+            value: m.disappearingLabel ?? m.disappearing.label,
             end: m.canAdminister ? OrbitRowEnd.chevron : OrbitRowEnd.none,
             onTap: m.canAdminister
                 ? () => showOrbitSheet(
@@ -849,7 +1021,8 @@ class GroupInfoScreen extends StatelessWidget {
                           icon: OrbitIcons.timer,
                           label: d.label,
                           on: d == m.disappearing,
-                          onTap: () => a.onSetDisappearing?.call(d),
+                          onTap: () =>
+                              _tell(context, a.onSetDisappearing?.call(d)),
                         ),
                     ],
                   )
@@ -933,7 +1106,7 @@ class GroupInfoScreen extends StatelessWidget {
                   'your chats. You can only come back if someone adds you or '
                   'sends a link.',
               'Leave',
-              a.onLeave,
+              () => _tell(context, a.onLeave?.call()),
             ),
           ),
           if (m.isOwner)
@@ -946,7 +1119,7 @@ class GroupInfoScreen extends StatelessWidget {
                 'The group is deleted for everyone and nobody can send to it '
                     'any more. This cannot be undone.',
                 'Delete group',
-                a.onDelete,
+                () => _tell(context, a.onDelete?.call()),
               ),
             ),
         ],
@@ -966,14 +1139,21 @@ class GroupInfoScreen extends StatelessWidget {
       height: 1.45,
     );
     final name = p.title.replaceFirst('Confirm ', '').replaceFirst('?', '');
+    // The 38px buttons take 5px above and below as their touch area (48px),
+    // from the card's own spacing, so nothing moves.
+    Widget target(Widget button) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: OrbitTapArea(child: button),
+    );
     return Container(
+      key: ValueKey('pending-${p.account}'),
       margin: const EdgeInsets.fromLTRB(
         OrbitSpace.gutter,
         14,
         OrbitSpace.gutter,
         0,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 7),
       decoration: BoxDecoration(
         color: t.warningSoft,
         border: Border.all(color: t.warningLine),
@@ -1019,32 +1199,41 @@ class GroupInfoScreen extends StatelessWidget {
                     ),
                   ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.only(top: 5),
                   child: Wrap(
                     spacing: 8,
                     children: [
-                      OrbitButton(
-                        label: 'Confirm',
-                        height: 38,
-                        padding: 16,
-                        fontSize: 13,
-                        onPressed: () =>
-                            actions.onConfirmPending?.call(p.account),
-                      ),
-                      if (p.canRemove)
+                      target(
                         OrbitButton(
-                          label: 'Remove',
-                          kind: OrbitButtonKind.secondary,
+                          label: 'Confirm',
                           height: 38,
                           padding: 16,
                           fontSize: 13,
-                          onPressed: () => confirm(
-                            'Remove $name?',
-                            '$name will be taken out of the group. The group '
-                                'key changes, so they cannot read anything '
-                                'new.',
-                            'Remove',
-                            () => actions.onRemovePending?.call(p.account),
+                          onPressed: () => _tell(
+                            context,
+                            actions.onConfirmPending?.call(p.account),
+                          ),
+                        ),
+                      ),
+                      if (p.canRemove)
+                        target(
+                          OrbitButton(
+                            label: 'Remove',
+                            kind: OrbitButtonKind.secondary,
+                            height: 38,
+                            padding: 16,
+                            fontSize: 13,
+                            onPressed: () => confirm(
+                              'Remove $name?',
+                              '$name will be taken out of the group. The group '
+                                  'key changes, so they cannot read anything '
+                                  'new.',
+                              'Remove',
+                              () => _tell(
+                                context,
+                                actions.onRemovePending?.call(p.account),
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -1071,7 +1260,10 @@ class GroupInfoScreen extends StatelessWidget {
       if (mem.detail.isNotEmpty) mem.detail,
     ];
     final sub = parts.join(' · ');
-    void act(MemberAction x) => a.onMemberAction?.call(mem.account, x);
+    void act(MemberAction x) =>
+        _tell(context, a.onMemberAction?.call(mem.account, x));
+    final allowed = mem.actions;
+    bool may(MemberAction x) => allowed == null || allowed.contains(x);
     return OrbitListRow(
       leading: OrbitAvatar(avatar: mem.avatar, size: 40),
       title: n,
@@ -1104,16 +1296,21 @@ class GroupInfoScreen extends StatelessWidget {
                 context,
                 title: n,
                 items: [
-                  OrbitMenuItem(
-                    icon: OrbitIcons.shieldStar,
-                    label: mem.isAdmin ? 'Remove admin' : 'Make admin',
-                    onTap: () => act(
-                      mem.isAdmin
-                          ? MemberAction.removeAdmin
-                          : MemberAction.makeAdmin,
+                  if (may(
+                    mem.isAdmin
+                        ? MemberAction.removeAdmin
+                        : MemberAction.makeAdmin,
+                  ))
+                    OrbitMenuItem(
+                      icon: OrbitIcons.shieldStar,
+                      label: mem.isAdmin ? 'Remove admin' : 'Make admin',
+                      onTap: () => act(
+                        mem.isAdmin
+                            ? MemberAction.removeAdmin
+                            : MemberAction.makeAdmin,
+                      ),
                     ),
-                  ),
-                  if (model.isOwner)
+                  if (model.isOwner && may(MemberAction.makeOwner))
                     OrbitMenuItem(
                       icon: OrbitIcons.crownSimple,
                       label: 'Make owner',
@@ -1133,30 +1330,32 @@ class GroupInfoScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  OrbitMenuItem(
-                    icon: OrbitIcons.userMinus,
-                    label: 'Remove from group',
-                    danger: true,
-                    onTap: () => confirm(
-                      'Remove $n?',
-                      '$n will be taken out of the group. The group key '
-                          'changes, so they cannot read anything new.',
-                      'Remove',
-                      () => act(MemberAction.remove),
+                  if (may(MemberAction.remove))
+                    OrbitMenuItem(
+                      icon: OrbitIcons.userMinus,
+                      label: 'Remove from group',
+                      danger: true,
+                      onTap: () => confirm(
+                        'Remove $n?',
+                        '$n will be taken out of the group. The group key '
+                            'changes, so they cannot read anything new.',
+                        'Remove',
+                        () => act(MemberAction.remove),
+                      ),
                     ),
-                  ),
-                  OrbitMenuItem(
-                    icon: OrbitIcons.prohibit,
-                    label: 'Remove and ban',
-                    danger: true,
-                    onTap: () => confirm(
-                      'Remove and ban $n?',
-                      '$n will be removed and cannot join again through a '
-                          'link until you unban them.',
-                      'Ban',
-                      () => act(MemberAction.ban),
+                  if (may(MemberAction.ban))
+                    OrbitMenuItem(
+                      icon: OrbitIcons.prohibit,
+                      label: 'Remove and ban',
+                      danger: true,
+                      onTap: () => confirm(
+                        'Remove and ban $n?',
+                        '$n will be removed and cannot join again through a '
+                            'link until you unban them.',
+                        'Ban',
+                        () => act(MemberAction.ban),
+                      ),
                     ),
-                  ),
                 ],
               ),
             )
@@ -1200,8 +1399,14 @@ class GroupInfoScreen extends StatelessWidget {
                   OrbitButton(
                     label: 'Save',
                     onPressed: () {
-                      actions.onSaveInfo?.call(name.text, about.text);
                       Navigator.maybePop(sheet);
+                      _tell(
+                        context,
+                        actions.onSaveInfo?.call(
+                          name.text.trim(),
+                          about.text.trim(),
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -1224,8 +1429,10 @@ class GroupSettingsModel {
     this.editInfo = GroupWho.admins,
     this.addMembers = GroupWho.everyone,
     this.sendMessages = GroupWho.everyone,
+    this.status = GroupInfoStatus.ready,
   });
 
+  final GroupInfoStatus status;
   final bool canChange;
   final GroupWho editInfo;
   final GroupWho addMembers;
@@ -1237,11 +1444,13 @@ class GroupSettingsActions {
     this.onEditInfo,
     this.onAddMembers,
     this.onSendMessages,
+    this.onRetry,
   });
 
-  final ValueChanged<GroupWho>? onEditInfo;
-  final ValueChanged<GroupWho>? onAddMembers;
-  final ValueChanged<GroupWho>? onSendMessages;
+  final GroupAnswer Function(GroupWho who)? onEditInfo;
+  final GroupAnswer Function(GroupWho who)? onAddMembers;
+  final GroupAnswer Function(GroupWho who)? onSendMessages;
+  final VoidCallback? onRetry;
 }
 
 /// `group-settings`: who can edit the group, add people and send.
@@ -1260,11 +1469,34 @@ class GroupSettingsScreen extends StatelessWidget {
     final m = model;
     String label(GroupWho w) =>
         w == GroupWho.admins ? 'Only admins' : 'Everyone';
+    if (m.status != GroupInfoStatus.ready) {
+      return OrbitPage(
+        title: 'Group settings',
+        children: switch (m.status) {
+          GroupInfoStatus.loading => const [
+            SizedBox(height: 120),
+            OrbitPageLoading(),
+          ],
+          GroupInfoStatus.failed => [
+            OrbitLoadFailed(
+              title: 'This group could not be loaded.',
+              onRetry: actions.onRetry,
+            ),
+          ],
+          _ => const [
+            OrbitEmptyState(
+              icon: OrbitIcons.usersThree,
+              title: 'You are not in this group',
+            ),
+          ],
+        },
+      );
+    }
     OrbitListRow row(
       String title,
       String sheet,
       GroupWho value,
-      ValueChanged<GroupWho>? set,
+      GroupAnswer Function(GroupWho who)? set,
     ) => OrbitListRow(
       title: title,
       value: label(value),
@@ -1281,7 +1513,9 @@ class GroupSettingsScreen extends StatelessWidget {
                         : OrbitIcons.shieldStar,
                     label: label(w),
                     on: w == value,
-                    onTap: () => set?.call(w),
+                    onTap: () {
+                      if (w != value) _tell(context, set?.call(w));
+                    },
                   ),
               ],
             )
@@ -1345,11 +1579,17 @@ class InviteLinksModel {
     this.approveNew = false,
     this.links = const [],
     this.creating = false,
+    this.error,
   });
 
   final bool approveNew;
   final List<InviteLinkItem> links;
+
+  /// A link is being made (or revoked): Create spins, Revoke waits.
   final bool creating;
+
+  /// Why the last change did not work (not allowed, offline).
+  final String? error;
 }
 
 class InviteLinksActions {
@@ -1364,7 +1604,9 @@ class InviteLinksActions {
   final ValueChanged<bool>? onSetApprove;
   final VoidCallback? onCreate;
   final ValueChanged<String>? onShare;
-  final ValueChanged<String>? onCopy;
+
+  /// Copies the link; the page says "Link copied.".
+  final Future<void> Function(String linkId)? onCopy;
   final ValueChanged<String>? onRevoke;
 }
 
@@ -1413,10 +1655,12 @@ class InviteLinksScreen extends StatelessWidget {
               icon: OrbitIcons.linkSimpleHorizontal,
               busy: m.creating,
               block: true,
-              onPressed: a.onCreate ?? _none,
+              onPressed: m.creating ? null : (a.onCreate ?? _none),
             ),
           ],
         ),
+        if (m.error != null)
+          OrbitInlineNotice(kind: OrbitNoticeKind.error, text: m.error!),
         if (m.links.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
@@ -1504,7 +1748,14 @@ class InviteLinksScreen extends StatelessWidget {
                 height: 40,
                 padding: 14,
                 fontSize: 13,
-                onPressed: () => a.onCopy?.call(l.id),
+                onPressed: () async {
+                  final copy = a.onCopy;
+                  if (copy == null) return;
+                  await copy(l.id);
+                  if (context.mounted) {
+                    showOrbitToast(context, 'Link copied.');
+                  }
+                },
               ),
               OrbitButton(
                 label: 'Revoke',
@@ -1513,21 +1764,23 @@ class InviteLinksScreen extends StatelessWidget {
                 height: 40,
                 padding: 14,
                 fontSize: 13,
-                onPressed: () => showOrbitDialog(
-                  context,
-                  title: 'Revoke this link?',
-                  text:
-                      'It stops working at once. People who already joined '
-                      'stay in the group.',
-                  actions: [
-                    const OrbitDialogAction('Cancel'),
-                    OrbitDialogAction(
-                      'Revoke',
-                      kind: OrbitButtonKind.danger,
-                      onPressed: () => a.onRevoke?.call(l.id),
-                    ),
-                  ],
-                ),
+                onPressed: model.creating
+                    ? null
+                    : () => showOrbitDialog(
+                        context,
+                        title: 'Revoke this link?',
+                        text:
+                            'It stops working at once. People who already joined '
+                            'stay in the group.',
+                        actions: [
+                          const OrbitDialogAction('Cancel'),
+                          OrbitDialogAction(
+                            'Revoke',
+                            kind: OrbitButtonKind.danger,
+                            onPressed: () => a.onRevoke?.call(l.id),
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -1557,17 +1810,24 @@ class PersonEntryView {
 }
 
 class JoinRequestsModel {
-  const JoinRequestsModel({this.requests = const [], this.loading = false});
+  const JoinRequestsModel({
+    this.requests = const [],
+    this.loading = false,
+    this.loadFailed = false,
+  });
 
   final List<PersonEntryView> requests;
   final bool loading;
+  final bool loadFailed;
 }
 
 class JoinRequestsActions {
-  const JoinRequestsActions({this.onApprove, this.onReject});
+  const JoinRequestsActions({this.onApprove, this.onReject, this.onRetry});
 
-  final ValueChanged<String>? onApprove;
-  final ValueChanged<String>? onReject;
+  /// Each answers with the sentence to show ("Sadia joined the group.").
+  final GroupAnswer Function(String account)? onApprove;
+  final GroupAnswer Function(String account)? onReject;
+  final VoidCallback? onRetry;
 }
 
 /// `group-requests`: people asking to join, each with Reject and Approve.
@@ -1584,6 +1844,23 @@ class JoinRequestsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = model;
+    if (m.loading || m.loadFailed) {
+      return OrbitPage(
+        title: 'Join requests',
+        children: [
+          if (m.loading) ...[
+            const SizedBox(height: 120),
+            const OrbitPageLoading(),
+          ] else
+            OrbitLoadFailed(
+              title:
+                  'The requests could not be loaded. Only admins can see '
+                  'them.',
+              onRetry: actions.onRetry,
+            ),
+        ],
+      );
+    }
     if (m.requests.isEmpty) {
       return const OrbitPage(
         title: 'Join requests',
@@ -1616,14 +1893,16 @@ class JoinRequestsScreen extends StatelessWidget {
                       icon: OrbitIcons.x,
                       tooltip: 'Reject ${r.title}',
                       tone: OrbitIconButtonTone.danger,
-                      onPressed: () => actions.onReject?.call(r.account),
+                      onPressed: () =>
+                          _tell(context, actions.onReject?.call(r.account)),
                     ),
                     OrbitIconButton(
                       icon: OrbitIcons.check,
                       weight: OrbitIconWeight.bold,
                       tooltip: 'Approve ${r.title}',
                       tone: OrbitIconButtonTone.accent,
-                      onPressed: () => actions.onApprove?.call(r.account),
+                      onPressed: () =>
+                          _tell(context, actions.onApprove?.call(r.account)),
                     ),
                   ],
                 ),
@@ -1636,15 +1915,23 @@ class JoinRequestsScreen extends StatelessWidget {
 }
 
 class BannedPeopleModel {
-  const BannedPeopleModel({this.people = const []});
+  const BannedPeopleModel({
+    this.people = const [],
+    this.loading = false,
+    this.loadFailed = false,
+  });
 
   final List<PersonEntryView> people;
+  final bool loading;
+  final bool loadFailed;
 }
 
 class BannedPeopleActions {
-  const BannedPeopleActions({this.onUnban});
+  const BannedPeopleActions({this.onUnban, this.onRetry});
 
-  final ValueChanged<String>? onUnban;
+  /// Answers with the sentence to show ("Shuvo can join again.").
+  final GroupAnswer Function(String account)? onUnban;
+  final VoidCallback? onRetry;
 }
 
 /// `group-banned`: people banned from this phone, each with Unban.
@@ -1661,6 +1948,21 @@ class BannedPeopleScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = model;
+    if (m.loading || m.loadFailed) {
+      return OrbitPage(
+        title: 'Banned people',
+        children: [
+          if (m.loading) ...[
+            const SizedBox(height: 120),
+            const OrbitPageLoading(),
+          ] else
+            OrbitLoadFailed(
+              title: 'The list could not be loaded.',
+              onRetry: actions.onRetry,
+            ),
+        ],
+      );
+    }
     if (m.people.isEmpty) {
       return const OrbitPage(
         title: 'Banned people',
@@ -1694,7 +1996,8 @@ class BannedPeopleScreen extends StatelessWidget {
                 trailing: OrbitButton(
                   label: 'Unban',
                   kind: OrbitButtonKind.ghost,
-                  onPressed: () => actions.onUnban?.call(p.account),
+                  onPressed: () =>
+                      _tell(context, actions.onUnban?.call(p.account)),
                 ),
               ),
           ],
@@ -1723,7 +2026,10 @@ class AddMembersActions {
   });
 
   final MemberPickerActions picker;
-  final VoidCallback? onAdd;
+
+  /// Adds the people picked. Ok: its sentence ("Added 2 people.") and back;
+  /// not ok: "No one was added", and why.
+  final Future<({bool ok, String? message})> Function()? onAdd;
 }
 
 /// `group-add`: the member picker without the people already in, and Add N.
@@ -1736,6 +2042,28 @@ class AddMembersScreen extends StatelessWidget {
 
   final AddMembersModel model;
   final AddMembersActions actions;
+
+  Future<void> _add(BuildContext context) async {
+    final add = actions.onAdd;
+    if (add == null || model.adding) return;
+    final result = await add();
+    if (!context.mounted) return;
+    final message = result.message;
+    if (result.ok) {
+      if (message != null) showOrbitToast(context, message);
+      await Navigator.maybePop(context);
+      return;
+    }
+    // Nobody was added: stay, say why, and let the person choose again.
+    if (message != null) {
+      await showOrbitDialog(
+        context,
+        title: 'No one was added',
+        text: message,
+        actions: const [OrbitDialogAction('OK', kind: OrbitButtonKind.primary)],
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1752,7 +2080,7 @@ class AddMembersScreen extends StatelessWidget {
               icon: OrbitIcons.userPlus,
               label: 'Add $n',
               busy: model.adding,
-              onPressed: actions.onAdd,
+              onPressed: () => _add(context),
             ),
     );
   }
@@ -1791,6 +2119,7 @@ class JoinGroupModel {
 class JoinGroupActions {
   const JoinGroupActions({
     this.onContinue,
+    this.linkLooksRight,
     this.onPaste,
     this.onJoin,
     this.onOpenGroup,
@@ -1799,6 +2128,12 @@ class JoinGroupActions {
   });
 
   final ValueChanged<String>? onContinue;
+
+  /// Whether the text is a group link at all; a wrong one stays on the
+  /// field with a toast. Null takes every text.
+  final bool Function(String link)? linkLooksRight;
+
+  /// Null pastes the clipboard into the field.
   final VoidCallback? onPaste;
   final VoidCallback? onJoin;
   final VoidCallback? onOpenGroup;
@@ -1986,6 +2321,27 @@ class _JoinInputState extends State<_JoinInput> {
     super.dispose();
   }
 
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim();
+    if (text != null && text.isNotEmpty && mounted) {
+      setState(() => _link.text = text);
+    }
+  }
+
+  void _continue() {
+    final text = _link.text.trim();
+    final looks = widget.actions.linkLooksRight;
+    if (looks != null && !looks(text)) {
+      showOrbitToast(
+        context,
+        'That is not an Orbit group link. Check that you copied all of it.',
+      );
+      return;
+    }
+    widget.actions.onContinue?.call(text);
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2010,13 +2366,9 @@ class _JoinInputState extends State<_JoinInput> {
               controller: _link,
               hint: 'https://…/open#HLX-GRP-…',
               mono: true,
-              onPaste: widget.actions.onPaste ?? _none,
+              onPaste: widget.actions.onPaste ?? _paste,
             ),
-            OrbitButton(
-              label: 'Continue',
-              block: true,
-              onPressed: () => widget.actions.onContinue?.call(_link.text),
-            ),
+            OrbitButton(label: 'Continue', block: true, onPressed: _continue),
           ],
         ),
       ),

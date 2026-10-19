@@ -18,8 +18,10 @@ application/
   group_invites.dart    invite links (memory only), join requests, bans, join-by-link flow
   group_picture.dart    encrypted group picture: upload, fetch, picker, scaling
   group_navigation.dart groupChatLocationProvider (seam), groupSignalsProvider
-presentation/           create, info, settings, invite, requests, banned, add members,
-                        join (preview + confirm), member picker
+presentation/           connectors for orbit_ui's group pages: create (NewGroupScreen),
+                        info, settings, invite, requests, banned, add members, join
+                        (preview + confirm); member_picker_wiring.dart feeds the
+                        shared MemberPicker (groupCandidateItemsProvider, lookup)
 groups_routes.dart      /home/groups/new, /join, /:id and /settings /invite /requests
                         /banned /add under it
 ```
@@ -71,8 +73,8 @@ joined by themselves through a link. The engine holds them back (no sender key,
 no group key) and writes a `member_unconfirmed` notice. `group_pending.dart`
 turns `watchPendingMembers` into `PendingMemberView`s ("Confirm NAME?", the
 reason in plain English, `canRemove` from the viewer's role) and
-`shared/widgets/pending_members_prompt.dart` draws them in group info and above
-the group conversation: Confirm (`GroupActions.confirmMember`) for everybody,
+`shared/pending_members.dart` hands them to Orbit's cards in group info and
+above the group conversation: Confirm (`GroupActions.confirmMember`) for everybody,
 Remove (the existing `removeMember`, with its confirmation) only where the
 group's rules allow it. A plain member also sees "Only an admin can remove
 someone. If you do not know them, you can leave the group." The roster row says

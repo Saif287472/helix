@@ -80,8 +80,7 @@ conversation_routes.dart    /chat/:id and its sub-routes
   settings screen links to its info page.
 - **Unconfirmed group members:** above a group conversation the Orbit screen
   draws "Confirm NAME?" (Confirm, and Remove for admins) from
-  `shared/pending_members.dart` (the group info page still uses
-  `shared/widgets/pending_members_prompt.dart`) for members the server's
+  `shared/pending_members.dart` (as the group info page does) for members the server's
   roster added without an announcement; the timeline shows the engine's `member_unconfirmed` notice
   (`core/chat/message_semantics.dart`). The groups feature owns the logic.
 

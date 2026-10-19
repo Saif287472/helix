@@ -10,6 +10,8 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
 
+import 'package:orbit_ui/orbit_ui.dart' show OrbitDialogPanel, OrbitTextField;
+
 import '../support/group_support.dart';
 import '../support/harness.dart';
 
@@ -52,13 +54,25 @@ void main() {
     return port;
   }
 
+  /// Opens the member's sheet from their ⋮ button.
   Future<void> tapMember(WidgetTester tester, String name) async {
-    await tester.tap(find.text(name));
+    await tester.tap(find.byTooltip('Actions for $name'));
     await tester.pumpAndSettle();
   }
 
+  Finder inDialog(String text) => find.descendant(
+    of: find.byType(OrbitDialogPanel),
+    matching: find.text(text),
+  );
+
+  /// The text field under [label] in the edit sheet.
+  Finder field(String label) => find.descendant(
+    of: find.widgetWithText(OrbitTextField, label),
+    matching: find.byType(EditableText),
+  );
+
   group('the header and the roster', () {
-    testWidgets('shows the name, count, description and every member', (
+    groupTest('shows the name, count, description and every member', (
       tester,
     ) async {
       await pump(tester, testGroup());
@@ -72,7 +86,7 @@ void main() {
       expect(find.text('~carol'), findsOneWidget);
     });
 
-    testWidgets('roles are shown and members are ordered owner, admins, '
+    groupTest('roles are shown and members are ordered owner, admins, '
         'the rest', (tester) async {
       await pump(tester, testGroup());
 
@@ -85,7 +99,7 @@ void main() {
       expect(admin, lessThan(bob));
     });
 
-    testWidgets('the naming order is used: number under a name, ~Helix name '
+    groupTest('the naming order is used: number under a name, ~Helix name '
         'alone', (tester) async {
       await pump(tester, testGroup());
 
@@ -93,9 +107,7 @@ void main() {
       expect(find.textContaining('+8801711000002'), findsOneWidget);
     });
 
-    testWidgets('a member from another server shows that server', (
-      tester,
-    ) async {
+    groupTest('a member from another server shows that server', (tester) async {
       await pump(
         tester,
         testGroup(
@@ -120,7 +132,7 @@ void main() {
       expect(find.textContaining('on chat.example.org'), findsOneWidget);
     });
 
-    testWidgets('a group whose name has not arrived says so', (tester) async {
+    groupTest('a group whose name has not arrived says so', (tester) async {
       await pump(tester, testGroup(title: ''));
 
       expect(find.text('New group'), findsOneWidget);
@@ -129,9 +141,7 @@ void main() {
   });
 
   group('what each role sees', () {
-    testWidgets('the owner sees every admin tool and can delete', (
-      tester,
-    ) async {
+    groupTest('the owner sees every admin tool and can delete', (tester) async {
       await pump(tester, testGroup());
 
       expect(find.text('Edit group info'), findsOneWidget);
@@ -144,14 +154,14 @@ void main() {
       expect(find.text('Delete group'), findsOneWidget);
     });
 
-    testWidgets('an admin cannot delete the group', (tester) async {
+    groupTest('an admin cannot delete the group', (tester) async {
       await pump(tester, testGroup(role: GroupMemberRole.admin));
 
       expect(find.text('Group settings'), findsOneWidget);
       expect(find.text('Delete group'), findsNothing);
     });
 
-    testWidgets('a member sees no admin tool unless the group allows it', (
+    groupTest('a member sees no admin tool unless the group allows it', (
       tester,
     ) async {
       await pump(tester, testGroup(role: GroupMemberRole.member));
@@ -162,10 +172,15 @@ void main() {
       expect(find.text('Add members'), findsNothing);
       expect(find.text('Leave group'), findsOneWidget);
       // Nothing to do to anybody.
-      expect(find.byIcon(Icons.more_vert), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Tooltip && (w.message ?? '').startsWith('Actions for'),
+        ),
+        findsNothing,
+      );
     });
 
-    testWidgets('a member may add and edit when the group says everyone', (
+    groupTest('a member may add and edit when the group says everyone', (
       tester,
     ) async {
       await pump(
@@ -224,7 +239,7 @@ void main() {
   });
 
   group('admin actions on a member', () {
-    testWidgets('make admin', (tester) async {
+    groupTest('make admin', (tester) async {
       final port = await pump(tester, testGroup());
       await tapMember(tester, 'Bob');
       await tester.tap(find.text('Make admin'));
@@ -234,7 +249,7 @@ void main() {
       expect(find.text('Bob is now an admin.'), findsOneWidget);
     });
 
-    testWidgets('remove admin', (tester) async {
+    groupTest('remove admin', (tester) async {
       final port = await pump(tester, testGroup());
       await tapMember(tester, 'Ada Lovelace');
       await tester.tap(find.text('Remove admin'));
@@ -243,7 +258,7 @@ void main() {
       expect(port.calls, ['role ada member']);
     });
 
-    testWidgets('remove asks first, then removes', (tester) async {
+    groupTest('remove asks first, then removes', (tester) async {
       final port = await pump(tester, testGroup());
       await tapMember(tester, 'Bob');
       await tester.tap(find.text('Remove from group'));
@@ -256,7 +271,7 @@ void main() {
       expect(find.text('Bob was removed.'), findsOneWidget);
     });
 
-    testWidgets('cancelling a removal does nothing', (tester) async {
+    groupTest('cancelling a removal does nothing', (tester) async {
       final port = await pump(tester, testGroup());
       await tapMember(tester, 'Bob');
       await tester.tap(find.text('Remove from group'));
@@ -267,7 +282,7 @@ void main() {
       expect(port.calls, isEmpty);
     });
 
-    testWidgets('ban asks first, then removes and bans', (tester) async {
+    groupTest('ban asks first, then removes and bans', (tester) async {
       final port = await pump(tester, testGroup());
       await tapMember(tester, 'Bob');
       await tester.tap(find.text('Remove and ban'));
@@ -279,19 +294,19 @@ void main() {
       expect(port.calls, ['ban bob']);
     });
 
-    testWidgets('making somebody the owner needs a clear yes', (tester) async {
+    groupTest('making somebody the owner needs a clear yes', (tester) async {
       final port = await pump(tester, testGroup());
       await tapMember(tester, 'Bob');
       await tester.tap(find.text('Make owner'));
       await tester.pumpAndSettle();
       expect(find.text('Make Bob the owner?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Make owner'));
+      await tester.tap(inDialog('Make owner'));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['role bob owner']);
     });
 
-    testWidgets('a refusal from the server is said in plain words', (
+    groupTest('a refusal from the server is said in plain words', (
       tester,
     ) async {
       final port = await pump(tester, testGroup());
@@ -311,7 +326,7 @@ void main() {
       expect(find.textContaining('internal detail'), findsNothing);
     });
 
-    testWidgets('a stale roster is said, with what to do', (tester) async {
+    groupTest('a stale roster is said, with what to do', (tester) async {
       final port = await pump(tester, testGroup());
       port.failWith = const ApiException(
         status: 409,
@@ -328,41 +343,41 @@ void main() {
   });
 
   group('the group itself', () {
-    testWidgets('leaving asks, leaves, and says so', (tester) async {
+    groupTest('leaving asks, leaves, and says so', (tester) async {
       final port = await pump(tester, testGroup(role: GroupMemberRole.member));
       await tester.tap(find.text('Leave group'));
       await tester.pumpAndSettle();
-      expect(find.text('Leave "Book club"?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
+      expect(find.text('Leave “Book club”?'), findsOneWidget);
+      await tester.tap(inDialog('Leave'));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['leave']);
     });
 
-    testWidgets('deleting asks, then deletes for everyone', (tester) async {
+    groupTest('deleting asks, then deletes for everyone', (tester) async {
       final port = await pump(tester, testGroup());
       await tester.tap(find.text('Delete group'));
       await tester.pumpAndSettle();
-      expect(find.text('Delete "Book club"?'), findsOneWidget);
-      await tester.tap(find.text('Delete group').last);
+      expect(find.text('Delete “Book club”?'), findsOneWidget);
+      await tester.tap(inDialog('Delete group'));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['delete']);
     });
 
-    testWidgets('a failed leave shows why and stays', (tester) async {
+    groupTest('a failed leave shows why and stays', (tester) async {
       final port = await pump(tester, testGroup(role: GroupMemberRole.member));
       port.failWith = const NetworkException();
       await tester.tap(find.text('Leave group'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
+      await tester.tap(inDialog('Leave'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('offline'), findsOneWidget);
       expect(find.text('Leave group'), findsOneWidget);
     });
 
-    testWidgets('the disappearing-messages default shows and can be set by an '
+    groupTest('the disappearing-messages default shows and can be set by an '
         'admin', (tester) async {
       final port = await pump(tester, testGroup(disappearing: 604800));
       expect(find.text('7 days'), findsOneWidget);
@@ -375,7 +390,7 @@ void main() {
       expect(port.calls, ['disappearing 86400']);
     });
 
-    testWidgets('turning disappearing messages off sends null', (tester) async {
+    groupTest('turning disappearing messages off sends null', (tester) async {
       final port = await pump(tester, testGroup(disappearing: 604800));
       await tester.tap(find.text('Disappearing messages'));
       await tester.pumpAndSettle();
@@ -385,7 +400,7 @@ void main() {
       expect(port.calls, ['disappearing null']);
     });
 
-    testWidgets('a member sees the timer but cannot change it', (tester) async {
+    groupTest('a member sees the timer but cannot change it', (tester) async {
       final port = await pump(
         tester,
         testGroup(role: GroupMemberRole.member, disappearing: 86400),
@@ -397,7 +412,7 @@ void main() {
       expect(find.text('Off'), findsNothing);
     });
 
-    testWidgets('the admin tools open their pages', (tester) async {
+    groupTest('the admin tools open their pages', (tester) async {
       await pump(tester, testGroup());
       await tester.tap(find.text('Group settings'));
       await tester.pumpAndSettle();
@@ -406,52 +421,43 @@ void main() {
   });
 
   group('editing', () {
-    testWidgets('name and description are saved, only what changed', (
+    groupTest('name and description are saved, only what changed', (
       tester,
     ) async {
       final port = await pump(tester, testGroup());
       await tester.tap(find.text('Edit group info'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Group name'),
-        'Reading club',
-      );
+      await tester.enterText(field('Group name'), 'Reading club');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['rename Reading club']);
     });
 
-    testWidgets('a new description is saved on its own', (tester) async {
+    groupTest('a new description is saved on its own', (tester) async {
       final port = await pump(tester, testGroup());
       await tester.tap(find.text('Edit group info'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Description'),
-        'Now on Saturdays',
-      );
+      await tester.enterText(field('Description'), 'Now on Saturdays');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(port.calls, ['description Now on Saturdays']);
     });
 
-    testWidgets('a conflict while saving is explained', (tester) async {
+    groupTest('a conflict while saving is explained', (tester) async {
       final port = await pump(tester, testGroup());
       port.failWith = const GroupException(GroupFailure.versionConflict);
       await tester.tap(find.text('Edit group info'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Group name'),
-        'Other',
-      );
+      await tester.enterText(field('Group name'), 'Other');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('changed at the same time'), findsOneWidget);
     });
 
-    testWidgets('the picture is chosen from the phone and encrypted up', (
+    groupTest('the picture is chosen from the phone and encrypted up', (
       tester,
     ) async {
       final port = await pump(
@@ -459,7 +465,7 @@ void main() {
         testGroup(),
         picker: FakePicker(Uint8List.fromList([1, 2, 3])),
       );
-      await tester.tap(find.byType(InkResponse).first);
+      await tester.tap(find.bySemanticsLabel('Change group picture'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose a picture'));
       await tester.pumpAndSettle();
@@ -467,9 +473,9 @@ void main() {
       expect(port.calls, ['picture set']);
     });
 
-    testWidgets('choosing nothing changes nothing', (tester) async {
+    groupTest('choosing nothing changes nothing', (tester) async {
       final port = await pump(tester, testGroup(), picker: FakePicker());
-      await tester.tap(find.byType(InkResponse).first);
+      await tester.tap(find.bySemanticsLabel('Change group picture'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose a picture'));
       await tester.pumpAndSettle();
@@ -479,7 +485,7 @@ void main() {
   });
 
   group('roster changes and the end of membership', () {
-    testWidgets('being removed is said, and the page says you are out', (
+    groupTest('being removed is said, and the page says you are out', (
       tester,
     ) async {
       final port = await pump(tester, testGroup());
@@ -493,7 +499,7 @@ void main() {
       expect(find.text('You are not in this group'), findsOneWidget);
     });
 
-    testWidgets('a group that was deleted says so', (tester) async {
+    groupTest('a group that was deleted says so', (tester) async {
       final port = await pump(tester, testGroup());
       port.signal(const GroupMembershipEnded('g1', 'deleted'));
       await tester.pumpAndSettle();
@@ -501,7 +507,7 @@ void main() {
       expect(find.text('This group was deleted.'), findsOneWidget);
     });
 
-    testWidgets('a member added elsewhere appears without a refresh', (
+    groupTest('a member added elsewhere appears without a refresh', (
       tester,
     ) async {
       final port = await pump(tester, testGroup());
@@ -525,7 +531,7 @@ void main() {
       expect(find.text('~dan'), findsOneWidget);
     });
 
-    testWidgets('a group that is not there shows the not-a-member page', (
+    groupTest('a group that is not there shows the not-a-member page', (
       tester,
     ) async {
       await pump(tester, null);
@@ -535,7 +541,7 @@ void main() {
   });
 
   group('states and accessibility', () {
-    testWidgets('holds at 2x text with nothing overflowing', (tester) async {
+    groupTest('holds at 2x text with nothing overflowing', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await pump(tester, testGroup());
@@ -543,7 +549,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('meets the tap-target and label guidelines', (tester) async {
+    groupTest('meets the tap-target and label guidelines', (tester) async {
       await pump(tester, testGroup());
 
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));

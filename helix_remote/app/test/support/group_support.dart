@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_invites.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
@@ -411,3 +413,16 @@ GroupSnapshot testGroup({
         const GroupMemberInfo(account: 'carol', role: GroupMemberRole.member),
       ],
 );
+
+/// A widget test that ends by taking the app down and letting the last Orbit
+/// toast (4s at most) go, so no timer is left pending.
+
+void groupTest(
+  String name,
+  Future<void> Function(WidgetTester tester) body, {
+  bool? skip,
+}) => testWidgets(name, (tester) async {
+  await body(tester);
+  await tester.pumpWidget(const SizedBox());
+  await tester.pump(const Duration(seconds: 5));
+}, skip: skip);

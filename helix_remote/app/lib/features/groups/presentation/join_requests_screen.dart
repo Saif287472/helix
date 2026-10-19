@@ -1,87 +1,53 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/groups/application/group_invites.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// People who used an approval link and wait for an admin: approve lets them
-/// in (and hands them the group's key), reject turns them away.
+/// Connector: people who used an approval link and wait for an admin,
+/// drawn by `orbit_ui`'s Join requests. Approve lets them in (and hands them
+/// the group's key), reject turns them away.
 class JoinRequestsScreen extends ConsumerWidget {
   const JoinRequestsScreen({super.key, required this.groupId});
 
   final String groupId;
 
-  Future<void> _answer(
-    BuildContext context,
-    WidgetRef ref,
-    PersonEntryView request, {
-    required bool approve,
-  }) async {
-    final actions = ref.read(joinRequestActionsProvider);
-    final result = approve
-        ? await actions.approve(groupId, request.id)
-        : await actions.reject(groupId, request.id);
-    if (!context.mounted) return;
-    showHelixSnackBar(
-      context,
-      result.message ??
-          (approve
-              ? '${request.title} joined the group.'
-              : '${request.title} was turned away.'),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final requests = ref.watch(joinRequestViewsProvider(groupId));
-    return Scaffold(
-      appBar: AppBar(title: const Text('Join requests')),
-      body: switch (requests) {
-        AsyncError() => HelixErrorState(
-          message:
-              'The requests could not be loaded. Only admins can see them.',
-          onRetry: () => ref.invalidate(joinRequestsProvider(groupId)),
-        ),
-        AsyncData(:final value) when value.isEmpty => const HelixEmptyState(
-          icon: Icons.how_to_reg_outlined,
-          title: 'No one is waiting',
-          message:
-              'When someone uses an approval link, they show up here for you '
-              'to let in.',
-        ),
-        AsyncData(:final value) => ListView(
-          children: [
-            for (final request in value)
-              ListTile(
-                key: ValueKey('request-${request.id}'),
-                leading: HelixAvatar(model: request.avatar),
-                title: Text(
-                  request.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text('Asked ${request.whenLabel}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Reject ${request.title}',
-                      onPressed: () =>
-                          _answer(context, ref, request, approve: false),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.check),
-                      tooltip: 'Approve ${request.title}',
-                      onPressed: () =>
-                          _answer(context, ref, request, approve: true),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
+    final list = requests.value ?? const <PersonEntryView>[];
+    final actions = ref.read(joinRequestActionsProvider);
+
+    Future<String?> answer(String account, {required bool approve}) async {
+      final request = list.where((r) => r.account == account).firstOrNull;
+      if (request == null) return null;
+      final result = approve
+          ? await actions.approve(groupId, request.id)
+          : await actions.reject(groupId, request.id);
+      return result.message ??
+          (approve
+              ? '${request.title} joined the group.'
+              : '${request.title} was turned away.');
+    }
+
+    return orbit.JoinRequestsScreen(
+      model: orbit.JoinRequestsModel(
+        requests: [
+          for (final r in list)
+            orbit.PersonEntryView(
+              account: r.account,
+              title: r.title,
+              whenLabel: 'Asked ${r.whenLabel}',
+              avatar: r.avatar,
+            ),
+        ],
+        loading: requests.isLoading && !requests.hasValue,
+        loadFailed: requests.hasError && !requests.hasValue,
+      ),
+      actions: orbit.JoinRequestsActions(
+        onApprove: (account) => answer(account, approve: true),
+        onReject: (account) => answer(account, approve: false),
+        onRetry: () => ref.invalidate(joinRequestsProvider(groupId)),
+      ),
     );
   }
 }

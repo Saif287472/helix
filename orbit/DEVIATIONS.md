@@ -688,3 +688,60 @@ score exactly as at Review 4 after the changes below.
 - **Scan someone's code (contact mode) is not wired**: there is no route
   for it yet; it depends on the code format of `you.md` (batch 8).
   - **Owner:** pending (Part B batch 6).
+
+## Part B batch 7 (groups, wired into the app)
+
+All compared group states, the search fields and the pending-member cards
+score exactly as at Review 4 after the changes below.
+
+- **Behaviour-only hooks added to `orbit_ui`:**
+  - **Every group change answers with its sentence**, shown as a toast
+    (`GroupAnswer`: "Bob is now an admin.", "Only an admin can do that in
+    this group.", "<Name> joined the group." …). Leaving and deleting go
+    back to Chats when they work, and say so.
+  - **The member picker** looks up a number (7 or more of its characters)
+    or a `~name` only when nobody here matches, waits with a spinner, says
+    why when nobody is found, and "That person is already in this group.";
+    the person found is picked and the search clears. It filters on the
+    name, number, `~name`, nickname and phone-book name (the old picker's
+    rule; the port filtered on the name and number only). Its failure
+    sentence is the app's ("Your people could not be loaded.").
+  - **New group**: Create stays tappable and says "Enter a group name of 1
+    to 100 characters." when there is no name (`group-new-error`; the old
+    button was disabled); a picture that cannot be used says so ("That
+    picture could not be used."); people who could not be added are named
+    in the prototype's "Some people were not added" dialog, then the chat
+    opens.
+  - **Group info**: a member's menu offers only what the app allows (an
+    admin cannot make an owner or touch another admin); "Remove picture"
+    only when there is one; a line for a name still arriving; a timer set
+    elsewhere is named ("3 days"); the picture and name are labelled for a
+    screen reader; the pending cards' 38px buttons answer across 48px (5px
+    of the card's own spacing moved into their touch area, so nothing
+    moves).
+  - **Group settings**, **Join requests** and **Banned people** load,
+    fail with Try again ("This group could not be loaded.", "The requests
+    could not be loaded. Only admins can see them.", "The list could not be
+    loaded."), and say "You are not in this group" when it is gone.
+  - **Invite with a link**: an error line under Create, Revoke waits while
+    a link is made, and Copy says "Link copied.".
+  - **Add members**: nobody added opens "No one was added" with the reasons
+    and stays; otherwise its sentence and back.
+  - **Join a group**: a text that is not a group link stays on the field
+    with "That is not an Orbit group link. Check that you copied all of
+    it."; Paste reads the clipboard.
+  - **The member picker's search** answers across 48px (`OrbitTapArea`,
+    which can now merge a text field's own semantics node), drawn at the
+    prototype's 46px. Giving the field itself a 48px box moved its hint by a
+    pixel, so it was not done.
+  - **The picker rows grow with large text** (they were a fixed 64px and
+    overflowed at 2x text).
+  - **Owner:** pending (Part B batch 7).
+- **The derive items are built** (`application/`): members', requesters'
+  and banned people's pictures (`PeopleDirectory.imageOf`), the picker's
+  rows with pictures (`groupCandidateItemsProvider`), the timer's label
+  (`disappearingLabel`, moved from presentation), the name error on Create
+  (`CreateGroupState.nameError`), an unusable picture
+  (`UnusablePicture`), and the group-link check (`looksLikeGroupLink`,
+  over `HelixDeepLink`).
+  - **Owner:** pending (Part B batch 7).

@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show ImageProvider;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_actions.dart';
 import 'package:helix_remote/features/groups/application/group_errors.dart';
@@ -361,7 +363,11 @@ final class PersonEntryView {
     required this.account,
     required this.names,
     required this.whenLabel,
+    this.image,
   });
+
+  /// Their picture, when this device has one.
+  final ImageProvider? image;
 
   /// The request id (requests) or the account (bans).
   final String id;
@@ -376,8 +382,14 @@ final class PersonEntryView {
   HelixAvatarModel get avatar => HelixAvatarModel(
     name: names.display,
     colorIndex: HelixAvatarModel.colorIndexFor(account),
+    image: image,
   );
 }
+
+/// Whether [text] is a group link at all (`HLX-GRP-…`, in any of its
+/// forms): the join page checks this before opening it.
+bool looksLikeGroupLink(String text) =>
+    HelixDeepLink.tryParse(text.trim())?.kind == HelixDeepLinkKind.groupLink;
 
 /// [joinRequestsProvider], named and dated.
 final joinRequestViewsProvider = Provider.autoDispose
@@ -394,6 +406,7 @@ final joinRequestViewsProvider = Provider.autoDispose
               account: r.account,
               names: names.nameOf(r.account).tileNames,
               whenLabel: formatWhen(r.createdAt, now),
+              image: names.imageOf(r.account),
             ),
         ],
       );
@@ -414,6 +427,7 @@ final bannedViewsProvider = Provider.autoDispose
               account: b.account,
               names: names.nameOf(b.account).tileNames,
               whenLabel: formatWhen(b.bannedAt, now),
+              image: names.imageOf(b.account),
             ),
         ],
       );

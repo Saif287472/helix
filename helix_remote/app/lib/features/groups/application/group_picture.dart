@@ -122,10 +122,19 @@ final groupPictureProvider = FutureProvider.family<Uint8List?, String>((
   }
 });
 
+/// A file was chosen but it is not an image this device can read, or it is
+/// too big even scaled down.
+final class UnusablePicture implements Exception {
+  const UnusablePicture();
+
+  /// What the person is told.
+  static const message = 'That picture could not be used.';
+}
+
 /// Lets the person choose a picture and makes it small enough to upload.
 abstract interface class GroupPicturePicker {
-  /// The chosen image scaled down (PNG), or null when nothing was chosen or
-  /// the file is not an image this device can read.
+  /// The chosen image scaled down (PNG), or null when nothing was chosen.
+  /// Throws [UnusablePicture] when the file cannot be used.
   Future<Uint8List?> pick();
 }
 
@@ -137,12 +146,21 @@ final class FileGroupPicturePicker implements GroupPicturePicker {
 
   @override
   Future<Uint8List?> pick() async {
+    var chosen = false;
     try {
       final file = await FilePicker.pickFile(type: FileType.image);
       if (file == null) return null;
+      chosen = true;
       final original = await file.readAsBytes();
-      return await scaleImage(original, maxSide: maxSide);
+      final scaled = await scaleImage(original, maxSide: maxSide);
+      if (scaled == null) throw const UnusablePicture();
+      return scaled;
+    } on UnusablePicture {
+      rethrow;
     } on Object {
+      // No picker on this device is "nothing chosen"; a file that would
+      // not read is unusable.
+      if (chosen) throw const UnusablePicture();
       return null;
     }
   }
