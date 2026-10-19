@@ -49,6 +49,8 @@ HelixMessage mapMessage(
     authorId: row.sender,
     authorName: showAuthor ? ctx.people.displayOf(row.sender) : null,
     authorColorIndex: ctx.people.colorIndexOf(row.sender),
+    // The picture beside the last bubble of a run in a group.
+    authorAvatar: showAuthor ? ctx.people.avatarOf(row.sender) : null,
     sentAtMs: row.sentAt.millisecondsSinceEpoch,
     status: deliveryStatusOf(row) ?? HelixDeliveryStatus.sent,
     reply: row.replyToId == null ? null : reply,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
+import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote_api/v2.dart';
@@ -11,6 +12,7 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show Mention, MessageRef, PresenceResponse;
+import 'a3b_fakes.dart' show FakeLocalSettings;
 import 'orbit_theme.dart';
 
 /// "Now" in every chat test: 3 October 2026, 14:30 local.
@@ -259,15 +261,17 @@ class TestChatGateway extends ChatGateway {
       log.add('download:$attachmentId');
 }
 
-/// A scope with the test gateway and a fixed clock, around [home] in the real
-/// light theme.
+/// A scope with the test gateway, a fixed clock and in-memory settings
+/// ([settings], e.g. "Enter key sends"), around [home] in the Orbit theme.
 Widget chatApp(
   TestChatGateway gateway,
   Widget home, {
   List<Override> overrides = const [],
+  FakeLocalSettings? settings,
 }) => ProviderScope(
   overrides: [
     chatGatewayProvider.overrideWith((ref) => gateway),
+    localSettingsProvider.overrideWithValue(settings ?? FakeLocalSettings()),
     // Names are the app's one source; here its rows are the test database's.
     peopleRowsProvider.overrideWith((ref) => gateway.engine.people.watchAll()),
     clockProvider.overrideWithValue(() => testNow),
@@ -280,11 +284,12 @@ Widget chatApp(
   ),
 );
 
-/// Takes the app out of the tree and lets drift's stream clean-up timers run,
-/// so a test does not end with a timer pending.
+/// Takes the app out of the tree and lets drift's stream clean-up timers
+/// and the last Orbit toast's (4s at most) run, so a test does not end with
+/// a timer pending.
 Future<void> disposeApp(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox());
-  await tester.pump(const Duration(seconds: 2));
+  await tester.pump(const Duration(seconds: 5));
 }
 
 /// Lets real asynchronous work (the database, streams) finish, then draws.

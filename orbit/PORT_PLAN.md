@@ -545,6 +545,20 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   toast. Known gap until the window batch: no chat beside the list on a wide
   window. Tests: app 834, orbit_ui 179, helix_remote_ui 184, all passing;
   27 Home states unchanged from Review 4.
+- [x] Step 2, batch 3 (pending your review): the conversation draws the
+  Orbit `ChatScreen` through the connector in
+  `features/conversation/presentation/conversation_screen.dart`, over the
+  existing providers: paged timeline (older, and newer after a jump), jumps
+  to a quoted message or a search hit outside the loaded window, read
+  receipts only in the foreground and at the bottom, disappearing timers from
+  the rows drawn, media taps and downloads, voice play, speed and seek,
+  links, view-once, the reactions sheet, the composer's drafts, edits,
+  mentions, Enter to send, attachments and hold-to-record, pending members,
+  and the lifecycle (draft saved and playback stopped on leaving; a held
+  recording dropped in the background). The old conversation widgets are
+  deleted. Tests: app 838, orbit_ui 184, helix_remote_ui 184, rules 20,
+  all passing; 32 compared states
+  unchanged from Review 4.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

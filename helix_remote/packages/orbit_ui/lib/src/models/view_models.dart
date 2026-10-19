@@ -679,6 +679,7 @@ class HelixMessage extends HelixValue {
     this.authorId,
     this.authorName,
     this.authorColorIndex = 0,
+    this.authorAvatar,
     this.sentAtMs = 0,
     this.status = HelixDeliveryStatus.sent,
     this.reply,
@@ -704,6 +705,10 @@ class HelixMessage extends HelixValue {
   /// null in a direct chat.
   final String? authorName;
   final int authorColorIndex;
+
+  /// The author's picture beside the last bubble of a group run; null draws
+  /// their initials from [authorName] in [authorColorIndex].
+  final HelixAvatarModel? authorAvatar;
 
   /// Sender time (epoch ms), used only to split runs.
   final int sentAtMs;
@@ -737,6 +742,7 @@ class HelixMessage extends HelixValue {
     authorId: authorId,
     authorName: authorName,
     authorColorIndex: authorColorIndex,
+    authorAvatar: authorAvatar,
     sentAtMs: sentAtMs,
     status: status ?? this.status,
     reply: reply,
@@ -757,6 +763,7 @@ class HelixMessage extends HelixValue {
     authorId,
     authorName,
     authorColorIndex,
+    authorAvatar,
     sentAtMs,
     status,
     reply,

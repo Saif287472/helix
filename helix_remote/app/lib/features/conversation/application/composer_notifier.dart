@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
+import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/attachment_picker.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/core/platform/media_sanitizer.dart';
 import 'package:helix_remote/core/platform/voice_recorder.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/conversation/application/audio_playback.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show MediaInput;
@@ -90,6 +92,7 @@ class ComposerState {
     this.edit,
     this.mentionCandidates = const [],
     this.recording,
+    this.recordingLevels = const [],
     this.notice,
     this.noticeSerial = 0,
   });
@@ -98,6 +101,10 @@ class ComposerState {
   final ComposerTarget? edit;
   final List<HelixMentionCandidate> mentionCandidates;
   final HelixVoiceRecordState? recording;
+
+  /// The live waveform of a locked recording: the loudness so far, as the
+  /// bubble's bars (0..255); empty while held or not recording.
+  final List<int> recordingLevels;
 
   /// A sentence for a snackbar ("Voice messages are not available on this
   /// device."); never an exception's text.
@@ -111,12 +118,17 @@ class ComposerState {
     ComposerTarget? Function()? edit,
     List<HelixMentionCandidate>? mentionCandidates,
     HelixVoiceRecordState? Function()? recording,
+    List<int>? recordingLevels,
     String? notice,
   }) => ComposerState(
     reply: reply == null ? this.reply : reply(),
     edit: edit == null ? this.edit : edit(),
     mentionCandidates: mentionCandidates ?? this.mentionCandidates,
     recording: recording == null ? this.recording : recording(),
+    // A recording that ended takes its waveform with it.
+    recordingLevels: recording != null && recording() == null
+        ? const []
+        : recordingLevels ?? this.recordingLevels,
     notice: notice ?? this.notice,
     noticeSerial: notice == null ? noticeSerial : noticeSerial + 1,
   );
@@ -656,6 +668,9 @@ final class ComposerNotifier extends Notifier<ComposerState> {
 
   static const _voiceStep = Duration(milliseconds: 100);
 
+  /// The bars of the locked recording's live waveform.
+  static const liveWaveBars = 24;
+
   void _voiceTicked() {
     if (_voicePhase != VoicePhase.recording) return;
     final before = formatDurationMs(_voiceElapsedMs);
@@ -663,6 +678,15 @@ final class ComposerNotifier extends Notifier<ComposerState> {
     final current = state.recording;
     if (current == null) return;
     final label = formatDurationMs(_voiceElapsedMs);
+    if (current.locked) {
+      // The locked bar draws what has been heard so far.
+      state = state.copyWith(
+        recordingLevels: VoiceWaveform.fromDecibels(
+          _recorder?.levels ?? const [],
+          samples: liveWaveBars,
+        ),
+      );
+    }
     if (label != before) {
       state = state.copyWith(
         recording: () => HelixVoiceRecordState(
@@ -796,6 +820,25 @@ final composerDraftProvider = FutureProvider.autoDispose.family<String, String>(
     return (await gateway.chat(conversationId))?.draft ?? '';
   },
 );
+
+/// The reply or edit banner over the field, from the composer's target:
+/// "Replying to Sam" or "Edit message", with the text.
+HelixComposerBannerModel? composerBannerOf(ComposerState state) {
+  final edit = state.edit;
+  final target = edit ?? state.reply;
+  if (target == null) return null;
+  return HelixComposerBannerModel(
+    kind: edit != null
+        ? HelixComposerBannerKind.edit
+        : HelixComposerBannerKind.reply,
+    title: edit != null ? 'Edit message' : 'Replying to ${target.authorName}',
+    text: target.text,
+    previewKind: target.kind,
+  );
+}
+
+/// "Enter key sends" (You > Chats): off unless the person turned it on.
+final enterSendsProvider = settingProvider(AppSettings.enterToSend);
 
 /// Files picked and waiting on the "send" preview screen.
 final class PendingAttachments extends Notifier<List<AttachmentDraft>> {

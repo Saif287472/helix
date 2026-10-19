@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
@@ -59,7 +60,12 @@ void main() {
     await show(
       tester,
       nadia(),
-      actions: ChatActions(onCall: ({required bool video}) => placed = video),
+      actions: ChatActions(
+        onCall: ({required bool video}) {
+          placed = video;
+          return null;
+        },
+      ),
     );
     expect(find.text('Nadia Rahman'), findsOneWidget);
     expect(find.text('online'), findsOneWidget);
@@ -121,11 +127,19 @@ void main() {
     );
     expect(find.text('2 selected'), findsOneWidget);
     expect(find.byType(OrbitComposer), findsNothing);
+    // Forward takes the selection with it, as the prototype's bar does.
     await tester.tap(find.byTooltip('Forward'));
+    await tester.pump();
     expect(forwarded, {'n3', 'n5'});
+    expect(find.text('2 selected'), findsNothing);
+    expect(find.byType(OrbitComposer), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await show(tester, nadia(), start: const ChatStart(selected: {'n3'}));
+    expect(find.text('1 selected'), findsOneWidget);
     await tester.tap(find.byTooltip('Cancel selection'));
     await tester.pump();
-    expect(find.text('2 selected'), findsNothing);
+    expect(find.text('1 selected'), findsNothing);
     expect(find.byType(OrbitComposer), findsOneWidget);
   });
 
@@ -167,13 +181,26 @@ void main() {
       tester,
       nadia(group: true, pending: const [p]),
       actions: ChatActions(
-        onConfirmMember: (a) => confirmed = a,
-        onRemoveMember: (a) => removed = a,
+        onConfirmMember: (a) {
+          confirmed = a;
+          return null;
+        },
+        onRemoveMember: (a) {
+          removed = a;
+          return null;
+        },
       ),
     );
     await tester.tap(find.text('Confirm'));
-    await tester.tap(find.text('Remove'));
+    await tester.pump();
     expect(confirmed, 'karim');
+    // Remove asks first.
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Karim Uncle?'), findsOneWidget);
+    expect(removed, isNull);
+    await tester.tap(find.text('Remove').last);
+    await tester.pumpAndSettle();
     expect(removed, 'karim');
     expect(find.textContaining('Only an admin'), findsNothing);
   });
@@ -193,5 +220,177 @@ void main() {
     expect(find.text('Nadia Rahman'), findsOneWidget);
     expect(find.text('This conversation could not be opened.'), findsOneWidget);
     expect(find.byType(OrbitComposer), findsNothing);
+  });
+
+  group('the app\'s hooks', () {
+    HelixMessageItem text(String id, String body, {bool out = false}) =>
+        HelixMessageItem(
+          HelixMessage(
+            id: id,
+            outgoing: out,
+            content: HelixTextContent(body),
+            timeLabel: '14:05',
+          ),
+        );
+
+    ChatModel chat(List<HelixTimelineItem> items, {bool enter = false}) =>
+        ChatModel(
+          conversationId: 'direct:nadia',
+          title: 'Nadia Rahman',
+          avatar: OrbitFakes.nadia.avatar,
+          items: items,
+          enterSends: enter,
+        );
+
+    testWidgets('the app can decide the menu, and deleting asks first', (
+      tester,
+    ) async {
+      Set<String>? deleted;
+      await show(
+        tester,
+        nadia(),
+        actions: ChatActions(
+          messageMenu: (id) => const ChatMessageMenu(
+            actions: {ChatMessageAction.reply, ChatMessageAction.deleteForMe},
+            allowReactions: false,
+          ),
+          onDeleteForMe: (ids) => deleted = ids,
+        ),
+        start: const ChatStart(actionsFor: 'n6'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Reply'), findsOneWidget);
+      expect(find.text('Copy'), findsNothing);
+      expect(find.text('Select'), findsNothing);
+      expect(find.bySemanticsLabel('React with 👍'), findsNothing);
+      await tester.tap(find.text('Delete for me'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete this message?'), findsOneWidget);
+      expect(deleted, isNull);
+      await tester.tap(find.text('Delete for me'));
+      await tester.pumpAndSettle();
+      expect(deleted, {'n6'});
+    });
+
+    testWidgets('a link, a quote and a reaction answer taps', (tester) async {
+      String? link;
+      String? quoted;
+      String? reactions;
+      await show(
+        tester,
+        chat([
+          text('a', 'https://example.org/plan'),
+          const HelixMessageItem(
+            HelixMessage(
+              id: 'b',
+              outgoing: true,
+              content: HelixTextContent('about that'),
+              timeLabel: '14:06',
+              reply: HelixReplyQuote(authorName: 'Nadia', text: 'the plan'),
+              reactions: [HelixReaction(emoji: '👍', count: 1)],
+            ),
+          ),
+        ]),
+        actions: ChatActions(
+          onOpenLink: (url) => link = url,
+          onQuote: (id) => quoted = id,
+          reactionsOf: (id) async {
+            reactions = id;
+            return const [];
+          },
+        ),
+      );
+      // Just inside the first bubble: the start of the link.
+      final first = tester.getTopLeft(
+        find.byWidgetPredicate(
+          (w) => w is OrbitMessageBubble && w.message.id == 'a',
+        ),
+      );
+      await tester.tapAt(first + const Offset(30, 22));
+      expect(link, 'https://example.org/plan');
+      await tester.tap(find.text('the plan', findRichText: true));
+      expect(quoted, 'b');
+      await tester.tap(find.text('👍'));
+      await tester.pumpAndSettle();
+      expect(reactions, 'b');
+      expect(find.text('No reactions yet.'), findsOneWidget);
+    });
+
+    testWidgets('swiping their message towards the middle replies', (
+      tester,
+    ) async {
+      String? replied;
+      await show(
+        tester,
+        chat([text('a', 'are you coming?')]),
+        actions: ChatActions(onReply: (id) => replied = id),
+      );
+      await tester.dragFrom(
+        tester.getTopLeft(find.byType(OrbitMessageBubble)) +
+            const Offset(30, 22),
+        const Offset(70, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(replied, 'a');
+    });
+
+    testWidgets('the mic records while held; a tap says to hold it', (
+      tester,
+    ) async {
+      final calls = <String>[];
+      await show(
+        tester,
+        chat(const []),
+        actions: ChatActions(
+          onVoiceStart: () => calls.add('start'),
+          onVoiceSlide: (cancel, lock) {},
+          onVoiceLock: () => calls.add('lock'),
+          onVoiceEnd: ({required send}) => calls.add('end:$send'),
+        ),
+      );
+      final mic = find.byTooltip('Record a voice message');
+      await tester.tap(mic);
+      await tester.pump();
+      expect(
+        find.text('Hold the microphone to record a voice message.'),
+        findsOneWidget,
+      );
+      expect(calls, isEmpty);
+
+      var hold = await tester.startGesture(tester.getCenter(mic));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(calls, ['start']);
+      await hold.up();
+      expect(calls, ['start', 'end:true']);
+
+      hold = await tester.startGesture(tester.getCenter(mic));
+      await tester.pump(const Duration(milliseconds: 300));
+      await hold.moveBy(const Offset(0, -90));
+      await hold.up();
+      expect(calls, ['start', 'end:true', 'start', 'lock']);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('Enter sends when the setting says so', (tester) async {
+      final sent = <String>[];
+      await show(
+        tester,
+        chat(const [], enter: true),
+        actions: ChatActions(
+          onSend: (t) {
+            sent.add(t);
+            return true;
+          },
+        ),
+      );
+      await tester.enterText(find.byType(TextField), 'on my way');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(sent, ['on my way']);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        '',
+      );
+    });
   });
 }

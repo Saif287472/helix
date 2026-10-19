@@ -6,6 +6,8 @@ import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/core/platform/voice_recorder.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 
+import 'package:orbit_ui/orbit_ui.dart' show OrbitComposer;
+
 import '../support/chat_harness.dart';
 import '../support/media_fakes.dart';
 
@@ -39,7 +41,8 @@ void main() {
     return chat;
   }
 
-  Finder mic() => find.bySemanticsLabel('Record voice message');
+  // Orbit's mic: "Record a voice message", hold to record.
+  Finder mic() => find.bySemanticsLabel('Record a voice message');
 
   Future<TestGesture> hold(WidgetTester tester) async {
     final gesture = await tester.startGesture(tester.getCenter(mic()));
@@ -118,6 +121,7 @@ void main() {
     gateway,
   ) async {
     await open(tester, gateway);
+    recorder.levels = const [-30, -12, -4, -20];
     var gesture = await hold(tester);
     await gesture.moveBy(const Offset(0, -90));
     await tester.pump();
@@ -125,6 +129,12 @@ void main() {
     await tester.pump();
     expect(find.byTooltip('Send recording'), findsOneWidget);
     expect(recorder.events, ['start'], reason: 'still recording');
+    // The locked bar draws what the microphone has heard so far.
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      tester.widget<OrbitComposer>(find.byType(OrbitComposer)).recordingWave,
+      hasLength(4),
+    );
     await tester.tap(find.byTooltip('Send recording'));
     await tester.pump();
     await tester.pump();

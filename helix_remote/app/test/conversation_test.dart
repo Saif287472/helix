@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart';
 
+import 'support/a3b_fakes.dart' show FakeLocalSettings;
 import 'support/chat_harness.dart';
+import 'support/orbit_theme.dart';
 
 void main() {
   Future<void> open(
@@ -33,13 +37,11 @@ void main() {
 
     expect(find.text('Bob'), findsOneWidget);
     expect(find.text('online'), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
-    expect(
-      find.textContaining('Hello Bob here', findRichText: true),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Hi Bob', findRichText: true), findsOneWidget);
-    expect(find.byType(HelixMessageBubble), findsNWidgets(2));
+    // Orbit sets the day in capitals.
+    expect(find.text('TODAY'), findsOneWidget);
+    expect(findMessageText('Hello Bob here'), findsOneWidget);
+    expect(findMessageText('Hi Bob'), findsOneWidget);
+    expect(find.byType(OrbitMessageBubble), findsNWidgets(2));
   });
 
   chatTest('an empty conversation says it is encrypted', (
@@ -66,10 +68,7 @@ void main() {
     await settle(tester, rounds: 10);
 
     expect(gateway.log, contains('sendText:$chat:see you at 5'));
-    expect(
-      find.textContaining('see you at 5', findRichText: true),
-      findsOneWidget,
-    );
+    expect(findMessageText('see you at 5'), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       '',
@@ -90,7 +89,7 @@ void main() {
     });
     await open(tester, gateway, chat);
 
-    expect(find.text('2 unread messages'), findsOneWidget);
+    expect(find.text('2 UNREAD MESSAGES'), findsOneWidget);
     await settle(tester, rounds: 10);
     expect(gateway.log, contains('markRead:$chat'));
   });
@@ -126,13 +125,14 @@ void main() {
     });
     await open(tester, gateway, chat);
 
-    expect(find.text('This message was deleted'), findsOneWidget);
-    expect(find.text("Couldn't decrypt this message"), findsOneWidget);
+    expect(findMessageText('This message was deleted'), findsOneWidget);
+    expect(findMessageText("Couldn't decrypt this message"), findsOneWidget);
+    // The app is called Orbit now.
     expect(
-      find.text('This message needs a newer version of Helix'),
+      findMessageText('This message needs a newer version of Orbit'),
       findsOneWidget,
     );
-    expect(find.textContaining('secret'), findsNothing);
+    expect(findMessageText('secret'), findsNothing);
   });
 
   chatTest('long press offers reply, copy and delete; reply shows a banner', (
@@ -145,9 +145,7 @@ void main() {
     await tester.runAsync(() => gateway.incoming(chat, 'what time?'));
     await open(tester, gateway, chat);
 
-    await tester.longPress(
-      find.textContaining('what time?', findRichText: true),
-    );
+    await tester.longPress(findMessageText('what time?'));
     await tester.pumpAndSettle();
     expect(find.text('Reply'), findsOneWidget);
     expect(find.text('Copy'), findsOneWidget);
@@ -171,13 +169,170 @@ void main() {
     final row = (await tester.runAsync(() => gateway.incoming(chat, 'nice')))!;
     await open(tester, gateway, chat);
 
-    await tester.longPress(find.textContaining('nice', findRichText: true));
+    await tester.longPress(findMessageText('nice'));
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('React with 👍'));
     await settle(tester, rounds: 10);
 
     expect(gateway.log, contains('react:${row.localRowid}:👍'));
     expect(find.text('👍'), findsWidgets);
+  });
+
+  chatTest('the reactions sheet says who reacted, and yours can go', (
+    tester,
+    gateway,
+  ) async {
+    final chat = (await tester.runAsync(
+      () => gateway.chatWith('bob', name: 'Bob'),
+    ))!;
+    final row = (await tester.runAsync(() async {
+      final row = await gateway.incoming(chat, 'nice');
+      await gateway.react(row.localRowid, '👍');
+      return row;
+    }))!;
+    gateway.log.clear();
+    await open(tester, gateway, chat);
+
+    // The reaction under the bubble opens the sheet.
+    await tester.tap(find.text('👍'));
+    await settle(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Reactions'), findsOneWidget);
+    expect(find.text('You'), findsOneWidget);
+    expect(find.text('Tap to remove'), findsOneWidget);
+
+    await tester.tap(find.text('You'));
+    await settle(tester, rounds: 10);
+    expect(gateway.log, contains('react:${row.localRowid}:null'));
+    expect(find.text('Reactions'), findsNothing);
+  });
+
+  chatTest('Enter sends when "Enter key sends" is on', (tester, gateway) async {
+    final chat = (await tester.runAsync(
+      () => gateway.chatWith('bob', name: 'Bob'),
+    ))!;
+    final settings = FakeLocalSettings();
+    await tester.runAsync(() => settings.set(AppSettings.enterToSend, true));
+    await tester.pumpWidget(
+      chatApp(
+        gateway,
+        ConversationScreen(conversationId: chat),
+        settings: settings,
+      ),
+    );
+    await settle(tester, rounds: 10);
+
+    await tester.enterText(find.byType(TextField), 'on my way');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await settle(tester, rounds: 10);
+    expect(gateway.log, contains('sendText:$chat:on my way'));
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
+  });
+
+  chatTest('a quote jumps to the message it quotes, outside the loaded '
+      'window, and Scroll to latest comes back', (tester, gateway) async {
+    final chat = (await tester.runAsync(
+      () => gateway.chatWith('bob', name: 'Bob'),
+    ))!;
+    await tester.runAsync(() async {
+      final first = await gateway.incoming(
+        chat,
+        'the very first message',
+        at: testNow.subtract(const Duration(hours: 5)),
+      );
+      // Yours, so none of them is unread (the window would grow to show the
+      // unread ones).
+      for (var i = 0; i < 80; i++) {
+        await gateway.outgoing(
+          chat,
+          'filler $i',
+          at: testNow.subtract(Duration(hours: 4, minutes: -i)),
+        );
+      }
+      await gateway.db.messagesDao.insertMessage(
+        MessagesCompanion.insert(
+          messageId: 'quoting',
+          conversationId: chat,
+          sender: 'me',
+          outgoing: true,
+          sortKey: SortKey.of(testNow.toUtc(), 'quoting'),
+          sentAt: testNow.toUtc(),
+          receivedAt: testNow.toUtc(),
+          kind: 'text',
+          body: const Value('about that'),
+          status: MessageStatus.sent,
+          replyToId: Value(first.messageId),
+          replyToAuthor: const Value('bob'),
+        ),
+      );
+      await gateway.db.messagesDao.refreshSummary(chat);
+    });
+    await open(tester, gateway, chat);
+    // The bubble holding [text] (the quote repeats the words).
+    Finder bubble(String text) => find.byWidgetPredicate(
+      (w) =>
+          w is OrbitMessageBubble &&
+          w.message.content is HelixTextContent &&
+          (w.message.content as HelixTextContent).text == text,
+    );
+    expect(bubble('the very first message'), findsNothing);
+    expect(bubble('about that'), findsOneWidget);
+
+    // The quote names it; tapping it opens a window around it.
+    await tester.tap(find.text('the very first message', findRichText: true));
+    await settle(tester, rounds: 20);
+    await tester.pumpAndSettle();
+    expect(bubble('the very first message'), findsOneWidget);
+    expect(bubble('about that'), findsNothing);
+
+    // The newest messages are a tap away.
+    await tester.tap(find.byTooltip('Scroll to latest message'));
+    await settle(tester, rounds: 20);
+    await tester.pumpAndSettle();
+    expect(bubble('about that'), findsOneWidget);
+  });
+
+  chatTest('opened at a message (a search hit), it shows that message', (
+    tester,
+    gateway,
+  ) async {
+    final chat = (await tester.runAsync(
+      () => gateway.chatWith('bob', name: 'Bob'),
+    ))!;
+    final first = (await tester.runAsync(() async {
+      final first = await gateway.incoming(
+        chat,
+        'where it started',
+        at: testNow.subtract(const Duration(hours: 5)),
+      );
+      for (var i = 0; i < 80; i++) {
+        await gateway.outgoing(
+          chat,
+          'later $i',
+          at: testNow.subtract(Duration(hours: 4, minutes: -i)),
+        );
+      }
+      await gateway.db.messagesDao.refreshSummary(chat);
+      return first;
+    }))!;
+    await tester.pumpWidget(
+      chatApp(
+        gateway,
+        ConversationScreen(conversationId: chat, messageId: first.messageId),
+      ),
+    );
+    await settle(tester, rounds: 20);
+    await tester.pumpAndSettle();
+    expect(findMessageText('where it started'), findsOneWidget);
+    // Far from the newest now: the way back, with the unread count.
+    expect(
+      find.byTooltip('Scroll to latest message, 1 unread'),
+      findsOneWidget,
+    );
   });
 
   chatTest('a recent own message can be edited and deleted for everyone', (
@@ -196,9 +351,7 @@ void main() {
     ))!;
     await open(tester, gateway, chat);
 
-    await tester.longPress(
-      find.textContaining('typo here', findRichText: true),
-    );
+    await tester.longPress(findMessageText('typo here'));
     await tester.pumpAndSettle();
     expect(find.text('Message info'), findsOneWidget);
     await tester.tap(find.text('Edit'));
@@ -209,22 +362,18 @@ void main() {
     await tester.tap(find.byTooltip('Save edit'));
     await settle(tester, rounds: 10);
     expect(gateway.log, contains('edit:${row.localRowid}:fixed here'));
-    expect(
-      find.textContaining('fixed here', findRichText: true),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Edited', findRichText: true), findsOneWidget);
+    expect(findMessageText('fixed here'), findsOneWidget);
+    expect(find.text('Edited'), findsOneWidget);
 
-    await tester.longPress(
-      find.textContaining('fixed here', findRichText: true),
-    );
+    await tester.longPress(findMessageText('fixed here'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete for everyone'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete for everyone'));
+    expect(find.text('Delete for everyone?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OrbitButton, 'Delete for everyone'));
     await settle(tester, rounds: 10);
     expect(gateway.log, contains('deleteForEveryone:${row.localRowid}'));
-    expect(find.text('You deleted this message'), findsOneWidget);
+    expect(findMessageText('You deleted this message'), findsOneWidget);
   });
 
   chatTest('an old own message cannot be edited', (tester, gateway) async {
@@ -239,7 +388,7 @@ void main() {
       ),
     );
     await open(tester, gateway, chat);
-    await tester.longPress(find.textContaining('ancient', findRichText: true));
+    await tester.longPress(findMessageText('ancient'));
     await tester.pumpAndSettle();
     expect(find.text('Edit'), findsNothing);
     expect(find.text('Delete for everyone'), findsOneWidget);
@@ -293,12 +442,26 @@ void main() {
 
     await tester.tap(find.byTooltip('More options'));
     await tester.pumpAndSettle();
+    // Orbit's menu closes first and opens the search a beat later.
     await tester.tap(find.text('Search'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'lunch');
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, rounds: 20);
-    expect(find.byType(HelixMessageSearchTile), findsOneWidget);
+    // One hit, with the match marked; the timeline is not shown meanwhile.
+    expect(
+      find.textContaining('lunch at noon', findRichText: true),
+      findsOneWidget,
+    );
+    expect(findMessageText('something else'), findsNothing);
+    expect(find.text('No results'), findsNothing);
+
+    // Picking it closes the search and brings the message back into view.
+    await tester.tap(find.textContaining('lunch at noon', findRichText: true));
+    await settle(tester, rounds: 10);
+    expect(find.byTooltip('Close search'), findsNothing);
+    expect(findMessageText('lunch at noon'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   chatTest('a group shows sender names and a blocked chat cannot be written', (

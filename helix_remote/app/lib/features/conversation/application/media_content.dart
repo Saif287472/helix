@@ -127,6 +127,8 @@ HelixMediaItem _gridItem(MediaPart part) {
     transfer: transfer,
     progress: progress,
     semanticLabel: isVideo ? 'Video' : 'Photo',
+    // The download chip of a photo or video not on the device yet.
+    sizeLabel: formatFileSize(row.size),
   );
 }
 

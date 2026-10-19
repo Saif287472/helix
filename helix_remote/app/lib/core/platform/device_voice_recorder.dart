@@ -131,6 +131,9 @@ final class DeviceVoiceRecorder implements VoiceRecorder {
   @override
   Stream<VoicePhase> get phases => _phases.stream;
 
+  @override
+  List<double> get levels => List.unmodifiable(_decibels);
+
   Duration get _elapsed {
     final since = _runningSince;
     return since == null ? _banked : _banked + _now().difference(since);

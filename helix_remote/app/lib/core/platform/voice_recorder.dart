@@ -59,6 +59,10 @@ abstract interface class VoiceRecorder {
   /// Changes of [VoicePhase], including ones the system made.
   Stream<VoicePhase> get phases;
 
+  /// The loudness readings of the recording so far (decibels full scale),
+  /// for the live waveform; empty when nothing is being recorded.
+  List<double> get levels;
+
   /// Asks for the microphone permission when it is not granted yet (the
   /// system prompt), and starts recording. Throws
   /// [VoiceRecorderPermissionDenied] and [VoiceRecorderUnavailable].
@@ -90,6 +94,9 @@ final class UnavailableVoiceRecorder implements VoiceRecorder {
 
   @override
   Stream<VoicePhase> get phases => const Stream.empty();
+
+  @override
+  List<double> get levels => const [];
 
   @override
   Future<void> start() async => throw const VoiceRecorderUnavailable();

@@ -180,9 +180,7 @@ TimelineSnapshot buildTimeline({
               row.localRowid.toString(),
               text,
               icon: row.kind == 'call_log' ? callLogIcon(row) : null,
-              tone: row.kind == 'call_log' && callLogMissed(row)
-                  ? HelixNoticeTone.missedCall
-                  : HelixNoticeTone.plain,
+              tone: noticeToneOf(row),
             ),
             messageRowid: row.localRowid,
             messageId: row.messageId,
@@ -227,4 +225,17 @@ TimelineSnapshot buildTimeline({
     hasNewer: hasNewer,
     oldestSortKey: rows.isEmpty ? null : rows.first.sortKey,
   );
+}
+
+/// How a notice is drawn: amber when a safety number changed, red for a
+/// call you missed, plain otherwise.
+HelixNoticeTone noticeToneOf(MessageRow row) {
+  if (row.kind == 'call_log' && callLogMissed(row)) {
+    return HelixNoticeTone.missedCall;
+  }
+  if (row.kind == 'system' &&
+      payloadOf(row)['kind'] == 'safety_number_changed') {
+    return HelixNoticeTone.warn;
+  }
+  return HelixNoticeTone.plain;
 }

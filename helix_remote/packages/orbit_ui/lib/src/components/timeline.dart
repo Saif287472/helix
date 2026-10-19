@@ -1,7 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -17,6 +18,83 @@ import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 
+/// What the parts of a bubble do when touched, for every message of a
+/// timeline: each callback names the message by [HelixMessage.id]. All are
+/// optional; a bubble draws the same with or without them, and a part with
+/// no callback takes no touches (the bubble's own tap and long press get
+/// them).
+class OrbitBubbleActions {
+  const OrbitBubbleActions({
+    this.onReply,
+    this.onQuote,
+    this.onReactions,
+    this.onLink,
+    this.onMedia,
+    this.onViewOnce,
+    this.onAudioToggle,
+    this.onAudioSpeed,
+    this.onAudioSeek,
+  });
+
+  /// Swiped 56px towards the middle (theirs right, yours left).
+  final ValueChanged<String>? onReply;
+
+  /// The quoted message was tapped.
+  final ValueChanged<String>? onQuote;
+
+  /// A reaction under the bubble was tapped.
+  final ValueChanged<String>? onReactions;
+
+  /// A link in the text, or the link card, was tapped (the address).
+  final ValueChanged<String>? onLink;
+
+  /// Picture [index] of a media grid, or a document's button, was tapped.
+  final void Function(String id, int index)? onMedia;
+  final ValueChanged<String>? onViewOnce;
+
+  /// A voice message's play button.
+  final ValueChanged<String>? onAudioToggle;
+
+  /// A voice message's speed chip.
+  final ValueChanged<String>? onAudioSpeed;
+
+  /// The waveform was tapped or dragged, at a fraction 0..1 of the note.
+  final void Function(String id, double fraction)? onAudioSeek;
+
+  static const none = OrbitBubbleActions();
+}
+
+/// The message a bubble's parts belong to, and what touching them does.
+class _BubbleTaps extends InheritedWidget {
+  const _BubbleTaps({
+    required this.id,
+    required this.actions,
+    required super.child,
+  });
+
+  final String id;
+  final OrbitBubbleActions actions;
+
+  static _BubbleTaps? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_BubbleTaps>();
+
+  @override
+  bool updateShouldNotify(_BubbleTaps old) =>
+      old.id != id || old.actions != actions;
+}
+
+/// [child], tappable when [onTap] is set (answering across 48px when
+/// [target]); otherwise exactly [child].
+Widget _tappable(VoidCallback? onTap, Widget child, {bool target = false}) {
+  if (onTap == null) return child;
+  final detector = GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: child,
+  );
+  return target ? OrbitTapArea(child: detector) : detector;
+}
+
 /// `.timeline`'s contents (`UI.timeline` in `js/ui.js`): [items] top to
 /// bottom, 10px 12px 14px in. The chat background is the caller's (an
 /// [OrbitPatternBackground]); a screen puts this in its scrolling list.
@@ -28,6 +106,7 @@ class OrbitTimeline extends StatelessWidget {
     this.onRetry,
     this.onTapMessage,
     this.onLongPressMessage,
+    this.bubble = OrbitBubbleActions.none,
   });
 
   final List<HelixTimelineItem> items;
@@ -37,32 +116,37 @@ class OrbitTimeline extends StatelessWidget {
   final ValueChanged<String>? onRetry;
   final ValueChanged<String>? onTapMessage;
   final ValueChanged<String>? onLongPressMessage;
+  final OrbitBubbleActions bubble;
+
+  /// The timeline's padding in a list [width] wide. A wide chat keeps its
+  /// messages to the middle 860px:
+  /// `padding-inline: max(12px, calc((100% - 860px) / 2))`.
+  static EdgeInsets paddingFor(double width) {
+    final side = width.isFinite
+        ? ((width - 860) / 2).clamp(12.0, 9999.0)
+        : 12.0;
+    return EdgeInsets.fromLTRB(side, 10, side, 14);
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    // A wide chat keeps its messages to the middle 860px:
-    // `padding-inline: max(12px, calc((100% - 860px) / 2))`.
-    builder: (context, c) {
-      final side = c.maxWidth.isFinite
-          ? ((c.maxWidth - 860) / 2).clamp(12.0, 9999.0)
-          : 12.0;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(side, 10, side, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final it in items)
-              OrbitTimelineEntry(
-                item: it,
-                group: group,
-                onRetry: onRetry,
-                onTapMessage: onTapMessage,
-                onLongPressMessage: onLongPressMessage,
-              ),
-          ],
-        ),
-      );
-    },
+    builder: (context, c) => Padding(
+      padding: paddingFor(c.maxWidth),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final it in items)
+            OrbitTimelineEntry(
+              item: it,
+              group: group,
+              onRetry: onRetry,
+              onTapMessage: onTapMessage,
+              onLongPressMessage: onLongPressMessage,
+              bubble: bubble,
+            ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -76,6 +160,7 @@ class OrbitTimelineEntry extends StatelessWidget {
     this.onRetry,
     this.onTapMessage,
     this.onLongPressMessage,
+    this.bubble = OrbitBubbleActions.none,
   });
 
   final HelixTimelineItem item;
@@ -83,9 +168,20 @@ class OrbitTimelineEntry extends StatelessWidget {
   final ValueChanged<String>? onRetry;
   final ValueChanged<String>? onTapMessage;
   final ValueChanged<String>? onLongPressMessage;
+  final OrbitBubbleActions bubble;
+
+  /// How many entries were built (a test hook): a burst of messages must
+  /// rebuild the rows that changed, not every row on screen.
+  @visibleForTesting
+  static int debugBuilds = 0;
 
   @override
-  Widget build(BuildContext context) => switch (item) {
+  Widget build(BuildContext context) {
+    debugBuilds++;
+    return _entry();
+  }
+
+  Widget _entry() => switch (item) {
     final HelixMessageItem m => OrbitMessageBubble(
       message: m.message,
       position: m.position,
@@ -96,6 +192,7 @@ class OrbitTimelineEntry extends StatelessWidget {
       onLongPress: onLongPressMessage == null
           ? null
           : () => onLongPressMessage!(m.message.id),
+      actions: bubble,
     ),
     final HelixDateSeparatorItem d => OrbitDaySeparator(d.label),
     final HelixUnreadDividerItem u => OrbitUnreadDivider(u.count),
@@ -541,6 +638,7 @@ class OrbitMessageBubble extends StatelessWidget {
     this.onRetry,
     this.onTap,
     this.onLongPress,
+    this.actions = OrbitBubbleActions.none,
   });
 
   final HelixMessage message;
@@ -550,6 +648,10 @@ class OrbitMessageBubble extends StatelessWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+
+  /// What the bubble's parts do (quote, links, media, voice, reactions) and
+  /// the swipe to reply.
+  final OrbitBubbleActions actions;
 
   @override
   Widget build(BuildContext context) {
@@ -605,7 +707,13 @@ class OrbitMessageBubble extends StatelessWidget {
           ),
         Align(
           alignment: out ? Alignment.centerRight : Alignment.centerLeft,
-          child: bubble,
+          child: actions.onReply == null
+              ? bubble
+              : _SwipeToReply(
+                  outgoing: out,
+                  onReply: () => actions.onReply!(m.id),
+                  child: bubble,
+                ),
         ),
         if (m.reactions.isNotEmpty)
           // `margin-top: -5px`: over the bubble's edge, and 5px less tall.
@@ -624,10 +732,12 @@ class OrbitMessageBubble extends StatelessWidget {
                   left: 0,
                   bottom: 0,
                   child: OrbitAvatar(
-                    avatar: HelixAvatarModel(
-                      name: author ?? '',
-                      colorIndex: m.authorColorIndex,
-                    ),
+                    avatar:
+                        m.authorAvatar ??
+                        HelixAvatarModel(
+                          name: author ?? '',
+                          colorIndex: m.authorColorIndex,
+                        ),
                     size: 30,
                   ),
                 ),
@@ -650,13 +760,180 @@ class OrbitMessageBubble extends StatelessWidget {
         ],
       );
     }
+    Widget body = identical(actions, OrbitBubbleActions.none)
+        ? row
+        : _BubbleTaps(id: m.id, actions: actions, child: row);
+    final touchable = onTap != null || onLongPress != null;
+    if (touchable) {
+      // One node a screen reader can read and act on: the whole story for a
+      // bubble without controls; one that has them (play, download, a link
+      // card, Retry) keeps them reachable.
+      final c = m.content;
+      final controls =
+          c is HelixMediaContent ||
+          c is HelixAudioContent ||
+          c is HelixViewOnceContent ||
+          c is HelixDocumentContent ||
+          (c is HelixTextContent && c.linkPreview != null) ||
+          (out && m.status == HelixDeliveryStatus.failed);
+      final a = actions;
+      body = Semantics(
+        container: true,
+        explicitChildNodes: controls,
+        label: describe(m),
+        selected: selected,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        customSemanticsActions: {
+          if (a.onReply != null)
+            const CustomSemanticsAction(label: 'Reply'): () => a.onReply!(m.id),
+          if (m.reply != null && a.onQuote != null)
+            const CustomSemanticsAction(label: 'Go to replied message'): () =>
+                a.onQuote!(m.id),
+          if (m.reactions.isNotEmpty && a.onReactions != null)
+            const CustomSemanticsAction(label: 'Show reactions'): () =>
+                a.onReactions!(m.id),
+        },
+        child: controls ? body : ExcludeSemantics(child: body),
+      );
+    }
     return Padding(
       padding: EdgeInsets.only(top: opens ? 8 : 2),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: onTap,
         onLongPress: onLongPress,
-        child: row,
+        onSecondaryTap: onLongPress,
+        excludeFromSemantics: touchable,
+        child: body,
+      ),
+    );
+  }
+
+  /// What a screen reader says for [m]: who, what, when and how far it got.
+  static String describe(HelixMessage m) {
+    final b = StringBuffer(m.outgoing ? 'You' : (m.authorName ?? ''));
+    if (b.isNotEmpty) b.write(': ');
+    if (m.forwarded) b.write('Forwarded. ');
+    final r = m.reply;
+    if (r != null) {
+      final (_, kind) = orbitPreviewLabel(r.kind);
+      b.write('Reply to ${r.authorName}: ${r.text.isEmpty ? kind : r.text}. ');
+    }
+    final c = m.content;
+    switch (c) {
+      case HelixTextContent():
+        b.write(c.text);
+        if (c.linkPreview?.title != null) {
+          b.write('. Link: ${c.linkPreview!.title}');
+        }
+      case HelixMediaContent():
+        b.write(
+          c.items.length == 1
+              ? (c.items.first.isVideo ? 'Video' : 'Photo')
+              : '${c.items.length} photos and videos',
+        );
+        if (c.caption.isNotEmpty) b.write(', ${c.caption}');
+      case HelixAudioContent():
+        b.write(c.isVoiceNote ? 'Voice message' : 'Audio');
+        b.write(', ${c.durationLabel}');
+      case HelixDocumentContent():
+        b.write('Document ${c.name}');
+        if (c.sizeLabel.isNotEmpty) b.write(', ${c.sizeLabel}');
+        if (c.caption.isNotEmpty) b.write(', ${c.caption}');
+      case HelixLocationContent():
+        b.write('Location');
+        if (c.label.isNotEmpty) b.write(', ${c.label}');
+      case HelixContactContent():
+        b.write('Contact ${c.name}');
+      case HelixPollContent():
+        b.write('Poll ${c.question}');
+      case HelixPlaceholderContent():
+        b.write(_placeholderWords(c.kind, m.outgoing).$2);
+      case HelixViewOnceContent():
+        b.write(
+          'View once ${c.isVideo ? 'video' : 'photo'}${c.opened ? ', opened' : ''}',
+        );
+    }
+    if (m.edited) b.write(', edited');
+    if (m.expiresLabel != null) b.write(', disappears after ${m.expiresLabel}');
+    b.write(', ${m.timeLabel}');
+    if (m.outgoing) {
+      b.write(switch (m.status) {
+        HelixDeliveryStatus.pending => ', sending',
+        HelixDeliveryStatus.sent => ', sent',
+        HelixDeliveryStatus.delivered => ', delivered',
+        HelixDeliveryStatus.read => ', read',
+        HelixDeliveryStatus.failed => ', not sent',
+      });
+    }
+    if (m.reactions.isNotEmpty) {
+      b.write(
+        ', reactions '
+        '${m.reactions.map((r) => '${r.emoji} ${r.count}').join(', ')}',
+      );
+    }
+    return b.toString();
+  }
+}
+
+/// The prototype's swipe to reply: the bubble follows the finger sideways,
+/// up to 80px towards the middle of the chat, and springs back in 180ms; let
+/// go past 56px and [onReply] runs.
+class _SwipeToReply extends StatefulWidget {
+  const _SwipeToReply({
+    required this.outgoing,
+    required this.onReply,
+    required this.child,
+  });
+
+  final bool outgoing;
+  final VoidCallback onReply;
+  final Widget child;
+
+  @override
+  State<_SwipeToReply> createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<_SwipeToReply> {
+  static const _trigger = 56.0;
+  static const _most = 80.0;
+  var _pull = 0.0;
+  var _dragging = false;
+
+  void _end() {
+    final fire = _pull >= _trigger;
+    setState(() {
+      _pull = 0;
+      _dragging = false;
+    });
+    if (fire) widget.onReply();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sign = widget.outgoing ? -1.0 : 1.0;
+    final t = OrbitTokens.of(context);
+    return GestureDetector(
+      // Measured from where the finger went down, as the prototype's is.
+      dragStartBehavior: DragStartBehavior.down,
+      onHorizontalDragStart: (_) => setState(() => _dragging = true),
+      onHorizontalDragUpdate: (d) =>
+          setState(() => _pull = (_pull + d.delta.dx * sign).clamp(0.0, _most)),
+      onHorizontalDragEnd: (_) => _end(),
+      onHorizontalDragCancel: () => setState(() {
+        _pull = 0;
+        _dragging = false;
+      }),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: _pull * sign),
+        duration: _dragging || !OrbitMotion.allowed(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: t.motion.curve,
+        builder: (context, dx, child) =>
+            Transform.translate(offset: Offset(dx, 0), child: child),
+        child: widget.child,
       ),
     );
   }
@@ -838,6 +1115,7 @@ class _BlockBody extends StatelessWidget {
     final m = message;
     final c = m.content;
     final meta = _Meta(message: m, color: look.meta, readColor: t.readTick);
+    final onLink = _BubbleTaps.of(context)?.actions.onLink;
     // Card contents push the bubble's 12px padding back with their own
     // negative margins; they are laid out from the inside of the padding by
     // undoing it here.
@@ -856,7 +1134,14 @@ class _BlockBody extends StatelessWidget {
             ),
           );
         }
-        parts.add(_TextFlow(span: _rich(t, c, text), style: text, meta: meta));
+        parts.add(
+          _TextFlow(
+            span: _rich(t, c, text),
+            style: text,
+            meta: meta,
+            onLink: onLink,
+          ),
+        );
       case HelixPollContent(:final question, :final options):
         final s = ['Poll: $question', ...options.map((o) => '- $o')].join('\n');
         parts.add(
@@ -1078,10 +1363,14 @@ class _TextFlow extends SingleChildRenderObjectWidget {
     required this.span,
     required this.style,
     required Widget meta,
+    this.onLink,
   }) : super(child: meta);
 
   final InlineSpan span;
   final TextStyle style;
+
+  /// A link in the text was tapped; null leaves every tap to the bubble.
+  final ValueChanged<String>? onLink;
 
   @override
   RenderObject createRenderObject(BuildContext context) => _RenderTextFlow(
@@ -1089,13 +1378,14 @@ class _TextFlow extends SingleChildRenderObjectWidget {
     style,
     MediaQuery.textScalerOf(context),
     Directionality.of(context),
-  );
+  )..onLink = onLink;
 
   @override
   void updateRenderObject(BuildContext context, _RenderTextFlow r) => r
     ..span = span
     ..style = style
-    ..scaler = MediaQuery.textScalerOf(context);
+    ..scaler = MediaQuery.textScalerOf(context)
+    ..onLink = onLink;
 }
 
 class _RenderTextFlow extends RenderProxyBox {
@@ -1107,6 +1397,51 @@ class _RenderTextFlow extends RenderProxyBox {
   final TextDirection _dir;
   final _text = TextPainter();
   Offset _metaAt = Offset.zero;
+
+  ValueChanged<String>? onLink;
+  TapGestureRecognizer? _tap;
+  String? _pressed;
+
+  static final _joiners = RegExp('[​⁠]');
+
+  /// The link under [position], if a link's own letters are there.
+  String? _linkAt(Offset position) {
+    final text = _text.text;
+    if (text == null) return null;
+    final lines = _text.computeLineMetrics().length;
+    final shift = (_line - _line.roundToDouble()) * math.max(1, lines) / 2;
+    final local = position - Offset(0, shift);
+    final pos = _text.getPositionForOffset(local);
+    final at = pos.affinity == TextAffinity.upstream
+        ? pos.offset - 1
+        : pos.offset;
+    if (at < 0) return null;
+    final boxes = _text.getBoxesForSelection(
+      TextSelection(baseOffset: at, extentOffset: at + 1),
+    );
+    if (!boxes.any((b) => b.toRect().inflate(2).contains(local))) return null;
+    final span = text.getSpanForPosition(TextPosition(offset: at));
+    if (span is! TextSpan) return null;
+    final url = span.text?.replaceAll(_joiners, '');
+    return url != null && _url.hasMatch(url) ? url : null;
+  }
+
+  @override
+  bool hitTestSelf(Offset position) =>
+      onLink != null && _linkAt(position) != null;
+
+  @override
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+    if (event is! PointerDownEvent || onLink == null) return;
+    _pressed = _linkAt(entry.localPosition);
+    if (_pressed == null) return;
+    (_tap ??= TapGestureRecognizer(debugOwner: this)
+          ..onTap = () {
+            final url = _pressed;
+            if (url != null) onLink?.call(url);
+          })
+        .addPointer(event);
+  }
 
   set span(InlineSpan v) {
     if (v == _span) return;
@@ -1247,6 +1582,7 @@ class _RenderTextFlow extends RenderProxyBox {
 
   @override
   void dispose() {
+    _tap?.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -1347,48 +1683,53 @@ class _Quote extends StatelessWidget {
       color: t.ink3,
       height: 1.35,
     );
+    final taps = _BubbleTaps.of(context);
+    final onQuote = taps?.actions.onQuote;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: look.out ? t.tintOut : t.tint,
-            border: Border(left: BorderSide(color: ink, width: 3)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                OrbitText(
-                  quote.authorName,
-                  style: style.copyWith(
-                    color: ink,
-                    fontWeight: FontWeight.w600,
-                    fontVariations: const [ui.FontVariation('wght', 640)],
+      child: _tappable(
+        onQuote == null || quote.missing ? null : () => onQuote(taps!.id),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: look.out ? t.tintOut : t.tint,
+              border: Border(left: BorderSide(color: ink, width: 3)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  OrbitText(
+                    quote.authorName,
+                    style: style.copyWith(
+                      color: ink,
+                      fontWeight: FontWeight.w600,
+                      fontVariations: const [ui.FontVariation('wght', 640)],
+                    ),
                   ),
-                ),
-                OrbitText.rich(
-                  TextSpan(
-                    children: [
-                      if (icon != null && quote.kind != HelixPreviewKind.text)
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.middle,
-                          child: OrbitIcon(icon, size: 12, color: t.ink3),
-                        ),
-                      if (icon != null && quote.kind != HelixPreviewKind.text)
-                        const TextSpan(text: ' '),
-                      TextSpan(text: text),
-                    ],
+                  OrbitText.rich(
+                    TextSpan(
+                      children: [
+                        if (icon != null && quote.kind != HelixPreviewKind.text)
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: OrbitIcon(icon, size: 12, color: t.ink3),
+                          ),
+                        if (icon != null && quote.kind != HelixPreviewKind.text)
+                          const TextSpan(text: ' '),
+                        TextSpan(text: text),
+                      ],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: quote.missing
+                        ? style.copyWith(fontStyle: FontStyle.italic)
+                        : style,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: quote.missing
-                      ? style.copyWith(fontStyle: FontStyle.italic)
-                      : style,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1410,49 +1751,53 @@ class _LinkCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = look.t;
     final host = Uri.tryParse(link.url)?.host ?? link.url;
+    final onLink = _BubbleTaps.of(context)?.actions.onLink;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: look.out ? t.tintOut : t.tint,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (link.title != null)
-              OrbitText(
-                link.title!,
-                style: t.font.style(
-                  size: OrbitType.small,
-                  weight: 620,
-                  color: look.ink,
-                ),
-              ),
-            if (link.description != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: OrbitText(
-                  link.description!,
-                  style: t.font.style(size: OrbitType.caption, color: t.ink3),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                children: [
-                  OrbitIcon(OrbitIcons.linkSimple, size: 10.5, color: t.ink3),
-                  Flexible(
-                    child: OrbitText(
-                      ' ${host.toLowerCase()}',
-                      style: t.mono.style(size: 10.5, color: t.ink3),
-                    ),
+      child: _tappable(
+        onLink == null ? null : () => onLink(link.url),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: look.out ? t.tintOut : t.tint,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (link.title != null)
+                OrbitText(
+                  link.title!,
+                  style: t.font.style(
+                    size: OrbitType.small,
+                    weight: 620,
+                    color: look.ink,
                   ),
-                ],
+                ),
+              if (link.description != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: OrbitText(
+                    link.description!,
+                    style: t.font.style(size: OrbitType.caption, color: t.ink3),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    OrbitIcon(OrbitIcons.linkSimple, size: 10.5, color: t.ink3),
+                    Flexible(
+                      child: OrbitText(
+                        ' ${host.toLowerCase()}',
+                        style: t.mono.style(size: 10.5, color: t.ink3),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1521,11 +1866,16 @@ class _MediaBody extends StatelessWidget {
     final c = m.content as HelixMediaContent;
     final items = c.items.take(4).toList();
     final n = items.length;
+    final taps = _BubbleTaps.of(context);
+    final onMedia = taps?.actions.onMedia;
     Widget cell(int i, double aspect) => AspectRatio(
       aspectRatio: aspect,
-      child: _MediaCell(
-        item: items[i],
-        more: i == 3 && c.items.length > 4 ? c.items.length - 4 : 0,
+      child: _tappable(
+        onMedia == null ? null : () => onMedia(taps!.id, i),
+        _MediaCell(
+          item: items[i],
+          more: i == 3 && c.items.length > 4 ? c.items.length - 4 : 0,
+        ),
       ),
     );
     Widget grid;
@@ -1816,6 +2166,34 @@ class _Voice extends StatelessWidget {
     final chip = voice && (c.playing || c.speed != 1);
     final dot = voice && !out && !c.played;
     final meta = t.mono.style(size: 10.5, color: out ? t.outMeta : t.inMeta);
+    final taps = _BubbleTaps.of(context);
+    final a = taps?.actions;
+    final id = taps?.id ?? message.id;
+    final onToggle = a?.onAudioToggle;
+    final onSpeed = a?.onAudioSpeed;
+    final onSeek = a?.onAudioSeek;
+    Widget seekable(Widget child) {
+      if (onSeek == null) return child;
+      return Builder(
+        builder: (context) {
+          void at(Offset p) {
+            final box = context.findRenderObject();
+            if (box is! RenderBox || !box.hasSize || box.size.width <= 0) {
+              return;
+            }
+            onSeek(id, (p.dx / box.size.width).clamp(0.0, 1.0));
+          }
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (d) => at(d.localPosition),
+            onHorizontalDragUpdate: (d) => at(d.localPosition),
+            child: child,
+          );
+        },
+      );
+    }
+
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 236),
       child: Padding(
@@ -1825,19 +2203,23 @@ class _Voice extends StatelessWidget {
             Semantics(
               button: true,
               label: c.playing ? 'Pause' : 'Play',
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: out ? t.cyanInk : t.accent,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: OrbitIcon(
-                    icon.$1,
-                    weight: icon.$2,
-                    size: 17,
-                    color: t.onAccent,
+              child: _tappable(
+                onToggle == null ? null : () => onToggle(id),
+                target: true,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: out ? t.cyanInk : t.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: OrbitIcon(
+                      icon.$1,
+                      weight: icon.$2,
+                      size: 17,
+                      color: t.onAccent,
+                    ),
                   ),
                 ),
               ),
@@ -1859,18 +2241,20 @@ class _Voice extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minWidth: 36 * 2 + 35 * 2,
-                      minHeight: 28,
-                      maxHeight: 28,
-                    ),
-                    child: CustomPaint(
-                      painter: _WavePainter(
-                        samples: c.waveform ?? const <int>[],
-                        progress: c.progress,
-                        idle: out ? t.waveOutIdle : t.waveIdle,
-                        on: out ? t.cyanInk : t.accent,
+                  seekable(
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: 36 * 2 + 35 * 2,
+                        minHeight: 28,
+                        maxHeight: 28,
+                      ),
+                      child: CustomPaint(
+                        painter: _WavePainter(
+                          samples: c.waveform ?? const <int>[],
+                          progress: c.progress,
+                          idle: out ? t.waveOutIdle : t.waveIdle,
+                          on: out ? t.cyanInk : t.accent,
+                        ),
                       ),
                     ),
                   ),
@@ -1901,22 +2285,31 @@ class _Voice extends StatelessWidget {
             ),
             if (chip) ...[
               const SizedBox(width: 10),
-              Container(
-                height: 26,
-                constraints: const BoxConstraints(minWidth: 38),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: out ? const Color(0x99FFFFFF) : t.surface,
-                  border: Border.all(color: out ? t.outLine : t.line),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${_speed(c.speed)}x',
-                  style: t.mono.style(
-                    size: 11,
-                    weight: 600,
-                    color: out ? t.outInk : t.ink2,
+              Semantics(
+                button: onSpeed != null,
+                label: 'Playback speed ${_speed(c.speed)}x',
+                excludeSemantics: true,
+                child: _tappable(
+                  onSpeed == null ? null : () => onSpeed(id),
+                  target: true,
+                  Container(
+                    height: 26,
+                    constraints: const BoxConstraints(minWidth: 38),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: out ? const Color(0x99FFFFFF) : t.surface,
+                      border: Border.all(color: out ? t.outLine : t.line),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${_speed(c.speed)}x',
+                      style: t.mono.style(
+                        size: 11,
+                        weight: 600,
+                        color: out ? t.outInk : t.ink2,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1991,6 +2384,8 @@ class _Document extends StatelessWidget {
     final c = content;
     final out = look.out;
     final ink = out ? t.cyanInk : t.accent;
+    final taps = _BubbleTaps.of(context);
+    final onMedia = taps?.actions.onMedia;
     final act = switch (c.transfer) {
       HelixTransferState.notDownloaded => (
         OrbitIcons.downloadSimple,
@@ -2088,20 +2483,34 @@ class _Document extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: t.surface,
-                border: Border.all(color: t.line),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: OrbitIcon(
-                  act.$1,
-                  weight: act.$2,
-                  size: 17,
-                  color: t.ink2,
+            Semantics(
+              button: onMedia != null,
+              label: switch (c.transfer) {
+                HelixTransferState.notDownloaded => 'Download',
+                HelixTransferState.downloading ||
+                HelixTransferState.uploading => 'Cancel',
+                HelixTransferState.failed => 'Try again',
+                HelixTransferState.done => 'Open',
+              },
+              child: _tappable(
+                onMedia == null ? null : () => onMedia(taps!.id, 0),
+                target: true,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: t.surface,
+                    border: Border.all(color: t.line),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: OrbitIcon(
+                      act.$1,
+                      weight: act.$2,
+                      size: 17,
+                      color: t.ink2,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -2275,52 +2684,57 @@ class _ViewOnce extends StatelessWidget {
         : outgoing
         ? 'Sent'
         : 'Tap to view';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox.square(
-            dimension: 34,
-            child: CustomPaint(
-              painter: _DashedCircle(ring),
-              child: Center(
-                child: Text(
-                  '1',
-                  style: t.mono.style(size: 15, weight: 700, color: ring),
+    final taps = _BubbleTaps.of(context);
+    final onViewOnce = taps?.actions.onViewOnce;
+    return _tappable(
+      onViewOnce == null ? null : () => onViewOnce(taps!.id),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox.square(
+              dimension: 34,
+              child: CustomPaint(
+                painter: _DashedCircle(ring),
+                child: Center(
+                  child: Text(
+                    '1',
+                    style: t.mono.style(size: 15, weight: 700, color: ring),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              OrbitText(
-                content.isVideo ? 'Video' : 'Photo',
-                style: t.font.style(
-                  size: OrbitType.body,
-                  weight: opened ? 450 : 560,
-                  color: opened ? t.ink3 : look.ink,
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (opened) ...[
-                    OrbitIcon(OrbitIcons.check, size: 11, color: t.ink3),
-                    const SizedBox(width: 3),
-                  ],
-                  OrbitText(
-                    status,
-                    style: t.mono.style(size: 11, weight: 450, color: t.ink3),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OrbitText(
+                  content.isVideo ? 'Video' : 'Photo',
+                  style: t.font.style(
+                    size: OrbitType.body,
+                    weight: opened ? 450 : 560,
+                    color: opened ? t.ink3 : look.ink,
                   ),
-                ],
-              ),
-            ],
-          ),
-        ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (opened) ...[
+                      OrbitIcon(OrbitIcons.check, size: 11, color: t.ink3),
+                      const SizedBox(width: 3),
+                    ],
+                    OrbitText(
+                      status,
+                      style: t.mono.style(size: 11, weight: 450, color: t.ink3),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2357,6 +2771,29 @@ class _DashedCircle extends CustomPainter {
   bool shouldRepaint(_DashedCircle old) => old.color != color;
 }
 
+/// A placeholder's icon and words (`UI.placeholder`).
+(OrbitGlyph, String) _placeholderWords(
+  HelixPlaceholderKind kind,
+  bool outgoing,
+) => switch (kind) {
+  HelixPlaceholderKind.deleted => (
+    OrbitIcons.prohibit,
+    outgoing ? 'You deleted this message' : 'This message was deleted',
+  ),
+  HelixPlaceholderKind.undecryptable => (
+    OrbitIcons.lockSimple,
+    "Couldn't decrypt this message",
+  ),
+  HelixPlaceholderKind.unsupported => (
+    OrbitIcons.arrowCircleUp,
+    'This message needs a newer version of Orbit',
+  ),
+  HelixPlaceholderKind.expired => (
+    OrbitIcons.timer,
+    'This message has disappeared',
+  ),
+};
+
 /// `.bubble.placeholder`: a deleted, undecryptable, unsupported or
 /// disappeared message. No fill, a dashed `--control-line` edge
 /// (`--out-line` in yours, `--warning-line` when it could not be
@@ -2378,24 +2815,7 @@ class _PlaceholderBody extends StatelessWidget {
     final t = look.t;
     final m = message;
     final c = m.content as HelixPlaceholderContent;
-    final (icon, label) = switch (c.kind) {
-      HelixPlaceholderKind.deleted => (
-        OrbitIcons.prohibit,
-        m.outgoing ? 'You deleted this message' : 'This message was deleted',
-      ),
-      HelixPlaceholderKind.undecryptable => (
-        OrbitIcons.lockSimple,
-        'Couldn\'t decrypt this message',
-      ),
-      HelixPlaceholderKind.unsupported => (
-        OrbitIcons.arrowCircleUp,
-        'This message needs a newer version of Orbit',
-      ),
-      HelixPlaceholderKind.expired => (
-        OrbitIcons.timer,
-        'This message has disappeared',
-      ),
-    };
+    final (icon, label) = _placeholderWords(c.kind, m.outgoing);
     final warn = c.kind == HelixPlaceholderKind.undecryptable;
     final ink = warn
         ? t.warning
@@ -2615,6 +3035,8 @@ class _Reactions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
+    final taps = _BubbleTaps.of(context);
+    final onReactions = taps?.actions.onReactions;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Wrap(
@@ -2628,32 +3050,36 @@ class _Reactions extends StatelessWidget {
                   ? '${r.emoji} ${r.count}, tap to remove your reaction'
                   : '${r.emoji} ${r.count}',
               excludeSemantics: true,
-              child: _Pop(
-                child: Container(
-                  height: 26,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: r.mine ? t.accentSoft : t.surface,
-                    border: Border.all(color: r.mine ? t.accentLine : t.line),
-                    borderRadius: BorderRadius.circular(99),
-                    boxShadow: t.shadowCard,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(r.emoji, style: t.font.style(size: 13)),
-                      if (r.count > 1) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          '${r.count}',
-                          style: t.mono.style(
-                            size: 10.5,
-                            weight: 600,
-                            color: r.mine ? t.accentInk : t.ink3,
+              child: _tappable(
+                onReactions == null ? null : () => onReactions(taps!.id),
+                target: true,
+                _Pop(
+                  child: Container(
+                    height: 26,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: r.mine ? t.accentSoft : t.surface,
+                      border: Border.all(color: r.mine ? t.accentLine : t.line),
+                      borderRadius: BorderRadius.circular(99),
+                      boxShadow: t.shadowCard,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(r.emoji, style: t.font.style(size: 13)),
+                        if (r.count > 1) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '${r.count}',
+                            style: t.mono.style(
+                              size: 10.5,
+                              weight: 600,
+                              color: r.mine ? t.accentInk : t.ink3,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),

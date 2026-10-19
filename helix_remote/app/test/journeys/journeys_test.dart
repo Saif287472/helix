@@ -9,6 +9,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:orbit_ui/orbit_ui.dart' show OrbitCallLogTile, PeoplePanel;
 
 import '../support/chat_harness.dart' show settle, testNow;
+import '../support/orbit_theme.dart' show findMessageText;
 import 'journey_harness.dart';
 
 /// Whole-app walks across features, over the real router: the seams the
@@ -49,10 +50,7 @@ void main() {
     await tester.pump();
     await tapAndSettle(tester, find.byTooltip('Send'));
     expect(app.chat.log, contains('sendText:direct:mum:are you free?'));
-    expect(
-      find.textContaining('are you free?', findRichText: true),
-      findsOneWidget,
-    );
+    expect(findMessageText('are you free?'), findsOneWidget);
 
     // The header opens the contact info; its Voice call button places the
     // call through the one calls seam.

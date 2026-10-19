@@ -253,5 +253,6 @@ void journeyTest(
   // Disposing the container is what cancels the providers' own timers.
   _active?.dispose();
   _active = null;
-  await tester.pump(const Duration(seconds: 2));
+  // Long enough for the last Orbit toast (4s at most) to go too.
+  await tester.pump(const Duration(seconds: 5));
 });

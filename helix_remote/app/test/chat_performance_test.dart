@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/features/chats/presentation/chats_tab.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
-import 'package:helix_remote/features/conversation/presentation/timeline_row.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart' show HelixChatListTile;
+import 'package:orbit_ui/orbit_ui.dart'
+    show OrbitMessageBubble, OrbitTimelineEntry;
 
 import 'support/chat_harness.dart';
+import 'support/orbit_theme.dart';
 
 /// The plan's §6.4 budgets, as relative and build-count checks (never a
 /// wall-clock figure, which would be a flaky test): what is built and read
@@ -94,14 +96,14 @@ void main() {
       reason: 'reading 50 rows of 100,000 must not scan them',
     );
 
-    timelineRowBuilds = 0;
+    OrbitTimelineEntry.debugBuilds = 0;
     await tester.pumpWidget(
       chatApp(gateway, ConversationScreen(conversationId: big)),
     );
     await settle(tester, rounds: 12);
-    expect(find.byType(HelixMessageBubble).evaluate().length, lessThan(60));
+    expect(find.byType(OrbitMessageBubble).evaluate().length, lessThan(60));
     expect(
-      timelineRowBuilds,
+      OrbitTimelineEntry.debugBuilds,
       lessThan(200),
       reason: 'the first frame builds a screenful of rows, not 100,000',
     );
@@ -120,7 +122,7 @@ void main() {
     );
     await settle(tester, rounds: 10);
 
-    timelineRowBuilds = 0;
+    OrbitTimelineEntry.debugBuilds = 0;
     // One write per message, a few milliseconds apart - faster than frames,
     // so the screen is told about several at a time. (Each write needs its
     // own turn of the real event loop, because the screen's own streams read
@@ -137,14 +139,11 @@ void main() {
     }
     await settle(tester, rounds: 12);
 
-    expect(
-      find.textContaining('burst 999', findRichText: true),
-      findsOneWidget,
-    );
+    expect(findMessageText('burst 999'), findsOneWidget);
     // A list that rebuilt every visible row on every snapshot would build
     // ~15 rows x hundreds of snapshots. Equal rows are kept as they were.
     expect(
-      timelineRowBuilds,
+      OrbitTimelineEntry.debugBuilds,
       lessThan(6000),
       reason: 'rows are rebuilt only when their own content changes',
     );

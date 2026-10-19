@@ -23,20 +23,24 @@ application/
                             voice notes (permission, lock/cancel, interruption,
                             background, 10 minute limit)
   message_actions.dart      menu rules (edit 15 min, delete-for-everyone 2 days,
-                            admins), react toggle, forward, selection
+                            admins), react toggle, forward
   read_tracker.dart         mark read only when foreground + at bottom;
                             starts disappearing timers on display
   conversation_header / _search / _settings / forward_targets / message_info /
   media_viewer / conversation_calls
 presentation/
-  conversation_screen.dart  implements `ConversationUi` (taps -> engine/nav)
-  timeline_view.dart        reverse list, paging, jump-to-message, scroll to
-                            bottom, keeps position when messages arrive below
-  timeline_row.dart         one row; widgets are reused while the entry is equal
-  composer_bar.dart, emoji_panel.dart, conversation_app_bar.dart,
-  in_chat_search_view.dart, forward_screen.dart, message_info_screen.dart,
-  media_viewer_screen.dart, video_player_view.dart, send_files_screen.dart,
-  conversation_settings_screen.dart
+  conversation_screen.dart  connector: draws orbit_ui's `ChatScreen` from the
+                            providers above (timeline window, jumps, media of
+                            the rows drawn, player, composer, search, pending
+                            members) and maps its actions to the notifiers and
+                            routes; follows the app lifecycle. The screen
+                            itself (lazy reversed list, paging, jumps, scroll
+                            to latest, keeping your place, selection, sheets,
+                            hold-to-record) is `orbit_ui`'s.
+  forward_screen.dart, message_info_screen.dart, media_viewer_screen.dart,
+  video_player_view.dart, send_files_screen.dart,
+  conversation_settings_screen.dart, shared_media_screen.dart (still the old
+                            widgets until the conversation's pages batch)
 conversation_routes.dart    /chat/:id and its sub-routes
 ```
 
@@ -65,10 +69,11 @@ conversation_routes.dart    /chat/:id and its sub-routes
   engine's previews come from `FlutterMediaProcessor`.
 - **Group management** (members, roles, links) is the groups feature's; the
   settings screen links to its info page.
-- **Unconfirmed group members:** above a group conversation sits
-  `shared/widgets/pending_members_prompt.dart` ("Confirm NAME?" with Confirm,
-  and Remove for admins) for members the server's roster added without an
-  announcement; the timeline shows the engine's `member_unconfirmed` notice
+- **Unconfirmed group members:** above a group conversation the Orbit screen
+  draws "Confirm NAME?" (Confirm, and Remove for admins) from
+  `shared/pending_members.dart` (the group info page still uses
+  `shared/widgets/pending_members_prompt.dart`) for members the server's
+  roster added without an announcement; the timeline shows the engine's `member_unconfirmed` notice
   (`core/chat/message_semantics.dart`). The groups feature owns the logic.
 
 ## Not here

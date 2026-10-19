@@ -139,6 +139,10 @@ final class ConversationActions {
     await gateway.react(rowid, mine?.emoji == emoji ? null : emoji);
   }
 
+  /// Takes this account's reaction off [rowid] ("Tap to remove").
+  Future<void> removeMyReaction(int rowid) async =>
+      (await _gateway).react(rowid, null);
+
   /// The text of [rowids] (a selection), oldest first, one message per line,
   /// for the clipboard.
   Future<String> textOf(Iterable<int> rowids) async {
@@ -218,29 +222,3 @@ final class ConversationActions {
 /// asked, and must still reach the engine when they finish.
 final conversationActionsProvider =
     Provider.family<ConversationActions, String>(ConversationActions.new);
-
-/// The messages ticked in a conversation (the "Select" action). Empty means
-/// no selection is in progress.
-final class MessageSelection extends Notifier<Set<int>> {
-  MessageSelection(this.conversationId);
-
-  final String conversationId;
-
-  @override
-  Set<int> build() => const {};
-
-  void toggle(int rowid) {
-    final next = {...state};
-    if (!next.remove(rowid)) next.add(rowid);
-    state = next;
-  }
-
-  void start(int rowid) => state = {rowid};
-
-  void clear() {
-    if (state.isNotEmpty) state = const {};
-  }
-}
-
-final messageSelectionProvider = NotifierProvider.autoDispose
-    .family<MessageSelection, Set<int>, String>(MessageSelection.new);

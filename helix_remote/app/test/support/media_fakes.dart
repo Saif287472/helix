@@ -38,6 +38,10 @@ final class FakeVoiceRecorder implements VoiceRecorder {
   /// What the system does to the recording (a call).
   void systemPhase(VoicePhase phase) => _phases.add(phase);
 
+  /// The loudness the "microphone" has heard so far.
+  @override
+  List<double> levels = const [];
+
   @override
   Future<void> start() async {
     events.add('start');

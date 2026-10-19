@@ -456,3 +456,80 @@ batch ran out of credit before verifying it; the commander finished it.
   rewritten against the connector; the connector lives in
   `shared/widgets/orbit_home_connector.dart` because it joins four features.
   - **Owner:** pending (Part B batch 2).
+
+## Part B batch 3 (the conversation, wired into the app)
+
+All 26 conversation states, `kit-timeline`, the three Message info states
+and both Forward states score exactly as at Review 4 after the changes below,
+so none of them moved a pixel in the compared states.
+
+- **Behaviour-only hooks added to `orbit_ui`:**
+  - `OrbitBubbleActions` (timeline): the quote, links in the text, the link
+    card, each picture, a document's button, view-once, a voice message's
+    play, speed and waveform (tap or drag to seek), and the reactions under
+    a bubble answer taps when the caller passes a hook; without one they
+    take no touches, as before. Right-click opens the actions view.
+  - `ChatScreen`: the long-press menu can come from the app
+    (`messageMenu`), with the reaction you already gave; "+" opens the React
+    sheet with every emoji; a reaction under a message opens the Reactions
+    sheet (spinner, "No reactions yet.", yours with "Tap to remove"); Delete
+    for me and Delete for everyone ask first (the prototype's dialogs), and
+    "It can no longer be deleted for everyone." when it is too late; Copy
+    says "Copied"; the selection bar's Copy and Forward end the selection;
+    the camera sheet (Take a photo, Record a video) and the attach tiles
+    pick files; the emoji panel inserts at the cursor and closes when the
+    field gets focus; back closes the selection, then the search; a pending
+    member's buttons wait while the answer comes, and Remove asks first.
+  - `OrbitComposer` takes the caller's text controller and focus (an edit
+    fills the field, a reply puts the cursor in it, the draft is saved when
+    the screen closes), sends on Enter when `enterSends`, reports the cursor
+    with the text, and hands the whole person to a mention pick.
+  - **Hold to record**: the mic records while held (the prototype's 220ms;
+    the old app's was 500ms), sliding 120px towards the start cancels and
+    80px up locks, and the gesture survives the switch from the field to the
+    recording strip. A plain tap says "Hold the microphone to record a voice
+    message."
+  - **Swipe to reply** follows the prototype: theirs to the right, yours to
+    the left, up to 80px, 56px to reply, measured from where the finger went
+    down, springing back in 180ms (the old app slid every bubble to the
+    right). Off while selecting and where nothing can be sent.
+  - **Scroll to latest message** (`.to-bottom`): shown 160px from the bottom
+    or after a jump into the past, with the unread count; it sits 10px above
+    the composer, which is the prototype's 92px from the bottom while the
+    composer is the usual height.
+  - **Opening at the unread line** is the app's (`ChatModel.openAtUnread`);
+    the preview opens at the bottom, as the prototype does.
+  - **Bubbles tell a screen reader** who, what, when and how far it got, with
+    Reply, "Go to replied message" and "Show reactions" as actions (the old
+    bubble's summary); a bubble with controls keeps them reachable.
+  - **The composer field's 48px is touchable**: its 12px above and below are
+    the input's own padding now, so the 2x-text tap-target check passes.
+  - **Owner:** pending (Part B batch 3).
+- **The timeline is a lazy list built from the bottom** (it was one column
+  of every message): it pages older and, after a jump, newer messages in,
+  keeps your place when messages arrive while you read further up, and
+  rebuilds only the rows that changed. Its rows have no repaint boundaries:
+  with them, `chat-emoji` moves by 0.01% (text at a fractional offset is
+  rasterised a hair differently). Turning them on is a performance choice
+  for later, with a compare.
+  - **Owner:** pending (Part B batch 3).
+- **The emoji panel and the React sheet use the prototype's emoji**, not the
+  app's longer list (the contract said the app's list would move in; the
+  approved design draws these).
+  - **Owner:** pending (Part B batch 3). Say if you want the longer list.
+- **In-chat search**: results come from the app's search with its marked
+  words; each shows who sent it (yours as "You"); a spinner while it runs and
+  "The search could not be run." when it fails.
+  - **Owner:** pending (Part B batch 3).
+- **"This conversation could not be opened." offers Try again** in the app
+  (the prototype's interaction list); the preview's stays disabled.
+  - **Owner:** pending (Part B batch 3).
+- **The derive items are built** (`application/`): the author's picture
+  beside a group run, the size on a photo's download chip, the amber
+  key-change notice, the call buttons' rule, the reply or edit banner, and
+  the live waveform of a locked recording (`VoiceRecorder.levels`). The
+  played-dot that survives a restart (new backend work, optional) is not.
+  - **Owner:** pending (Part B batch 3).
+- **Selection lives in the screen** (the app's `messageSelectionProvider` had
+  no other user and is gone).
+  - **Owner:** pending (Part B batch 3).

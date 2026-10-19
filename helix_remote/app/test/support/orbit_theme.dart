@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
 /// The Orbit theme the app draws with (`core/theme/orbit_app_theme.dart`),
@@ -22,3 +23,9 @@ ThemeData orbitTestTheme() => OrbitTheme.of(orbitTestTokens);
 /// page colour under the navigator.
 Widget orbitTestBuilder(BuildContext context, Widget? child) =>
     Material(color: orbitTestTokens.bg, child: child);
+
+/// A message's text in an Orbit bubble. The bubbles lay their text out
+/// themselves (the time floats after the last line), so the text is found by
+/// what they tell a screen reader rather than by a `Text` widget.
+Finder findMessageText(String text) =>
+    find.bySemanticsLabel(RegExp(RegExp.escape(text)));

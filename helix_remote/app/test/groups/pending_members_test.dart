@@ -11,6 +11,7 @@ import 'package:helix_remote/features/groups/presentation/group_info_screen.dart
 import 'package:helix_remote/shared/widgets/pending_members_prompt.dart';
 import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:orbit_ui/orbit_ui.dart' show OrbitButton;
 
 import '../chat_logic_test.dart' show row;
 import '../support/chat_harness.dart' as chat;
@@ -394,12 +395,20 @@ void main() {
       await chat.settle(tester, rounds: 10);
 
       expect(find.text('Confirm Bob?'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Remove'), findsNothing);
+      // The app's sentence, with what confirming means.
+      expect(
+        find.textContaining('Until you confirm, what you send in this group'),
+        findsOneWidget,
+      );
+      // A plain member is not offered Remove.
+      expect(find.widgetWithText(OrbitButton, 'Remove'), findsNothing);
+      expect(find.textContaining('Only an admin can remove'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.tap(find.widgetWithText(OrbitButton, 'Confirm'));
       await chat.settle(tester, rounds: 6);
       expect(port.calls, contains('confirm bob'));
       expect(find.text('Confirm Bob?'), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
     });
 
     chat.chatTest('a direct chat has no prompt', (tester, gateway) async {
@@ -416,6 +425,7 @@ void main() {
       );
       await chat.settle(tester, rounds: 8);
       expect(find.byType(PendingMembersPrompt), findsNothing);
+      expect(find.textContaining('Confirm '), findsNothing);
     });
   });
 }

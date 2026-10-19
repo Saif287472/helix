@@ -58,6 +58,10 @@ class ConversationHeader {
   /// composer shows it instead of the text field.
   final String? composerDisabledReason;
 
+  /// The header offers voice and video calls: a direct chat that neither
+  /// side has blocked (group calls are not part of this release).
+  bool get canCall => peerAccount != null && !blocked && !blockedByPeer;
+
   @override
   bool operator ==(Object other) =>
       other is ConversationHeader &&
