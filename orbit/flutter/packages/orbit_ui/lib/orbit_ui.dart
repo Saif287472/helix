@@ -69,3 +69,4 @@ export 'src/theme/orbit_tokens.dart';
 export 'src/theme/pattern_painter.dart';
 export 'src/theme/svg_path.dart';
 export 'src/theme/turbulence.dart';
+export 'src/window/window_scaffold.dart';

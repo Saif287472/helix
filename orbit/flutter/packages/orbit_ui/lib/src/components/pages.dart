@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:orbit_ui/src/components/bars.dart';
 import 'package:orbit_ui/src/theme/pattern_painter.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
+import 'package:orbit_ui/src/window/window_scaffold.dart';
 
 /// `Kit.youPage(title, body, opts)` (`js/kit.js`): a You-style page. The
 /// flat header on the page colour (`.appbar.flat.you-bar`) with ←, × or
@@ -108,12 +109,20 @@ class _Page extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
     final f = footer;
-    Widget body = SingleChildScrollView(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
+    // A page drawn for a phone keeps a readable width in a wide detail
+    // pane: `padding-inline: max(0px, calc((100% - 680px) / 2))`.
+    final wide = OrbitPaneScope.maybeOf(context)?.pane == OrbitPane.detail;
+    Widget body = LayoutBuilder(
+      builder: (context, c) {
+        final side = wide ? ((c.maxWidth - 680) / 2).clamp(0.0, 9999.0) : 0.0;
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(side, 0, side, bottom),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
+        );
+      },
     );
     final bg = background;
     if (bg != null) body = ColoredBox(color: bg, child: body);

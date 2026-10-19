@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,6 +22,7 @@ import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 import 'package:orbit_ui/src/theme/pattern_painter.dart';
+import 'package:orbit_ui/src/window/window_scaffold.dart';
 
 /// Whether a list has loaded (`contracts/conversation.md`).
 enum LoadState { loading, error, ready }
@@ -657,14 +660,21 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     final t = OrbitTokens.of(context);
     final it = m.items[_i];
     final v = m.video;
-    Widget picture() => AspectRatio(
-      aspectRatio: 4 / 3,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: it.image == null ? orbitSwatch(it.swatch) : null,
-          image: it.image == null
-              ? null
-              : DecorationImage(image: it.image!, fit: BoxFit.cover),
+    // `.mv-img`: the full width at 4:3, cut by the stage when taller.
+    Widget picture() => LayoutBuilder(
+      builder: (context, c) => OverflowBox(
+        maxHeight: double.infinity,
+        child: SizedBox(
+          width: c.maxWidth,
+          height: c.maxWidth * 3 / 4,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: it.image == null ? orbitSwatch(it.swatch) : null,
+              image: it.image == null
+                  ? null
+                  : DecorationImage(image: it.image!, fit: BoxFit.cover),
+            ),
+          ),
         ),
       ),
     );
@@ -773,6 +783,43 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
             right: 0,
             bottom: 0,
             child: _VideoControls(video: v, actions: a),
+          ),
+        );
+      }
+    }
+    // A window has no swipe: Previous and Next sit at the sides (`.mv-nav`).
+    if (MediaQuery.sizeOf(context).width >= orbitWindowBreakpoint) {
+      Widget nav(bool next) => OrbitIconButton(
+        icon: next ? OrbitIcons.caretRight : OrbitIcons.caretLeft,
+        tooltip: next ? 'Next' : 'Previous',
+        size: 52,
+        iconSize: 24,
+        color: OrbitNight.text,
+        onPressed: () => _step(next ? 1 : -1),
+      );
+      Widget disc(Widget b) => ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: ColoredBox(color: t.scrim, child: b),
+        ),
+      );
+      if (_i > 0) {
+        stage.add(
+          Positioned(
+            left: 20,
+            top: 0,
+            bottom: 0,
+            child: Center(child: disc(nav(false))),
+          ),
+        );
+      }
+      if (_i < m.items.length - 1) {
+        stage.add(
+          Positioned(
+            right: 20,
+            top: 0,
+            bottom: 0,
+            child: Center(child: disc(nav(true))),
           ),
         );
       }

@@ -10,6 +10,7 @@ import 'package:orbit_ui/src/theme/motion.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
+import 'package:orbit_ui/src/window/window_scaffold.dart';
 
 /// The height of a chat-list row (`--row-h`).
 const double orbitRowHeight = 72;
@@ -196,6 +197,7 @@ class _RowFrame extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.label,
+    this.current = false,
   });
 
   final Widget avatar;
@@ -208,6 +210,10 @@ class _RowFrame extends StatelessWidget {
   final VoidCallback? onLongPress;
   final String? label;
 
+  /// Open on the right of a wide window (`.chat-row.current`):
+  /// `--accent-soft` with a 3px `--accent` bar on the left.
+  final bool current;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -217,7 +223,12 @@ class _RowFrame extends StatelessWidget {
       selected: selected,
       label: label,
       child: Material(
-        color: selected ? t.accentSoft : background ?? Colors.transparent,
+        color: selected || current
+            ? t.accentSoft
+            : background ?? Colors.transparent,
+        shape: current
+            ? Border(left: BorderSide(color: t.accent, width: 3))
+            : null,
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
@@ -362,6 +373,7 @@ class OrbitChatListTile extends StatelessWidget {
     return _RowFrame(
       label: item.title,
       selected: selected,
+      current: OrbitCurrentScope.of(context) == item.id,
       background: background,
       onTap: onTap,
       onLongPress: onLongPress,

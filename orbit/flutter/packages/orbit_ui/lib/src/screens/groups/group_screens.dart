@@ -1075,8 +1075,7 @@ class GroupInfoScreen extends StatelessWidget {
     return OrbitListRow(
       leading: OrbitAvatar(avatar: mem.avatar, size: 40),
       title: n,
-      sub: mem.notConfirmed || sub.isNotEmpty ? ' ' : '',
-      subLeading: mem.notConfirmed || sub.isNotEmpty
+      subWidget: mem.notConfirmed || sub.isNotEmpty
           ? OrbitText.rich(
               TextSpan(
                 children: [

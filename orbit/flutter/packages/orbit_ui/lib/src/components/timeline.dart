@@ -39,21 +39,30 @@ class OrbitTimeline extends StatelessWidget {
   final ValueChanged<String>? onLongPressMessage;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final it in items)
-          OrbitTimelineEntry(
-            item: it,
-            group: group,
-            onRetry: onRetry,
-            onTapMessage: onTapMessage,
-            onLongPressMessage: onLongPressMessage,
-          ),
-      ],
-    ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    // A wide chat keeps its messages to the middle 860px:
+    // `padding-inline: max(12px, calc((100% - 860px) / 2))`.
+    builder: (context, c) {
+      final side = c.maxWidth.isFinite
+          ? ((c.maxWidth - 860) / 2).clamp(12.0, 9999.0)
+          : 12.0;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(side, 10, side, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final it in items)
+              OrbitTimelineEntry(
+                item: it,
+                group: group,
+                onRetry: onRetry,
+                onTapMessage: onTapMessage,
+                onLongPressMessage: onLongPressMessage,
+              ),
+          ],
+        ),
+      );
+    },
   );
 }
 
@@ -560,7 +569,11 @@ class OrbitMessageBubble extends StatelessWidget {
 
     final bubble = LayoutBuilder(
       builder: (context, box) {
-        final maxW = withAv ? box.maxWidth * 0.8 + 10 : box.maxWidth * 0.8;
+        // A wide window caps it: `max-width: min(80%, 540px)` (550 with a
+        // picture).
+        final maxW = withAv
+            ? (box.maxWidth * 0.8 + 10).clamp(0.0, 550.0)
+            : (box.maxWidth * 0.8).clamp(0.0, 540.0);
         return ConstrainedBox(
           constraints: BoxConstraints(minWidth: 64, maxWidth: maxW),
           child: _Bubble(

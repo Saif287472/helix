@@ -343,3 +343,32 @@ The port follows the prototype, so these changed the prototype itself:
 - **The link and approve steps keep their camera as a slot** inside
   `OrbitScanFrame`.
   - **Owner:** pending (batch 9).
+
+## Phase 4 batch 10 (the wide Windows layout)
+
+- **Compared on a representative set, not every key.** 15 keys at 960px
+  and 19 at 1280px, covering every placement (list, detail, info beside or
+  over, full and boxed), overlays and the composer's anchored sheet: 0.3%
+  to 7.3%. The other keys use the same frame; Review 4 is where to look
+  at them.
+  - **Owner:** pending (batch 10).
+- **The preview composes a window from `screens.json`**: each key's base
+  screens are pushed through the prototype's own `route` rules, and a base
+  screen is drawn by the key whose screen and parameters match it. In the
+  app, go_router's shell does this (frame.md's spike).
+  - **Owner:** pending (batch 10).
+- **The title bar is a stand-in** in the preview; the app tints the real
+  Windows caption (frame.md).
+  - **Owner:** pending (batch 10).
+- **What is open on the right is marked in the list** for chats only so
+  far (`OrbitCurrentScope`); topic tiles and call rows get it with the
+  wiring.
+  - **Owner:** pending (batch 10).
+- **A window has no speaker or output control on a call**, as the
+  prototype draws it; the app's empty output list on Windows says the
+  same.
+  - **Owner:** pending (batch 10).
+- **Pages are kept to a readable width** (680px) in the detail pane only
+  where they use `OrbitPage` or `OrbitYouPage`; a few pages with their own
+  frame still fill the pane.
+  - **Owner:** pending (batch 10).

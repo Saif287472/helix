@@ -183,6 +183,7 @@ class OrbitListRow extends StatelessWidget {
     this.titleInk,
     this.subInk,
     this.minHeight = 60,
+    this.subWidget,
   });
 
   final String title;
@@ -226,6 +227,9 @@ class OrbitListRow extends StatelessWidget {
 
   /// `min-height` (52 on Edit profile's who-sees-what rows).
   final double minHeight;
+
+  /// In place of the sub line (a mixed-colour line).
+  final Widget? subWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +302,12 @@ class OrbitListRow extends StatelessWidget {
                           color: titleInk,
                         ),
                       ),
-                  if (sub.isNotEmpty && subLead != null)
+                  if (subWidget != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: subWidget,
+                    )
+                  else if (sub.isNotEmpty && subLead != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Row(

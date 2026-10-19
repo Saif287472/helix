@@ -10,6 +10,7 @@ import 'package:orbit_ui/src/theme/motion.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
+import 'package:orbit_ui/src/window/window_scaffold.dart';
 
 /// One row of a sheet or a menu (`items` in `App.sheet` and `App.menu`,
 /// `js/app.js`), or a rule between rows ([OrbitMenuItem.divider]).
@@ -92,35 +93,51 @@ class OrbitSheetPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [for (final it in items) _row(t, it)],
         );
-    final screen = MediaQuery.sizeOf(context).height;
+    final size = MediaQuery.sizeOf(context);
+    final screen = size.height;
     final fixed = heightFactor;
+    // On a wide window a sheet is a centred card: corner `--r-xl`, 8px 0
+    // 14px in, no grab handle, at most 680px tall.
+    final wide = size.width >= orbitWindowBreakpoint;
+    final anchored = _AnchoredScope.of(context);
+    final maxH = wide
+        ? (screen - 64).clamp(0.0, 680.0)
+        : screen * (fixed ?? 0.86);
     return ConstrainedBox(
-      constraints: fixed == null
-          ? BoxConstraints(maxHeight: screen * 0.86)
+      constraints: fixed == null || wide
+          ? BoxConstraints(maxHeight: maxH)
           : BoxConstraints.tightFor(height: screen * fixed),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: t.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: t.shadowSheet,
+          borderRadius: wide
+              ? BorderRadius.circular(t.rXl)
+              : const BorderRadius.vertical(top: Radius.circular(28)),
+          border: anchored ? Border.all(color: t.line) : null,
+          boxShadow: anchored ? t.shadowFloat : t.shadowSheet,
         ),
         child: Padding(
-          padding: const EdgeInsets.only(top: 10, bottom: 30),
+          padding: wide
+              ? const EdgeInsets.only(top: 8, bottom: 14)
+              : const EdgeInsets.only(top: 10, bottom: 30),
           child: Column(
-            mainAxisSize: fixed == null ? MainAxisSize.min : MainAxisSize.max,
+            mainAxisSize: fixed == null || wide
+                ? MainAxisSize.min
+                : MainAxisSize.max,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: t.line,
-                    borderRadius: BorderRadius.circular(4),
+              if (!wide)
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: t.line,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
-              ),
               if (title.isNotEmpty || text.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
@@ -545,6 +562,7 @@ class _OrbitOverlayRoute<T> extends PopupRoute<T> {
     required this.reduceMotion,
     required this.builder,
     this.menuTop = 92,
+    this.anchor,
   });
 
   final _OverlayKind kind;
@@ -553,9 +571,25 @@ class _OrbitOverlayRoute<T> extends PopupRoute<T> {
   final WidgetBuilder builder;
   final double menuTop;
 
+  /// The button that opened it; a sheet on a wide window hangs above it.
+  final Rect? anchor;
+
+  bool _anchored(BuildContext context) =>
+      kind == _OverlayKind.sheet &&
+      anchor != null &&
+      MediaQuery.sizeOf(context).width >= orbitWindowBreakpoint;
+
   @override
   Color? get barrierColor =>
-      kind == _OverlayKind.menu ? Colors.transparent : tokens.scrim;
+      kind == _OverlayKind.menu || (anchor != null && _wideAtPush)
+      ? Colors.transparent
+      : tokens.scrim;
+
+  bool get _wideAtPush {
+    final nav = navigator;
+    if (nav == null) return false;
+    return MediaQuery.sizeOf(nav.context).width >= orbitWindowBreakpoint;
+  }
 
   @override
   bool get barrierDismissible => true;
@@ -582,7 +616,31 @@ class _OrbitOverlayRoute<T> extends PopupRoute<T> {
       type: MaterialType.transparency,
       child: builder(context),
     );
+    final w = MediaQuery.sizeOf(context).width;
+    final wide = w >= orbitWindowBreakpoint;
+    if (_anchored(context)) {
+      // `.sheet.anchored`: 420px, its foot 8px above the button and its
+      // edge 12px past the button's, no scrim.
+      // Measured in the route's own box: on a window it starts under the
+      // title bar.
+      final a = anchor!;
+      return LayoutBuilder(
+        builder: (context, c) => Stack(
+          children: [
+            Positioned(
+              right: (c.maxWidth - a.right - 12).clamp(8.0, double.infinity),
+              bottom: c.maxHeight - a.top + 8,
+              width: 420,
+              child: _AnchoredScope(child: panel),
+            ),
+          ],
+        ),
+      );
+    }
     return switch (kind) {
+      _OverlayKind.sheet when wide => Center(
+        child: SizedBox(width: (w - 48).clamp(0.0, 440.0), child: panel),
+      ),
       _OverlayKind.sheet => Align(
         alignment: Alignment.bottomCenter,
         child: panel,
@@ -590,7 +648,7 @@ class _OrbitOverlayRoute<T> extends PopupRoute<T> {
       _OverlayKind.dialog => Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: panel,
+          child: wide ? SizedBox(width: 400, child: panel) : panel,
         ),
       ),
       _OverlayKind.menu => Stack(
@@ -641,6 +699,7 @@ Future<void> _open(
   _OverlayKind kind,
   Widget Function(BuildContext, void Function(VoidCallback?) done) panel, {
   double menuTop = 92,
+  BuildContext? anchor,
 }) {
   final tokens = OrbitTokens.of(context);
   final navigator = Navigator.of(context);
@@ -651,12 +710,21 @@ Future<void> _open(
     if (run != null) Timer(const Duration(milliseconds: 60), run);
   }
 
+  // Where the button that opened it is, in the navigator's own space.
+  Rect? at;
+  final box = anchor?.findRenderObject();
+  final host = navigator.context.findRenderObject();
+  if (box is RenderBox && host is RenderBox && box.hasSize) {
+    final tl = host.globalToLocal(box.localToGlobal(Offset.zero));
+    at = tl & box.size;
+  }
   return navigator.push(
     _OrbitOverlayRoute<void>(
       kind: kind,
       tokens: tokens,
       reduceMotion: !OrbitMotion.allowed(context),
       menuTop: menuTop,
+      anchor: at,
       builder: (context) => panel(context, done),
     ),
   );
@@ -670,9 +738,11 @@ Future<void> showOrbitSheet(
   List<OrbitMenuItem> items = const [],
   Widget? body,
   double? heightFactor,
+  BuildContext? anchor,
 }) => _open(
   context,
   _OverlayKind.sheet,
+  anchor: anchor,
   (context, done) => OrbitSheetPanel(
     title: title,
     text: text,
@@ -825,11 +895,13 @@ void showOrbitToast(
     }
   }
 
+  // On a wide window a toast sits under the right pane, clear of the list.
+  final wide = MediaQuery.sizeOf(context).width >= orbitWindowBreakpoint;
   entry = OverlayEntry(
     builder: (context) => Positioned(
-      left: 16,
+      left: wide ? orbitListWidth + 16 : 16,
       right: 16,
-      bottom: 104,
+      bottom: wide ? 24 : 104,
       child: Material(
         type: MaterialType.transparency,
         child: TweenAnimationBuilder<double>(
@@ -863,4 +935,15 @@ void showOrbitToast(
   if (!stay) {
     _toastTimer = Timer(Duration(milliseconds: error ? 4000 : 2800), close);
   }
+}
+
+/// Marks a sheet hung from its button (`.sheet.anchored`).
+class _AnchoredScope extends InheritedWidget {
+  const _AnchoredScope({required super.child});
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_AnchoredScope>() != null;
+
+  @override
+  bool updateShouldNotify(_AnchoredScope old) => false;
 }

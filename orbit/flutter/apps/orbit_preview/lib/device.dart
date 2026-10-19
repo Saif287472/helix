@@ -51,6 +51,9 @@ class _OrbitDeviceSurfaceState extends State<OrbitDeviceSurface> {
 
   static const statusBarHeight = OrbitDeviceSurface.statusBarHeight;
 
+  /// `.winbar`: the system title bar, tinted to the theme.
+  static const titleBarHeight = 32.0;
+
   @override
   Widget build(BuildContext context) {
     final device = widget.device;
@@ -84,7 +87,16 @@ class _OrbitDeviceSurfaceState extends State<OrbitDeviceSurface> {
                 // The screen's own navigator, so a sheet, dialog or toast
                 // opens inside the phone, under its status bar, as the
                 // prototype's overlay layer does.
+                if (!_phone)
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: titleBarHeight,
+                    child: _TitleBar(),
+                  ),
                 Positioned.fill(
+                  top: _phone ? 0 : titleBarHeight,
                   child: RepaintBoundary(
                     key: _screen,
                     child: Navigator(
@@ -204,4 +216,55 @@ class _GestureBar extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// `.winbar` (`css/window.css`): the title bar Windows draws, tinted to the
+/// theme: `--bg` behind, `--ink-2` text, the mark and "Orbit" on the left
+/// and the three caption buttons on the right.
+class _TitleBar extends StatelessWidget {
+  const _TitleBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    Widget cap(OrbitGlyph g) => SizedBox(
+      width: 46,
+      child: Center(
+        child: OrbitIcon(
+          g,
+          weight: OrbitIconWeight.light,
+          size: 14,
+          color: t.ink2,
+        ),
+      ),
+    );
+    return ExcludeSemantics(
+      child: ColoredBox(
+        color: t.bg,
+        child: Row(
+          children: [
+            const SizedBox(width: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: const OrbitMark(size: 16),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Orbit',
+              style: TextStyle(
+                fontFamily: 'Segoe UI',
+                fontSize: 12,
+                height: 1,
+                color: t.ink2,
+              ),
+            ),
+            const Spacer(),
+            cap(OrbitIcons.minus),
+            cap(OrbitIcons.square),
+            cap(OrbitIcons.x),
+          ],
+        ),
+      ),
+    );
+  }
 }

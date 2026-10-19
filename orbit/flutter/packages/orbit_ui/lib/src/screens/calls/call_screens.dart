@@ -20,6 +20,7 @@ import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 import 'package:orbit_ui/src/theme/pattern_painter.dart';
+import 'package:orbit_ui/src/window/window_scaffold.dart';
 
 /// Where a call is (`contracts/calls.md`). The prototype's `outgoing` and
 /// `ringing` are both [dialing], told apart by [CallModel.statusText].
@@ -224,10 +225,13 @@ class _CallScreenState extends State<CallScreen>
               _header(t, m.video),
               Expanded(child: _middle(t)),
               if (m.notice != null) _notice(t),
-              if (incoming)
-                _incoming(t)
-              else
-                _tray(t, ended: m.stage == CallStage.ended),
+              // A window keeps the controls to a phone's reach (440px).
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: incoming
+                    ? _incoming(t)
+                    : _tray(t, ended: m.stage == CallStage.ended),
+              ),
             ],
           ),
         ),
@@ -557,8 +561,10 @@ class _CallScreenState extends State<CallScreen>
       onPressed: live && enabled ? (onPressed ?? _noop) : null,
     );
     final many = m.audioRoutes.length > 2;
+    // A window has no output control: Windows picks its own output.
+    final window = MediaQuery.sizeOf(context).width >= orbitWindowBreakpoint;
     Widget? speaker;
-    if (m.audioRoutes.isNotEmpty) {
+    if (m.audioRoutes.isNotEmpty && !window) {
       if (many) {
         final (ic, label) = _route(m.audioRoute);
         speaker = b(
@@ -859,10 +865,12 @@ class _CallScreenState extends State<CallScreen>
                 ),
               ),
             ),
+          // `left: 14px; right: 14px`, but a window's 440px width wins, so
+          // the tray sits at the left.
           Positioned(
             left: 14,
-            right: 14,
             bottom: 30,
+            width: (size.width - 28).clamp(0.0, 440.0),
             child: hideable(_tray(t, ended: false)),
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:orbit_preview/device.dart';
 import 'package:orbit_preview/ported.dart';
 import 'package:orbit_preview/theme_library.dart';
+import 'package:orbit_preview/window_compose.dart';
 import 'package:orbit_ui/compare.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
@@ -113,6 +114,11 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
   if (request.keys.isNotEmpty) {
     final tokens = library.byId(request.theme);
     final files = <OrbitShotFile>[];
+    // On a window a key is drawn in its panes, over the screens it was
+    // opened from.
+    final composer = request.device == OrbitDevice.phone
+        ? null
+        : OrbitWindowComposer.load();
     for (final key in request.keys) {
       final build = orbitPorted[key];
       if (build == null) {
@@ -127,7 +133,10 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
           device: request.device,
           tokens: tokens,
           reduceMotion: request.reduceMotion,
-          child: Builder(builder: build),
+          child: request.device == OrbitDevice.phone
+              ? Builder(builder: build)
+              : composer?.build(key, request.device.width.toDouble()) ??
+                    Builder(builder: build),
         ),
       );
       await _settle();

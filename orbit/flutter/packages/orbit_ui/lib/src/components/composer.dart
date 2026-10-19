@@ -80,12 +80,16 @@ class OrbitComposer extends StatefulWidget {
     this.disabledIcon = false,
     this.emojiOpen = false,
     this.mentions = const [],
+    this.attachKey,
     this.actions = const OrbitComposerActions(),
   });
 
   /// People an "@" in a group can mention (`.mentions`): shown over the
   /// field while there are any.
   final List<HelixPersonItem> mentions;
+
+  /// On the paperclip, so a window can hang the attach sheet above it.
+  final GlobalKey? attachKey;
 
   final String initialText;
   final HelixComposerBannerModel? banner;
@@ -255,7 +259,14 @@ class _OrbitComposerState extends State<OrbitComposer> {
               ),
             ),
           ),
-          fieldButton(OrbitIcons.paperclip, 'Attach', w.actions.onAttach),
+          KeyedSubtree(
+            key: w.attachKey,
+            child: fieldButton(
+              OrbitIcons.paperclip,
+              'Attach',
+              w.actions.onAttach,
+            ),
+          ),
           if (!has)
             fieldButton(OrbitIcons.camera, 'Camera', w.actions.onCamera),
         ],

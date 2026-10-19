@@ -463,6 +463,12 @@ pending your review:
   `SecurityActivityScreen`, `BackupScreen`, `TransferScreen`,
   `RecoveryScreen`; Restore history is `RestoreScreen`). 35 keys, 0.8% to
   5.7% in Orbit.
+- [x] Batch 10: the wide Windows layout (`OrbitWindowScaffold` with the
+  list, detail, info and full panes and the "Pick a chat" placeholder,
+  `OrbitPaneScope` for the frame's touches, window sheets and dialogs,
+  the composer's anchored sheet, the media viewer's Previous and Next,
+  readable widths, the open chat marked). 34 shots at 960 and 1280px,
+  0.3% to 7.3%.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

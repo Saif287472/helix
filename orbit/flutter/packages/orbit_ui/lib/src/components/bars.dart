@@ -12,6 +12,7 @@ import 'package:orbit_ui/src/theme/effect_shapes.dart';
 import 'package:orbit_ui/src/theme/motion.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
+import 'package:orbit_ui/src/window/window_scaffold.dart';
 
 /// What leads an [OrbitAppBar].
 enum OrbitAppBarLead {
@@ -86,21 +87,32 @@ class OrbitAppBar extends StatelessWidget {
         ? t.inverse
         : t.line2;
     final ink = selection ? t.onInverse : this.ink;
-    final leadButton = switch (lead) {
-      OrbitAppBarLead.none => const SizedBox(width: 8),
-      OrbitAppBarLead.back => OrbitIconButton(
-        icon: OrbitIcons.arrowLeft,
-        tooltip: leadTooltip ?? 'Back',
-        onPressed: onLead,
-        color: ink,
-      ),
-      OrbitAppBarLead.close => OrbitIconButton(
-        icon: OrbitIcons.x,
-        tooltip: leadTooltip ?? 'Close',
-        onPressed: onLead,
-        color: ink,
-      ),
-    };
+    // On a wide window the first page on the right has no back arrow (the
+    // list is the way back), and the info pane's first page closes instead.
+    final scope = OrbitPaneScope.maybeOf(context);
+    final rootOf =
+        scope != null && scope.root && this.lead == OrbitAppBarLead.back;
+    final lead = rootOf && scope.pane == OrbitPane.info
+        ? OrbitAppBarLead.close
+        : this.lead;
+    final hideBack = rootOf && scope.pane == OrbitPane.detail;
+    final leadButton = hideBack
+        ? const SizedBox(width: 6)
+        : switch (lead) {
+            OrbitAppBarLead.none => const SizedBox(width: 8),
+            OrbitAppBarLead.back => OrbitIconButton(
+              icon: OrbitIcons.arrowLeft,
+              tooltip: leadTooltip ?? 'Back',
+              onPressed: onLead,
+              color: ink,
+            ),
+            OrbitAppBarLead.close => OrbitIconButton(
+              icon: OrbitIcons.x,
+              tooltip: rootOf ? 'Close' : leadTooltip ?? 'Close',
+              onPressed: onLead,
+              color: ink,
+            ),
+          };
     final heading = titleWidget;
     final children = <Widget>[
       leadButton,
