@@ -9,20 +9,17 @@ import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/features/backup/backup_routes.dart';
 import 'package:helix_remote/features/devices/devices_routes.dart';
 import 'package:helix_remote/features/calls/calls_routes.dart';
-import 'package:helix_remote/features/calls/presentation/calls_tab.dart';
 import 'package:helix_remote/features/groups/groups_routes.dart';
 import 'package:helix_remote/features/chats/chats_routes.dart';
-import 'package:helix_remote/features/chats/presentation/chats_tab.dart';
 import 'package:helix_remote/features/conversation/conversation_routes.dart';
-import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/features/profile/profile_routes.dart';
 import 'package:helix_remote/features/settings/presentation/settings_tab.dart';
 import 'package:helix_remote/features/settings/settings_routes.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 import 'package:helix_remote/shared/route_paths.dart';
-import 'package:helix_remote/shared/widgets/people_search_panel.dart';
 import 'package:helix_remote/shared/widgets/reset_screen.dart';
 
 // Kept importable from here: the link listener, sign-in and the tests all
@@ -36,6 +33,7 @@ abstract final class AppRoutes {
   static const signIn = '/sign-in';
   static const home = '/home';
   static const reset = '/reset';
+  static const startup = '/startup';
 }
 
 /// The app's router.
@@ -54,6 +52,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen(postSignInProvider, (_, _) => poke());
   ref.onDispose(refresh.dispose);
 
+  // Once the app has left the "Opening Orbit…" screen it never goes back to
+  // it, even when a later action (a personal-server sign-in) rebuilds the
+  // runtime and authState briefly reports "starting" again.
+  var startupDone = false;
+
   final router = GoRouter(
     initialLocation: AppRoutes.signIn,
     // The launcher's intent URL reaches Flutter as the platform's default
@@ -63,38 +66,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     overridePlatformDefaultLocation: true,
     refreshListenable: refresh,
     // A [Ref], not a [WidgetRef]: the redirect runs outside the widget tree.
-    redirect: (context, state) => _redirectFor(ref, state.matchedLocation),
+    redirect: (context, state) => _redirectFor(
+      ref,
+      state.matchedLocation,
+      startupDone,
+      (v) => startupDone = v,
+    ),
     routes: [
+      GoRoute(
+        path: AppRoutes.startup,
+        builder: (context, state) => const orbit.OrbitStartup(),
+      ),
       GoRoute(
         path: AppRoutes.signIn,
         builder: (context, state) => const SignInScreen(),
       ),
       GoRoute(
         path: AppRoutes.home,
-        // The home shell lays the tabs out; each tab's content is its
-        // feature's.
-        builder: (context, state) => HomeScreen(
-          // The router is where features meet (they never import each other):
-          // the people search is the people feature's panel, shown under the
-          // Chats and Calls search fields.
-          chatsTab: ChatsTab(
-            // On a wide window the chosen chat opens beside the list.
-            detailBuilder: (context, id) =>
-                ConversationScreen(conversationId: id),
-            peopleResults: (context, query) => PeopleSearchPanel(
-              query: query,
-              mode: PeopleSearchMode.chats,
-              embedded: true,
-            ),
-            onSearchSubmitted: PeopleSearchPanel.submit,
-          ),
-          callsTab: CallsTabScreen(
-            peopleSearch: (context, query, onCall) =>
-                PeopleSearchPanel(query: query, mode: PeopleSearchMode.calls),
-            onSearchSubmitted: PeopleSearchPanel.submit,
-          ),
-          settingsTab: const SettingsTab(),
-        ),
+        builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsTab(),
       ),
       ...chatsRoutes,
       ...conversationRoutes,
@@ -128,7 +121,12 @@ const _restoreStepRoutes = {
 /// The states that mean "wait" return null so the current screen stays up
 /// rather than flashing. A revoked device is forced off the home tabs, because
 /// its data has been wiped and there is nothing left there to see.
-String? _redirectFor(Ref ref, String location) {
+String? _redirectFor(
+  Ref ref,
+  String location,
+  bool startupDone,
+  void Function(bool) setStartupDone,
+) {
   final auth = ref.read(authStateProvider);
   final at = location;
 
@@ -138,7 +136,14 @@ String? _redirectFor(Ref ref, String location) {
 
   if (auth.hasError) return AppRoutes.reset;
   final state = auth.value;
-  if (state == null) return null; // Still opening the database.
+  if (state == null) {
+    // Still opening the database: show the startup screen on a cold start,
+    // but never again once the app has left it.
+    if (startupDone) return null;
+    return at == AppRoutes.startup ? null : AppRoutes.startup;
+  }
+  // The database has opened: from now on the startup screen never shows.
+  setStartupDone(true);
   if (state == AppAuthState.ready) {
     // The step after signing in on a new device comes before the tabs, once.
     final step = ref.read(postSignInProvider);
@@ -150,12 +155,14 @@ String? _redirectFor(Ref ref, String location) {
           ? null
           : RoutePaths.restoreAfterSignIn;
     }
+    if (at == AppRoutes.startup) return AppRoutes.home;
     if (at == RoutePaths.restoreAfterSignIn) return AppRoutes.home;
     if (at == RoutePaths.linkThisDevice) return AppRoutes.home;
     return at == AppRoutes.signIn ? AppRoutes.home : null;
   }
   // signedOut or revoked. Linking this device shows a QR code while signed
   // out, so it is the one other place a signed-out device may be.
+  if (at == AppRoutes.startup) return AppRoutes.signIn;
   if (at == RoutePaths.linkThisDevice) return null;
   return at == AppRoutes.signIn ? null : AppRoutes.signIn;
 }

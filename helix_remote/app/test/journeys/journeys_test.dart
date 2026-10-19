@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/router/app_router.dart';
+import 'package:helix_remote/shared/navigation/group_paths.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -31,7 +32,7 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Mum');
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, rounds: 10);
-    expect(find.text('People'), findsOneWidget);
+    expect(find.text('Mum'), findsWidgets);
 
     // Tapping the result starts the conversation and opens it.
     await tapAndSettle(tester, find.byType(HelixPersonTile));
@@ -125,8 +126,8 @@ void main() {
     ];
     await app.signIn(tester);
 
-    await tapAndSettle(tester, find.byTooltip('More options'));
-    await tapAndSettle(tester, find.text('New group'));
+    app.router.go(GroupPaths.create);
+    await settle(tester, rounds: 10);
     expect(find.text('New group'), findsWidgets);
 
     await tapAndSettle(tester, find.text('Mum'));
@@ -150,7 +151,8 @@ void main() {
     final app = await Journey.start(tester);
     await app.signIn(tester);
 
-    await tapAndSettle(tester, find.text('Settings').last);
+    app.router.go('/settings');
+    await settle(tester, rounds: 10);
     await tapAndSettle(tester, find.text('Devices'));
     expect(find.text('Pixel 8'), findsOneWidget);
     expect(find.text('Office laptop'), findsOneWidget);

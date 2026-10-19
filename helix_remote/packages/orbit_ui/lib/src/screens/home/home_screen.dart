@@ -639,7 +639,12 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.only(bottom: 40),
-              children: [PeoplePanel(model: m.search, actions: _a.people)],
+              children: [
+                PeoplePanel(
+                  model: m.search,
+                  actions: _a.peopleCalls ?? _a.people,
+                ),
+              ],
             ),
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/links/link_channel.dart';
 import 'package:helix_remote/core/router/app_router.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 /// Turns links that arrive from outside the app into navigation.
 ///
@@ -64,6 +65,14 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
       // applied by the next sign-in after a sign-out: drop it.
       if (_signedIn) {
         pending.set(null);
+        if (context.mounted) {
+          orbit.showOrbitToast(
+            context,
+            "You're already signed in. Invite and recovery links are "
+            "for setting up a new device.",
+            stay: true,
+          );
+        }
         return;
       }
       // Parked, and applied by the sign-in screen once the device is known to

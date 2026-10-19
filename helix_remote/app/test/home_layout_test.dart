@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/features/chats/presentation/chats_tab.dart';
-import 'package:helix_remote/features/home/presentation/home_screen.dart';
 
 import 'support/chat_harness.dart';
 
@@ -16,11 +15,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  Widget home({Widget Function(BuildContext, String)? detail}) => HomeScreen(
-    chatsTab: ChatsTab(detailBuilder: detail),
-    callsTab: const Center(child: Text('calls here')),
-    settingsTab: const Center(child: Text('settings here')),
-  );
+  Widget home({Widget Function(BuildContext, String)? detail}) =>
+      ChatsTab(detailBuilder: detail);
 
   chatTest('the new chat button opens the search', (tester, gateway) async {
     size(tester, 400);
@@ -61,39 +57,5 @@ void main() {
     expect(find.text('Select a chat'), findsNothing);
     // The list is still there, with the open chat marked.
     expect(find.text('Bob'), findsOneWidget);
-  });
-
-  chatTest('wide windows show the tabs one at a time, narrow ones page', (
-    tester,
-    gateway,
-  ) async {
-    size(tester, 1200);
-    await tester.pumpWidget(chatApp(gateway, home()));
-    await settle(tester);
-    expect(find.byType(PageView), findsNothing);
-    expect(find.byType(IndexedStack), findsWidgets);
-
-    await tester.tap(find.text('Calls'));
-    await settle(tester);
-    expect(find.text('calls here'), findsOneWidget);
-
-    // Narrowing keeps the tab the person was on.
-    size(tester, 400);
-    await tester.pumpAndSettle();
-    await settle(tester);
-    expect(find.byType(PageView), findsOneWidget);
-    expect(find.text('calls here'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  chatTest('narrow windows keep the swipeable pages', (tester, gateway) async {
-    size(tester, 400);
-    await tester.pumpWidget(chatApp(gateway, home()));
-    await settle(tester);
-    expect(find.byType(PageView), findsOneWidget);
-
-    await tester.tap(find.text('Settings'));
-    await settle(tester);
-    expect(find.text('settings here'), findsOneWidget);
   });
 }

@@ -286,6 +286,7 @@ class HomeActions {
     this.onDeleteCalls,
     this.onCallSearchChanged,
     this.people = const PeoplePanelActions(),
+    this.peopleCalls,
   });
 
   final void Function()? onOpenYou;
@@ -310,6 +311,7 @@ class HomeActions {
   /// The Calls search's text (its own people panel).
   final void Function(String text)? onCallSearchChanged;
   final PeoplePanelActions people;
+  final PeoplePanelActions? peopleCalls;
 }
 
 /// Where the preview opens Home: the prototype's keys start in these states.

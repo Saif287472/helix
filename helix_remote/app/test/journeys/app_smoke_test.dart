@@ -28,8 +28,6 @@ void main() {
 
     // The three tabs, the chat with its last message.
     expect(find.text('Chats'), findsWidgets);
-    expect(find.text('Calls'), findsWidgets);
-    expect(find.text('Settings'), findsWidgets);
     expect(find.text('Mum'), findsOneWidget);
     expect(find.text('dinner at eight?'), findsOneWidget);
 

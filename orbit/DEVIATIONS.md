@@ -412,3 +412,93 @@ changes below, so none of them moved a pixel in the compared states.
 - **No separate high-contrast theme**: the app always shows the Orbit
   theme, as Part B step 3 says.
   - **Owner:** pending (Part B batch 1).
+
+## Part B batch 2 (Home on Orbit, wired into the app)
+
+All 26 Home keys score exactly as at Review 4 after the changes below.
+
+- **`peopleCalls: PeoplePanelActions?` added to `HomeActions`** in
+  `orbit_ui` `home_models.dart`. The Chats tab's people panel and the Calls
+  tab's people panel need different action wiring: Chats opens a chat on a
+  person tap, Calls places a call. A second optional field lets the connector
+  pass a separate `PeoplePanelActions` for the Calls tab without changing any
+  screen layout. When `peopleCalls` is absent the Calls panel falls back to
+  `people`.
+  - **Owner:** pending (Part B batch 2).
+- **Settings tab moved to a pushed route** (`/settings`). The Home contract
+  uses a "You" tab at slot 3; today's app has a Settings tab. The design
+  decision in `contracts/home.md` (decision 6) says: keep today's Settings
+  page reachable from that slot. `onOpenYou` navigates `context.push('/settings')`.
+  The tab dot and "You" avatar in the dock are drawn by `orbit_ui` as in the
+  prototype; the pushed `SettingsTab` fills it. The full You screen (with
+  avatar, name and the You-style page) is a later batch.
+  - **Owner:** pending (Part B batch 2).
+- **Wide-window layout kept as-is** (`ChatsTab.detailBuilder`). `orbit_ui`'s
+  `HomeScreen` already supports the wide two-pane layout through
+  `ChatsTab.detailBuilder`. The full `OrbitWindowScaffold` shell (go_router
+  shell, responsive breakpoints, window chrome) is deferred to the last batch.
+  The connector passes `detailBuilder` only when the `HomeScreen` widget tree
+  provides one; the connector itself does not override it.
+  - **Owner:** pending (Part B batch 2).
+- **`OrbitStartup` ("Opening Orbitâ€¦") shown only on cold start.**
+  A `startupDone` bool is closed over in the `appRouterProvider` factory. It
+  starts `false`, flips to `true` the first time `authState` resolves to
+  non-null. While `false` and `authState` is `null` (database opening), the
+  redirect sends the app to `/startup`. Once flipped it never resets, even
+  when a personal-server re-auth rebuilds the runtime and `authState` briefly
+  goes `null` again. Signed-in devices no longer flash the sign-in page on
+  start: `state == AppAuthState.ready` redirects `/sign-in` and `/startup`
+  straight to `/home`.
+  - **Owner:** pending (Part B batch 2).
+- **Signed-in link toast** (`chats-link-signed-in`). When a setup code link
+  (invite or recovery) arrives while `authState == AppAuthState.ready`, the
+  `AppLinkListener` now calls `orbit.showOrbitToast` with the sentence "You're
+  already signed in. Invite and recovery links are for setting up a new
+  device." (`stay: true`). Previously the link was dropped silently.
+  - **Owner:** pending (Part B batch 2).
+- **`meNeedsAttention` is always `false`.** The contract says Part B puts the
+  checkup summary in `core/`. That consolidation is a multi-feature dependency
+  (account checkup, device health, backup status) and is deferred. The dock
+  dot is therefore never shown.
+  - **Owner:** pending (Part B batch 2).
+- **`onTabChanged` is a no-op.** Orbit's `HomeScreen` manages its own active
+  tab; the app's connector does not need to mirror it. `onTabChanged: (_) {}`
+  satisfies the required field.
+  - **Owner:** pending (Part B batch 2).
+- **Quick row derived from call log** (first 2 unique peers). The contract's
+  `quickRow` is derived from recent unique callers in the call log with their
+  directory avatar. No server change is needed. A peer with no directory entry
+  gets no avatar image (shows initials).
+  - **Owner:** pending (Part B batch 2).
+- **`onCallBack` looks up `callEntries` by call-log id.** If a call-log entry
+  is not found (race condition), the connector falls back to the first entry
+  rather than throwing. An error sentence is returned to the screen if the
+  callBack action itself fails.
+  - **Owner:** pending (Part B batch 2).
+
+
+## Part B batch 2 (Home on Orbit, wired into the app)
+
+- **Behaviour-only hooks added to `orbit_ui`**: `HomeActions` gains an optional
+  `peopleCalls` actions object so the Calls search's people panel can differ
+  from the Chats search's (tap a person calls instead of opening a chat); the
+  Calls pane uses `peopleCalls ?? people`. `OrbitTapArea`/tap targets unchanged.
+  - **Owner:** pending (Part B batch 2).
+- **Settings is no longer a dock tab**: Orbit's dock has Chats and Calls only;
+  the profile picture opens `/settings` (the existing `SettingsTab`), keeping
+  the settings pages reachable. Noted per contract (`frame.md`).
+  - **Owner:** pending (Part B batch 2).
+- **`meNeedsAttention` is false** in this batch (the checkup summary lives in
+  `core/` and is not wired yet); the amber dot never shows.
+  - **Owner:** pending (Part B batch 2).
+- **Wide Windows layout is untouched**: `ChatsTab.detailBuilder` still works
+  on its own; `OrbitHomeConnector` does not implement the two-pane chat. The
+  full Orbit window wiring is the last batch.
+  - **Owner:** pending (Part B batch 2).
+- **Signed-in link toast** now shows the `chats-link-signed-in` sentence
+  instead of being dropped.
+  - **Owner:** pending (Part B batch 2).
+- **"Opening Orbit…" startup screen** shows on a cold start only, guarded by
+  a `startupDone` flag in `appRouterProvider` so a later runtime rebuild (a
+  personal-server sign-in) does not bounce back to it.
+  - **Owner:** pending (Part B batch 2).
