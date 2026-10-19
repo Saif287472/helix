@@ -175,6 +175,7 @@ class OrbitListRow extends StatelessWidget {
     this.titleWidget,
     this.iconInk,
     this.titleInk,
+    this.subInk,
   });
 
   final String title;
@@ -212,6 +213,9 @@ class OrbitListRow extends StatelessWidget {
 
   /// The title's colour, where a row tints only its title.
   final Color? titleInk;
+
+  /// The sub line's colour ("Verified" in `--success`).
+  final Color? subInk;
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +300,7 @@ class OrbitListRow extends StatelessWidget {
                               sub,
                               style: t.font.style(
                                 size: OrbitType.caption,
-                                color: t.ink3,
+                                color: subInk ?? t.ink3,
                                 height: 1.35,
                               ),
                             ),

@@ -230,7 +230,14 @@ class HomeModel {
 }
 
 /// How long to mute (`MuteFor` in `contracts/home.md`).
-enum MuteFor { eightHours, week, always }
+enum MuteFor {
+  eightHours('8 hours'),
+  week('1 week'),
+  always('Always');
+
+  const MuteFor(this.label);
+  final String label;
+}
 
 /// `PeoplePanelActions` (`contracts/home.md`).
 class PeoplePanelActions {

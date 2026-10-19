@@ -272,3 +272,20 @@ The port follows the prototype, so these changed the prototype itself:
 - **The video and camera pictures are slots** (`remoteVideo`, `localVideo`);
   the preview draws the prototype's gradients there.
   - **Owner:** pending (batch 5).
+
+## Phase 4 batch 6 (people)
+
+- **The QR code is drawn from a seed in the preview.** The contract's
+  `HelixQrMatrix` arrives with the wiring; `SafetyNumberModel.qrSeed` stands
+  in until then.
+  - **Owner:** pending (batch 6).
+- **The scanner's camera is a slot** inside `OrbitScanFrame`; "Simulate a
+  match / a mismatch" stay as preview actions (the prototype's own
+  stand-ins) and are not shown in the app.
+  - **Owner:** pending (batch 6).
+- **A missing action does nothing** on these pages rather than drawing its
+  button disabled, as on the sign-in pages.
+  - **Owner:** pending (batch 6).
+- **`MuteFor` is shared** with Home (one enum with its labels) rather than
+  the second copy the contract mentions.
+  - **Owner:** pending (batch 6).

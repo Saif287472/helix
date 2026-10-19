@@ -443,6 +443,9 @@ pending your review:
 - [x] Batch 5: calls (`CallScreen` with incoming, dialing, live,
   reconnecting, ended, notices, audio outputs and the video layout;
   `CallDetailScreen`). 24 keys, 0.8% to 3.9% in Orbit.
+- [x] Batch 6: people (`ContactScreen`, `SafetyNumberScreen`,
+  `ScanCodeScreen` with `OrbitScanFrame`, `PeopleSearchScreen`). 17 keys,
+  0.8% to 4.6% in Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

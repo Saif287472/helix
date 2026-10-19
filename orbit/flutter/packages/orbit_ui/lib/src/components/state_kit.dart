@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:orbit_ui/src/components/button.dart';
+import 'package:orbit_ui/src/components/page_bits.dart';
 import 'package:orbit_ui/src/components/spinner.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -374,10 +375,15 @@ class OrbitPermissionCard extends StatelessWidget {
     this.denied = false,
     this.text = '',
     this.onPressed,
+    this.dark = false,
   });
 
   final OrbitPermission kind;
   final bool denied;
+
+  /// `.perm-card.dark`: on a night page (the scanner), a faint white card
+  /// in `--night-text`.
+  final bool dark;
   final String text;
   final VoidCallback? onPressed;
 
@@ -403,8 +409,8 @@ class OrbitPermissionCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: t.surface,
-        border: Border.all(color: t.line),
+        color: dark ? const Color(0x0FFFFFFF) : t.surface,
+        border: Border.all(color: dark ? const Color(0x24FFFFFF) : t.line),
         borderRadius: BorderRadius.circular(t.rLg),
       ),
       child: Row(
@@ -428,6 +434,7 @@ class OrbitPermissionCard extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 OrbitText(
@@ -435,7 +442,7 @@ class OrbitPermissionCard extends StatelessWidget {
                   style: t.font.style(
                     size: OrbitType.body,
                     weight: 600,
-                    color: t.ink,
+                    color: dark ? OrbitNight.text : t.ink,
                   ),
                 ),
                 if (text.isNotEmpty)
@@ -445,7 +452,9 @@ class OrbitPermissionCard extends StatelessWidget {
                       text,
                       style: t.font.style(
                         size: OrbitType.small,
-                        color: t.ink3,
+                        color: dark
+                            ? OrbitNight.text.withValues(alpha: 0.75)
+                            : t.ink3,
                         height: 1.5,
                       ),
                     ),

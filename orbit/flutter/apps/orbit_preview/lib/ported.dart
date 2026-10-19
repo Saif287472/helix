@@ -4,6 +4,7 @@ import 'package:orbit_preview/previews/calls.dart';
 import 'package:orbit_preview/previews/chat.dart';
 import 'package:orbit_preview/previews/chat_pages.dart';
 import 'package:orbit_preview/previews/home.dart';
+import 'package:orbit_preview/previews/people.dart';
 import 'package:orbit_preview/previews/signin.dart';
 
 /// The screen keys that have a Flutter screen, and how to build each on fake
@@ -25,6 +26,7 @@ final Map<String, WidgetBuilder> orbitPorted = <String, WidgetBuilder>{
   ...chatPreviews,
   ...chatPagePreviews,
   ...callPreviews,
+  ...peoplePreviews,
   'kit-overlays': (context) => const KitOverlaysScreen(),
   for (final o in KitOverlay.values)
     o.key: (context) => KitOverlaysScreen(open: o),

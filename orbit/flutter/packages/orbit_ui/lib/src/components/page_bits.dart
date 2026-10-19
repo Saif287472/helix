@@ -48,6 +48,8 @@ class OrbitProfileHero extends StatelessWidget {
     this.sub = '',
     this.verified = false,
     this.about = '',
+    this.size = 72,
+    this.extra = const [],
   });
 
   final HelixAvatarModel avatar;
@@ -56,6 +58,12 @@ class OrbitProfileHero extends StatelessWidget {
   final bool verified;
   final String about;
 
+  /// The picture's size (112 on Contact info).
+  final double size;
+
+  /// Lines under the sub line, 8px apart ("Blocked").
+  final List<Widget> extra;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -63,7 +71,7 @@ class OrbitProfileHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 18, 24, 4),
       child: Column(
         children: [
-          OrbitAvatar(avatar: avatar, size: 72),
+          OrbitAvatar(avatar: avatar, size: size),
           const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -86,14 +94,17 @@ class OrbitProfileHero extends StatelessWidget {
               ],
             ],
           ),
+          // The prototype always draws `.h-sub`, so even an empty one keeps
+          // its 4px gap.
+          const SizedBox(height: 4),
           if (sub.isNotEmpty) ...[
-            const SizedBox(height: 4),
             OrbitText(
               sub,
               textAlign: TextAlign.center,
               style: t.mono.style(size: 12.5, color: t.ink3),
             ),
           ],
+          for (final e in extra) ...[const SizedBox(height: 8), e],
           if (about.isNotEmpty) ...[
             const SizedBox(height: 8),
             ConstrainedBox(

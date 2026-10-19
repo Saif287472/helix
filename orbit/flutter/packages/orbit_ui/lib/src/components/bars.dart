@@ -48,6 +48,7 @@ class OrbitAppBar extends StatelessWidget {
     this.selection = false,
     this.background,
     this.rule = true,
+    this.ink,
   });
 
   final String title;
@@ -66,6 +67,9 @@ class OrbitAppBar extends StatelessWidget {
   final Color? background;
   final bool rule;
 
+  /// The title and lead button's colour on a dark bar (the scanner's).
+  final Color? ink;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -81,7 +85,7 @@ class OrbitAppBar extends StatelessWidget {
         : selection
         ? t.inverse
         : t.line2;
-    final ink = selection ? t.onInverse : null;
+    final ink = selection ? t.onInverse : this.ink;
     final leadButton = switch (lead) {
       OrbitAppBarLead.none => const SizedBox(width: 8),
       OrbitAppBarLead.back => OrbitIconButton(
@@ -113,7 +117,7 @@ class OrbitAppBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: t.display(
                     size: selection ? 17 : OrbitType.title,
-                    color: selection ? t.onInverse : t.ink,
+                    color: selection ? t.onInverse : (this.ink ?? t.ink),
                   ),
                 ),
               ),
