@@ -457,6 +457,12 @@ pending your review:
   topic pages `PrivacyScreen`, `NotificationsScreen`,
   `ChatsSettingsScreen`, `StorageScreen`, `AccountScreen`, with
   `OrbitSegRow`. 17 keys, 0.8% to 5.6% in Orbit.
+- [x] Batch 9: the settings pages (`PasswordScreen`, `DeleteAccountScreen`,
+  `BlockedScreen`, `AboutScreen`, `LegalScreen`, `AdvancedScreen`) and
+  devices and backup (`DeviceListScreen`, `ApproveDeviceScreen`,
+  `SecurityActivityScreen`, `BackupScreen`, `TransferScreen`,
+  `RecoveryScreen`; Restore history is `RestoreScreen`). 35 keys, 0.8% to
+  5.7% in Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

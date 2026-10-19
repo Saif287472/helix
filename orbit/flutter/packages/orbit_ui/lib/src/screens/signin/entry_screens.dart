@@ -69,6 +69,7 @@ class OrbitTransferCard extends StatelessWidget {
     this.progress,
     this.actions = const [],
     this.top = 10,
+    this.iconWeight = OrbitIconWeight.fill,
   });
 
   final String title;
@@ -77,6 +78,9 @@ class OrbitTransferCard extends StatelessWidget {
   final double? progress;
   final List<OrbitButton> actions;
   final double top;
+
+  /// Settings' transfers draw a bold up or down arrow.
+  final OrbitIconWeight iconWeight;
 
   @override
   Widget build(BuildContext context) {
@@ -94,12 +98,7 @@ class OrbitTransferCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              OrbitIcon(
-                icon,
-                weight: OrbitIconWeight.fill,
-                size: 19,
-                color: t.accent,
-              ),
+              OrbitIcon(icon, weight: iconWeight, size: 19, color: t.accent),
               const SizedBox(width: 8),
               Expanded(
                 child: OrbitText(

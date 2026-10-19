@@ -323,3 +323,23 @@ The port follows the prototype, so these changed the prototype itself:
 - **The theme JSON's swatches are read** into `OrbitThemeMeta.swatches` for
   Appearance's hero.
   - **Owner:** pending (batch 8).
+
+## Phase 4 batch 9 (settings pages, devices, backup)
+
+- **Icons keep their CSS line box where it shows.** A device card's 26px
+  icon is an `<i>` in a 1.4 line box, so the port gives it a 36px box.
+  - **Owner:** pending (batch 9).
+- **Tags and pills shrink to an ellipsis** rather than overflowing a
+  narrow card when the text is large; the prototype would overflow.
+  - **Owner:** pending (batch 9).
+- **Backup's disabled button while running is at 60%**, the prototype's
+  inline opacity, which replaces the usual disabled 45% rather than adding
+  to it.
+  - **Owner:** pending (batch 9).
+- **Restore history is `RestoreScreen`** (batch 1) with `afterSignIn:
+  false`, as the prototype reuses its restore page; the contract's
+  `RestoreHistoryScreen` is that screen.
+  - **Owner:** pending (batch 9).
+- **The link and approve steps keep their camera as a slot** inside
+  `OrbitScanFrame`.
+  - **Owner:** pending (batch 9).

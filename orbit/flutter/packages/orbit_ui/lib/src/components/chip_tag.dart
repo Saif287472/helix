@@ -135,13 +135,18 @@ class OrbitTag extends StatelessWidget {
             OrbitIcon(icon!, size: 12, color: fg),
             const SizedBox(width: 4),
           ],
-          Text(
-            label.toUpperCase(),
-            style: t.mono.style(
-              size: 10,
-              weight: 500,
-              color: fg,
-              letterSpacingEm: 0.06,
+          // Shrinks to an ellipsis rather than overflowing a narrow card.
+          Flexible(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: t.mono.style(
+                size: 10,
+                weight: 500,
+                color: fg,
+                letterSpacingEm: 0.06,
+              ),
             ),
           ),
         ],

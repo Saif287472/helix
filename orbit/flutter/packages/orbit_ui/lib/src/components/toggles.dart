@@ -83,11 +83,15 @@ class OrbitCheckbox extends StatelessWidget {
     required this.label,
     required this.on,
     required this.onChanged,
+    this.top = 8,
   });
 
   final String label;
   final bool on;
   final ValueChanged<bool>? onChanged;
+
+  /// The space above the row (0 inside a form card: `.form-card .chk`).
+  final double top;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +113,7 @@ class OrbitCheckbox extends StatelessWidget {
             minWidth: double.infinity,
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+            padding: EdgeInsets.fromLTRB(2, top, 2, 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
