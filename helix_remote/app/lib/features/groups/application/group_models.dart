@@ -202,21 +202,29 @@ final class CreatedGroupInfo {
   final List<String> rejected;
 }
 
-/// An invite link to share.
+/// An invite link to share, or one the server lists that still works.
 @immutable
 final class InviteLinkInfo {
   const InviteLinkInfo({
     required this.linkId,
-    required this.link,
+    this.link,
     required this.requiresApproval,
+    this.createdAt,
+    this.createdBy,
     this.expiresAt,
   });
 
   final String linkId;
 
   /// The URL to share. A secret: never logged or shown in a notification.
-  final String link;
+  /// Only the device that made the link knows it, while the app runs; the
+  /// server keeps a hash, so a link it lists has none.
+  final String? link;
   final bool requiresApproval;
+  final DateTime? createdAt;
+
+  /// The admin who made it, when the server knows.
+  final String? createdBy;
   final DateTime? expiresAt;
 
   @override

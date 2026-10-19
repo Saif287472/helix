@@ -134,6 +134,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `DELETE /v1/groups/{group_id}/invite-links/{link_id}` | — → 204 | |
 | `POST /v1/groups/invite-links/preview` | `InviteTokenRequest` → `InvitePreview` | Rate-limited. |
 | `POST /v1/groups/join` | `InviteTokenRequest` → `JoinGroupResponse` | Banned accounts refused. |
+| `GET /v1/groups/{group_id}/invite-links` | — → `InviteLinkList` | Admins. The live links, newest first: id, approval mode, who made it and when, expiry; never the token. |
 | `GET /v1/groups/{group_id}/join-requests` | — → `JoinRequestList` | Admins. |
 | `POST /v1/groups/{group_id}/join-requests/{request_id}` | `ResolveJoinRequest` → 204 | Admins. |
 | `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. Rate-limited per device (200 burst, 5/s, ephemeral sends included). A stored send costs the payload's units ([`POST /v1/messages`](#messaging)) once per member device, plus the distributions, charged to the sender's stored-envelope budget and to the group's own (200,000 burst, 2,000/s); `rate_limited` when either is spent. Ephemeral sends are not charged. |

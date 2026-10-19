@@ -419,10 +419,18 @@ void main() {
 
       final invite = await g.alice.engine.groups.createInviteLink(g.id);
       expect(invite.link, contains('#HLX-GRP-'));
-      // A member cannot make links.
+      // A member cannot make links, nor see them.
       await expectLater(
         g.carol.engine.groups.createInviteLink(g.id),
         throwsA(isA<GroupException>()),
+      );
+      await expectLater(
+        g.carol.engine.groups.inviteLinks(g.id),
+        throwsA(isA<GroupException>()),
+      );
+      expect(
+        (await g.alice.engine.groups.inviteLinks(g.id)).map((l) => l.linkId),
+        [invite.linkId],
       );
 
       final preview = await dave.engine.groups.previewInvite(invite.link);
@@ -460,8 +468,9 @@ void main() {
           if (m.kind == 'text') m.body,
       ], isNot(contains('hello')));
 
-      // A revoked link stops working.
+      // A revoked link stops working, and is no longer listed.
       await g.alice.engine.groups.revokeInviteLink(g.id, invite.linkId);
+      expect(await g.alice.engine.groups.inviteLinks(g.id), isEmpty);
       final erin = await world.register('erin', erinNumber);
       await expectLater(
         erin.engine.groups.joinWithLink(invite.link),

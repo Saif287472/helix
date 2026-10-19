@@ -134,6 +134,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     Migration(1, 'groups_baseline', GroupStore.baseline),
     Migration(2, 'group_federation', GroupStore.federation),
     Migration(3, 'group_federation_hardening', GroupStore.hardening),
+    Migration(4, 'invite_link_creator', GroupStore.linkCreator),
   ];
 
   @override
@@ -155,6 +156,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     'unban': _unban,
     'create_link': _createLink,
     'revoke_link': _revokeLink,
+    'list_links': _listLinks,
     'preview': _preview,
     'join': _join,
     'join_requests': _joinRequests,
@@ -189,6 +191,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
       ..add(name, Routes.unbanFromGroup, _scoped('unban'))
       ..add(name, Routes.createInviteLink, _scoped('create_link'))
       ..add(name, Routes.revokeInviteLink, _scoped('revoke_link'))
+      ..add(name, Routes.listInviteLinks, _scoped('list_links'))
       ..add(name, Routes.previewInviteLink, _byToken('preview'))
       ..add(name, Routes.joinGroup, _byToken('join'))
       ..add(name, Routes.joinRequests, _scoped('join_requests'))
@@ -848,6 +851,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
       id: linkId,
       groupId: id,
       tokenHash: sha256Bytes(token.codeUnits),
+      createdBy: actor.account,
       req: req,
     );
     return jsonResponse(
@@ -876,6 +880,34 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
       _notFound();
     }
     return noContent();
+  }
+
+  /// The group's live links for an admin: ids, approval mode, who made them
+  /// and when. The tokens are only stored hashed, so they are never listed.
+  Future<Response> _listLinks(
+    _Actor actor,
+    Frame frame,
+    Map<String, String> params,
+    JsonReader? body,
+  ) async {
+    final id = _uuid(params, 'group_id');
+    if (!(await _requireMember(context.db, id, actor.account)).canAdminister) {
+      throw const ApiError(ErrorCode.forbidden);
+    }
+    return jsonResponse(
+      InviteLinkList(
+        links: [
+          for (final l in await _store.liveLinks(context.db, id))
+            InviteLinkSummary(
+              linkId: l.linkId,
+              requiresApproval: l.requiresApproval,
+              createdAt: l.createdAt,
+              createdBy: l.createdBy == null ? null : frame.view(l.createdBy!),
+              expiresAt: l.expiresAt,
+            ),
+        ],
+      ).toJson(),
+    );
   }
 
   /// The live link for [token]; for an S2S action it must belong to the

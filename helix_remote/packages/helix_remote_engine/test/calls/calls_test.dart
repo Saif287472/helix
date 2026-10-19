@@ -390,6 +390,9 @@ void main() {
         await alice.db.settingsDao.get(PersonState.blocksMe(bob.account)),
         isFalse,
       );
+      // Wait for it to ring, so Bob's side is not still handling the offer
+      // when tearDown closes the databases.
+      await bob.until(() => bob.current?.phase == CallPhase.ringing);
     });
 
     test(

@@ -378,6 +378,55 @@ void main() {
       );
     });
 
+    test('admins list the live invite links, never their tokens', () async {
+      final g = await create([bob.accountId]);
+      Future<InviteLink> make({bool approval = false}) async =>
+          InviteLink.fromJson(
+            (await h.api.call(
+              Routes.createInviteLink,
+              params: {'group_id': g.groupId},
+              bearer: alice.bearer,
+              body: CreateInviteLinkRequest(
+                encryptedPreview: bytes(30),
+                requiresApproval: approval,
+              ).toJson(),
+            )).json,
+          );
+      final first = await make();
+      final second = await make(approval: true);
+
+      Future<TestResponse> list(TestDevice d) => h.api.call(
+        Routes.listInviteLinks,
+        params: {'group_id': g.groupId},
+        bearer: d.bearer,
+      );
+      final listed = await list(alice);
+      expect(listed.status, 200, reason: listed.body);
+      expect(listed.body, isNot(contains(first.token)));
+      expect(listed.body, isNot(contains(second.token)));
+      final links = InviteLinkList.fromJson(listed.json).links;
+      expect(links.map((l) => l.linkId), [second.linkId, first.linkId]);
+      expect(links.map((l) => l.requiresApproval), [true, false]);
+      expect(links.map((l) => l.createdBy), everyElement(alice.accountId));
+
+      await h.api.call(
+        Routes.revokeInviteLink,
+        params: {'group_id': g.groupId, 'link_id': second.linkId},
+        bearer: alice.bearer,
+      );
+      expect(
+        InviteLinkList.fromJson(
+          (await list(alice)).json,
+        ).links.map((l) => l.linkId),
+        [first.linkId],
+      );
+
+      // A member who is not an admin may not see them; a stranger cannot
+      // tell the group exists.
+      expect((await list(bob)).errorCode, 'forbidden');
+      expect((await list(carol)).status, 404);
+    });
+
     test('group state updates are optimistic', () async {
       final g = await create([bob.accountId]);
       Future<TestResponse> set(int expected) => h.api.call(

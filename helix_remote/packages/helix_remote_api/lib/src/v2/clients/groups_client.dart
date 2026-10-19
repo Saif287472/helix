@@ -100,6 +100,13 @@ final class GroupsClient {
     json: InviteTokenRequest(token: token).toJson(),
   );
 
+  /// The group's live invite links (admins), without their tokens.
+  Future<InviteLinkList> inviteLinks(String groupId) => _t.call(
+    Routes.listInviteLinks,
+    InviteLinkList.fromJson,
+    params: {'group_id': groupId},
+  );
+
   Future<JoinRequestList> joinRequests(String groupId) => _t.call(
     Routes.joinRequests,
     JoinRequestList.fromJson,

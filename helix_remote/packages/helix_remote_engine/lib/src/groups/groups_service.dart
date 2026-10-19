@@ -485,6 +485,14 @@ final class GroupsService {
     await _ctx.api.groups.revokeInviteLink(groupId, linkId);
   }
 
+  /// The group's live invite links (admins), newest first. The server keeps
+  /// only a hash of each token, so a link made on another device can be
+  /// revoked here but not shown again.
+  Future<List<InviteLinkSummary>> inviteLinks(String groupId) async {
+    await _requireAdmin(groupId);
+    return (await _ctx.api.groups.inviteLinks(groupId)).links;
+  }
+
   /// What a link leads to: the member count and, when the link's key opens
   /// it, the group's name, description and picture.
   Future<GroupInvitePreview> previewInvite(String link) async {

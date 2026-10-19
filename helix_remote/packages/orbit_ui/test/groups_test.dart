@@ -181,6 +181,44 @@ void main() {
     expect(revoked, '1');
   });
 
+  testWidgets('a link without its URL says when it was made, revoke only', (
+    tester,
+  ) async {
+    String? revoked;
+    await show(
+      tester,
+      InviteLinksScreen(
+        model: const InviteLinksModel(
+          links: [
+            InviteLinkItem(id: 'old', approve: true, made: '3 Oct, 14:05'),
+          ],
+        ),
+        actions: InviteLinksActions(onRevoke: (id) => revoked = id),
+      ),
+    );
+    expect(
+      find.text(
+        'Made 3 Oct, 14:05. It cannot be shown again, but it can be revoked.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Share'), findsNothing);
+    expect(find.text('Copy'), findsNothing);
+    await tester.tap(find.text('Revoke'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Revoke').last);
+    await tester.pumpAndSettle();
+    expect(revoked, 'old');
+  });
+
+  testWidgets('no "links appear here" while the list loads', (tester) async {
+    await show(
+      tester,
+      const InviteLinksScreen(model: InviteLinksModel(loading: true)),
+    );
+    expect(find.textContaining('Links you make appear here'), findsNothing);
+  });
+
   testWidgets('join requests approve and reject', (tester) async {
     final done = <String>[];
     await show(

@@ -104,6 +104,10 @@ CREATE INDEX remote_joins_account ON $s.remote_joins (account_id);
 CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
 ''';
 
+  /// Who made each invite link (expand only: older links have none).
+  static String linkCreator(String s) =>
+      'ALTER TABLE $s.invite_links ADD COLUMN created_by text;';
+
   Future<void> insertGroup(
     Tx tx, {
     required String id,
@@ -319,15 +323,17 @@ CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
     required String id,
     required String groupId,
     required Uint8List tokenHash,
+    required String createdBy,
     required CreateInviteLinkRequest req,
   }) async {
     await db.execute(
-      'INSERT INTO $s.invite_links (id, group_id, token_hash, requires_approval, encrypted_preview, expires_at) '
-      'VALUES (@id:uuid, @g:uuid, @h:bytea, @ra:boolean, @p:bytea, @e:timestamptz)',
+      'INSERT INTO $s.invite_links (id, group_id, token_hash, created_by, requires_approval, encrypted_preview, expires_at) '
+      'VALUES (@id:uuid, @g:uuid, @h:bytea, @by:text, @ra:boolean, @p:bytea, @e:timestamptz)',
       {
         'id': id,
         'g': groupId,
         'h': tokenHash,
+        'by': createdBy,
         'ra': req.requiresApproval,
         'p': req.encryptedPreview,
         'e': req.expiresAt,
@@ -340,6 +346,30 @@ CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
     'WHERE token_hash = @h:bytea AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())',
     {'h': tokenHash},
   );
+
+  /// The group's links that still work, newest first (`created_by` as
+  /// stored: the caller frames it for the viewer).
+  Future<List<InviteLinkSummary>> liveLinks(
+    SqlSession db,
+    String groupId,
+  ) async {
+    final rows = await db.query(
+      'SELECT id, requires_approval, created_at, created_by, expires_at FROM $s.invite_links '
+      'WHERE group_id = @g:uuid AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now()) '
+      'ORDER BY created_at DESC, id DESC',
+      {'g': groupId},
+    );
+    return [
+      for (final r in rows)
+        InviteLinkSummary(
+          linkId: r.string('id'),
+          requiresApproval: r.boolean('requires_approval'),
+          createdAt: r.time('created_at'),
+          createdBy: r.optString('created_by'),
+          expiresAt: r.optTime('expires_at'),
+        ),
+    ];
+  }
 
   Future<bool> revokeLink(SqlSession db, String groupId, String linkId) async =>
       await db.execute(

@@ -65,6 +65,10 @@ abstract interface class GroupsPort {
   });
   Future<void> revokeInviteLink(String groupId, String linkId);
 
+  /// The group's links that still work (admins), newest first, without
+  /// their URLs.
+  Future<List<InviteLinkInfo>> inviteLinks(String groupId);
+
   Future<InvitePreviewInfo> previewInvite(String link);
   Future<JoinResultInfo> joinWithLink(String link);
 
@@ -370,6 +374,18 @@ final class EngineGroupsPort implements GroupsPort {
   @override
   Future<void> revokeInviteLink(String groupId, String linkId) =>
       _groups.revokeInviteLink(groupId, linkId);
+
+  @override
+  Future<List<InviteLinkInfo>> inviteLinks(String groupId) async => [
+    for (final link in await _groups.inviteLinks(groupId))
+      InviteLinkInfo(
+        linkId: link.linkId,
+        requiresApproval: link.requiresApproval,
+        createdAt: link.createdAt,
+        createdBy: link.createdBy,
+        expiresAt: link.expiresAt,
+      ),
+  ];
 
   @override
   Future<InvitePreviewInfo> previewInvite(String link) async {

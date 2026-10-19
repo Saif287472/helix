@@ -55,7 +55,7 @@ wait for the redesign. B5 is the server decision S3 below.
 |---|---|---|---|
 | S1 | A share link `helix.agiletechbd.com/u/<~name>`, app links that open it, and scan-to-chat | You: the share sheet (QR, copy, share, scan someone's code) | **Build in Part B** (size M). It is the headline of the You page. It needs a `~name` and "Find me by ~name" turned on. |
 | S2 | A live "~name is available" check | Profile editor | **Don't build.** It would let anyone probe which names are taken, which the server avoids on purpose. Instead: show "Looks good" from the name rules as you type, and the server's answer on Save. |
-| S3 | List a group's live invite links (id, approval, made by, date; never the secret) | Invite links page: revoking any link | **Build in Part B** (size S). It fixes B5. |
+| S3 | List a group's live invite links (id, approval, made by, date; never the secret) | Invite links page: revoking any link | **Built** (Part B, pending review). It fixes B5. |
 | S4 | List a group's bans from the server | Banned people, across devices | **Drop.** The design does not need it. |
 | S5 | Delete security events after 30 days | "Orbit keeps 30 days of activity" | **Don't build; fix the copy** to "Your account's sign-ins, devices and key changes". |
 

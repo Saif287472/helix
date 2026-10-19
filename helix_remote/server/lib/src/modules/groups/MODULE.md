@@ -27,7 +27,10 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
   stored. Previews return the member count and an encrypted preview
   (sealed with a key carried in the link fragment). Banned accounts
   cannot join. Approval links create join requests that only admins hear
-  about (`join_requested`).
+  about (`join_requested`). Admins can list the live links (id, approval
+  mode, who made it and when, expiry; never the token, so a link made on
+  another device can be revoked there but not shown again). `created_by`
+  (migration 4) is empty for links made before it.
 - **State updates** are optimistic (`expected_version`, else
   `version_conflict`).
 - **Non-members** get 404 for every group route, so a group's existence

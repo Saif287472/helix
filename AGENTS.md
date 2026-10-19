@@ -249,6 +249,17 @@ engine 299, api 194, admin 191, ui 183 with 1 golden test skipped off Linux, db
 140, protocol 84, crypto 73, rules 20, cli 13, calls 5, domain 4; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).
 
+Since 8c8a066 (ADR-030, 2026-10-17), confirmed 2026-10-20:
+- admin `test/rules_test.dart` "only the last four phone digits are ever
+  handled" fails: ADR-030 lets the console show the full reported number
+  (`accountPhone` in `admin/lib/src/features/common/format.dart`), and the
+  rule was not updated. Changing the rule is the user's call.
+- Fixed on the `orbit-ui` branch (2026-10-20), still failing on `main` until
+  it merges: the api route-parity table lacked `setPhoneNumber` and
+  `setOwnName`, and engine `calls_test.dart` "a caller the callee blocked is
+  told at once" closed its databases while Bob was still handling the second
+  offer (it failed under `flutter test` only).
+
 Some server tests are timing-sensitive and can fail while the machine is busy
 with other test runs (they pass alone; rerun them alone before calling a failure
 real): `test/platform/hardening_db_test.dart` ("sends are limited per device and

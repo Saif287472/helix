@@ -15,6 +15,7 @@ import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart'
     show HelixAvatarModel, HelixPersonNames;
+import 'package:orbit_ui/orbit_ui.dart' show InviteLinkItem;
 import 'package:share_plus/share_plus.dart';
 
 /// Hands a link to the phone's share sheet, or the clipboard.
@@ -52,15 +53,16 @@ final linkSharerProvider = Provider<LinkSharer>(
 
 /// The invite links made for one group during this session.
 ///
-/// The server keeps only a link's hash and offers no list, and the link itself
-/// is a secret, so links live in memory only: they are here to be shared or
-/// revoked while the app runs. A link made earlier cannot be re-shown; make
-/// another (and revoke from here the ones made now).
+/// The group's live links: the server lists them (id, approval mode, dates)
+/// but keeps only a hash of each, and the link itself is a secret, so its URL
+/// exists only on the device that made it, in memory while the app runs
+/// ([_madeLinksProvider]). Any other link can be revoked but not shown again.
 @immutable
 final class GroupInviteState {
   const GroupInviteState({
     this.links = const [],
     this.requiresApproval = false,
+    this.loading = false,
     this.working = false,
     this.error,
   });
@@ -70,25 +72,36 @@ final class GroupInviteState {
 
   /// The mode the next link is made in.
   final bool requiresApproval;
+
+  /// The server's list has not come yet.
+  final bool loading;
   final bool working;
   final String? error;
 
   GroupInviteState copyWith({
     List<InviteLinkInfo>? links,
     bool? requiresApproval,
+    bool? loading,
     bool? working,
     String? error,
     bool clearError = false,
   }) => GroupInviteState(
     links: links ?? this.links,
     requiresApproval: requiresApproval ?? this.requiresApproval,
+    loading: loading ?? this.loading,
     working: working ?? this.working,
     error: clearError ? null : error ?? this.error,
   );
 }
 
-final groupInviteProvider =
-    NotifierProvider.family<GroupInviteController, GroupInviteState, String>(
+/// The links this device made for a group while the app runs, by id: the
+/// one place their URLs are kept (never written to disk).
+final _madeLinksProvider = Provider.family<Map<String, InviteLinkInfo>, String>(
+  (ref, groupId) => {},
+);
+
+final groupInviteProvider = NotifierProvider.autoDispose
+    .family<GroupInviteController, GroupInviteState, String>(
       GroupInviteController.new,
     );
 
@@ -97,8 +110,51 @@ final class GroupInviteController extends Notifier<GroupInviteState> {
 
   final String groupId;
 
+  /// Links made while the list was loading: it may not have them yet.
+  final Set<String> _madeWhileLoading = {};
+
+  Map<String, InviteLinkInfo> get _made =>
+      ref.read(_madeLinksProvider(groupId));
+
   @override
-  GroupInviteState build() => const GroupInviteState();
+  GroupInviteState build() {
+    unawaited(_load());
+    return GroupInviteState(
+      links: _made.values.toList().reversed.toList(),
+      loading: true,
+    );
+  }
+
+  /// Reads the live links from the server; the ones made here keep their
+  /// URLs, and the URLs of links that stopped working are forgotten.
+  Future<void> _load() async {
+    try {
+      final port = await ref.read(groupsPortProvider.future);
+      final listed = await port.inviteLinks(groupId);
+      if (!ref.mounted) return;
+      final live = {for (final l in listed) l.linkId};
+      final made = _made
+        ..removeWhere(
+          (id, _) => !live.contains(id) && !_madeWhileLoading.contains(id),
+        );
+      state = state.copyWith(
+        loading: false,
+        links: [
+          for (final id in _madeWhileLoading.toList().reversed)
+            if (!live.contains(id)) ?made[id],
+          for (final l in listed) made[l.linkId] ?? l,
+        ],
+      );
+    } on Object catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        loading: false,
+        error: groupErrorText(error, context: GroupContext.link),
+      );
+    } finally {
+      _madeWhileLoading.clear();
+    }
+  }
 
   void setRequiresApproval(bool value) =>
       state = state.copyWith(requiresApproval: value, clearError: true);
@@ -113,6 +169,9 @@ final class GroupInviteController extends Notifier<GroupInviteState> {
         groupId,
         requiresApproval: state.requiresApproval,
       );
+      if (!ref.mounted) return;
+      _made[link.linkId] = link;
+      if (state.loading) _madeWhileLoading.add(link.linkId);
       state = state.copyWith(links: [link, ...state.links], working: false);
     } on Object catch (error) {
       state = state.copyWith(
@@ -129,6 +188,8 @@ final class GroupInviteController extends Notifier<GroupInviteState> {
     try {
       final port = await ref.read(groupsPortProvider.future);
       await port.revokeInviteLink(groupId, linkId);
+      _made.remove(linkId);
+      if (!ref.mounted) return;
       state = state.copyWith(
         links: [
           for (final link in state.links)
@@ -143,6 +204,60 @@ final class GroupInviteController extends Notifier<GroupInviteState> {
       );
     }
   }
+}
+
+/// [groupInviteProvider]'s links as the page draws them: one made elsewhere
+/// (or before the app last started) has no URL, only who made it and when.
+final inviteLinkItemsProvider = Provider.autoDispose
+    .family<List<InviteLinkItem>, String>((ref, groupId) {
+      final links = ref.watch(groupInviteProvider(groupId)).links;
+      final now = ref.watch(clockProvider)();
+      final names =
+          ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+      final me = ref
+          .watch(groupSnapshotProvider(groupId))
+          .value
+          ?.members
+          .where((m) => m.isSelf)
+          .firstOrNull
+          ?.account;
+      return [
+        for (final l in links)
+          InviteLinkItem(
+            id: l.linkId,
+            url: l.link,
+            approve: l.requiresApproval,
+            made: l.link == null
+                ? inviteMadeLabel(
+                    at: l.createdAt,
+                    now: now,
+                    by: switch (l.createdBy) {
+                      null => null,
+                      final by when by == me => 'you',
+                      final by => names.nameOf(by).tileNames.display,
+                    },
+                  )
+                : null,
+          ),
+      ];
+    });
+
+/// Who made a link and when, to follow "Made": "by you, today, 14:05",
+/// "by Nadia, 3 Oct, 14:05", "Mon, 14:05". Null when neither is known.
+String? inviteMadeLabel({DateTime? at, required DateTime now, String? by}) {
+  String? date;
+  if (at != null) {
+    final label = formatWhen(at, now);
+    date = label.startsWith('Today') || label.startsWith('Yesterday')
+        ? '${label[0].toLowerCase()}${label.substring(1)}'
+        : label;
+  }
+  return switch ((by, date)) {
+    (null, null) => null,
+    (final by?, null) => 'by $by',
+    (null, final date?) => date,
+    (final by?, final date?) => 'by $by, $date',
+  };
 }
 
 /// The people waiting for an admin's answer, refreshed when a new request

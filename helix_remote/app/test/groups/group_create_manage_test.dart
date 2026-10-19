@@ -292,13 +292,17 @@ void main() {
   });
 
   group('invite links', () {
-    Future<(FakeGroupsPort, FakeSharer)> pump(WidgetTester tester) async {
+    Future<(FakeGroupsPort, FakeSharer)> pump(
+      WidgetTester tester, {
+      FakeGroupsPort? port,
+      Widget? home,
+    }) async {
       tall(tester);
-      final port = FakeGroupsPort(group: testGroup());
+      port ??= FakeGroupsPort(group: testGroup());
       final sharer = FakeSharer();
       await tester.pumpWidget(
         harness(
-          home: const GroupInviteScreen(groupId: 'g1'),
+          home: home ?? const GroupInviteScreen(groupId: 'g1'),
           overrides: groupOverrides(
             port: port,
             names: testNames,
@@ -375,6 +379,96 @@ void main() {
       port.failWith = const GroupException(GroupFailure.notAllowed);
       await tester.tap(find.text('Create link'));
       await tester.pumpAndSettle();
+
+      expect(find.textContaining('Only an admin'), findsOneWidget);
+    });
+
+    groupTest('a live link made elsewhere is listed and can only be revoked', (
+      tester,
+    ) async {
+      final port = FakeGroupsPort(group: testGroup())
+        ..serverLinks = [
+          InviteLinkInfo(
+            linkId: 'mine',
+            requiresApproval: false,
+            createdAt: DateTime(2026, 10, 3, 14, 5),
+            createdBy: 'self',
+          ),
+          InviteLinkInfo(
+            linkId: 'old',
+            requiresApproval: true,
+            createdAt: DateTime(2026, 10, 3, 14, 5),
+            createdBy: 'bob',
+          ),
+        ];
+      await pump(tester, port: port);
+
+      expect(find.text('Admins approve new members'), findsNWidgets(2));
+      expect(
+        find.textContaining('It cannot be shown again, but it can be revoked'),
+        findsNWidgets(2),
+      );
+      expect(find.textContaining('Made by you, 3 Oct, '), findsOneWidget);
+      expect(find.textContaining('Made by Bob, 3 Oct, '), findsOneWidget);
+      expect(find.text('Share'), findsNothing);
+      expect(find.text('Copy'), findsNothing);
+      expect(find.textContaining('Links you make appear here'), findsNothing);
+
+      await tester.tap(find.text('Revoke').last);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OrbitDialogPanel),
+          matching: find.text('Revoke'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(port.calls, ['revoke old']);
+      expect(find.textContaining('Made by Bob'), findsNothing);
+      expect(find.textContaining('Made by you'), findsOneWidget);
+    });
+
+    groupTest('a link made here keeps its URL when the page is opened again', (
+      tester,
+    ) async {
+      final open = ValueNotifier(true);
+      addTearDown(open.dispose);
+      final (port, _) = await pump(
+        tester,
+        home: ValueListenableBuilder<bool>(
+          valueListenable: open,
+          builder: (_, isOpen, _) => isOpen
+              ? const GroupInviteScreen(groupId: 'g1')
+              : const SizedBox(),
+        ),
+      );
+      await tester.tap(find.text('Create link'));
+      await tester.pumpAndSettle();
+      expect(port.calls, ['link approval:false']);
+
+      // Away and back: the list is read again, and this link is still one
+      // to share.
+      open.value = false;
+      await tester.pumpAndSettle();
+      open.value = true;
+      await tester.pumpAndSettle();
+      expect(find.textContaining('HLX-GRP-secret'), findsOneWidget);
+      expect(find.text('Share'), findsOneWidget);
+
+      // Revoked elsewhere: gone the next time the page opens.
+      port.serverLinks = const [];
+      open.value = false;
+      await tester.pumpAndSettle();
+      open.value = true;
+      await tester.pumpAndSettle();
+      expect(find.textContaining('HLX-GRP-secret'), findsNothing);
+      expect(find.textContaining('Links you make appear here'), findsOneWidget);
+    });
+
+    groupTest('a list that cannot be read says so', (tester) async {
+      final port = FakeGroupsPort(group: testGroup())
+        ..linksError = const GroupException(GroupFailure.notAllowed);
+      await pump(tester, port: port);
 
       expect(find.textContaining('Only an admin'), findsOneWidget);
     });

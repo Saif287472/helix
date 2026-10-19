@@ -469,6 +469,12 @@ abstract final class Routes {
     module: 'groups',
     access: _dev,
   );
+  static const listInviteLinks = ApiRoute(
+    _get,
+    '/v1/groups/{group_id}/invite-links',
+    module: 'groups',
+    access: _dev,
+  );
   static const previewInviteLink = ApiRoute(
     _post,
     '/v1/groups/invite-links/preview',
@@ -890,6 +896,7 @@ abstract final class Routes {
     createGroup, myGroups, group, deleteGroup, setGroupState,
     setGroupSettings, addGroupMembers, removeGroupMember, setGroupRole,
     banFromGroup, unbanFromGroup, createInviteLink, revokeInviteLink,
+    listInviteLinks,
     previewInviteLink, joinGroup, joinRequests, resolveJoinRequest,
     sendGroupMessage, //
     turnCredentials, sendCallSignal, setCallState, pendingCalls,

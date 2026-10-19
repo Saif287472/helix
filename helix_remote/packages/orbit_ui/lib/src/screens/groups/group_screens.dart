@@ -1563,27 +1563,39 @@ class GroupSettingsScreen extends StatelessWidget {
 class InviteLinkItem {
   const InviteLinkItem({
     required this.id,
-    required this.url,
+    this.url,
     this.approve = false,
+    this.made,
   });
 
   final String id;
-  final String url;
+
+  /// The link to share. Null for a live link made on another device (or
+  /// before the app last started): the server keeps only a hash of it, so
+  /// the card says when it was made and offers only Revoke.
+  final String? url;
 
   /// New members wait for an admin.
   final bool approve;
+
+  /// When a link without a [url] was made ("today, 14:05"), after "Made".
+  final String? made;
 }
 
 class InviteLinksModel {
   const InviteLinksModel({
     this.approveNew = false,
     this.links = const [],
+    this.loading = false,
     this.creating = false,
     this.error,
   });
 
   final bool approveNew;
   final List<InviteLinkItem> links;
+
+  /// The live links are still being read: no "links appear here" yet.
+  final bool loading;
 
   /// A link is being made (or revoked): Create spins, Revoke waits.
   final bool creating;
@@ -1611,7 +1623,7 @@ class InviteLinksActions {
 }
 
 /// `group-invite`: whether links need approval, Create link, and a card per
-/// link with Share, Copy and Revoke.
+/// link with Share, Copy and Revoke (only Revoke for a link without its URL).
 class InviteLinksScreen extends StatelessWidget {
   const InviteLinksScreen({
     super.key,
@@ -1661,7 +1673,7 @@ class InviteLinksScreen extends StatelessWidget {
         ),
         if (m.error != null)
           OrbitInlineNotice(kind: OrbitNoticeKind.error, text: m.error!),
-        if (m.links.isEmpty)
+        if (m.links.isEmpty && !m.loading)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: OrbitText(
@@ -1679,9 +1691,12 @@ class InviteLinksScreen extends StatelessWidget {
     );
   }
 
-  /// `.linkc`: the link's kind, the URL in a mono well, and its buttons.
+  /// `.linkc`: the link's kind, the URL in a mono well, and its buttons. A
+  /// link without its URL says when it was made instead, and can only be
+  /// revoked.
   Widget _card(BuildContext context, OrbitTokens t, InviteLinkItem l) {
     final a = actions;
+    final url = l.url;
     return Container(
       margin: const EdgeInsets.fromLTRB(
         OrbitSpace.gutter,
@@ -1707,56 +1722,74 @@ class InviteLinksScreen extends StatelessWidget {
                 color: t.accent,
               ),
               const SizedBox(width: 8),
-              OrbitText(
-                l.approve
-                    ? 'Admins approve new members'
-                    : 'Joins straight away',
-                style: t.font.style(size: 13, weight: 600, color: t.ink2),
+              Flexible(
+                child: OrbitText(
+                  l.approve
+                      ? 'Admins approve new members'
+                      : 'Joins straight away',
+                  style: t.font.style(size: 13, weight: 600, color: t.ink2),
+                ),
               ),
             ],
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: t.field,
-              borderRadius: BorderRadius.circular(10),
+          if (url == null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: OrbitText(
+                '${l.made == null ? '' : 'Made ${l.made}. '}'
+                'It cannot be shown again, but it can be revoked.',
+                style: t.font.style(
+                  size: OrbitType.caption,
+                  color: t.ink3,
+                  height: 1.5,
+                ),
+              ),
+            )
+          else
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: t.field,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: SelectableText(
+                url,
+                style: t.mono.style(size: 12, color: t.ink, height: 1.4),
+              ),
             ),
-            child: SelectableText(
-              l.url,
-              style: t.mono.style(size: 12, color: t.ink, height: 1.4),
-            ),
-          ),
           // `.lk-actions`: one row, 8px apart; it wraps rather than
           // overflowing when the text is large.
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              OrbitButton(
-                label: 'Share',
-                icon: OrbitIcons.shareNetwork,
-                height: 40,
-                padding: 14,
-                fontSize: 13,
-                onPressed: () => a.onShare?.call(l.id),
-              ),
-              OrbitButton(
-                label: 'Copy',
-                icon: OrbitIcons.copy,
-                kind: OrbitButtonKind.secondary,
-                height: 40,
-                padding: 14,
-                fontSize: 13,
-                onPressed: () async {
-                  final copy = a.onCopy;
-                  if (copy == null) return;
-                  await copy(l.id);
-                  if (context.mounted) {
-                    showOrbitToast(context, 'Link copied.');
-                  }
-                },
-              ),
+              if (url != null) ...[
+                OrbitButton(
+                  label: 'Share',
+                  icon: OrbitIcons.shareNetwork,
+                  height: 40,
+                  padding: 14,
+                  fontSize: 13,
+                  onPressed: () => a.onShare?.call(l.id),
+                ),
+                OrbitButton(
+                  label: 'Copy',
+                  icon: OrbitIcons.copy,
+                  kind: OrbitButtonKind.secondary,
+                  height: 40,
+                  padding: 14,
+                  fontSize: 13,
+                  onPressed: () async {
+                    final copy = a.onCopy;
+                    if (copy == null) return;
+                    await copy(l.id);
+                    if (context.mounted) {
+                      showOrbitToast(context, 'Link copied.');
+                    }
+                  },
+                ),
+              ],
               OrbitButton(
                 label: 'Revoke',
                 kind: OrbitButtonKind.ghost,

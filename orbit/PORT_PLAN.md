@@ -608,6 +608,13 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   group avatar and pending-members prompt are deleted. Tests: app 852,
   orbit_ui 204, helix_remote_ui 184, rules 20, all passing; the compared
   group, search and pending-card states unchanged from Review 4.
+- [x] S3 (pending your review): the server lists a group's live invite
+  links (`GET /v1/groups/{group_id}/invite-links`, admins: id, approval
+  mode, who made it and when; never the token; migration 4 of the groups
+  module adds `created_by`), through the API, the engine and the app, and
+  Invite with a link shows every live link. The ones this device cannot
+  show (made elsewhere or before a restart) say who made them and when, and
+  can be revoked. Fixes gap B5.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

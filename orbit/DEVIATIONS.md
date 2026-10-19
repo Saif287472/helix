@@ -745,3 +745,19 @@ score exactly as at Review 4 after the changes below.
   (`UnusablePicture`), and the group-link check (`looksLikeGroupLink`,
   over `HelixDeepLink`).
   - **Owner:** pending (Part B batch 7).
+
+## Part B, S3 (the invite links list, approved gap item)
+
+- **Invite with a link lists every live link**, not only the ones made on
+  this device since the app started (gap B5; the server now lists them,
+  `GET /v1/groups/{group_id}/invite-links`). A link whose URL this device
+  does not have (made elsewhere, or before a restart: the server keeps only
+  a hash) gets a card without the URL well: its kind, then "Made by Nadia,
+  3 Oct, 14:05. It cannot be shown again, but it can be revoked." in the
+  caption style, and Revoke alone. The prototype has no such card; the
+  Share/Copy card and the empty page are unchanged (group-invite and
+  group-invite-empty identical to Review 4).
+  - While the list loads the page does not say "Links you make appear
+    here".
+  - The card's kind line can shrink (it overflowed at large text).
+  - **Owner:** pending (Part B, S3).

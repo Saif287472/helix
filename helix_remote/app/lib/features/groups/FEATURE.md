@@ -15,7 +15,7 @@ application/
   group_errors.dart     exceptions/server codes -> sentences (stale, permission, privacy,
                         dead link, full group, offline)
   create_group.dart     the new-group form, member candidates, lookup by number / ~name
-  group_invites.dart    invite links (memory only), join requests, bans, join-by-link flow
+  group_invites.dart    invite links (the server's list; URLs in memory), join requests, bans, join-by-link flow
   group_picture.dart    encrypted group picture: upload, fetch, picker, scaling
   group_navigation.dart groupChatLocationProvider (seam), groupSignalsProvider
 presentation/           connectors for orbit_ui's group pages: create (NewGroupScreen),
@@ -56,8 +56,11 @@ the flow, never logged or put in a notification; `InviteLinkInfo.toString` redac
   sentence, not an exception.
 - Settings: who may edit info / add members / send (admins always can).
 - Disappearing messages default: `chats.setDisappearing('group:<id>')`, admins.
-- Invite links: the server has no list, so links made in a session live in memory
-  (share / revoke until the app closes). Approval mode makes join requests.
+- Invite links: the page lists every live link from the server (who made it and
+  when, approval mode). The server keeps only a hash, so a link's URL exists only
+  on the device that made it, in memory while the app runs: those links can be
+  shared and copied; any other is "Made by Nadia, 3 Oct, 14:05. It cannot be
+  shown again, but it can be revoked." Approval mode makes join requests.
 - Bans: the server keeps no ban list; only bans made on this device are listed.
 - Federated members show their server (`uuid@domain`); a federated group shows its
   home server.

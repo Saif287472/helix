@@ -97,6 +97,7 @@ void main() {
     Routes.setPassword: (c) =>
         c.identity.setPassword(SetPasswordRequest(password: password)),
     Routes.setHelixName: (c) => c.identity.setHelixName('alice'),
+    Routes.setPhoneNumber: (c) => c.identity.setPhoneNumber('+15550100'),
     Routes.clearHelixName: (c) => c.identity.clearHelixName(),
     Routes.securityEvents: (c) => c.identity.securityEvents(),
     Routes.devices: (c) => c.identity.devices(),
@@ -127,6 +128,7 @@ void main() {
     Routes.discover: (c) =>
         c.people.discover(const DiscoverRequest(phoneHashes: [])),
     Routes.findByName: (c) => c.people.findByName('alice'),
+    Routes.setOwnName: (c) => c.people.setOwnName('Alice'),
     Routes.profile: (c) => c.people.profile(id),
     Routes.presence: (c) => c.people.presence(id),
     Routes.setOwnProfile: (c) =>
@@ -165,6 +167,7 @@ void main() {
     Routes.revokeInviteLink: (c) => c.groups.revokeInviteLink(id, id),
     Routes.previewInviteLink: (c) => c.groups.previewInviteLink('t'),
     Routes.joinGroup: (c) => c.groups.join('t'),
+    Routes.listInviteLinks: (c) => c.groups.inviteLinks(id),
     Routes.joinRequests: (c) => c.groups.joinRequests(id),
     Routes.resolveJoinRequest: (c) =>
         c.groups.resolveJoinRequest(id, id, approve: true),

@@ -489,6 +489,57 @@ final class JoinRequest {
   );
 }
 
+/// One live invite link, as `GET /v1/groups/{group_id}/invite-links` lists
+/// it for an admin: never its token, which the server keeps only as a hash,
+/// so a link made elsewhere can be revoked but not shown again.
+final class InviteLinkSummary {
+  const InviteLinkSummary({
+    required this.linkId,
+    required this.requiresApproval,
+    required this.createdAt,
+    this.createdBy,
+    this.expiresAt,
+  });
+
+  final String linkId;
+  final bool requiresApproval;
+  final DateTime createdAt;
+
+  /// The admin who made it; absent for links made before servers kept it.
+  final String? createdBy;
+  final DateTime? expiresAt;
+
+  JsonMap toJson() => compact({
+    'link_id': linkId,
+    'requires_approval': requiresApproval,
+    'created_at': toWireTime(createdAt),
+    'created_by': createdBy,
+    'expires_at': expiresAt == null ? null : toWireTime(expiresAt!),
+  });
+
+  factory InviteLinkSummary.fromJson(JsonReader json) => InviteLinkSummary(
+    linkId: json.nonEmpty('link_id'),
+    requiresApproval: json.boolean('requires_approval'),
+    createdAt: json.time('created_at'),
+    createdBy: json.optString('created_by'),
+    expiresAt: json.optTime('expires_at'),
+  );
+}
+
+/// The group's live invite links, newest first.
+final class InviteLinkList {
+  const InviteLinkList({required this.links});
+
+  final List<InviteLinkSummary> links;
+
+  JsonMap toJson() => {
+    'links': [for (final l in links) l.toJson()],
+  };
+
+  factory InviteLinkList.fromJson(JsonReader json) =>
+      InviteLinkList(links: json.objects('links', InviteLinkSummary.fromJson));
+}
+
 final class JoinRequestList {
   const JoinRequestList({required this.requests});
 

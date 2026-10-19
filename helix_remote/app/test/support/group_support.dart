@@ -37,6 +37,13 @@ class FakeGroupsPort implements GroupsPort {
   List<GroupCandidate> candidates = const [];
   List<JoinRequestInfo> requests = const [];
   List<BannedInfo> banned = const [];
+
+  /// The live links the server lists (without URLs), newest first; a link
+  /// made through this port joins them, a revoked one leaves.
+  List<InviteLinkInfo> serverLinks = const [];
+
+  /// Thrown by [inviteLinks] when set.
+  Object? linksError;
   GroupCandidate? lookupResult;
 
   /// Every call made, as a short string.
@@ -232,8 +239,17 @@ class FakeGroupsPort implements GroupsPort {
   }) async {
     calls.add('link approval:$requiresApproval');
     _maybeFail();
+    final id = 'link-${calls.length}';
+    serverLinks = [
+      InviteLinkInfo(
+        linkId: id,
+        requiresApproval: requiresApproval,
+        createdAt: DateTime(2026, 10, 20, 9),
+      ),
+      ...serverLinks,
+    ];
     return InviteLinkInfo(
-      linkId: 'link-${calls.length}',
+      linkId: id,
       link: 'https://example.org/open#HLX-GRP-secret${calls.length}',
       requiresApproval: requiresApproval,
     );
@@ -243,6 +259,17 @@ class FakeGroupsPort implements GroupsPort {
   Future<void> revokeInviteLink(String groupId, String linkId) async {
     calls.add('revoke $linkId');
     _maybeFail();
+    serverLinks = [
+      for (final l in serverLinks)
+        if (l.linkId != linkId) l,
+    ];
+  }
+
+  @override
+  Future<List<InviteLinkInfo>> inviteLinks(String groupId) async {
+    final error = linksError;
+    if (error != null) throw error;
+    return serverLinks;
   }
 
   @override
