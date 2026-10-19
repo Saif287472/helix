@@ -27,7 +27,8 @@ abstract final class ChatRoutes {
   /// Preview before sending picked files: `/chat/:id/send-files`.
   static const sendFiles = '/chat/:conversationId/send-files';
 
-  /// Media, documents and links of the conversation: `/chat/:id/shared`.
+  /// Media, documents and links of the conversation: `/chat/:id/shared`,
+  /// optionally `?tab=docs` or `?tab=links`.
   static const shared = '/chat/:conversationId/shared';
 }
 
@@ -59,9 +60,10 @@ String infoLocation(String conversationId, int rowid) =>
 String chatSettingsLocation(String conversationId) =>
     '${_base(conversationId)}/settings';
 
-/// The conversation's media, documents and links.
-String sharedMediaLocation(String conversationId) =>
-    '${_base(conversationId)}/shared';
+/// The conversation's media, documents and links, open on [tab] (`media`,
+/// `docs` or `links`; Media when null).
+String sharedMediaLocation(String conversationId, {String? tab}) =>
+    '${_base(conversationId)}/shared${tab == null ? '' : '?tab=$tab'}';
 
 /// The preview shown before picked files are sent.
 String sendFilesLocation(String conversationId) =>

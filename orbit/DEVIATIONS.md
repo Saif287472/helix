@@ -533,3 +533,64 @@ so none of them moved a pixel in the compared states.
 - **Selection lives in the screen** (the app's `messageSelectionProvider` had
   no other user and is gone).
   - **Owner:** pending (Part B batch 3).
+
+## Part B batch 4 (the conversation's pages, wired into the app)
+
+All 25 states of these pages (Forward, Message info, the media viewer and
+its video states, Send files, Media, links and docs, Chat settings) score
+exactly as at Review 4 after the changes below.
+
+- **Behaviour-only hooks added to `orbit_ui`:**
+  - The **media viewer** pages follow the finger (a `PageView`, the old app's
+    way; the prototype changes page after a 50px swipe) and ← and → turn
+    them on any screen. A real photo is shown whole and zooms and pans (the
+    old app's `InteractiveViewer`, up to 6x); the preview's stand-ins stay
+    the prototype's 4:3. The video on screen draws the app's player (the
+    `videoSurface` slot, `VideoView.surface`); a video beside it is its still
+    with the play button. The controls hide 3 seconds after playing starts
+    and come back on a tap (the prototype's timer). The seek bar follows the
+    finger and seeks when let go. A failure gives the app's reason
+    ("Videos cannot be played inside Helix on this device.", "This video
+    cannot be played on this device.", "This video stopped playing.") in the
+    prototype's layout.
+  - **One picture has no "(1 of 1)" and no dots**; a page whose file is not
+    on the device says "This file is not on your device yet." and hides
+    Share; a message with no photo or video says "There is nothing to show
+    here." (the old app's sentence; the prototype draws neither).
+  - **The video's speed chip is a 48px target.** It is still drawn 30px
+    high; the control row is 48px with 9px less padding above and below, so
+    nothing moves.
+  - **The viewer's bar grows with large text** (it was a fixed 60px and
+    overflowed at 2x text).
+  - **Forward**'s no-results state adds "Nothing matches “…”." (the
+    prototype's in-chat search empty state; the contract keeps the old app's
+    sentence), and the search ignores spaces around the words.
+  - **Message info**'s failure is "The details could not be loaded." (the
+    old app's sentence, as the contract says; Part A had its own).
+  - **The caption on Send files grows to 4 lines** and starts sentences with
+    a capital (the old app's field).
+  - **Owner:** pending (Part B batch 4).
+- **Message info shows one line per person**, Read, else Delivered, else
+  "Not delivered yet" (the prototype); the old page listed Read and
+  Delivered both. The message is its bubble (the prototype; the old page
+  showed its text only), with its photos or file when it has them.
+  - **Owner:** pending (Part B batch 4).
+- **A real photo or video still is not cut to 4:3** in the viewer (the
+  prototype's swatches are 4:3; cutting a portrait photo would hide most of
+  it).
+  - **Owner:** pending (Part B batch 4).
+- **A document's line reads "482 KB · PDF · Yesterday"** (the prototype's
+  "·"; the old page used commas). Links keep "example.org, 14:30", as the
+  prototype draws them.
+  - **Owner:** pending (Part B batch 4).
+- **The toasts the prototype shows are the app's now:** "Forwarded" (or
+  "Some messages could not be forwarded", as an error), "Chat cleared"
+  (the old app said nothing), "Downloading..." and "This file is no longer
+  on this phone." on the shared page.
+  - **Owner:** pending (Part B batch 4).
+- **The derive items are built** (`application/`): Message info's bubble
+  and its "Recipients" heading for a group, the first frame of a picked
+  video on Send files (`videoFramesProvider` over the existing
+  `VideoFrameSource`), and the shared page's tab as a route parameter
+  (`?tab=docs`, `?tab=links`; nothing opens it on another tab yet).
+  - **Owner:** pending (Part B batch 4).

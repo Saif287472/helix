@@ -26,8 +26,10 @@ application/
                             admins), react toggle, forward
   read_tracker.dart         mark read only when foreground + at bottom;
                             starts disappearing timers on display
-  conversation_header / _search / _settings / forward_targets / message_info /
-  media_viewer / conversation_calls
+  send_preview.dart         the send-files page's pictures: a photo scaled
+                            down, a video's first frame (`videoFramesProvider`)
+  conversation_header / _search / _settings / forward_targets / message_info
+  (with the message's bubble) / media_viewer / conversation_calls
 presentation/
   conversation_screen.dart  connector: draws orbit_ui's `ChatScreen` from the
                             providers above (timeline window, jumps, media of
@@ -38,9 +40,14 @@ presentation/
                             to latest, keeping your place, selection, sheets,
                             hold-to-record) is `orbit_ui`'s.
   forward_screen.dart, message_info_screen.dart, media_viewer_screen.dart,
-  video_player_view.dart, send_files_screen.dart,
-  conversation_settings_screen.dart, shared_media_screen.dart (still the old
-                            widgets until the conversation's pages batch)
+  send_files_screen.dart, conversation_settings_screen.dart,
+  shared_media_screen.dart  connectors for orbit_ui's conversation pages
+                            (`ForwardScreen`, `MessageInfoScreen`,
+                            `MediaViewerScreen`, `SendFilesScreen`,
+                            `ChatSettingsScreen`, `SharedMediaScreen`); the
+                            viewer's connector watches the video session of
+                            the page on screen, pauses it in the background
+                            and opens and ends a view-once message
 conversation_routes.dart    /chat/:id and its sub-routes
 ```
 
@@ -56,7 +63,8 @@ conversation_routes.dart    /chat/:id and its sub-routes
 - **Info pages:** the header title and the menu open the contact info (direct chat,
   `PeoplePaths.person`) or the group info (`GroupPaths.info`); see
   `application/conversation_links.dart`.
-- **Shared media:** `/chat/:id/shared` (`shared_media_screen.dart`): photos and videos
+- **Shared media:** `/chat/:id/shared` (`shared_media_screen.dart`, `?tab=docs` or
+  `?tab=links` to open on another tab): photos and videos
   in a grid, documents, links; from the menu, the settings and the contact info
   (`ConversationSeams.openSharedMedia`). Backed by the engine's
   `watchSharedAttachments` / `watchMessagesWithLinks`.
@@ -65,7 +73,8 @@ conversation_routes.dart    /chat/:id and its sub-routes
   `MediaSanitizer` (EXIF/location/time removed before the engine copies a photo or video; a photo that
   cannot be cleaned is not sent), `VoiceRecorder` (`record`), `AudioPlayerAdapter` (`audioplayers`),
   `VideoPlayers` (`video_player`; share sheet where unsupported), `FileActions` (share sheet),
-  `MediaTemp` (the cache folders for captures, recordings and cleaned copies, and their deletion). The
+  `MediaTemp` (the cache folders for captures, recordings and cleaned copies, and their deletion),
+  `VideoFrameSource` (`fc_native_video_thumbnail`; the send-files page's video stills). The
   engine's previews come from `FlutterMediaProcessor`.
 - **Group management** (members, roles, links) is the groups feature's; the
   settings screen links to its info page.

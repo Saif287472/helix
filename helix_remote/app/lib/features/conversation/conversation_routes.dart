@@ -31,6 +31,7 @@ final List<RouteBase> conversationRoutes = [
         path: 'shared',
         builder: (context, state) => SharedMediaScreen(
           conversationId: state.pathParameters['conversationId']!,
+          initialTab: state.uri.queryParameters['tab'],
         ),
       ),
       GoRoute(

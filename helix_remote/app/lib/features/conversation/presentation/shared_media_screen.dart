@@ -1,266 +1,132 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote/features/conversation/application/shared_media.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 import 'package:url_launcher/url_launcher.dart';
 
-/// The photos and videos, documents and links of one conversation, in three
-/// tabs. Reached from the conversation's menu and settings and from a
-/// person's contact info.
+/// Connector: the photos and videos, documents and links of one
+/// conversation, in three tabs, drawn by `orbit_ui`'s shared page. Reached
+/// from the conversation's menu and settings and from a person's contact
+/// info; [initialTab] (`media`, `docs` or `links`) picks the tab it opens on.
 class SharedMediaScreen extends ConsumerWidget {
-  const SharedMediaScreen({super.key, required this.conversationId});
+  const SharedMediaScreen({
+    super.key,
+    required this.conversationId,
+    this.initialTab,
+  });
 
   final String conversationId;
+  final String? initialTab;
+
+  static orbit.LoadState _stateOf(AsyncValue<Object?> v) => v.value != null
+      ? orbit.LoadState.ready
+      : v.hasError
+      ? orbit.LoadState.error
+      : orbit.LoadState.loading;
+
+  /// Taps follow a media bubble's rules: open it when it is here, download
+  /// it when it is not.
+  Future<void> _open(
+    BuildContext context,
+    WidgetRef ref, {
+    required SharedMediaTile? tile,
+    required SharedDocument? document,
+  }) async {
+    final part = tile?.part ?? document!.part;
+    final rowid = tile?.messageRowid ?? document!.messageRowid;
+    final result = await ref.read(sharedOpenProvider)(part, rowid);
+    if (!context.mounted) return;
+    switch (result) {
+      case SharedOpenResult.viewer:
+        if (tile != null) {
+          await context.push(
+            mediaLocation(conversationId, rowid, index: tile.index),
+          );
+        }
+      case SharedOpenResult.fetching:
+        orbit.showOrbitToast(context, 'Downloading...');
+      case SharedOpenResult.missing:
+        orbit.showOrbitToast(
+          context,
+          'This file is no longer on this phone.',
+          error: true,
+        );
+      case SharedOpenResult.handedOver || SharedOpenResult.cancelled:
+        break;
+    }
+  }
+
+  Future<void> _launch(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final title = ref.watch(conversationHeaderProvider(conversationId))?.title;
     final files = ref.watch(sharedFilesProvider(conversationId));
     final links = ref.watch(sharedLinksProvider(conversationId));
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(title ?? 'Media, links and docs'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Media'),
-              Tab(text: 'Docs'),
-              Tab(text: 'Links'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _Async<SharedFiles>(
-              value: files,
-              isEmpty: (files) => files.media.isEmpty,
-              empty: const HelixEmptyState(
-                icon: Icons.photo_library_outlined,
-                title: 'No media yet',
-                message:
-                    'Photos and videos you share in this chat show up here.',
-              ),
-              builder: (files) => _MediaGrid(
-                tiles: files.media,
-                conversationId: conversationId,
-              ),
+    final media = files.value?.media ?? const <SharedMediaTile>[];
+    final documents = files.value?.documents ?? const <SharedDocument>[];
+    final found = links.value ?? const <SharedLink>[];
+    return orbit.SharedMediaScreen(
+      model: orbit.SharedMediaModel(
+        title: title ?? 'Media, links and docs',
+        initialTab: switch (initialTab) {
+          'docs' => orbit.SharedTab.docs,
+          'links' => orbit.SharedTab.links,
+          _ => orbit.SharedTab.media,
+        },
+        filesState: _stateOf(files),
+        linksState: _stateOf(links),
+        media: [
+          for (final t in media)
+            orbit.SharedTileItem(
+              thumbnail: t.thumbnail,
+              isVideo: t.isVideo,
+              durationLabel: t.durationLabel ?? '',
+              label: t.label,
             ),
-            _Async<SharedFiles>(
-              value: files,
-              isEmpty: (files) => files.documents.isEmpty,
-              empty: const HelixEmptyState(
-                icon: Icons.description_outlined,
-                title: 'No documents yet',
-                message: 'Files you share in this chat show up here.',
-              ),
-              builder: (files) => ListView.builder(
-                itemCount: files.documents.length,
-                itemBuilder: (context, index) =>
-                    _DocumentTile(document: files.documents[index]),
-              ),
+        ],
+        documents: [
+          for (final d in documents)
+            orbit.SharedDocItem(name: d.name, detail: d.detail),
+        ],
+        links: [
+          for (final l in found)
+            orbit.SharedLinkItem(
+              url: l.url,
+              detail: '${l.host}, ${l.whenLabel}',
+              messageId: l.messageId,
             ),
-            _Async<List<SharedLink>>(
-              value: links,
-              isEmpty: (links) => links.isEmpty,
-              empty: const HelixEmptyState(
-                icon: Icons.link,
-                title: 'No links yet',
-                message: 'Web links sent in this chat show up here.',
-              ),
-              builder: (links) => ListView.builder(
-                itemCount: links.length,
-                itemBuilder: (context, index) => _LinkTile(
-                  link: links[index],
-                  conversationId: conversationId,
-                ),
-              ),
-            ),
-          ],
-        ),
+        ],
+      ),
+      actions: orbit.SharedMediaActions(
+        onOpenMedia: (i) {
+          if (i < media.length) {
+            unawaited(_open(context, ref, tile: media[i], document: null));
+          }
+        },
+        onOpenDocument: (i) {
+          if (i < documents.length) {
+            unawaited(_open(context, ref, tile: null, document: documents[i]));
+          }
+        },
+        onOpenLink: (url) => unawaited(_launch(url)),
+        // The app's way: the chat opens at that message.
+        onShowInChat: (messageId) =>
+            context.push(chatLocation(conversationId, messageId: messageId)),
+        onRetry: () {
+          ref.invalidate(sharedFilesProvider(conversationId));
+          ref.invalidate(sharedLinksProvider(conversationId));
+        },
       ),
     );
   }
-}
-
-/// Loading, error and empty states around one tab's content.
-class _Async<T> extends StatelessWidget {
-  const _Async({
-    required this.value,
-    required this.isEmpty,
-    required this.empty,
-    required this.builder,
-  });
-
-  final AsyncValue<T> value;
-  final bool Function(T value) isEmpty;
-  final Widget empty;
-  final Widget Function(T value) builder;
-
-  @override
-  Widget build(BuildContext context) {
-    final data = value.value;
-    if (data == null) {
-      return value.hasError
-          ? const HelixErrorState(message: 'This could not be loaded.')
-          : const Center(child: CircularProgressIndicator());
-    }
-    return isEmpty(data) ? empty : builder(data);
-  }
-}
-
-class _MediaGrid extends ConsumerWidget {
-  const _MediaGrid({required this.tiles, required this.conversationId});
-
-  final List<SharedMediaTile> tiles;
-  final String conversationId;
-
-  Future<void> _open(
-    BuildContext context,
-    WidgetRef ref,
-    SharedMediaTile tile,
-  ) async {
-    final result = await ref.read(sharedOpenProvider)(
-      tile.part,
-      tile.messageRowid,
-    );
-    if (!context.mounted) return;
-    switch (result) {
-      case SharedOpenResult.viewer:
-        await context.push(
-          mediaLocation(conversationId, tile.messageRowid, index: tile.index),
-        );
-      case SharedOpenResult.fetching:
-        showHelixSnackBar(context, 'Downloading...');
-      case SharedOpenResult.missing:
-        showHelixSnackBar(context, 'This file is no longer on this phone.');
-      case SharedOpenResult.handedOver || SharedOpenResult.cancelled:
-        break;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    return GridView.builder(
-      padding: const EdgeInsets.all(HelixSpace.xxs),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 128,
-        mainAxisSpacing: HelixSpace.xxs,
-        crossAxisSpacing: HelixSpace.xxs,
-      ),
-      itemCount: tiles.length,
-      itemBuilder: (context, index) {
-        final tile = tiles[index];
-        return Semantics(
-          button: true,
-          label: tile.label,
-          child: InkWell(
-            onTap: () => _open(context, ref, tile),
-            child: ExcludeSemantics(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(
-                    color: scheme.surfaceContainerHigh,
-                    child: tile.thumbnail == null
-                        ? Icon(
-                            tile.isVideo
-                                ? Icons.videocam_outlined
-                                : Icons.image_outlined,
-                            color: scheme.onSurfaceVariant,
-                          )
-                        : Image(image: tile.thumbnail!, fit: BoxFit.cover),
-                  ),
-                  if (tile.isVideo)
-                    Positioned(
-                      left: HelixSpace.xs,
-                      bottom: HelixSpace.xs,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.play_circle_outline,
-                            size: 18,
-                            color: HelixScrimColors.onBackdrop,
-                          ),
-                          if (tile.durationLabel != null)
-                            Text(
-                              ' ${tile.durationLabel}',
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: HelixScrimColors.onBackdrop,
-                                  ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _DocumentTile extends ConsumerWidget {
-  const _DocumentTile({required this.document});
-
-  final SharedDocument document;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => ListTile(
-    leading: const Icon(Icons.description_outlined),
-    title: Text(document.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-    subtitle: Text(document.detail),
-    onTap: () async {
-      final result = await ref.read(sharedOpenProvider)(
-        document.part,
-        document.messageRowid,
-      );
-      if (!context.mounted) return;
-      switch (result) {
-        case SharedOpenResult.fetching:
-          showHelixSnackBar(context, 'Downloading...');
-        case SharedOpenResult.missing:
-          showHelixSnackBar(context, 'This file is no longer on this phone.');
-        case SharedOpenResult.viewer ||
-            SharedOpenResult.handedOver ||
-            SharedOpenResult.cancelled:
-          break;
-      }
-    },
-  );
-}
-
-class _LinkTile extends StatelessWidget {
-  const _LinkTile({required this.link, required this.conversationId});
-
-  final SharedLink link;
-  final String conversationId;
-
-  Future<void> _launch() async {
-    final uri = Uri.tryParse(link.url);
-    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  @override
-  Widget build(BuildContext context) => ListTile(
-    leading: const Icon(Icons.link),
-    title: Text(link.url, maxLines: 2, overflow: TextOverflow.ellipsis),
-    subtitle: Text('${link.host}, ${link.whenLabel}'),
-    onTap: _launch,
-    trailing: IconButton(
-      icon: const Icon(Icons.chat_bubble_outline),
-      tooltip: 'Show in chat',
-      onPressed: () =>
-          context.push(chatLocation(conversationId, messageId: link.messageId)),
-    ),
-  );
 }

@@ -59,7 +59,7 @@ class SharedDocument {
   final int messageRowid;
   final String name;
 
-  /// "482 KB, PDF, Yesterday".
+  /// "482 KB · PDF · Yesterday".
   final String detail;
 
   @override
@@ -158,7 +158,7 @@ SharedFiles sharedFilesOf(List<SharedAttachment> rows, DateTime now) {
           part: part,
           messageRowid: row.messageRowid,
           name: name,
-          detail: [formatFileSize(row.size), ?type, when].join(', '),
+          detail: [formatFileSize(row.size), ?type, when].join(' · '),
         ),
       );
     }

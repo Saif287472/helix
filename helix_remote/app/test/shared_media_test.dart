@@ -77,7 +77,7 @@ void main() {
     await tester.tap(find.text('Docs'));
     await settle(tester);
     expect(find.text('plan.pdf'), findsOneWidget);
-    expect(find.text('482 KB, PDF, 14:30'), findsOneWidget);
+    expect(find.text('482 KB · PDF · 14:30'), findsOneWidget);
     await tester.tap(find.text('Links'));
     await settle(tester);
     // Trailing punctuation belongs to the sentence, not the link.

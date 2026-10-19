@@ -1,19 +1,22 @@
+import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/conversation/application/media_content.dart';
 import 'package:helix_remote/features/conversation/application/media_viewer.dart';
-import 'package:helix_remote/features/conversation/presentation/video_player_view.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/features/conversation/application/video_session.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// Full-screen view of the photos and videos of one message.
+/// Connector: the photos and videos of one message, full screen, drawn by
+/// `orbit_ui`'s viewer (`contracts/conversation.md`).
 ///
-/// Photos zoom and pan. A video opens in the in-app player (play / pause, seek,
-/// speed); where the device has no player it is handed to the system (share
-/// sheet) instead. A view-once message is opened
-/// here exactly once: opening marks it as viewed and tells the sender, and
-/// closing the viewer deletes the file.
+/// Photos zoom and pan. The video on screen plays in the in-app player (play
+/// and pause, seek, speed); where the device has no player it is handed to
+/// the system (share sheet) instead, and it pauses when the app goes to the
+/// background. A view-once message is opened here exactly once: once its
+/// file is on screen it is marked viewed and the sender is told, and closing
+/// the viewer deletes the file.
 class MediaViewerScreen extends ConsumerStatefulWidget {
   const MediaViewerScreen({
     super.key,
@@ -28,222 +31,172 @@ class MediaViewerScreen extends ConsumerStatefulWidget {
   ConsumerState<MediaViewerScreen> createState() => _MediaViewerScreenState();
 }
 
-class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen> {
-  late final PageController _pages = PageController(
-    initialPage: widget.initialIndex,
-  );
-  int _index = 0;
+class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
+    with WidgetsBindingObserver {
+  late int _index = widget.initialIndex;
   bool _openedViewOnce = false;
+
+  /// The file of the video on screen, whose session is watched.
+  String? _videoPath;
+
+  // Kept in a field: `ref` cannot be used from `dispose`.
   late final ViewOnceSession _session;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _session = ref.read(viewOnceSessionProvider(widget.rowid));
-    _index = widget.initialIndex;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // Closing the viewer is what ends a view-once message.
-    _session.close();
-    _pages.dispose();
+    unawaited(_session.close());
     super.dispose();
   }
+
+  /// A video does not keep playing behind the app.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final path = _videoPath;
+    if (path == null) return;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      unawaited(ref.read(videoSessionProvider(path).notifier).pause());
+    }
+  }
+
+  static String? _pathOf(MediaPart part) =>
+      part.view?.localPath ?? part.row.localPath;
+
+  static bool _isVideo(MediaPart part) =>
+      part.row.kind == 'video' || part.row.kind == 'video_note';
+
+  static String _speedLabel(double speed) =>
+      speed == speed.roundToDouble() ? '${speed.round()}x' : '${speed}x';
+
+  orbit.VideoView _videoOf(VideoViewState v) => orbit.VideoView(
+    phase: switch (v.phase) {
+      VideoPhase.failed => orbit.VideoPhase.failed,
+      VideoPhase.ready when v.surface != null => orbit.VideoPhase.ready,
+      _ => orbit.VideoPhase.opening,
+    },
+    playing: v.playing,
+    // A paused video that has not buffered yet shows its play button.
+    buffering: v.buffering && v.playing,
+    completed: v.completed,
+    fraction: v.fraction,
+    positionLabel: v.positionLabel,
+    durationLabel: v.durationLabel,
+    speed: _speedLabel(v.speed),
+    surface: v.surface,
+    message: v.message,
+  );
 
   @override
   Widget build(BuildContext context) {
     final meta = ref.watch(viewerMetaProvider(widget.rowid)).value;
     final parts = ref.watch(messageMediaProvider(widget.rowid)).value;
+    _videoPath = null;
 
-    if (meta != null && meta.viewOnce && !meta.outgoing && !_openedViewOnce) {
-      if (meta.alreadyOpened) {
-        return _Frame(
-          title: meta.senderName,
-          child: const Center(
-            child: Text(
-              'This view-once message has already been opened.',
-              style: TextStyle(color: HelixScrimColors.onBackdrop),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        );
-      }
-      // Only count it as opened once the file is on screen.
-      if (parts != null && parts.isNotEmpty && parts.every((p) => p.ready)) {
+    orbit.MediaViewerModel model;
+    var visual = const <MediaPart>[];
+    if (meta != null && meta.viewOnce && meta.outgoing) {
+      model = const orbit.MediaViewerModel(
+        state: orbit.ViewerState.viewOnceMine,
+        title: 'View once',
+        canShare: false,
+      );
+    } else if (meta != null &&
+        meta.viewOnce &&
+        meta.alreadyOpened &&
+        !_openedViewOnce) {
+      model = orbit.MediaViewerModel(
+        state: orbit.ViewerState.viewOnceOpened,
+        title: meta.senderName,
+        canShare: false,
+      );
+    } else if (parts == null) {
+      model = orbit.MediaViewerModel(
+        state: orbit.ViewerState.loading,
+        title: meta?.senderName ?? '',
+      );
+    } else {
+      visual = [
+        for (final p in parts)
+          if (p.isVisual) p,
+      ];
+      if (meta != null &&
+          meta.viewOnce &&
+          !_openedViewOnce &&
+          parts.isNotEmpty &&
+          parts.every((p) => p.ready)) {
+        // Only count it as opened once the file is on screen.
         _openedViewOnce = true;
         WidgetsBinding.instance.addPostFrameCallback((_) => _session.open());
       }
-    }
-    if (meta != null && meta.viewOnce && meta.outgoing) {
-      return const _Frame(
-        title: 'View once',
-        child: Center(
-          child: Text(
-            'You cannot open a view-once message you sent.',
-            style: TextStyle(color: HelixScrimColors.onBackdrop),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-    if (parts == null) {
-      return const _Frame(
-        title: '',
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    final visual = [
-      for (final p in parts)
-        if (p.isVisual) p,
-    ];
-    if (visual.isEmpty) {
-      return const _Frame(
-        title: '',
-        child: Center(
-          child: Text(
-            'There is nothing to show here.',
-            style: TextStyle(color: HelixScrimColors.onBackdrop),
-          ),
-        ),
-      );
-    }
-    return _Frame(
-      title: meta?.senderName ?? '',
-      subtitle: meta == null
-          ? null
-          : visual.length > 1
-          ? '${meta.timeLabel}  (${_index + 1} of ${visual.length})'
-          : meta.timeLabel,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.ios_share, color: HelixScrimColors.onBackdrop),
-          tooltip: 'Share',
-          onPressed: meta?.viewOnce ?? false
-              ? null
-              : () => ref
-                    .read(mediaActionsProvider)
-                    .share(visual[_index.clamp(0, visual.length - 1)]),
-        ),
-      ],
-      caption: meta?.caption,
-      child: PageView.builder(
-        controller: _pages,
-        itemCount: visual.length,
-        onPageChanged: (i) => setState(() => _index = i),
-        itemBuilder: (context, index) =>
-            _MediaPage(part: visual[index], active: index == _index),
-      ),
-    );
-  }
-}
-
-class _Frame extends StatelessWidget {
-  const _Frame({
-    required this.title,
-    required this.child,
-    this.subtitle,
-    this.actions = const [],
-    this.caption,
-  });
-
-  final String title;
-  final String? subtitle;
-  final List<Widget> actions;
-  final String? caption;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: HelixScrimColors.backdrop,
-      appBar: AppBar(
-        backgroundColor: HelixScrimColors.backdrop,
-        foregroundColor: HelixScrimColors.onBackdrop,
-        iconTheme: const IconThemeData(color: HelixScrimColors.onBackdrop),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                color: HelixScrimColors.onBackdrop,
-                fontSize: 16,
-              ),
-            ),
-            if (subtitle != null)
-              Text(
-                subtitle!,
-                style: const TextStyle(
-                  color: HelixScrimColors.onBackdropMuted,
-                  fontSize: 12,
-                ),
+      if (visual.isEmpty) {
+        model = orbit.MediaViewerModel(
+          state: orbit.ViewerState.empty,
+          title: meta?.senderName ?? '',
+          canShare: false,
+        );
+      } else {
+        final index = _index.clamp(0, visual.length - 1);
+        final current = visual[index];
+        final path = _pathOf(current);
+        orbit.VideoView? video;
+        if (_isVideo(current) && current.ready && path != null) {
+          _videoPath = path;
+          video = _videoOf(ref.watch(videoSessionProvider(path)));
+        }
+        model = orbit.MediaViewerModel(
+          title: meta?.senderName ?? '',
+          timeLabel: meta?.timeLabel ?? '',
+          caption: meta?.caption ?? '',
+          initialIndex: widget.initialIndex.clamp(0, visual.length - 1),
+          canShare: !(meta?.viewOnce ?? false),
+          video: video,
+          items: [
+            for (final p in visual)
+              orbit.ViewerItem(
+                isVideo: _isVideo(p),
+                onDevice: p.ready && _pathOf(p) != null,
+                image: _isVideo(p) || !p.ready || _pathOf(p) == null
+                    ? mediaThumbnailOf(p)
+                    : FileImage(File(_pathOf(p)!)),
               ),
           ],
-        ),
-        actions: actions,
-      ),
-      body: Column(
-        children: [
-          Expanded(child: child),
-          if (caption != null && caption!.isNotEmpty)
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.all(HelixSpace.md),
-                child: Text(
-                  caption!,
-                  style: const TextStyle(color: HelixScrimColors.onBackdrop),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MediaPage extends ConsumerWidget {
-  const _MediaPage({required this.part, required this.active});
-
-  final MediaPart part;
-
-  /// The page on screen; a video plays only on this one.
-  final bool active;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final path = part.view?.localPath ?? part.row.localPath;
-    if (!part.ready || path == null) {
-      return const Center(
-        child: Text(
-          'This file is not on your device yet.',
-          style: TextStyle(color: HelixScrimColors.onBackdrop),
-        ),
-      );
+        );
+      }
     }
-    final isVideo = part.row.kind == 'video' || part.row.kind == 'video_note';
-    if (isVideo) {
-      return VideoPlayerView(
-        key: ValueKey(path),
-        path: path,
-        active: active,
-        thumbnail: mediaThumbnailOf(part),
-        onOpenElsewhere: () => ref.read(mediaActionsProvider).share(part),
-      );
+
+    VideoSession? session() {
+      final path = _videoPath;
+      return path == null
+          ? null
+          : ref.read(videoSessionProvider(path).notifier);
     }
-    return InteractiveViewer(
-      maxScale: 6,
-      child: Center(
-        child: Image.file(
-          File(path),
-          fit: BoxFit.contain,
-          semanticLabel: 'Photo',
-          errorBuilder: (context, error, stack) => const Text(
-            'This picture cannot be shown.',
-            style: TextStyle(color: HelixScrimColors.onBackdrop),
-          ),
-        ),
+
+    return orbit.MediaViewerScreen(
+      model: model,
+      actions: orbit.MediaViewerActions(
+        onPageChanged: (i) => setState(() => _index = i),
+        onShare: (i) {
+          if (i < visual.length) {
+            unawaited(ref.read(mediaActionsProvider).share(visual[i]));
+          }
+        },
+        onOpenVideoElsewhere: (i) {
+          if (i < visual.length) {
+            unawaited(ref.read(mediaActionsProvider).share(visual[i]));
+          }
+        },
+        onVideoToggle: () => unawaited(session()?.toggle()),
+        onVideoSeek: (fraction) => unawaited(session()?.seek(fraction)),
+        onVideoSpeed: () => unawaited(session()?.cycleSpeed()),
       ),
     );
   }

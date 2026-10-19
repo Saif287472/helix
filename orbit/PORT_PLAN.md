@@ -559,6 +559,21 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   deleted. Tests: app 838, orbit_ui 184, helix_remote_ui 184, rules 20,
   all passing; 32 compared states
   unchanged from Review 4.
+- [x] Step 2, batch 4 (pending your review): the conversation's pages
+  draw the Orbit screens through connectors in
+  `features/conversation/presentation/`: Forward (chats and people,
+  "Forwarded"), Message info (the message as its bubble, one receipt line
+  per person), the media viewer (pages that follow the finger, ← and →,
+  zoom on a real photo, the in-app video player in the viewer with its
+  controls hiding after 3 seconds, a 48px speed target, view-once opened
+  once and ended on leaving, a video paused in the background), Send files
+  (photo and video stills, a 4-line caption, the camera's files deleted on
+  leaving), Media, links and docs (opening, downloading, "Show in chat",
+  `?tab=`), and Chat settings (mute, the timer, Clear with "Chat cleared",
+  Block with the prototype's sentence). The old pages and the video player
+  view are deleted. Tests: app 846, orbit_ui 190, helix_remote_ui 184, rules
+  20, all passing; the 25 compared states unchanged from Review 4, and the
+  viewer's window shots unchanged from batch 10.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

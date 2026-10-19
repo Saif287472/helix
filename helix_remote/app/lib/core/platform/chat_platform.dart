@@ -8,6 +8,7 @@ import 'package:helix_remote/core/platform/device_voice_recorder.dart';
 import 'package:helix_remote/core/platform/file_actions.dart';
 import 'package:helix_remote/core/platform/media_sanitizer.dart';
 import 'package:helix_remote/core/platform/media_temp.dart';
+import 'package:helix_remote/core/platform/video_frames.dart';
 import 'package:helix_remote/core/platform/video_player.dart';
 import 'package:helix_remote/core/platform/voice_recorder.dart';
 
@@ -51,6 +52,11 @@ final audioPlayerFactoryProvider = Provider<AudioPlayerAdapter Function()>(
 /// Plays a video file in the full-screen viewer.
 final videoPlayersProvider = Provider<VideoPlayers>(
   (ref) => const DeviceVideoPlayers(),
+);
+
+/// Still pictures out of a video file (the send-files preview).
+final videoFramesProvider = Provider<VideoFrameSource>(
+  (ref) => const NativeVideoFrameSource(),
 );
 
 final fileActionsProvider = Provider<FileActions>(

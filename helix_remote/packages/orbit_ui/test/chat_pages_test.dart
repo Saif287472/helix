@@ -64,6 +64,7 @@ void main() {
     await tester.enterText(find.byType(EditableText), 'zz');
     await tester.pump();
     expect(find.text('No results'), findsOneWidget);
+    expect(find.text('Nothing matches “zz”.'), findsOneWidget);
   });
 
   testWidgets('message info lists receipts, and says when it is gone', (
@@ -250,5 +251,149 @@ void main() {
     );
     expect(find.text('Group info'), findsOneWidget);
     expect(find.textContaining('Block'), findsNothing);
+  });
+
+  group('the viewer\'s hooks', () {
+    const video = VideoView(
+      playing: true,
+      positionLabel: '0:07',
+      durationLabel: '0:24',
+      fraction: 0.3,
+    );
+
+    testWidgets('arrow keys turn the pages and report them', (tester) async {
+      final pages = <int>[];
+      await show(
+        tester,
+        MediaViewerScreen(
+          model: const MediaViewerModel(
+            title: 'Nadia Rahman',
+            timeLabel: 'Today, 09:40',
+            items: [
+              ViewerItem(swatch: 'ph-a'),
+              ViewerItem(swatch: 'ph-b'),
+              ViewerItem(swatch: 'ph-c'),
+            ],
+          ),
+          actions: MediaViewerActions(onPageChanged: pages.add),
+        ),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(find.text('Today, 09:40 (2 of 3)'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(find.text('Today, 09:40 (1 of 3)'), findsOneWidget);
+      expect(pages, [1, 0]);
+    });
+
+    testWidgets('one picture has no count; one not here hides Share', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        const MediaViewerScreen(
+          model: MediaViewerModel(
+            title: 'Nadia Rahman',
+            timeLabel: 'Today, 09:40',
+            items: [ViewerItem(swatch: 'ph-a', onDevice: false)],
+          ),
+        ),
+      );
+      expect(find.text('Today, 09:40'), findsOneWidget);
+      expect(find.text('This file is not on your device yet.'), findsOneWidget);
+      expect(find.byTooltip('Share'), findsNothing);
+    });
+
+    testWidgets('a message with nothing to show says so', (tester) async {
+      await show(
+        tester,
+        const MediaViewerScreen(
+          model: MediaViewerModel(state: ViewerState.empty, canShare: false),
+        ),
+      );
+      expect(find.text('There is nothing to show here.'), findsOneWidget);
+    });
+
+    testWidgets('a playing video hides its controls after 3 seconds', (
+      tester,
+    ) async {
+      var toggles = 0;
+      final surface = Container(key: const Key('surface'), height: 200);
+      await show(
+        tester,
+        MediaViewerScreen(
+          model: MediaViewerModel(
+            items: const [ViewerItem(isVideo: true)],
+            video: VideoView(
+              playing: video.playing,
+              positionLabel: video.positionLabel,
+              durationLabel: video.durationLabel,
+              fraction: video.fraction,
+              surface: surface,
+            ),
+          ),
+          actions: MediaViewerActions(onVideoToggle: () => toggles++),
+        ),
+      );
+      expect(find.byKey(const Key('surface')), findsOneWidget);
+      expect(find.byTooltip('Pause'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.byTooltip('Pause'), findsNothing);
+      await tester.tap(find.byKey(const Key('surface')));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Pause'));
+      expect(toggles, 1);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('the seek bar follows the finger and seeks when let go', (
+      tester,
+    ) async {
+      final seeks = <double>[];
+      await show(
+        tester,
+        MediaViewerScreen(
+          model: const MediaViewerModel(
+            items: [ViewerItem(isVideo: true)],
+            video: VideoView(durationLabel: '0:24'),
+          ),
+          actions: MediaViewerActions(onVideoSeek: seeks.add),
+        ),
+      );
+      final bar = tester.getRect(find.byType(Slider));
+      final drag = await tester.startGesture(
+        bar.centerLeft + const Offset(4, 0),
+      );
+      await drag.moveTo(bar.center);
+      await tester.pump();
+      expect(seeks, isEmpty, reason: 'nothing until it is let go');
+      await drag.up();
+      await tester.pump();
+      expect(seeks.single, closeTo(0.5, 0.05));
+    });
+
+    testWidgets("a video that cannot play gives the app's reason", (
+      tester,
+    ) async {
+      var elsewhere = 0;
+      await show(
+        tester,
+        MediaViewerScreen(
+          model: const MediaViewerModel(
+            items: [ViewerItem(isVideo: true)],
+            video: VideoView(
+              phase: VideoPhase.failed,
+              message: 'This video stopped playing.',
+            ),
+          ),
+          actions: MediaViewerActions(onOpenVideoElsewhere: (_) => elsewhere++),
+        ),
+      );
+      expect(find.text('This video stopped playing.'), findsOneWidget);
+      await tester.tap(find.text('Open video'));
+      expect(elsewhere, 1);
+    });
   });
 }

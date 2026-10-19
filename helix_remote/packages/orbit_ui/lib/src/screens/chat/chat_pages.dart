@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -111,7 +112,7 @@ class _ForwardScreenState extends State<ForwardScreen> {
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final m = widget.model;
-    final q = _q.toLowerCase();
+    final q = _q.trim().toLowerCase();
     final rows = [
       for (final c in m.targets)
         if (c.title.toLowerCase().contains(q)) c,
@@ -146,10 +147,13 @@ class _ForwardScreenState extends State<ForwardScreen> {
                 )
               : rows.isEmpty
               ? ListView(
-                  children: const [
+                  children: [
+                    // The prototype's search empty state
+                    // (`conversation.js`), with what was typed.
                     OrbitEmptyState(
                       icon: OrbitIcons.magnifyingGlass,
                       title: 'No results',
+                      text: q.isEmpty ? '' : 'Nothing matches “${_q.trim()}”.',
                     ),
                   ],
                 )
@@ -317,7 +321,7 @@ class MessageInfoScreen extends StatelessWidget {
         ],
         MessageInfoState.error => [
           OrbitLoadFailed(
-            title: 'Message info could not be loaded.',
+            title: 'The details could not be loaded.',
             onRetry: actions.onRetry,
           ),
         ],
@@ -390,16 +394,30 @@ enum ViewerState {
   cannotShow,
   viewOnceOpened,
   viewOnceMine,
+
+  /// The message has no photo or video (the app's "There is nothing to show
+  /// here.").
+  empty,
   ready,
 }
 
 /// One picture or video in the viewer. [swatch] is the preview's stand-in.
 class ViewerItem {
-  const ViewerItem({this.isVideo = false, this.image, this.swatch});
+  const ViewerItem({
+    this.isVideo = false,
+    this.image,
+    this.swatch,
+    this.onDevice = true,
+  });
 
   final bool isVideo;
+
+  /// The photo, or a video's still.
   final ImageProvider? image;
   final String? swatch;
+
+  /// False: its page says "This file is not on your device yet."
+  final bool onDevice;
 }
 
 enum VideoPhase { opening, ready, failed }
@@ -415,6 +433,8 @@ class VideoView {
     this.positionLabel = '0:00',
     this.durationLabel = '0:00',
     this.speed = '1x',
+    this.surface,
+    this.message,
   });
 
   final VideoPhase phase;
@@ -425,6 +445,12 @@ class VideoView {
   final String positionLabel;
   final String durationLabel;
   final String speed;
+
+  /// The app's player (the `videoSurface` slot); null draws the still.
+  final Widget? surface;
+
+  /// Why it cannot be played; null is the prototype's sentence.
+  final String? message;
 }
 
 class MediaViewerModel {
@@ -470,7 +496,11 @@ class MediaViewerActions {
 /// `media-viewer`: a night page. Black, the sender and "(n of m)" in the
 /// bar with Share, the picture at 4:3 across the middle, dots for the pages,
 /// and the caption under the first. A video adds the 76px play button and
-/// the control strip; tapping the video shows or hides them.
+/// the control strip; tapping the video shows or hides them, and they hide
+/// 3 seconds after it starts playing.
+///
+/// The pages follow the finger, and ← and → turn them. A real photo is shown
+/// whole and zooms and pans; the preview's stand-ins are the prototype's 4:3.
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({
     super.key,
@@ -487,24 +517,110 @@ class MediaViewerScreen extends StatefulWidget {
 
 class _MediaViewerScreenState extends State<MediaViewerScreen> {
   late int _i = widget.model.initialIndex;
+  late final PageController _pages = PageController(
+    initialPage: widget.model.initialIndex,
+  );
   var _controls = true;
+  Timer? _hide;
+
+  /// While the seek bar is dragged it follows the finger, not the video.
+  double? _drag;
+
+  static const _hideAfter = Duration(seconds: 3);
+
+  bool get _playing => widget.model.video?.playing ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_playing) _scheduleHide();
+  }
+
+  @override
+  void didUpdateWidget(MediaViewerScreen old) {
+    super.didUpdateWidget(old);
+    final was = old.model.video?.playing ?? false;
+    if (_playing && !was && _controls) _scheduleHide();
+    if (!_playing) _hide?.cancel();
+  }
+
+  @override
+  void dispose() {
+    _hide?.cancel();
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _scheduleHide() {
+    _hide?.cancel();
+    _hide = Timer(_hideAfter, () {
+      if (mounted && _playing) setState(() => _controls = false);
+    });
+  }
+
+  void _toggleControls() {
+    _hide?.cancel();
+    setState(() => _controls = !_controls);
+    if (_controls && _playing) _scheduleHide();
+  }
 
   void _step(int d) {
     final n = widget.model.items.length;
+    if (n == 0) return;
     final i = (_i + d).clamp(0, n - 1);
     if (i == _i) return;
+    if (_pages.hasClients) _pages.jumpToPage(i);
+    _turned(i);
+  }
+
+  void _turned(int i) {
+    if (i == _i) return;
+    _hide?.cancel();
     setState(() {
       _i = i;
       _controls = true;
+      _drag = null;
     });
     widget.actions.onPageChanged?.call(i);
   }
+
+  KeyEventResult _key(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _step(-1);
+      return KeyEventResult.handled;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _step(1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Widget _say(String text) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: OrbitTokens.of(context).font.style(
+          size: OrbitType.body,
+          color: OrbitNight.viewerText,
+          height: 1.5,
+        ),
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     final m = widget.model;
     final a = widget.actions;
     final top = MediaQuery.paddingOf(context).top;
+    final n = m.items.length;
+    if (n > 0 && _i >= n) _i = n - 1;
     final message = switch (m.state) {
       ViewerState.nothingToShow => 'This file is not on your device yet.',
       ViewerState.cannotShow => 'This picture cannot be shown.',
@@ -512,33 +628,23 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
         'This view-once message has already been opened.',
       ViewerState.viewOnceMine =>
         'You cannot open a view-once message you sent.',
+      ViewerState.empty => 'There is nothing to show here.',
       _ => null,
     };
-    final ready = m.state == ViewerState.ready && m.items.isNotEmpty;
+    final ready = m.state == ViewerState.ready && n > 0;
     final paged =
         m.state == ViewerState.ready || m.state == ViewerState.cannotShow;
-    final sub = paged && m.items.isNotEmpty
-        ? '${m.timeLabel} (${_i + 1} of ${m.items.length})'
-        : '';
-    final share = paged && m.canShare;
+    // One picture has no "(1 of 1)".
+    final sub = !paged || n == 0
+        ? ''
+        : n == 1
+        ? m.timeLabel
+        : '${m.timeLabel} (${_i + 1} of $n)';
+    final share =
+        paged && m.canShare && (n == 0 || m.items[_i.clamp(0, n - 1)].onDevice);
     Widget body;
     if (message != null) {
-      body = Expanded(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: OrbitTokens.of(context).font.style(
-                size: OrbitType.body,
-                color: OrbitNight.viewerText,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ),
-      );
+      body = Expanded(child: _say(message));
     } else if (m.state == ViewerState.loading || !ready) {
       body = const Expanded(
         child: Center(child: OrbitSpinner(size: 34, color: OrbitNight.text)),
@@ -550,42 +656,46 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     // the `#000` that `.viewer-page` asks for.
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
-      child: ColoredBox(
-        color: OrbitNight.night,
-        child: Padding(
-          padding: EdgeInsets.only(top: top),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _bar(
-                context,
-                m.title,
-                sub,
-                share ? () => a.onShare?.call(_i) : null,
-              ),
-              body,
-              if (ready && _i == 0 && m.caption.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 34),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [Color(0x99000000), Color(0x00000000)],
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: _key,
+        child: ColoredBox(
+          color: OrbitNight.night,
+          child: Padding(
+            padding: EdgeInsets.only(top: top),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _bar(
+                  context,
+                  m.title,
+                  sub,
+                  share ? () => a.onShare?.call(_i) : null,
+                ),
+                body,
+                if (ready && _i == 0 && m.caption.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 34),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Color(0x99000000), Color(0x00000000)],
+                      ),
                     ),
-                  ),
-                  child: OrbitText(
-                    m.caption,
-                    style: OrbitTokens.of(context).font.style(
-                      size: 14,
-                      color: OrbitNight.caption,
-                      height: 1.5,
+                    child: OrbitText(
+                      m.caption,
+                      style: OrbitTokens.of(context).font.style(
+                        size: 14,
+                        color: OrbitNight.caption,
+                        height: 1.5,
+                      ),
                     ),
-                  ),
-                )
-              else if (ready)
-                const SizedBox(height: 34),
-            ],
+                  )
+                else if (ready)
+                  const SizedBox(height: 34),
+              ],
+            ),
           ),
         ),
       ),
@@ -599,8 +709,9 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     VoidCallback? share,
   ) {
     final t = OrbitTokens.of(context);
-    return SizedBox(
-      height: 60,
+    // 60px, taller only when large text needs it.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 60),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
@@ -656,47 +767,87 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     );
   }
 
-  Widget _stage(MediaViewerModel m, MediaViewerActions a) {
-    final t = OrbitTokens.of(context);
-    final it = m.items[_i];
-    final v = m.video;
-    // `.mv-img`: the full width at 4:3, cut by the stage when taller.
-    Widget picture() => LayoutBuilder(
-      builder: (context, c) => OverflowBox(
-        maxHeight: double.infinity,
-        child: SizedBox(
-          width: c.maxWidth,
-          height: c.maxWidth * 3 / 4,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: it.image == null ? orbitSwatch(it.swatch) : null,
-              image: it.image == null
-                  ? null
-                  : DecorationImage(image: it.image!, fit: BoxFit.cover),
+  /// `.vp-big`: the 76px round button over a video.
+  Widget _big(Widget child, {required String label, VoidCallback? onTap}) {
+    Widget disc = Container(
+      width: 76,
+      height: 76,
+      decoration: const BoxDecoration(
+        color: Color(0x29FFFFFF),
+        shape: BoxShape.circle,
+      ),
+      child: Center(child: child),
+    );
+    if (onTap != null) {
+      disc = Tooltip(
+        message: label,
+        excludeFromSemantics: true,
+        child: GestureDetector(onTap: onTap, child: disc),
+      );
+    }
+    return Semantics(button: onTap != null, label: label, child: disc);
+  }
+
+  /// `.mv-img`: the preview's stand-in fills the width at 4:3, cut by the
+  /// stage when taller; a real picture is shown whole.
+  Widget _picture(ViewerItem it, {bool zoom = false}) {
+    final image = it.image;
+    if (image == null) {
+      return Center(
+        child: LayoutBuilder(
+          builder: (context, c) => OverflowBox(
+            maxHeight: double.infinity,
+            child: SizedBox(
+              width: c.maxWidth,
+              height: c.maxWidth * 3 / 4,
+              child: DecoratedBox(
+                decoration: BoxDecoration(gradient: orbitSwatch(it.swatch)),
+              ),
             ),
           ),
         ),
+      );
+    }
+    final picture = Center(
+      child: Image(
+        image: image,
+        fit: BoxFit.contain,
+        semanticLabel: it.isVideo ? null : 'Photo',
+        excludeFromSemantics: it.isVideo,
+        errorBuilder: (_, _, _) => it.isVideo
+            ? const SizedBox.shrink()
+            : _say('This picture cannot be shown.'),
       ),
     );
-    Widget big(Widget child, {String? label, VoidCallback? onTap}) => Semantics(
-      button: onTap != null,
-      label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 76,
-          height: 76,
-          decoration: const BoxDecoration(
-            color: Color(0x29FFFFFF),
-            shape: BoxShape.circle,
-          ),
-          child: Center(child: child),
-        ),
-      ),
-    );
+    return zoom ? InteractiveViewer(maxScale: 6, child: picture) : picture;
+  }
+
+  /// One page: a photo, or a video with its controls when it is the current
+  /// page (a video beside it is only its still).
+  Widget _page(MediaViewerModel m, MediaViewerActions a, int j) {
+    final t = OrbitTokens.of(context);
+    final it = m.items[j];
+    if (!it.onDevice) return _say('This file is not on your device yet.');
+    if (!it.isVideo) return _picture(it, zoom: it.image != null);
+    final v = j == _i ? m.video : null;
+    const white = Color(0xFFFFFFFF);
     final stage = <Widget>[];
-    if (!it.isVideo || v == null) {
-      stage.add(Center(child: picture()));
+    if (v == null) {
+      stage
+        ..add(_picture(it))
+        ..add(
+          Center(
+            child: _big(
+              const OrbitIcon(
+                OrbitIcons.play,
+                weight: OrbitIconWeight.fill,
+                size: 34,
+                color: white,
+              ),
+              label: 'Video',
+            ),
+          ),
+        );
     } else if (v.phase == VideoPhase.failed) {
       stage.add(
         Center(
@@ -712,7 +863,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'This video cannot be played.',
+                  v.message ?? 'This video cannot be played.',
+                  textAlign: TextAlign.center,
                   style: t.font.style(
                     size: OrbitType.body,
                     color: OrbitNight.viewerText,
@@ -722,7 +874,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                 const SizedBox(height: 14),
                 _NightButton(
                   label: 'Open video',
-                  onPressed: () => a.onOpenVideoElsewhere?.call(_i),
+                  onPressed: () => a.onOpenVideoElsewhere?.call(j),
                 ),
               ],
             ),
@@ -730,19 +882,21 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
         ),
       );
     } else {
+      final surface = v.phase == VideoPhase.ready ? v.surface : null;
       stage.add(
-        Center(
+        Positioned.fill(
           child: GestureDetector(
-            onTap: () => setState(() => _controls = !_controls),
-            child: picture(),
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggleControls,
+            child: surface == null ? _picture(it) : Center(child: surface),
           ),
         ),
       );
       if (v.buffering || v.phase == VideoPhase.opening) {
         stage.add(
           Center(
-            child: big(
-              const OrbitSpinner(size: 34, color: Color(0xFFFFFFFF)),
+            child: _big(
+              const OrbitSpinner(size: 34, color: white),
               label: 'Loading the video',
             ),
           ),
@@ -750,12 +904,12 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
       } else if (v.completed) {
         stage.add(
           Center(
-            child: big(
+            child: _big(
               const OrbitIcon(
                 OrbitIcons.arrowCounterClockwise,
                 weight: OrbitIconWeight.bold,
                 size: 34,
-                color: Color(0xFFFFFFFF),
+                color: white,
               ),
               label: 'Play again',
               onTap: a.onVideoToggle,
@@ -763,30 +917,54 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
           ),
         );
       } else if (_controls) {
-        stage.add(
-          Center(
-            child: big(
-              OrbitIcon(
-                v.playing ? OrbitIcons.pause : OrbitIcons.play,
-                weight: OrbitIconWeight.fill,
-                size: 34,
-                color: const Color(0xFFFFFFFF),
+        stage
+          ..add(
+            Center(
+              child: _big(
+                OrbitIcon(
+                  v.playing ? OrbitIcons.pause : OrbitIcons.play,
+                  weight: OrbitIconWeight.fill,
+                  size: 34,
+                  color: white,
+                ),
+                label: v.playing ? 'Pause' : 'Play',
+                onTap: a.onVideoToggle,
               ),
-              label: v.playing ? 'Pause' : 'Play',
-              onTap: a.onVideoToggle,
             ),
-          ),
-        );
-        stage.add(
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _VideoControls(video: v, actions: a),
-          ),
-        );
+          )
+          ..add(
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _VideoControls(
+                video: v,
+                actions: a,
+                drag: _drag,
+                onDrag: (x) => setState(() => _drag = x),
+                onDragEnd: (x) {
+                  setState(() => _drag = null);
+                  a.onVideoSeek?.call(x);
+                },
+              ),
+            ),
+          );
       }
     }
+    return Stack(fit: StackFit.expand, children: stage);
+  }
+
+  Widget _stage(MediaViewerModel m, MediaViewerActions a) {
+    final t = OrbitTokens.of(context);
+    final n = m.items.length;
+    final stage = <Widget>[
+      PageView.builder(
+        controller: _pages,
+        itemCount: n,
+        onPageChanged: _turned,
+        itemBuilder: (context, j) => _page(m, a, j),
+      ),
+    ];
     // A window has no swipe: Previous and Next sit at the sides (`.mv-nav`).
     if (MediaQuery.sizeOf(context).width >= orbitWindowBreakpoint) {
       Widget nav(bool next) => OrbitIconButton(
@@ -813,7 +991,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
           ),
         );
       }
-      if (_i < m.items.length - 1) {
+      if (_i < n - 1) {
         stage.add(
           Positioned(
             right: 20,
@@ -824,40 +1002,37 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
         );
       }
     }
-    stage.add(
-      Positioned(
-        left: 0,
-        right: 0,
-        bottom: 14,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var j = 0; j < m.items.length; j++) ...[
-              if (j > 0) const SizedBox(width: 6),
-              Container(
-                width: j == _i ? 16 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: j == _i
-                      ? const Color(0xFFFFFFFF)
-                      : const Color(0x59FFFFFF),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ],
-          ],
+    if (n > 1) {
+      stage.add(
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 14,
+          child: IgnorePointer(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var j = 0; j < n; j++) ...[
+                  if (j > 0) const SizedBox(width: 6),
+                  Container(
+                    width: j == _i ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: j == _i
+                          ? const Color(0xFFFFFFFF)
+                          : const Color(0x59FFFFFF),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
-      ),
-    );
-    return GestureDetector(
-      onHorizontalDragEnd: (d) {
-        final vx = d.primaryVelocity ?? 0;
-        if (vx.abs() < 50) return;
-        _step(vx < 0 ? 1 : -1);
-      },
-      child: ClipRect(
-        child: Stack(fit: StackFit.expand, children: stage),
-      ),
+      );
+    }
+    return ClipRect(
+      child: Stack(fit: StackFit.expand, children: stage),
     );
   }
 }
@@ -865,17 +1040,29 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
 /// `.vp-ctrl`: the time, the seek bar, the length and the speed, mono 12px
 /// white over a fade to black, 12px 14px 30px in.
 class _VideoControls extends StatelessWidget {
-  const _VideoControls({required this.video, required this.actions});
+  const _VideoControls({
+    required this.video,
+    required this.actions,
+    required this.drag,
+    required this.onDrag,
+    required this.onDragEnd,
+  });
 
   final VideoView video;
   final MediaViewerActions actions;
+  final double? drag;
+  final ValueChanged<double> onDrag;
+  final ValueChanged<double> onDragEnd;
 
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final mono = t.mono.style(size: 12, color: const Color(0xFFFFFFFF));
+    // `12px 14px 30px` around a 30px row, drawn as a 48px row with 9px
+    // less above and below, so the speed chip's 48px target is inside it;
+    // the right-hand 14px is in the row for the same reason.
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 30),
+      padding: const EdgeInsets.fromLTRB(14, 3, 0, 21),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
@@ -883,52 +1070,61 @@ class _VideoControls extends StatelessWidget {
           colors: [Color(0xB3000000), Color(0x00000000)],
         ),
       ),
-      child: Row(
-        children: [
-          Text(video.positionLabel, style: mono),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SliderTheme(
-              data: const SliderThemeData(
-                trackHeight: 4,
-                activeTrackColor: Color(0xFFFFFFFF),
-                inactiveTrackColor: Color(0x59FFFFFF),
-                thumbColor: Color(0xFFFFFFFF),
-                overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
-                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8),
-              ),
-              child: Slider(
-                value: video.fraction,
-                onChanged: actions.onVideoSeek,
-                semanticFormatterCallback: (_) => video.positionLabel,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(video.durationLabel, style: mono),
-          const SizedBox(width: 10),
-          Tooltip(
-            message: 'Playback speed',
-            excludeFromSemantics: true,
-            child: Semantics(
-              button: true,
-              label: 'Playback speed ${video.speed}',
-              child: GestureDetector(
-                onTap: actions.onVideoSpeed,
-                child: Container(
-                  height: 30,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0x66FFFFFF)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(video.speed, style: mono),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            Text(video.positionLabel, style: mono),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SliderTheme(
+                data: const SliderThemeData(
+                  trackHeight: 4,
+                  activeTrackColor: Color(0xFFFFFFFF),
+                  inactiveTrackColor: Color(0x59FFFFFF),
+                  thumbColor: Color(0xFFFFFFFF),
+                  overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
+                  thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8),
+                ),
+                child: Slider(
+                  value: (drag ?? video.fraction).clamp(0.0, 1.0),
+                  onChanged: actions.onVideoSeek == null ? null : onDrag,
+                  onChangeEnd: onDragEnd,
+                  semanticFormatterCallback: (_) =>
+                      '${video.positionLabel} of ${video.durationLabel}',
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Text(video.durationLabel, style: mono),
+            const SizedBox(width: 10),
+            // Outermost, so a touch just outside the chip reaches it.
+            OrbitTapArea(
+              child: Tooltip(
+                message: 'Playback speed',
+                excludeFromSemantics: true,
+                child: Semantics(
+                  button: true,
+                  label: 'Playback speed ${video.speed}',
+                  child: GestureDetector(
+                    onTap: actions.onVideoSpeed,
+                    child: Container(
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0x66FFFFFF)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(video.speed, style: mono),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+          ],
+        ),
       ),
     );
   }
@@ -1153,6 +1349,9 @@ class _SendFilesScreenState extends State<SendFilesScreen> {
                 ),
                 child: TextField(
                   controller: _caption,
+                  minLines: 1,
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
                   style: t.font.style(size: 15, color: t.ink),
                   decoration: InputDecoration.collapsed(
                     hintText: 'Add a caption',

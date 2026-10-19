@@ -1,14 +1,17 @@
-import 'dart:io';
+import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/conversation/application/composer_notifier.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/features/conversation/application/send_preview.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// What the person is about to send: the picked photos, videos and files, a
-/// caption and, for photos and videos, "view once".
+/// Connector: what the person is about to send, the picked photos, videos
+/// and files, a caption and, for photos and videos, "view once", drawn by
+/// `orbit_ui`'s send-files page.
 ///
-/// The files are not copied until Send is pressed.
+/// The files are not copied until Send is pressed. Leaving without sending
+/// deletes the camera's files; their own files are never touched.
 class SendFilesScreen extends ConsumerStatefulWidget {
   const SendFilesScreen({super.key, required this.conversationId});
 
@@ -19,10 +22,11 @@ class SendFilesScreen extends ConsumerStatefulWidget {
 }
 
 class _SendFilesScreenState extends ConsumerState<SendFilesScreen> {
-  final TextEditingController _caption = TextEditingController();
-  bool _viewOnce = false;
-  bool _sending = false;
   bool _sent = false;
+
+  /// The files as last drawn: once sent, the page keeps them while it
+  /// closes.
+  List<AttachmentDraft> _files = const [];
 
   // Kept in a field: `ref` cannot be used from `dispose`.
   late final PendingAttachments _pending;
@@ -37,132 +41,58 @@ class _SendFilesScreenState extends ConsumerState<SendFilesScreen> {
 
   @override
   void dispose() {
-    _caption.dispose();
     // Backing out without sending: the camera's files are not kept.
-    if (!_sent) _pending.discard();
+    if (!_sent) unawaited(_pending.discard());
     super.dispose();
   }
 
-  Future<void> _send() async {
+  Future<bool> _send({required String caption, required bool viewOnce}) async {
     final files = ref.read(pendingAttachmentsProvider(widget.conversationId));
-    setState(() => _sending = true);
     final sent = await ref
         .read(composerProvider(widget.conversationId).notifier)
-        .sendFiles(files, caption: _caption.text, viewOnce: _viewOnce);
-    if (!mounted) return;
+        .sendFiles(files, caption: caption, viewOnce: viewOnce);
     if (sent) {
       _sent = true;
       _pending.set(const []);
-      Navigator.of(context).pop();
-    } else {
-      setState(() => _sending = false);
     }
+    return sent;
   }
+
+  static orbit.SendFileKind _kindOf(DraftKind kind) => switch (kind) {
+    DraftKind.image => orbit.SendFileKind.image,
+    DraftKind.video => orbit.SendFileKind.video,
+    DraftKind.audio => orbit.SendFileKind.audio,
+    DraftKind.document => orbit.SendFileKind.document,
+  };
 
   @override
   Widget build(BuildContext context) {
     final files = ref.watch(pendingAttachmentsProvider(widget.conversationId));
-    final visual = files.any(
-      (f) => f.kind == DraftKind.image || f.kind == DraftKind.video,
-    );
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          files.length == 1 ? 'Send file' : 'Send ${files.length} files',
-        ),
-      ),
-      body: files.isEmpty
-          ? const HelixEmptyState(
-              icon: Icons.attach_file,
-              title: 'Nothing to send',
-              message: 'Go back and pick a file.',
-            )
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(HelixSpace.sm),
-                    itemCount: files.length,
-                    itemBuilder: (context, index) {
-                      final file = files[index];
-                      return ListTile(
-                        key: ValueKey(file.path),
-                        leading: SizedBox.square(
-                          dimension: 48,
-                          child: file.kind == DraftKind.image
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Image.file(
-                                    File(file.path),
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 144,
-                                    excludeFromSemantics: true,
-                                    errorBuilder: (_, _, _) =>
-                                        const Icon(Icons.image_outlined),
-                                  ),
-                                )
-                              : Icon(switch (file.kind) {
-                                  DraftKind.video => Icons.videocam_outlined,
-                                  DraftKind.audio => Icons.headphones,
-                                  _ => Icons.insert_drive_file_outlined,
-                                }),
-                        ),
-                        title: Text(
-                          file.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(file.sizeLabel),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close),
-                          tooltip: 'Remove ${file.name}',
-                          onPressed: () => _pending.remove(file),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (visual)
-                  SwitchListTile(
-                    value: _viewOnce,
-                    onChanged: (value) => setState(() => _viewOnce = value),
-                    secondary: const Icon(Icons.filter_1_outlined),
-                    title: const Text('View once'),
-                    subtitle: const Text(
-                      'Photos and videos disappear after they are opened.',
-                    ),
-                  ),
-                SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.all(HelixSpace.sm),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _caption,
-                            minLines: 1,
-                            maxLines: 4,
-                            textCapitalization: TextCapitalization.sentences,
-                            decoration: const InputDecoration(
-                              hintText: 'Add a caption',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: HelixSpace.xs),
-                        IconButton.filled(
-                          icon: const Icon(Icons.send),
-                          tooltip: 'Send',
-                          onPressed: _sending ? null : _send,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+    if (!_sent) _files = files;
+    return orbit.SendFilesScreen(
+      model: orbit.SendFilesModel(
+        files: [
+          for (final f in _files)
+            orbit.SendFileItem(
+              id: f.path,
+              name: f.name,
+              sizeLabel: f.sizeLabel,
+              kind: _kindOf(f.kind),
+              preview: switch (f.kind) {
+                DraftKind.image => photoPreviewOf(f),
+                DraftKind.video => ref.watch(videoStillProvider(f.path)).value,
+                _ => null,
+              },
             ),
+        ],
+      ),
+      actions: orbit.SendFilesActions(
+        onRemove: (id) {
+          final file = _files.where((f) => f.path == id).firstOrNull;
+          if (file != null) _pending.remove(file);
+        },
+        onSend: _send,
+      ),
     );
   }
 }

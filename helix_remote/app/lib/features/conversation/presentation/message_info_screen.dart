@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/features/conversation/application/media_content.dart';
 import 'package:helix_remote/features/conversation/application/message_info.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// "Message info": when a message was sent, and when each person got it and
-/// read it.
+/// Connector: "Message info", your message as sent, when it was sent, and
+/// when each person got it and read it, drawn by `orbit_ui`'s page.
 class MessageInfoScreen extends ConsumerWidget {
   const MessageInfoScreen({super.key, required this.rowid});
 
@@ -13,67 +14,60 @@ class MessageInfoScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final info = ref.watch(messageInfoProvider(rowid));
-    return Scaffold(
-      appBar: AppBar(title: const Text('Message info')),
-      body: switch (info) {
-        AsyncData(:final value) when value == null => const HelixEmptyState(
-          icon: Icons.info_outline,
-          title: 'Message not found',
-          message: 'It may have been deleted.',
-        ),
-        AsyncData(:final value) => _Body(info: value!),
-        AsyncError() => const HelixErrorState(
-          message: 'The details could not be loaded.',
-        ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
+    final value = info.value;
+    final model = switch (info) {
+      AsyncData() when value == null => const orbit.MessageInfoModel(
+        loadState: orbit.MessageInfoState.notFound,
+      ),
+      AsyncData() => _model(ref, value!),
+      AsyncError() => const orbit.MessageInfoModel(
+        loadState: orbit.MessageInfoState.error,
+      ),
+      _ => const orbit.MessageInfoModel(
+        loadState: orbit.MessageInfoState.loading,
+      ),
+    };
+    return orbit.MessageInfoScreen(
+      model: model,
+      actions: orbit.MessageInfoActions(
+        onRetry: () => ref.invalidate(messageInfoProvider(rowid)),
+      ),
     );
   }
-}
 
-class _Body extends StatelessWidget {
-  const _Body({required this.info});
-
-  final MessageInfo info;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ListView(
-      children: [
-        if (info.preview.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.all(HelixSpace.md),
-            child: Text(
-              info.preview,
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
+  orbit.MessageInfoModel _model(WidgetRef ref, MessageInfo info) {
+    var message = info.message;
+    if (message != null && info.hasMedia) {
+      // A photo, a file or a voice message: its attachments, as the chat
+      // draws them.
+      final parts = ref.watch(messageMediaProvider(rowid)).value;
+      final placeholder = message.content;
+      if (parts != null) {
+        message = message.copyWith(
+          content: mediaContentOf(
+            rowid: rowid,
+            caption: placeholder is orbit.HelixMediaContent
+                ? placeholder.caption
+                : '',
+            parts: parts,
           ),
-        ListTile(
-          leading: const Icon(Icons.send_outlined),
-          title: const Text('Sent'),
-          subtitle: Text(info.sentLabel),
-        ),
-        const Divider(height: 1),
-        for (final line in info.lines) ...[
-          ListTile(
-            leading: HelixAvatar(model: line.avatar, size: HelixAvatarSize.sm),
-            title: Text(line.name),
-            subtitle: Text(
-              [
-                if (line.readLabel != null) 'Read ${line.readLabel}',
-                if (line.deliveredLabel != null)
-                  'Delivered ${line.deliveredLabel}',
-                if (line.readLabel == null && line.deliveredLabel == null)
-                  'Not delivered yet',
-              ].join('\n'),
-              style: TextStyle(color: scheme.onSurfaceVariant),
-            ),
-            isThreeLine: line.readLabel != null && line.deliveredLabel != null,
+        );
+      }
+    }
+    return orbit.MessageInfoModel(
+      message: message,
+      sentLabel: info.sentLabel,
+      isGroup: info.isGroup,
+      recipients: [
+        for (final line in info.lines)
+          orbit.ReceiptItem(
+            name: line.name,
+            avatar: line.avatar,
+            readLabel: line.readLabel == null ? null : 'Read ${line.readLabel}',
+            deliveredLabel: line.deliveredLabel == null
+                ? null
+                : 'Delivered ${line.deliveredLabel}',
           ),
-        ],
       ],
     );
   }

@@ -5,6 +5,7 @@ import 'package:helix_remote/core/chat/chat_naming.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
+import 'package:helix_remote/features/conversation/application/message_mapper.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// One person's receipts for a message.
@@ -32,6 +33,9 @@ class MessageInfo {
     required this.sentLabel,
     required this.lines,
     required this.preview,
+    this.message,
+    this.isGroup = false,
+    this.hasMedia = false,
   });
 
   final String sentLabel;
@@ -39,6 +43,15 @@ class MessageInfo {
 
   /// What the message said (text or caption), for the header of the page.
   final String preview;
+
+  /// The message as its bubble draws it, at the top of the page.
+  final HelixMessage? message;
+
+  /// A group's page heads the receipts "Recipients".
+  final bool isGroup;
+
+  /// Its attachments fill in the bubble (`messageMediaProvider`).
+  final bool hasMedia;
 }
 
 /// The info of the message with database id [rowid]; null when it is gone.
@@ -60,7 +73,32 @@ final messageInfoProvider = FutureProvider.autoDispose
       ];
       String? label(DateTime? at) =>
           at == null ? null : formatDateTime(at, now);
+      final ctx = MapperContext(
+        isGroup: peer == null,
+        selfId: gateway.selfAccountId,
+        people: people,
+        now: now,
+      );
+      final replyTo = row.replyToId;
+      final message = mapMessage(
+        row,
+        ctx,
+        reply: replyTo == null
+            ? null
+            : quoteOf(
+                row.replyToAuthor ?? '',
+                await gateway.findMessage(row.conversationId, replyTo),
+                ctx,
+              ),
+        reactions: await gateway.reactionsOf(rowid),
+      );
       return MessageInfo(
+        message: message,
+        isGroup: peer == null,
+        hasMedia:
+            row.kind == 'media' &&
+            row.viewOnceState == null &&
+            row.deletedAt == null,
         sentLabel: formatDateTime(row.sentAt, now),
         preview: (row.body ?? '').replaceAll(RegExp(r'\s+'), ' ').trim(),
         lines: [

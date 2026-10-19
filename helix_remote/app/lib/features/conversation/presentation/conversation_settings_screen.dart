@@ -1,14 +1,17 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/conversation/application/conversation_links.dart';
 import 'package:helix_remote/features/conversation/application/conversation_settings.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// Settings of one conversation: mute, disappearing messages, clear chat,
-/// block. A group's members, roles and invite links are the groups feature's.
+/// Connector: the settings of one conversation, mute, disappearing messages,
+/// clear chat and block, drawn by `orbit_ui`'s chat settings page. A group's
+/// members, roles and invite links are the groups feature's.
 class ConversationSettingsScreen extends ConsumerWidget {
   const ConversationSettingsScreen({super.key, required this.conversationId});
 
@@ -21,161 +24,51 @@ class ConversationSettingsScreen extends ConsumerWidget {
       conversationSettingsActionsProvider(conversationId),
     );
     if (view == null) {
-      return const HelixSettingsScaffold(
-        title: 'Chat settings',
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    Future<void> chooseMute() async {
-      final choice = await showMuteSheet(context, offerUnmute: view.muted);
-      switch (choice) {
-        case MuteLengthChoice(:final length):
-          await actions.mute(length);
-        case UnmuteChoice():
-          await actions.mute(null);
-        case null:
-          break;
-      }
-    }
-
-    Future<void> chooseDisappearing() async {
-      final choice = await showHelixBottomSheet<DisappearingChoice>(
-        context,
-        title: 'Disappearing messages',
-        builder: (sheetContext) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final option in disappearingChoices)
-              ListTile(
-                title: Text(option.label),
-                trailing: option.seconds == view.disappearingSeconds
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () => Navigator.pop(sheetContext, option),
-              ),
-          ],
+      return const orbit.ChatSettingsScreen(
+        model: orbit.ChatSettingsModel(
+          title: '',
+          avatar: orbit.HelixAvatarModel(name: ''),
+          loading: true,
         ),
       );
-      if (choice != null) await actions.setDisappearing(choice.seconds);
     }
-
-    Future<void> clearChat() async {
-      final confirmed = await showHelixDestructiveDialog(
-        context,
-        title: 'Clear this chat?',
-        message:
-            'All messages are removed from this device. The chat stays in '
-            'your list.',
-        action: 'Clear',
-      );
-      if (confirmed) await actions.clear();
-    }
-
-    Future<void> toggleBlock() async {
-      final peer = view.peerAccount;
-      if (peer == null) return;
-      if (view.blocked) {
-        await actions.unblock(peer);
-        return;
-      }
-      final confirmed = await showHelixDestructiveDialog(
-        context,
-        title: 'Block ${view.title}?',
-        message:
-            'They will not be able to message or call you. You can unblock '
-            'them here at any time.',
-        action: 'Block',
-      );
-      if (confirmed) await actions.block(peer);
-    }
-
-    return HelixSettingsScaffold(
-      title: 'Chat settings',
-      body: ListView(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(HelixSpace.lg),
-            child: Column(
-              children: [
-                HelixAvatar(
-                  model: view.avatar,
-                  size: HelixAvatarSize.xl,
-                  semanticLabel: view.title,
-                ),
-                const SizedBox(height: HelixSpace.sm),
-                Text(
-                  view.title,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (view.subtitle != null)
-                  Text(
-                    view.subtitle!,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          HelixSettingsSection(
-            children: [
-              if (infoLocationOf(conversationId) case final info?)
-                HelixSettingsTile(
-                  icon: view.isGroup
-                      ? Icons.group_outlined
-                      : Icons.person_outline,
-                  title: view.isGroup ? 'Group info' : 'Contact info',
-                  subtitle: view.isGroup
-                      ? 'Members, invite links and group settings'
-                      : 'Name, number and safety number',
-                  showChevron: true,
-                  onTap: () => context.push(info),
-                ),
-              HelixSettingsTile(
-                icon: Icons.photo_library_outlined,
-                title: 'Media, links and docs',
-                showChevron: true,
-                onTap: () => context.push(sharedMediaLocation(conversationId)),
-              ),
-              HelixSettingsTile(
-                icon: view.muted ? Icons.volume_off : Icons.volume_up_outlined,
-                title: 'Mute notifications',
-                subtitle: view.muted ? 'Muted' : 'Off',
-                showChevron: true,
-                onTap: chooseMute,
-              ),
-              HelixSettingsTile(
-                icon: Icons.timer_outlined,
-                title: 'Disappearing messages',
-                subtitle: view.disappearingLabel,
-                showChevron: true,
-                onTap: chooseDisappearing,
-              ),
-            ],
-          ),
-          HelixSettingsSection(
-            children: [
-              HelixSettingsTile(
-                icon: Icons.delete_sweep_outlined,
-                title: 'Clear chat',
-                destructive: true,
-                onTap: clearChat,
-              ),
-              if (!view.isGroup)
-                HelixSettingsTile(
-                  icon: Icons.block,
-                  title: view.blocked
-                      ? 'Unblock ${view.title}'
-                      : 'Block ${view.title}',
-                  destructive: !view.blocked,
-                  onTap: toggleBlock,
-                ),
-            ],
-          ),
+    final info = infoLocationOf(conversationId);
+    final peer = view.peerAccount;
+    return orbit.ChatSettingsScreen(
+      model: orbit.ChatSettingsModel(
+        title: view.title,
+        subtitle: view.subtitle,
+        avatar: view.avatar,
+        isGroup: view.isGroup,
+        hasInfoPage: info != null,
+        muted: view.muted,
+        muteChoices: [
+          for (final length in MuteFor.values)
+            (id: length.name, label: length.label),
         ],
+        disappearingLabel: view.disappearingLabel,
+        disappearingSeconds: view.disappearingSeconds,
+        disappearingChoices: [
+          for (final c in disappearingChoices)
+            (seconds: c.seconds, label: c.label),
+        ],
+        blocked: view.blocked,
+      ),
+      actions: orbit.ChatSettingsActions(
+        onOpenInfo: info == null ? null : () => context.push(info),
+        onOpenSharedMedia: () =>
+            context.push(sharedMediaLocation(conversationId)),
+        onMute: (id) => unawaited(
+          actions.mute(id == null ? null : MuteFor.values.byName(id)),
+        ),
+        onSetDisappearing: (seconds) =>
+            unawaited(actions.setDisappearing(seconds)),
+        onClear: () async {
+          await actions.clear();
+          if (context.mounted) orbit.showOrbitToast(context, 'Chat cleared');
+        },
+        onBlock: peer == null ? null : () => unawaited(actions.block(peer)),
+        onUnblock: peer == null ? null : () => unawaited(actions.unblock(peer)),
       ),
     );
   }
