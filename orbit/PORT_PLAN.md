@@ -435,6 +435,11 @@ pending your review:
   mention picker, selection, in-chat search, the message actions, the attach
   sheet and the emoji panel. 26 keys, 0.5% to 9.6% in Orbit (two keys higher
   where the prototype's shot stops short of the bottom; see `DEVIATIONS.md`).
+- [x] Batch 4: the conversation's pages (`ForwardScreen`,
+  `MessageInfoScreen`, `MediaViewerScreen` with the video states,
+  `SendFilesScreen`, `SharedMediaScreen`, `ChatSettingsScreen`), with the
+  shared `OrbitProfileHero`, `OrbitTabs`, `OrbitPick`, `OrbitBottomBar` and
+  `OrbitNight`. 25 keys, 0.6% to 3.1% in Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 import 'package:orbit_preview/previews/chat.dart';
+import 'package:orbit_preview/previews/chat_pages.dart';
 import 'package:orbit_preview/previews/home.dart';
 import 'package:orbit_preview/previews/signin.dart';
 
@@ -21,6 +22,7 @@ final Map<String, WidgetBuilder> orbitPorted = <String, WidgetBuilder>{
   ...entryPreviews,
   ...homePreviews,
   ...chatPreviews,
+  ...chatPagePreviews,
   'kit-overlays': (context) => const KitOverlaysScreen(),
   for (final o in KitOverlay.values)
     o.key: (context) => KitOverlaysScreen(open: o),

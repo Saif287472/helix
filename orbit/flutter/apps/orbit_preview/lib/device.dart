@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:orbit_ui/compare.dart' show OrbitDevice;
 import 'package:orbit_ui/orbit_ui.dart';
 
@@ -16,7 +18,7 @@ import 'package:orbit_ui/orbit_ui.dart';
 /// Everything the platform would otherwise decide is pinned here, because a
 /// screenshot must not depend on the machine it was taken on: one logical pixel
 /// per pixel, no text scaling, and reduce motion only when asked for.
-class OrbitDeviceSurface extends StatelessWidget {
+class OrbitDeviceSurface extends StatefulWidget {
   const OrbitDeviceSurface({
     super.key,
     required this.device,
@@ -33,10 +35,28 @@ class OrbitDeviceSurface extends StatelessWidget {
   /// `.statusbar { height: 40px }`, which `.page` pads its content below.
   static const statusBarHeight = 40.0;
 
-  bool get _phone => device == OrbitDevice.phone;
+  /// The screen under the status bar is a night page.
+  static final _night = ValueNotifier(false);
+
+  @override
+  State<OrbitDeviceSurface> createState() => _OrbitDeviceSurfaceState();
+}
+
+class _OrbitDeviceSurfaceState extends State<OrbitDeviceSurface> {
+  // One per surface: a shared key would carry a screen's state into the
+  // next shot.
+  final _screen = GlobalKey(debugLabel: 'screen');
+
+  bool get _phone => widget.device == OrbitDevice.phone;
+
+  static const statusBarHeight = OrbitDeviceSurface.statusBarHeight;
 
   @override
   Widget build(BuildContext context) {
+    final device = widget.device;
+    final tokens = widget.tokens;
+    final reduceMotion = widget.reduceMotion;
+    final child = widget.child;
     final size = Size(device.width.toDouble(), device.height.toDouble());
     final theme = OrbitTheme.of(tokens).copyWith(
       platform: _phone ? TargetPlatform.android : TargetPlatform.windows,
@@ -65,18 +85,21 @@ class OrbitDeviceSurface extends StatelessWidget {
                 // opens inside the phone, under its status bar, as the
                 // prototype's overlay layer does.
                 Positioned.fill(
-                  child: Navigator(
-                    pages: [MaterialPage<void>(child: child)],
-                    onDidRemovePage: (_) {},
+                  child: RepaintBoundary(
+                    key: _screen,
+                    child: Navigator(
+                      pages: [MaterialPage<void>(child: child)],
+                      onDidRemovePage: (_) {},
+                    ),
                   ),
                 ),
                 if (_phone) ...[
-                  const Positioned(
+                  Positioned(
                     left: 0,
                     right: 0,
                     top: 0,
                     height: statusBarHeight,
-                    child: _StatusBar(),
+                    child: _StatusBar(screen: _screen),
                   ),
                   const Positioned(
                     left: 0,
@@ -94,15 +117,48 @@ class OrbitDeviceSurface extends StatelessWidget {
   }
 }
 
-/// `.statusbar`: 9:41 and three filled icons, mono 13px at 500, in `--ink`.
-class _StatusBar extends StatelessWidget {
-  const _StatusBar();
+/// `.statusbar`: 9:41 and three filled icons, mono 13px at 500, in `--ink`;
+/// in `--night-text` over a night page (`.phone-screen.on-night`). A screen
+/// says it is a night page the way it tells a phone, with an
+/// `AnnotatedRegion<SystemUiOverlayStyle>` whose icons are light; the bar
+/// reads the region under it after every frame.
+class _StatusBar extends StatefulWidget {
+  const _StatusBar({required this.screen});
+
+  final GlobalKey screen;
+
+  @override
+  State<_StatusBar> createState() => _StatusBarState();
+}
+
+class _StatusBarState extends State<_StatusBar> {
+  var _night = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPersistentFrameCallback(_check);
+  }
+
+  void _check(Duration _) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = widget.screen.currentContext?.findRenderObject();
+      // ignore: invalid_use_of_protected_member
+      final layer = box is RenderRepaintBoundary ? box.layer : null;
+      final style = layer?.find<SystemUiOverlayStyle>(const Offset(200, 20));
+      final night = style?.statusBarIconBrightness == Brightness.light;
+      if (night != _night) setState(() => _night = night);
+      OrbitDeviceSurface._night.value = night;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
+    final ink = _night ? OrbitNight.text : t.ink;
     Widget icon(OrbitGlyph glyph) =>
-        OrbitIcon(glyph, weight: OrbitIconWeight.fill, size: 15, color: t.ink);
+        OrbitIcon(glyph, weight: OrbitIconWeight.fill, size: 15, color: ink);
     return ExcludeSemantics(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(30, 6, 28, 0),
@@ -111,7 +167,7 @@ class _StatusBar extends StatelessWidget {
           children: [
             Text(
               '9:41',
-              style: t.mono.style(size: 13, weight: 500, color: t.ink),
+              style: t.mono.style(size: 13, weight: 500, color: ink),
             ),
             Row(
               children: [
@@ -129,17 +185,23 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-/// `.gesture-bar`: 120×4, corner 4, `--gesture`, 7px off the bottom.
+/// `.gesture-bar`: 120×4, corner 4, `--gesture`, 7px off the bottom;
+/// `rgba(234, 238, 248, 0.45)` over a night page.
 class _GestureBar extends StatelessWidget {
   const _GestureBar();
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 120,
-    height: 4,
-    decoration: BoxDecoration(
-      color: OrbitTokens.of(context).gesture,
-      borderRadius: BorderRadius.circular(4),
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: OrbitDeviceSurface._night,
+    builder: (context, night, _) => Container(
+      width: 120,
+      height: 4,
+      decoration: BoxDecoration(
+        color: night
+            ? OrbitNight.text.withValues(alpha: 0.45)
+            : OrbitTokens.of(context).gesture,
+        borderRadius: BorderRadius.circular(4),
+      ),
     ),
   );
 }

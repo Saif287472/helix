@@ -229,3 +229,28 @@ The port follows the prototype, so these changed the prototype itself:
   port opens at the newest message, as the prototype means to; those two keys
   score 20-28% for that reason alone.
   - **Owner:** pending (batch 3).
+
+## Phase 4 batch 4 (the conversation's pages)
+
+- **The media viewer is `--night`, not black.** `.viewer-page` asks for
+  `#000`, but `.page.night` is more specific and wins, so the prototype
+  draws `#090C15`. The port matches what the prototype draws. If black was
+  meant, it is a one-line change in both.
+  - **Owner:** pending (batch 4).
+- **Night pages tell the status bar the way a phone expects.** The viewer
+  sets `SystemUiOverlayStyle.light` with an `AnnotatedRegion`; the preview's
+  status bar and gesture bar read it and turn `--night-text`, as
+  `.phone-screen.on-night` does.
+  - **Owner:** pending (batch 4).
+- **The video seek bar is Flutter's slider** themed white, where the
+  prototype draws Chrome's range input with `accent-color: #fff`.
+  - **Owner:** pending (batch 4).
+- **Not built yet:** the viewer's Previous / Next buttons and arrow keys on a
+  window (batch 10, the wide layout), the "Forwarded" and "Chat cleared"
+  toasts (the app's connector shows them), and the 3-second auto-hide of the
+  video controls (it follows `VideoView.playing` once wired).
+  - **Owner:** pending (batch 4).
+- **Models follow the contract's names, with simpler signatures** where the
+  contract returns a sentence or a result (`Future<String?>`); those return
+  types arrive when each page is wired in Part B.
+  - **Owner:** pending (batch 4).

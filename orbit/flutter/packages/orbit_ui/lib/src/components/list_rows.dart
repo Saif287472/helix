@@ -170,6 +170,9 @@ class OrbitListRow extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.onChanged,
+    this.leading,
+    this.subLeading,
+    this.titleWidget,
   });
 
   final String title;
@@ -193,10 +196,21 @@ class OrbitListRow extends StatelessWidget {
   /// A switch row's change.
   final ValueChanged<bool>? onChanged;
 
+  /// In place of the icon tile: a picture (`avatar(…, 40)`) or a thumbnail.
+  final Widget? leading;
+
+  /// Before the sub line, on its baseline (the ticks in Message info).
+  final Widget? subLeading;
+
+  /// In place of the title text (a link set in mono).
+  final Widget? titleWidget;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final ic = icon;
+    final lead = leading;
+    final subLead = subLeading;
     final (tileBg, tileInk) = danger
         ? (t.dangerSoft, t.danger)
         : iconColor == null
@@ -228,7 +242,10 @@ class OrbitListRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            if (ic != null) ...[
+            if (lead != null) ...[
+              lead,
+              const SizedBox(width: 14),
+            ] else if (ic != null) ...[
               Container(
                 width: 36,
                 height: 36,
@@ -250,15 +267,36 @@ class OrbitListRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OrbitText(
-                    title,
-                    style: t.font.style(
-                      size: OrbitType.body,
-                      weight: 520,
-                      color: titleInk,
-                    ),
-                  ),
-                  if (sub.isNotEmpty)
+                  titleWidget ??
+                      OrbitText(
+                        title,
+                        style: t.font.style(
+                          size: OrbitType.body,
+                          weight: 520,
+                          color: titleInk,
+                        ),
+                      ),
+                  if (sub.isNotEmpty && subLead != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          subLead,
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: OrbitText(
+                              sub,
+                              style: t.font.style(
+                                size: OrbitType.caption,
+                                color: t.ink3,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (sub.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: OrbitText(
