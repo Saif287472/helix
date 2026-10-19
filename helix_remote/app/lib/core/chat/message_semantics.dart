@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:helix_remote/core/groups/pending_member_copy.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
@@ -203,11 +202,16 @@ String callLogText(MessageRow row) {
 }
 
 /// The glyph on a call log notice.
-IconData callLogIcon(MessageRow row) {
-  final payload = payloadOf(row);
-  if (payload['outcome'] == 'missed' && !row.outgoing) return Icons.call_missed;
-  return payload['media'] == 'video' ? Icons.videocam : Icons.call;
+OrbitGlyph callLogIcon(MessageRow row) {
+  if (callLogMissed(row)) return OrbitIcons.phoneIncoming;
+  return payloadOf(row)['media'] == 'video'
+      ? OrbitIcons.videoCamera
+      : OrbitIcons.phone;
 }
+
+/// A call to you that nobody answered (`.notice.calllog.missed`).
+bool callLogMissed(MessageRow row) =>
+    payloadOf(row)['outcome'] == 'missed' && !row.outgoing;
 
 String _list(List<String> names) {
   if (names.isEmpty) return '';

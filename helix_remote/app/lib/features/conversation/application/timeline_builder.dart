@@ -180,6 +180,9 @@ TimelineSnapshot buildTimeline({
               row.localRowid.toString(),
               text,
               icon: row.kind == 'call_log' ? callLogIcon(row) : null,
+              tone: row.kind == 'call_log' && callLogMissed(row)
+                  ? HelixNoticeTone.missedCall
+                  : HelixNoticeTone.plain,
             ),
             messageRowid: row.localRowid,
             messageId: row.messageId,

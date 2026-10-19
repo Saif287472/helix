@@ -112,7 +112,8 @@ extension OrbitTokensValues on OrbitTokens {
   OrbitFontStack get mono => value<OrbitFontStack>('mono');
 
   // gradient
-  LinearGradient get wordmarkGradient => value<LinearGradient>('wordmark-gradient');
+  LinearGradient get wordmarkGradient =>
+      value<LinearGradient>('wordmark-gradient');
 
   // gradientRef
   LinearGradient get brandGradient => value<LinearGradient>('brand-gradient');
@@ -143,9 +144,9 @@ extension OrbitTokensValues on OrbitTokens {
   List<BoxShadow> get shadowSheet => value<List<BoxShadow>>('shadow-sheet');
 
   // transform
-  OrbitTextTransform get displayTransform => value<OrbitTextTransform>('display-transform');
+  OrbitTextTransform get displayTransform =>
+      value<OrbitTextTransform>('display-transform');
 
   // weight
   int get displayWeight => value<int>('display-weight');
-
 }

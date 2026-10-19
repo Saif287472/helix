@@ -1,7 +1,8 @@
 # Orbit Flutter workspace (Part A)
 #
-# Part A lives here, outside helix_remote/. The package is moved into
-# helix_remote/packages/ in Part B, unchanged.
+# Part B moved orbit_ui into helix_remote/packages/ (a member of the
+# helix_remote workspace). The preview app stays here and depends on it by
+# path.
 name: orbit_flutter_workspace
 publish_to: none
 
@@ -11,5 +12,4 @@ environment:
 # The same versions and the same lint rules as helix_remote/ (AGENTS.md).
 # Do not upgrade Flutter or Dart.
 workspace:
-  - packages/orbit_ui
   - apps/orbit_preview

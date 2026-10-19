@@ -516,6 +516,16 @@ to merge. Production is never stopped or redeployed.
    - You build the APK and try it on your phone, and run it on Windows.
 6. **Merge and commit** only when you say.
 
+Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
+- [x] Step 1. `orbit_ui` is `helix_remote/packages/orbit_ui`, a workspace member
+  in `v2PackageDependencies` with its own architecture test (it imports no
+  Helix package). The app's presentation rule allows it. The view models live
+  in `orbit_ui` (`package:orbit_ui/models.dart`) and `helix_remote_ui`
+  re-exports them, so the old screens keep working; the call-log notice now
+  carries an Orbit glyph and a tone. The fonts are in the dependency
+  register; the generators write to the new place and leave `dart format`
+  output. The preview depends on it by path.
+
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and
   is compared again.

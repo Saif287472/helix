@@ -25,7 +25,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLUTTER = os.path.dirname(HERE)
 PROTOTYPE = os.path.join(os.path.dirname(FLUTTER), 'prototype')
-OUT = os.path.join(FLUTTER, 'packages', 'orbit_ui', 'lib', 'src', 'icons', 'orbit_icons.dart')
+# orbit_ui lives in the helix_remote workspace since Part B.
+OUT = os.path.join(os.path.dirname(os.path.dirname(FLUTTER)), 'helix_remote', 'packages', 'orbit_ui', 'lib', 'src', 'icons', 'orbit_icons.dart')
 PKG = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'Pub', 'Cache', 'hosted', 'pub.dev',
                    'phosphor_flutter-2.1.0', 'lib', 'src')
 

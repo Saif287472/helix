@@ -33,11 +33,7 @@ void main() {
   }) {
     final pixels = Uint8List.fromList(from.pixels);
     pixels[pixel * 4] = (pixels[pixel * 4] + delta) % 256;
-    return OrbitImage(
-      width: from.width,
-      height: from.height,
-      pixels: pixels,
-    );
+    return OrbitImage(width: from.width, height: from.height, pixels: pixels);
   }
 
   group('the score', () {
@@ -52,8 +48,13 @@ void main() {
       expect(diff.differingPixels, 0);
       expect(diff.differingChannels, 0);
       expect(diff.maxChannelDelta, 0);
-      expect(diff.score, 0.0, reason: 'the score of two copies of the same '
-          'file is zero, not nearly zero');
+      expect(
+        diff.score,
+        0.0,
+        reason:
+            'the score of two copies of the same '
+            'file is zero, not nearly zero',
+      );
       expect(diff.roundedScore, 0.0);
     });
 
@@ -63,8 +64,11 @@ void main() {
       final diff = compareOrbitImages(a, b);
       expect(diff.differingPixels, 1);
       expect(diff.totalPixels, 100);
-      expect(diff.differingChannels, 1,
-          reason: 'one channel moved, so one channel differs');
+      expect(
+        diff.differingChannels,
+        1,
+        reason: 'one channel moved, so one channel differs',
+      );
       expect(diff.maxChannelDelta, 1);
       expect(diff.score, closeTo(1.0, 1e-12));
       expect(diff.roundedScore, 1.0);
@@ -87,9 +91,13 @@ void main() {
       // one unit.
       final a = image(10, 10);
       final b = withOnePixelChanged(a, pixel: 7, delta: 1);
-      expect(compareOrbitImages(a, b).score, 1.0,
-          reason: 'one unit out of one hundred pixels is one percent, not a '
-              'fraction of a percent');
+      expect(
+        compareOrbitImages(a, b).score,
+        1.0,
+        reason:
+            'one unit out of one hundred pixels is one percent, not a '
+            'fraction of a percent',
+      );
     });
 
     test('a moved pixel counts once however many channels moved', () {
@@ -103,8 +111,13 @@ void main() {
       final diff = compareOrbitImages(a, b);
       expect(diff.differingPixels, 1);
       expect(diff.differingChannels, 4);
-      expect(diff.score, 1.0, reason: 'four channels in one pixel is still '
-          'one pixel, so the score is one percent and not four');
+      expect(
+        diff.score,
+        1.0,
+        reason:
+            'four channels in one pixel is still '
+            'one pixel, so the score is one percent and not four',
+      );
       expect(diff.meanChannelDelta, greaterThan(0));
       expect(diff.meanChannelDelta, lessThanOrEqualTo(255));
     });
@@ -113,16 +126,12 @@ void main() {
       final a = OrbitImage(
         width: 8,
         height: 8,
-        pixels: Uint8List.fromList(
-          List<int>.filled(8 * 8 * 4, 0xFF),
-        ),
+        pixels: Uint8List.fromList(List<int>.filled(8 * 8 * 4, 0xFF)),
       );
       final b = OrbitImage(
         width: 8,
         height: 8,
-        pixels: Uint8List.fromList(
-          List<int>.filled(8 * 8 * 4, 0x00),
-        ),
+        pixels: Uint8List.fromList(List<int>.filled(8 * 8 * 4, 0x00)),
       );
       expect(compareOrbitImages(a, b).score, 100.0);
     });
@@ -140,15 +149,22 @@ void main() {
       final a = image(412, 866);
       final b = image(412, 865);
       expect(
-        () => compareOrbitImages(a, b,
-            leftName: 'the prototype', rightName: 'the Flutter render'),
+        () => compareOrbitImages(
+          a,
+          b,
+          leftName: 'the prototype',
+          rightName: 'the Flutter render',
+        ),
         throwsA(
           isA<OrbitCompareException>()
               .having((e) => e.message, 'message', contains('412x866'))
               .having((e) => e.message, 'message', contains('412x865'))
               .having((e) => e.message, 'message', contains('the prototype'))
               .having(
-                  (e) => e.message, 'message', contains('the Flutter render')),
+                (e) => e.message,
+                'message',
+                contains('the Flutter render'),
+              ),
         ),
       );
     });
@@ -156,20 +172,19 @@ void main() {
     test('the width alone is enough to stop it', () {
       expect(
         () => compareOrbitImages(image(412, 866), image(411, 866)),
-        throwsA(isA<OrbitCompareException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('411x866'), contains('412x866')),
-        )),
+        throwsA(
+          isA<OrbitCompareException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('411x866'), contains('412x866')),
+          ),
+        ),
       );
     });
 
     test('a missing file on the left', () {
       expect(
-        () => readOrbitPngFile(
-          'no\\such\\file.png',
-          name: 'the prototype',
-        ),
+        () => readOrbitPngFile('no\\such\\file.png', name: 'the prototype'),
         throwsA(
           isA<OrbitCompareException>()
               .having((e) => e.message, 'message', contains('no file at'))
@@ -186,8 +201,11 @@ void main() {
       expect(
         () => compareOrbitPngFiles(left.path, '${dir.path}/not-there.png'),
         throwsA(
-          isA<OrbitCompareException>()
-              .having((e) => e.message, 'message', contains('flutter')),
+          isA<OrbitCompareException>().having(
+            (e) => e.message,
+            'message',
+            contains('flutter'),
+          ),
         ),
       );
     });
@@ -201,7 +219,11 @@ void main() {
         () => readOrbitPngFile(bad.path),
         throwsA(
           isA<OrbitCompareException>()
-              .having((e) => e.message, 'message', contains('not a readable PNG'))
+              .having(
+                (e) => e.message,
+                'message',
+                contains('not a readable PNG'),
+              )
               .having((e) => e.message, 'message', contains('bad.png')),
         ),
       );
@@ -213,11 +235,13 @@ void main() {
       final empty = File('${dir.path}/empty.png')..writeAsBytesSync(<int>[]);
       expect(
         () => readOrbitPngFile(empty.path),
-        throwsA(isA<OrbitCompareException>().having(
-          (e) => e.message,
-          'message',
-          contains('too short'),
-        )),
+        throwsA(
+          isA<OrbitCompareException>().having(
+            (e) => e.message,
+            'message',
+            contains('too short'),
+          ),
+        ),
       );
     });
   });

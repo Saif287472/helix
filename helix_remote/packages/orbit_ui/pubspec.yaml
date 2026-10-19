@@ -9,8 +9,9 @@ resolution: workspace
 environment:
   sdk: ^3.12.0
 
-# Part B moves this package to helix_remote/packages/orbit_ui unchanged, so it
-# must not depend on anything the app does not have.
+# Moved here from orbit/flutter in Part B. It must not depend on anything the
+# app does not have, and it imports no Helix package (test/architecture_test).
+# orbit/flutter/apps/orbit_preview depends on it by path.
 dependencies:
   flutter:
     sdk: flutter
@@ -18,6 +19,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  helix_remote_architecture_rules:
+    path: ../helix_remote_architecture_rules
   flutter_lints: ^6.0.0
 
 flutter:

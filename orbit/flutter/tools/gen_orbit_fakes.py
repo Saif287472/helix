@@ -16,7 +16,8 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLUTTER = os.path.dirname(HERE)
 PROTOTYPE = os.path.join(os.path.dirname(FLUTTER), 'prototype')
-OUT = os.path.join(FLUTTER, 'packages', 'orbit_ui', 'lib', 'src', 'fakes', 'orbit_fakes.dart')
+# orbit_ui lives in the helix_remote workspace since Part B.
+OUT = os.path.join(os.path.dirname(os.path.dirname(FLUTTER)), 'helix_remote', 'packages', 'orbit_ui', 'lib', 'src', 'fakes', 'orbit_fakes.dart')
 
 DUMP = r"""
 const fs = require('fs');

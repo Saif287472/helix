@@ -103,16 +103,24 @@ void main() {
     );
   });
 
-  test('the package depends on Flutter only', () {
+  // orbit_ui holds the view models this package re-exports while the app
+  // switches to the Orbit screens (orbit/PORT_PLAN.md Part B); it is a leaf
+  // with no I/O either.
+  test('the package depends on Flutter and orbit_ui only', () {
     final pubspec = File(
       'pubspec.yaml',
     ).readAsStringSync().replaceAll('\r\n', '\n');
     final deps = RegExp(
-      r'^dependencies:\n((?:  .*\n)+)',
+      r'^dependencies:\n((?:  .*\n|\n)+)',
       multiLine: true,
     ).firstMatch(pubspec)!.group(1)!;
-    expect(deps, contains('flutter:'));
-    expect(RegExp(r'^  \w+:', multiLine: true).allMatches(deps), hasLength(1));
+    expect(
+      RegExp(
+        r'^  (\w+):',
+        multiLine: true,
+      ).allMatches(deps).map((m) => m.group(1)).toSet(),
+      {'flutter', 'orbit_ui'},
+    );
   });
 
   test('library files import nothing from the engine, db, api or crypto', () {

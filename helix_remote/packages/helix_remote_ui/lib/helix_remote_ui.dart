@@ -4,14 +4,15 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:orbit_ui/models.dart';
+
+export 'package:orbit_ui/models.dart';
 
 part 'src/chat_tokens.dart';
 part 'src/components.dart';
-part 'src/view_models.dart';
 part 'src/avatars.dart';
 part 'src/chat_list.dart';
 part 'src/message_bubble.dart';

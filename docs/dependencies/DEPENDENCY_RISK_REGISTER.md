@@ -121,3 +121,22 @@ packages. Declared dependencies that only they used were dropped from the remain
 `helix_remote_domain` and the test package from `tool`). `helix_remote/pubspec.lock` did not change: every
 resolved package is still declared by some remaining member (the app still declares
 `cryptography_flutter`, and the app and the admin console `flutter_secure_storage`). Nothing was added.
+
+## Orbit UI package and its bundled fonts (2026-10-19)
+
+Orbit Part B step 1 (`orbit/PORT_PLAN.md`) moved `orbit_ui` into the Helix Remote workspace
+(`helix_remote/packages/orbit_ui`). It declares no hosted dependency beyond the Flutter SDK
+(`flutter_lints` is dev-only and was already resolved), so `helix_remote/pubspec.lock` did not change.
+It ships font files, vendored verbatim, which are dependencies in their own right:
+
+- **Phosphor icons** (Regular, Light, Bold, Fill, Duotone; `packages/orbit_ui/fonts/phosphor/`),
+  MIT licence (`LICENSE` beside the files). Risk: an icon renamed or dropped upstream. Mitigation: the
+  icon table `lib/src/icons/orbit_icons.dart` names only code points present in these files, and the
+  files are never replaced without regenerating it; release builds tree-shake each font to the
+  glyphs used.
+- **Geist and Geist Mono** (variable roman and italic; `packages/orbit_ui/fonts/`), SIL Open Font
+  License 1.1, the licence text beside each family. Source, byte size and SHA-256 are in
+  `orbit/flutter/fonts/MANIFEST.md`. Risk: none at runtime (no network fetch). Mitigation: a family is
+  added only together with its licence.
+
+Owner: client-team.

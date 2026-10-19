@@ -7,7 +7,7 @@ This repository holds **three independent pub workspaces**, not one. There is no
 |---|---|---|
 | Helix Remote | `helix_remote/pubspec.yaml` (`name: helix_remote_workspace`) | `helix_remote/pubspec.lock` — **committed** |
 | Helix Local | `helix_local/pubspec.yaml` | not committed (`helix_local/.gitignore`) |
-| Orbit | `orbit/flutter/pubspec.yaml` (`name: orbit_flutter_workspace`) | `orbit/flutter/pubspec.lock` — **committed** |
+| Orbit preview | `orbit/flutter/pubspec.yaml` (`name: orbit_flutter_workspace`) | `orbit/flutter/pubspec.lock` — **committed** |
 
 ## Helix Remote
 
@@ -44,19 +44,20 @@ it, and nothing in the Helix Remote CI jobs depends on it.
 
 ## Orbit
 
-`orbit/flutter/` is Part A of the Orbit UI port (`orbit/PORT_PLAN.md`): the design system and every
-screen live in `packages/orbit_ui`, and `apps/orbit_preview` is a Flutter twin of the HTML prototype
-that runs on fake data. It sits outside `helix_remote/` on purpose, so a redesign cannot break the
-working app; Part B moves `orbit_ui` into `helix_remote/packages/` unchanged.
+`orbit/flutter/` holds `apps/orbit_preview`, the Flutter twin of the HTML prototype that runs on fake
+data (`orbit/PORT_PLAN.md`). The design system and every screen, `orbit_ui`, moved into the Helix
+Remote workspace in Part B step 1 (`helix_remote/packages/orbit_ui`), so `helix_remote/pubspec.lock`
+is the one that governs it; the preview depends on it by path.
 
 Its lockfile is committed for the same reason Helix Remote's is: the compare tool (`PORT_PLAN.md`,
 Phase 2) renders the same screen twice and diffs the pixels, so the resolved versions are part of
 what is being reviewed and must not move underneath the comparison. No CI job runs this workspace yet
 — CI starts covering Orbit when Part B lands.
 
-When Part B moves `orbit_ui` into the Helix Remote workspace this one goes with the rest of Part A:
-`orbit/flutter/pubspec.lock` is deleted and its packages are covered by `helix_remote/pubspec.lock`.
-Two lockfiles must never describe the same package.
+Since Part B step 1 the preview's lockfile describes only the Flutter SDK's own packages, the
+preview's dev-only lints and `orbit_ui` as a path package. It adds no hosted dependency of its own;
+one that `orbit_ui` needs is declared in `orbit_ui` and so governed by `helix_remote/pubspec.lock`.
+The preview's own packages are never shipped.
 
 ## Enforcement
 

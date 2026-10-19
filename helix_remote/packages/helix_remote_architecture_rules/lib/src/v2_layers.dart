@@ -22,7 +22,10 @@ const Map<String, Set<String>> v2PackageDependencies = {
     'helix_remote_db',
   },
   'helix_remote_calls': {'helix_remote_domain', 'helix_remote_protocol'},
-  'helix_remote_ui': {},
+  'helix_remote_ui': {'orbit_ui'},
+  // The Orbit design system and screens (orbit/PORT_PLAN.md Part B): a leaf
+  // that takes models and actions, so it imports no Helix package.
+  'orbit_ui': {},
   'helix_remote_server': {'helix_remote_protocol'},
 };
 

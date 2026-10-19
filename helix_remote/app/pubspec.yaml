@@ -31,6 +31,8 @@ dependencies:
     path: ../packages/helix_remote_calls
   helix_remote_ui:
     path: ../packages/helix_remote_ui
+  orbit_ui:
+    path: ../packages/orbit_ui
   # Plain providers only: no riverpod_generator, so no codegen to keep in step
   # (docs/dependencies/DEPENDENCY_RISK_REGISTER.md).
   flutter_riverpod: ^3.4.3

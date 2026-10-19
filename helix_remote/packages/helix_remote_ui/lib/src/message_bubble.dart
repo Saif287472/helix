@@ -150,6 +150,8 @@ class HelixMessageBubble extends StatelessWidget {
         if (c.label.isNotEmpty) b.write(', ${c.label}');
       case HelixContactContent():
         b.write('Contact ${c.name}');
+      case HelixPollContent():
+        b.write('Poll ${c.question}');
       case HelixPlaceholderContent():
         b.write(_placeholderText(c.kind, m.outgoing));
       case HelixViewOnceContent():
@@ -618,6 +620,16 @@ class _BubbleBody extends StatelessWidget {
       case HelixContactContent():
         children.add(HelixContactCard(content: c, onTap: actions.onContactTap));
         children.add(_MetaRow(message: m));
+      case HelixPollContent():
+        children.add(
+          _TextWithMeta(
+            message: m,
+            content: HelixTextContent(
+              [c.question, ...c.options.map((o) => '- $o')].join('\n'),
+            ),
+            actions: actions,
+          ),
+        );
       case HelixPlaceholderContent():
         children.add(
           HelixPlaceholderBody(

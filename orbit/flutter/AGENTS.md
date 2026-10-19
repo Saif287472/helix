@@ -69,7 +69,9 @@ fixed registry — the app ships the effect types, packs carry their settings.
 
 ## Porting and comparing a screen
 
-- Build the screen in `packages/orbit_ui`, add its key to
+- Build the screen in `orbit_ui` (since Part B step 1 it is
+  `helix_remote/packages/orbit_ui`, a member of that workspace; the gate's
+  format and analysis rules apply to it), add its key to
   `apps/orbit_preview/lib/ported.dart`, then compare it: `shoot_html.py` for
   the prototype, `orbit_preview.exe --shoot <key>` for Flutter (build with
   `flutter build windows --debug` in `apps/orbit_preview` first). The steps

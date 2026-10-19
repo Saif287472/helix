@@ -20,11 +20,13 @@ theme table. This script adds no design decisions of its own.
 import io
 import json
 import os
+import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-THEMES = os.path.join(HERE, '..', 'packages', 'orbit_ui', 'assets', 'themes')
-OUT = os.path.join(HERE, '..', 'packages', 'orbit_ui', 'lib', 'src', 'theme',
-                   'orbit_tokens.g.dart')
+# orbit_ui lives in the helix_remote workspace since Part B.
+PKG = os.path.join(HERE, '..', '..', '..', 'helix_remote', 'packages', 'orbit_ui')
+THEMES = os.path.join(PKG, 'assets', 'themes')
+OUT = os.path.join(PKG, 'lib', 'src', 'theme', 'orbit_tokens.g.dart')
 
 # The Dart type of each JSON group.
 TYPES = {
@@ -126,6 +128,9 @@ def main():
     a('')
 
     io.open(OUT, 'w', encoding='utf-8', newline='\n').write('\n'.join(w))
+    # The helix_remote gate checks formatting, so leave the file as
+    # `dart format` would.
+    subprocess.run(['dart', 'format', OUT], check=True, shell=os.name == 'nt')
     print('wrote %s: %d tokens in %d groups' % (OUT, len(fields), len(groups)))
 
 

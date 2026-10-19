@@ -951,7 +951,9 @@ def main():
     # a downloadable theme pack carries (Part C): data only, never code.
     import json as _json
     import shutil
-    out_dir = os.path.join(r'J:\Projects\helix', r'orbit\flutter\packages\orbit_ui\assets\themes')
+    # orbit_ui lives in the helix_remote workspace since Part B.
+    out_dir = os.path.join(ROOT, '..', '..', 'helix_remote', 'packages', 'orbit_ui',
+                           'assets', 'themes')
     if os.path.isdir(out_dir):
         shutil.rmtree(out_dir)
     os.makedirs(out_dir, exist_ok=True)

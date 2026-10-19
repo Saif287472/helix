@@ -138,8 +138,6 @@ final class OrbitMotion {
     if (v < 0) {
       throw FormatException('a duration is negative', '$key: $v');
     }
-    return Duration(
-      microseconds: (v * Duration.microsecondsPerSecond).round(),
-    );
+    return Duration(microseconds: (v * Duration.microsecondsPerSecond).round());
   }
 }

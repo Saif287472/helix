@@ -10,9 +10,10 @@ import 'package:helix_remote_architecture_rules/helix_remote_architecture_rules.
 ///
 /// 1. **Presentation imports nothing below it.** A file in
 ///    `features/*/presentation/` may import its own `application/`, `shared/`,
-///    `helix_remote_ui` and `helix_remote_domain` - and nothing else. The
-///    engine, database, crypto and API are reached through a notifier, so a
-///    widget cannot end up coupled to a ratchet, a row or a socket.
+///    `helix_remote_ui`, `orbit_ui` and `helix_remote_domain` - and nothing
+///    else. The engine, database, crypto and API are reached through a
+///    notifier, so a widget cannot end up coupled to a ratchet, a row or a
+///    socket.
 /// 2. **No v1 package.** `helix_remote_storage`, `_sync`, `_groups` and
 ///    `helix_remote_backend` are deleted at cutover.
 void main() {
@@ -198,7 +199,11 @@ bool _forbiddenInPresentation(String uri) {
   // about staying off the layers below.
   if (uri.startsWith('package:helix_remote/features/')) return false;
   // The two leaf packages: components and value types, no I/O.
-  const allowed = {'package:helix_remote_ui/', 'package:helix_remote_domain/'};
+  const allowed = {
+    'package:helix_remote_ui/',
+    'package:orbit_ui/',
+    'package:helix_remote_domain/',
+  };
   if (allowed.any(uri.startsWith)) return false;
   // Everything else in this app - engine, database, crypto, api, core - is
   // reached through a provider, not imported by a widget.

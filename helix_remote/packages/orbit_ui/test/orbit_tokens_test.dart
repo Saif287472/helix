@@ -38,10 +38,20 @@ void main() {
   test('every built-in theme loads', () async {
     for (final id in ids) {
       final tokens = await load(id);
-      expect(tokens.meta.id, id, reason: '$id loaded but says it is something '
-          'else');
-      expect(tokens.meta.name, isNotEmpty, reason: '$id has no name for the '
-          'picker');
+      expect(
+        tokens.meta.id,
+        id,
+        reason:
+            '$id loaded but says it is something '
+            'else',
+      );
+      expect(
+        tokens.meta.name,
+        isNotEmpty,
+        reason:
+            '$id has no name for the '
+            'picker',
+      );
     }
   });
 
@@ -52,14 +62,19 @@ void main() {
       final raw = json['tokens']! as Map<String, Object?>;
       final inJson = {
         for (final group in raw.entries)
-          for (final token in (group.value! as Map).keys) '$group.${token as String}',
+          for (final token in (group.value! as Map).keys)
+            '$group.${token as String}',
       };
       // The JSON is keyed `group.key`; `values` is keyed by the bare name, so
       // the counts must match even though the spellings differ.
-      expect(tokens.values.length, inJson.length,
-          reason: '$id: the JSON has ${inJson.length} tokens and the loaded '
-              'theme has ${tokens.values.length}; a token was dropped or '
-              'invented');
+      expect(
+        tokens.values.length,
+        inJson.length,
+        reason:
+            '$id: the JSON has ${inJson.length} tokens and the loaded '
+            'theme has ${tokens.values.length}; a token was dropped or '
+            'invented',
+      );
     }
   });
 
@@ -83,8 +98,11 @@ void main() {
     expect(orbit.displayTransform, OrbitTextTransform.none);
     expect(orbit.shadowCard, hasLength(1));
     expect(orbit.glow, hasLength(1));
-    expect(orbit.glow.single.blurRadius, 0.0,
-        reason: "Orbit's glow is a glow of nothing");
+    expect(
+      orbit.glow.single.blurRadius,
+      0.0,
+      reason: "Orbit's glow is a glow of nothing",
+    );
     expect(orbit.font.families.first, 'Geist');
     expect(orbit.mono.families.first, 'Geist Mono');
     expect(orbit.av0Bg, const Color(0xFFE3ECFD));
@@ -93,16 +111,21 @@ void main() {
 
   test('a shadow keeps every layer, and a gradient every stop', () async {
     final terminal = await load('terminal');
-    expect(terminal.shadowFloat, hasLength(2),
-        reason: 'the floating shadow is two layers');
+    expect(
+      terminal.shadowFloat,
+      hasLength(2),
+      reason: 'the floating shadow is two layers',
+    );
     expect(terminal.glow.single.color, const Color(0x5939FF88));
 
     final orbit = await load('orbit');
     expect(orbit.wordmarkGradient.colors, hasLength(3));
     expect(orbit.wordmarkGradient.stops, [0.0, 0.48, 1.0]);
-    expect(orbit.brandGradient.colors,
-        [orbit.callTop, orbit.callMid, orbit.callBottom],
-        reason: 'the brand gradient is built from the call colours');
+    expect(
+      orbit.brandGradient.colors,
+      [orbit.callTop, orbit.callMid, orbit.callBottom],
+      reason: 'the brand gradient is built from the call colours',
+    );
   });
 
   test('a pattern is a name and its settings, never a picture', () async {
@@ -111,14 +134,20 @@ void main() {
 
     final bloom = await load('bloom');
     expect(bloom.chatPattern.kind, 'grain');
-    expect(bloom.chatPattern.paramColour('a'), isNull,
-        reason: 'grain mixes raw numbers, not a colour');
+    expect(
+      bloom.chatPattern.paramColour('a'),
+      isNull,
+      reason: 'grain mixes raw numbers, not a colour',
+    );
     expect(bloom.chatPattern.size.size, const Size(160, 160));
 
     final terminal = await load('terminal');
     expect(terminal.chatPattern.kind, 'scanlines');
-    expect(terminal.chatPattern.size.isAuto, isTrue,
-        reason: 'scanlines carry their own period');
+    expect(
+      terminal.chatPattern.size.isAuto,
+      isTrue,
+      reason: 'scanlines carry their own period',
+    );
 
     final arcade = await load('arcade');
     expect(arcade.chatPattern.kind, 'neonGrid');
@@ -138,8 +167,10 @@ void main() {
     expect(cursor.param<String>('period'), '1s');
     // Terminal's cursor colour reads a token rather than naming one, so a
     // theme can follow it if the accent ever changes.
-    expect(cursor.param<Map<Object?, Object?>>('colour'),
-        {'kind': 'token', 'name': 'accent'});
+    expect(cursor.param<Map<Object?, Object?>>('colour'), {
+      'kind': 'token',
+      'name': 'accent',
+    });
     expect(OrbitColour.token('accent').resolve(terminal), terminal.accent);
 
     final field = await load('field');
@@ -149,8 +180,11 @@ void main() {
     for (final id in ids) {
       final meta = (await load(id)).meta;
       for (final e in meta.effects) {
-        expect(OrbitEffects.byName(e.kind), isNotNull,
-            reason: '$id switches on an effect this build has not got');
+        expect(
+          OrbitEffects.byName(e.kind),
+          isNotNull,
+          reason: '$id switches on an effect this build has not got',
+        );
       }
     }
   });
@@ -160,9 +194,13 @@ void main() {
     for (final id in ids) {
       used.add((await load(id)).chatPattern.kind);
     }
-    expect(used, OrbitEffects.patterns.map((p) => p.name).toSet(),
-        reason: 'a registered pattern is used by no theme, or a theme uses one '
-            'that is not registered');
+    expect(
+      used,
+      OrbitEffects.patterns.map((p) => p.name).toSet(),
+      reason:
+          'a registered pattern is used by no theme, or a theme uses one '
+          'that is not registered',
+    );
   });
 
   test('a theme that is missing a token fails instead of defaulting', () {
@@ -182,9 +220,13 @@ void main() {
       },
     });
     expect(thin.accent, isNotNull);
-    expect(() => thin.value<Color>('r-md'), throwsArgumentError,
-        reason: 'a screen reading a token this theme lacks is a bug in the '
-            'screen, not something to paper over');
+    expect(
+      () => thin.value<Color>('r-md'),
+      throwsArgumentError,
+      reason:
+          'a screen reading a token this theme lacks is a bug in the '
+          'screen, not something to paper over',
+    );
     expect(() => thin.value<Color>('accent'), returnsNormally);
   });
 
@@ -204,16 +246,10 @@ void main() {
         'lengthPx': {'r-md': 'wide'},
       },
     };
-    expect(
-      () => OrbitTokens.fromThemeJson(notANumber),
-      throwsFormatException,
-    );
+    expect(() => OrbitTokens.fromThemeJson(notANumber), throwsFormatException);
 
     // And a document with no tokens group at all.
-    expect(
-      () => OrbitTokens.fromThemeJson({'id': 'x'}),
-      throwsFormatException,
-    );
+    expect(() => OrbitTokens.fromThemeJson({'id': 'x'}), throwsFormatException);
   });
 
   test('an effect this build has not got is refused, not ignored', () async {
@@ -230,10 +266,7 @@ void main() {
         'curve': [0.2, 0.7, 0.2, 1.0],
       },
       'effects': [
-        {
-          'kind': 'discoBall',
-          'params': <String, Object?>{},
-        },
+        {'kind': 'discoBall', 'params': <String, Object?>{}},
       ],
     };
     expect(
@@ -252,7 +285,9 @@ void main() {
     final orbit = OrbitTokens.fromThemeJson({
       'id': 'a',
       'tokens': {
-        'colour': {'accent': {'hex': '#000000', 'alpha': 1}},
+        'colour': {
+          'accent': {'hex': '#000000', 'alpha': 1},
+        },
         'lengthPx': {'r-md': 10},
       },
       'motion': {
@@ -264,7 +299,9 @@ void main() {
       'id': 'b',
       'dark': true,
       'tokens': {
-        'colour': {'accent': {'hex': '#FFFFFF', 'alpha': 1}},
+        'colour': {
+          'accent': {'hex': '#FFFFFF', 'alpha': 1},
+        },
         'lengthPx': {'r-md': 20},
       },
       'motion': {

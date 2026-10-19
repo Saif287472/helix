@@ -87,7 +87,10 @@ helix_remote/                pub workspace (run commands from here)
                                   outbound pipelines, groups, calls, transfers)
   packages/helix_remote_cli       headless client on the engine (helix_v2)
   packages/helix_remote_calls     WebRTC wrapper (Flutter)
-  packages/helix_remote_ui        design tokens + components
+  packages/helix_remote_ui        design tokens + components (the old look; it
+                                  re-exports the view models from orbit_ui)
+  packages/orbit_ui               the Orbit design system and every Orbit screen
+                                  (orbit/PORT_PLAN.md; models in, actions out)
   packages/helix_remote_domain    shared value types (legal documents only today)
   packages/helix_remote_architecture_rules  test-only import-rule helpers
   contracts/v2/fixtures/     golden wire fixtures

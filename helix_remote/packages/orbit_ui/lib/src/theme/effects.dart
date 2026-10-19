@@ -116,13 +116,15 @@ abstract final class OrbitEffects {
   /// format carries data, and the effect types live in the app.
   static OrbitEffectKind? byName(String? name) => _byName[name];
 
-  static OrbitPatternKind? patternByName(String? name) =>
-      _patternByName[name];
+  static OrbitPatternKind? patternByName(String? name) => _patternByName[name];
 
   /// Throws when the theme asks for an effect or pattern this build has not
   /// got, naming both, so the failure says which pack or generator is wrong.
-  static void validate(String theme, Iterable<String> effectNames,
-      String? pattern) {
+  static void validate(
+    String theme,
+    Iterable<String> effectNames,
+    String? pattern,
+  ) {
     for (final name in effectNames) {
       if (_byName[name] == null) {
         throw FormatException(

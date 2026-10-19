@@ -12,7 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   orbit_ui:
-    path: ../../packages/orbit_ui
+    path: ../../../../helix_remote/packages/orbit_ui
 
 dev_dependencies:
   flutter_test:

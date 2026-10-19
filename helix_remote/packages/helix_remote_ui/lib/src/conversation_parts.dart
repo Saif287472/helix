@@ -307,8 +307,13 @@ class HelixTimelineRow extends StatelessWidget {
     final HelixUnreadDividerItem i => HelixUnreadDivider(count: i.count),
     final HelixSystemNoticeItem i => HelixSystemNotice(
       text: i.text,
-      icon: i.icon,
+      icon: i.icon?.regular,
     ),
+    // Orbit's timeline items; only the Orbit screens are given them.
+    HelixEncryptionNoticeItem() => const HelixSystemNotice(
+      text: 'Messages are end-to-end encrypted. Say hello.',
+    ),
+    HelixTypingItem() => const SizedBox.shrink(),
   };
 }
 
