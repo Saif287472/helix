@@ -85,6 +85,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The status line, by what a screen reader announces.
+  Finder status(String words) => find.bySemanticsLabel(words);
+
   Future<void> emit(WidgetTester tester, CallSnapshot? call) async {
     port.emit(call);
     await tester.pump();
@@ -98,9 +101,10 @@ void main() {
 
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('+8801711000001'), findsOneWidget);
-    expect(find.text('Incoming voice call'), findsOneWidget);
-    expect(find.text('Helix voice call'), findsOneWidget);
-    expect(find.text('End-to-end encrypted'), findsOneWidget);
+    expect(status('Incoming voice call'), findsOneWidget);
+    expect(find.text('ORBIT VOICE CALL'), findsOneWidget);
+    expect(find.text('END-TO-END ENCRYPTED'), findsOneWidget);
+    expect(find.bySemanticsLabel('Picture of Ada Lovelace'), findsOneWidget);
     expect(find.byTooltip('Answer call'), findsOneWidget);
     expect(find.byTooltip('Decline call'), findsOneWidget);
   });
@@ -165,7 +169,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Incoming video call'), findsOneWidget);
+    expect(status('Incoming video call'), findsOneWidget);
     await tester.tap(find.byTooltip('Answer video call'));
     await tester.pumpAndSettle();
     expect(permissions.asked, [true]);
@@ -176,9 +180,9 @@ void main() {
   ) async {
     await open(tester);
     await emit(tester, snapshot());
-    expect(find.text('Calling…'), findsOneWidget);
+    expect(status('Calling…'), findsOneWidget);
     await emit(tester, snapshot(phase: CallPhase.ringing));
-    expect(find.text('Ringing…'), findsOneWidget);
+    expect(status('Ringing…'), findsOneWidget);
 
     await tester.tap(find.byTooltip('End call'));
     await tester.pumpAndSettle();
@@ -203,6 +207,7 @@ void main() {
     testWidgets('runs a timer from the moment it connected', (tester) async {
       await live(tester);
       expect(find.text('05:00'), findsOneWidget);
+      expect(status('Call duration 05:00'), findsOneWidget);
 
       wall = DateTime.utc(2026, 10, 3, 9, 11, 5);
       await tester.pump(const Duration(seconds: 1));
@@ -286,7 +291,7 @@ void main() {
 
       hub.publish(const CallMediaInfo(state: CallMediaState.disconnected));
       await tester.pump(const Duration(milliseconds: 20));
-      expect(find.text('Reconnecting…'), findsOneWidget);
+      expect(status('Reconnecting…'), findsOneWidget);
     });
   });
 
@@ -435,7 +440,7 @@ void main() {
         CallEnd.answeredElsewhere,
         direction: CallDirection.incoming,
       );
-      expect(find.text('Answered on another device'), findsOneWidget);
+      expect(status('Answered on another device'), findsOneWidget);
     });
 
     testWidgets('declined on another device', (tester) async {
@@ -444,34 +449,34 @@ void main() {
         CallEnd.declinedElsewhere,
         direction: CallDirection.incoming,
       );
-      expect(find.text('Declined on another device'), findsOneWidget);
+      expect(status('Declined on another device'), findsOneWidget);
     });
 
     testWidgets('no answer, busy, declined by them, failed', (tester) async {
       await ended(tester, CallEnd.unanswered);
-      expect(find.text('No answer'), findsOneWidget);
+      expect(status('No answer'), findsOneWidget);
     });
 
     testWidgets('busy', (tester) async {
       await ended(tester, CallEnd.busy);
-      expect(find.text('Busy: on another call'), findsOneWidget);
+      expect(status('Busy: on another call'), findsOneWidget);
       expect(find.text('They are in another call right now.'), findsOneWidget);
     });
 
     testWidgets('declined by the other person', (tester) async {
       await ended(tester, CallEnd.declinedByPeer);
-      expect(find.text('Call declined'), findsOneWidget);
+      expect(status('Call declined'), findsOneWidget);
     });
 
     testWidgets('a failure explains itself', (tester) async {
       await ended(tester, CallEnd.failed);
-      expect(find.text('Call failed'), findsOneWidget);
+      expect(status('Call failed'), findsOneWidget);
       expect(find.textContaining('could not connect'), findsOneWidget);
     });
 
     testWidgets('an answered call keeps its talk time', (tester) async {
       await ended(tester, CallEnd.remoteHungUp, answeredAt: answered);
-      expect(find.text('Call ended'), findsOneWidget);
+      expect(status('Call ended'), findsOneWidget);
       expect(find.text('04:12'), findsOneWidget);
     });
 
@@ -487,7 +492,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
       expect(find.text('open'), findsOneWidget);
-      expect(find.text('Call ended'), findsNothing);
+      expect(status('Call ended'), findsNothing);
     });
   });
 

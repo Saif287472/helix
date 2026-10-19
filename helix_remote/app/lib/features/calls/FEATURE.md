@@ -24,8 +24,11 @@ application/
                             CallMediaHub (video surfaces, camera facing, quality)
   platform/                 CallPlatform (Android channel), CallPermissions,
                             CallAudioPlatform, CallRinger - interfaces + real adapters
-presentation/               CallsTabScreen (the tab), CallDetailScreen, CallScreen with the
-                            incoming and in-call views
+presentation/               CallsTabScreen (the tab, until the cleanup; Home draws Orbit's),
+                            and the connectors CallScreen and CallDetailScreen, which
+                            draw orbit_ui's call screen and Call details from
+                            callScreenStateProvider / callDetailProvider (the video
+                            surfaces go in its slots, shown once they have frames)
 calls_routes.dart           /call (the full-screen call), /home/calls/:callId (detail)
 ```
 

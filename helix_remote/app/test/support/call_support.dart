@@ -13,6 +13,7 @@ import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
+import 'package:helix_remote/features/calls/application/call_log.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_providers.dart';
@@ -354,6 +355,7 @@ List<Override> callOverrides({
   Duration linger = const Duration(milliseconds: 50),
   DateTime Function()? clock,
   Stream<CallNotificationResponse>? responses,
+  bool blocksMe = false,
 }) => [
   callsPortProvider.overrideWith((ref) async => port),
   callPermissionsProvider.overrideWithValue(
@@ -370,6 +372,8 @@ List<Override> callOverrides({
     responses ?? const Stream.empty(),
   ),
   callLaunchResponseProvider.overrideWithValue(Future.value(null)),
+  // Whether the person on Call details has blocked this account.
+  callPeerBlocksMeProvider.overrideWith((ref, peer) => Stream.value(blocksMe)),
   ?(clock == null ? null : clockProvider.overrideWithValue(clock)),
 ];
 

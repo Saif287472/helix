@@ -1,19 +1,21 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/features/calls/application/call_audio.dart';
-import 'package:helix_remote/features/calls/application/call_controller.dart';
-import 'package:helix_remote/features/calls/application/call_screen_state.dart';
-import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
-import 'package:helix_remote/features/calls/presentation/in_call_view.dart';
-import 'package:helix_remote/features/calls/presentation/incoming_call_view.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'dart:async';
 
-/// The full-screen call: ringing here, dialing, connecting, live, and the
-/// moment after it ends.
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/features/calls/application/call_controller.dart';
+import 'package:helix_remote/features/calls/application/call_copy.dart';
+import 'package:helix_remote/features/calls/application/call_screen_state.dart';
+import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
+import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
+
+/// Connector: the full-screen call, ringing here, dialing, connecting, live,
+/// and the moment after it ends, drawn by `orbit_ui`'s call screen
+/// (`contracts/calls.md`).
 ///
-/// It draws [callScreenStateProvider] and nothing else, and closes itself when
-/// the call is gone (the state holds an ended call for a moment first, so
-/// "Answered on another device" is readable). The back gesture is ignored
+/// It draws [callScreenStateProvider] and nothing else, and closes itself
+/// when the call is gone (the state holds an ended call for a moment first,
+/// so "Answered on another device" is readable). The back gesture is ignored
 /// while the call is live: leaving a call is hanging up, and an incoming one
 /// is answered or declined, never dismissed by accident.
 class CallScreen extends ConsumerStatefulWidget {
@@ -26,6 +28,9 @@ class CallScreen extends ConsumerStatefulWidget {
 class _CallScreenState extends ConsumerState<CallScreen> {
   late final CallScreenOpen _open;
   bool _closing = false;
+
+  /// The last call drawn, kept for the frame before the screen closes.
+  orbit.CallModel? _last;
 
   @override
   void initState() {
@@ -48,34 +53,67 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     });
   }
 
-  Future<void> _chooseRoute(CallAudioState audio) async {
-    final route = await showHelixBottomSheet<CallAudioRoute>(
-      context,
-      title: 'Audio output',
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final option in audio.available)
-            ListTile(
-              leading: Icon(_iconOf(option)),
-              title: Text(option.label),
-              trailing: option == audio.route ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.of(context).pop(option),
-            ),
-        ],
-      ),
-    );
-    if (route != null) {
-      await ref.read(callActionsProvider).selectRoute(route);
-    }
-  }
-
-  static IconData _iconOf(CallAudioRoute route) => switch (route) {
-    CallAudioRoute.earpiece => Icons.phone_in_talk,
-    CallAudioRoute.speaker => Icons.volume_up,
-    CallAudioRoute.bluetooth => Icons.bluetooth_audio,
-    CallAudioRoute.wiredHeadset => Icons.headset,
+  static orbit.CallStage _stageOf(CallStage s) => switch (s) {
+    CallStage.dialing => orbit.CallStage.dialing,
+    CallStage.incoming => orbit.CallStage.incoming,
+    CallStage.connecting => orbit.CallStage.connecting,
+    CallStage.active => orbit.CallStage.active,
+    CallStage.ended => orbit.CallStage.ended,
   };
+
+  static orbit.CallAudioRoute _routeOf(CallAudioRoute r) => switch (r) {
+    CallAudioRoute.earpiece => orbit.CallAudioRoute.earpiece,
+    CallAudioRoute.speaker => orbit.CallAudioRoute.speaker,
+    CallAudioRoute.bluetooth => orbit.CallAudioRoute.bluetooth,
+    CallAudioRoute.wiredHeadset => orbit.CallAudioRoute.wiredHeadset,
+  };
+
+  static CallAudioRoute _appRouteOf(orbit.CallAudioRoute r) => switch (r) {
+    orbit.CallAudioRoute.earpiece => CallAudioRoute.earpiece,
+    orbit.CallAudioRoute.speaker => CallAudioRoute.speaker,
+    orbit.CallAudioRoute.bluetooth => CallAudioRoute.bluetooth,
+    orbit.CallAudioRoute.wiredHeadset => CallAudioRoute.wiredHeadset,
+  };
+
+  orbit.CallModel _model(CallScreenState s, Duration? elapsed) {
+    final live = s.isLive;
+    return orbit.CallModel(
+      callId: s.callId,
+      title: s.title,
+      subtitle: s.subtitle?.trim(),
+      avatar: s.avatar,
+      video: s.video,
+      stage: _stageOf(s.stage),
+      statusText: s.statusText,
+      // The clock runs while the call is live and not reconnecting; until
+      // its first tick the line says "Connected".
+      elapsedLabel:
+          elapsed != null &&
+              s.stage == CallStage.active &&
+              s.quality != CallQuality.reconnecting
+          ? formatCallDuration(elapsed)
+          : null,
+      talkTimeLabel: s.stage == CallStage.ended && s.talkTime != null
+          ? formatCallDuration(s.talkTime!)
+          : null,
+      endDetail: s.endDetail,
+      endIsProblem: s.endIsProblem,
+      quality: switch (s.quality) {
+        CallQuality.good => orbit.CallQuality.good,
+        CallQuality.weak => orbit.CallQuality.weak,
+        CallQuality.reconnecting => orbit.CallQuality.reconnecting,
+      },
+      muted: s.muted,
+      cameraOn: s.cameraOn,
+      audioRoute: _routeOf(s.audio.route),
+      audioRoutes: [for (final r in s.audio.available) _routeOf(r)],
+      notice: s.notice,
+      busy: s.busy,
+      videoLayout: s.showsVideo && live,
+      hasLocalVideo: s.cameraOn && s.local != null,
+      hasRemoteVideo: s.stage == CallStage.active && s.remote != null,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,47 +121,54 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     ref.listen(callScreenStateProvider, (_, next) => _closeIfOver(next));
     if (state == null) {
       _closeIfOver(null);
-      return const Scaffold(backgroundColor: HelixScrimColors.backdrop);
+      final last = _last;
+      return last == null
+          ? const ColoredBox(color: orbit.OrbitNight.night)
+          : orbit.CallScreen(model: last);
     }
     final actions = ref.read(callActionsProvider);
     final elapsed = ref.watch(callElapsedProvider).value;
+    final model = _last = _model(state, elapsed);
+    final remote = state.remote;
+    final local = state.local;
     return PopScope(
       canPop: !state.isLive,
-      child: Scaffold(
-        backgroundColor: HelixScrimColors.backdrop,
-        body: state.stage == CallStage.incoming
-            ? IncomingCallView(
-                state: state,
-                onAccept: state.busy ? null : actions.accept,
-                onDecline: state.busy ? null : actions.decline,
-                onDismissNotice: actions.dismissNotice,
-              )
-            : InCallView(
-                state: state,
-                elapsed: elapsed,
-                callbacks: CallCallbacks(
-                  onHangUp: actions.hangUp,
-                  onMute: ({required muted}) => actions.setMuted(muted: muted),
-                  onCamera: ({required enabled}) =>
-                      actions.setCameraEnabled(enabled: enabled),
-                  onFlipCamera: actions.switchCamera,
-                  onRoute: () {
-                    final audio = state.audio;
-                    if (audio.available.length > 2) {
-                      _chooseRoute(audio);
-                    } else {
-                      // Two outputs: the control is a toggle.
-                      final next = audio.available.firstWhere(
-                        (route) => route != audio.route,
-                        orElse: () => audio.route,
-                      );
-                      actions.selectRoute(next);
-                    }
-                  },
-                  onDismissNotice: actions.dismissNotice,
-                ),
-              ),
+      child: orbit.CallScreen(
+        model: model,
+        actions: orbit.CallActions(
+          answer: () => unawaited(actions.accept()),
+          decline: () => unawaited(actions.decline()),
+          hangUp: () => unawaited(actions.hangUp()),
+          setMuted: (muted) => unawaited(actions.setMuted(muted: muted)),
+          setCamera: (on) => unawaited(actions.setCameraEnabled(enabled: on)),
+          flipCamera: () => unawaited(actions.switchCamera()),
+          selectAudioRoute: (route) =>
+              unawaited(actions.selectRoute(_appRouteOf(route))),
+          dismissNotice: actions.dismissNotice,
+        ),
+        // Their video once frames arrive; their picture until then (the
+        // camera is off, or the first frame has not landed).
+        remoteVideo: (context, placeholder) => remote == null
+            ? placeholder
+            : _Frames(surface: remote, placeholder: placeholder),
+        localVideo: (context, placeholder) => local == null
+            ? placeholder
+            : local.build(mirror: state.frontCamera),
       ),
     );
   }
+}
+
+/// [surface] while it has frames, else [placeholder].
+class _Frames extends StatelessWidget {
+  const _Frames({required this.surface, required this.placeholder});
+
+  final CallVideoSurface surface;
+  final Widget placeholder;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: surface.changes,
+    builder: (context, _) => surface.hasFrames ? surface.build() : placeholder,
+  );
 }

@@ -594,3 +594,52 @@ exactly as at Review 4 after the changes below.
   `VideoFrameSource`), and the shared page's tab as a route parameter
   (`?tab=docs`, `?tab=links`; nothing opens it on another tab yet).
   - **Owner:** pending (Part B batch 4).
+
+## Part B batch 5 (calls, wired into the app)
+
+All 24 call states score exactly as at Review 4 after the changes below.
+
+- **Behaviour-only hooks added to `orbit_ui`:**
+  - **A screen reader hears the call** in the app's words: the status as a
+    live region ("Incoming voice call", "Call duration 00:12", the end
+    reason), the picture as "Picture of <name>", the name as a heading, the
+    big video as "Video from <name>" or "Your camera", and the tile as a
+    button, "Show your camera full screen" or "Show <name> full screen" (the
+    port's tooltip had the two the wrong way round). Hidden video controls
+    leave the screen reader's tree.
+  - **"Connected" until the clock's first tick** (the preview always has a
+    clock).
+  - **The video slots get a stand-in**: until frames arrive, their picture
+    on the gradient (smaller in the tile). The "CAMERA OFF" line of
+    `call-video-their-camera-off` shows only when the app says the camera is
+    off, which it cannot tell yet (no signal for it), so the app never
+    shows it.
+  - **Your tile** needs your camera's picture in the app, starts at the top
+    end (the left in a right-to-left language), stays inside the safe area
+    when dragged, and shows a move cursor on a desktop.
+  - **A notice on a video call sits above the tray** (the prototype draws
+    the notice on the voice layout only).
+  - **An end reason steps aside while a notice shows** (the app's rule).
+  - **Audio output with two outputs picks the other one** (not always the
+    phone and its speaker), one output is no choice (disabled), and a
+    speaker with a headset reads "Audio output: Headset".
+  - **The camera button works from connecting on** (the app's rule; the
+    prototype allows it once active). No compared state is a video call
+    that is connecting.
+  - **Call details**: Voice call and Video call spin while the call is
+    placed, and a refusal is an error toast; a failure to load is "This
+    call could not be loaded." (the old page's sentence; Part A had its
+    own).
+  - **Owner:** pending (Part B batch 5).
+- **The derive items are built** (`application/`): the tinted end reason
+  (`CallScreenState.endIsProblem`), the rows' titles ("Unanswered voice
+  call" for no answer and "Voice call failed" / "Video call failed", the
+  design's words), and Call details for someone who blocked you: no call
+  buttons, and "<name> has blocked you. You can't message or call them."
+  (`callPeerBlocksMeProvider`). Someone you blocked keeps the buttons, and
+  a tap says why, as today.
+  - **Owner:** pending (Part B batch 5).
+- **The app's call sentences still say Helix** ("Helix needs the microphone
+  to make calls…"; the preview says Orbit). They change with the app-wide
+  rename (Part B step 3).
+  - **Owner:** pending (Part B batch 5).

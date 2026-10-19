@@ -574,6 +574,18 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   view are deleted. Tests: app 846, orbit_ui 190, helix_remote_ui 184, rules
   20, all passing; the 25 compared states unchanged from Review 4, and the
   viewer's window shots unchanged from batch 10.
+- [x] Step 2, batch 5 (pending your review): calls draw the Orbit screens
+  through the connectors `features/calls/presentation/call_screen.dart`
+  and `call_detail_screen.dart`: every stage from ringing to ended, the
+  clock, mute, the camera, flip, the audio output toggle and sheet, the
+  notice bar, the video layout with the app's surfaces (a stand-in until
+  frames arrive), the draggable self tile, Back ignored on a live call,
+  and the screen closing by itself; Call details with the app's rows, call
+  back with a spinner and the refusal as a toast, delete, and no call
+  buttons for someone who blocked you. The old incoming and in-call views
+  and the call parts are deleted. Tests: app 848, orbit_ui 196,
+  helix_remote_ui 184, rules 20, all passing; the 24 compared call states
+  unchanged from Review 4, and the call window shots unchanged from batch 10.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

@@ -106,6 +106,9 @@ final class CallScreenState {
 
   bool get isLive => stage != CallStage.ended;
 
+  /// Busy or failed: the reason is tinted as a problem.
+  bool get endIsProblem => end == CallEnd.busy || end == CallEnd.failed;
+
   /// Both sides can see each other's video.
   bool get showsVideo => video && stage != CallStage.incoming;
 

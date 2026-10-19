@@ -131,9 +131,12 @@ class CallActions {
 }
 
 /// A picture from the platform: the other person's video or your camera.
-/// The preview passes nothing and the screen draws the prototype's stand-in
-/// gradients.
-typedef CallVideoSlot = Widget Function(BuildContext context);
+/// [placeholder] is what the screen draws while there is no picture (their
+/// picture on the gradient, smaller in the tile); the app shows it until
+/// frames arrive. The preview passes no slot and the screen draws the
+/// prototype's stand-in gradients.
+typedef CallVideoSlot =
+    Widget Function(BuildContext context, Widget placeholder);
 
 /// `call` (`js/screens/calls.js`): the full-screen call, a night page on the
 /// brand gradient. The header says what kind of call and that it is
@@ -293,12 +296,24 @@ class _CallScreenState extends State<CallScreen>
       color: ended && m.endIsProblem ? const Color(0xFFFFD3D5) : t.callMuted,
       letterSpacingEm: 0.12,
     );
+    // The status is a live region a screen reader announces as it changes.
+    Widget said(String text, Widget child) => Semantics(
+      container: true,
+      liveRegion: true,
+      label: text,
+      excludeSemantics: true,
+      child: child,
+    );
     final parts = <Widget>[
       _orb(t, rings: _ringing),
-      OrbitText(
-        m.title,
-        textAlign: TextAlign.center,
-        style: t.display(size: 28, color: t.callText),
+      Semantics(
+        container: true,
+        header: true,
+        child: OrbitText(
+          m.title,
+          textAlign: TextAlign.center,
+          style: t.display(size: 28, color: t.callText),
+        ),
       ),
       if (sub.isNotEmpty)
         Transform.translate(
@@ -311,22 +326,30 @@ class _CallScreenState extends State<CallScreen>
     ];
     if (m.stage == CallStage.incoming) {
       parts.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OrbitIcon(
-              m.video ? OrbitIcons.videoCamera : OrbitIcons.phone,
-              weight: OrbitIconWeight.fill,
-              size: 13,
-              color: t.callMuted,
-            ),
-            const SizedBox(width: 8),
-            OrbitText(m.statusText.toUpperCase(), style: status),
-          ],
+        said(
+          m.statusText,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OrbitIcon(
+                m.video ? OrbitIcons.videoCamera : OrbitIcons.phone,
+                weight: OrbitIconWeight.fill,
+                size: 13,
+                color: t.callMuted,
+              ),
+              const SizedBox(width: 8),
+              OrbitText(m.statusText.toUpperCase(), style: status),
+            ],
+          ),
         ),
       );
     } else if (ended) {
-      parts.add(OrbitText(m.statusText.toUpperCase(), style: status));
+      parts.add(
+        said(
+          m.statusText,
+          OrbitText(m.statusText.toUpperCase(), style: status),
+        ),
+      );
       final talk = m.talkTimeLabel;
       // `style="margin-top:0"` on this `.c-sub`: the full 18px gap.
       if (talk != null) {
@@ -335,30 +358,48 @@ class _CallScreenState extends State<CallScreen>
         );
       }
       final detail = m.endDetail;
-      if (detail != null) parts.add(_detail(t, detail));
+      // A notice says more than the reason, so the reason steps aside.
+      if (detail != null && m.notice == null) parts.add(_detail(t, detail));
     } else if (m.stage == CallStage.active &&
         m.quality != CallQuality.reconnecting) {
+      // "Connected" until the clock's first tick.
+      final clock = m.elapsedLabel;
       parts.add(
-        OrbitText(
-          m.elapsedLabel ?? '00:00',
-          style: status.copyWith(color: t.callLive),
-        ),
+        clock == null
+            ? said(
+                m.statusText,
+                OrbitText(m.statusText.toUpperCase(), style: status),
+              )
+            : said(
+                'Call duration $clock',
+                OrbitText(clock, style: status.copyWith(color: t.callLive)),
+              ),
       );
-      if (m.quality == CallQuality.weak) parts.add(_weakChip(t));
+      if (m.quality == CallQuality.weak) {
+        parts.add(said('Poor connection', _weakChip(t)));
+      }
       if (m.muted) parts.add(_detail(t, 'Your microphone is off'));
     } else if (m.quality == CallQuality.reconnecting) {
       parts.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OrbitSpinner(size: 13, color: t.callMuted),
-            const SizedBox(width: 8),
-            OrbitText(m.statusText.toUpperCase(), style: status),
-          ],
+        said(
+          m.statusText,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OrbitSpinner(size: 13, color: t.callMuted),
+              const SizedBox(width: 8),
+              OrbitText(m.statusText.toUpperCase(), style: status),
+            ],
+          ),
         ),
       );
     } else {
-      parts.add(OrbitText(m.statusText.toUpperCase(), style: status));
+      parts.add(
+        said(
+          m.statusText,
+          OrbitText(m.statusText.toUpperCase(), style: status),
+        ),
+      );
     }
     // `.c-mid`: centred, 18px between parts; `.c-sub` pulls itself 10px up,
     // which the translate above does without changing the gap that follows,
@@ -435,34 +476,40 @@ class _CallScreenState extends State<CallScreen>
         );
       },
     );
-    return SizedBox.square(
-      dimension: 132,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          if (rings) ...[
-            Positioned.fill(child: halo(const Color(0x99FFFFFF), 0)),
-            Positioned.fill(child: halo(const Color(0x998CF0FF), 1 / 3)),
-            Positioned.fill(child: halo(const Color(0x99FFFFFF), 2 / 3)),
-          ],
-          DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(112 * 0.34),
-              // CSS's first shadow is on top; Flutter's last is.
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x8C08143C),
-                  offset: Offset(0, 18),
-                  blurRadius: 40,
-                  spreadRadius: -12,
-                ),
-                BoxShadow(color: Color(0x38FFFFFF), spreadRadius: 4),
-              ],
+    return Semantics(
+      container: true,
+      image: true,
+      label: 'Picture of ${m.title}',
+      excludeSemantics: true,
+      child: SizedBox.square(
+        dimension: 132,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            if (rings) ...[
+              Positioned.fill(child: halo(const Color(0x99FFFFFF), 0)),
+              Positioned.fill(child: halo(const Color(0x998CF0FF), 1 / 3)),
+              Positioned.fill(child: halo(const Color(0x99FFFFFF), 2 / 3)),
+            ],
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(112 * 0.34),
+                // CSS's first shadow is on top; Flutter's last is.
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x8C08143C),
+                    offset: Offset(0, 18),
+                    blurRadius: 40,
+                    spreadRadius: -12,
+                  ),
+                  BoxShadow(color: Color(0x38FFFFFF), spreadRadius: 4),
+                ],
+              ),
+              child: OrbitAvatar(avatar: m.avatar, size: 112, cornerPct: 34),
             ),
-            child: OrbitAvatar(avatar: m.avatar, size: 112, cornerPct: 34),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -575,15 +622,27 @@ class _CallScreenState extends State<CallScreen>
           onPressed: () => _chooseRoute(context),
         );
       } else {
+        // Two outputs: a tap picks the other one; one output is no choice.
         final on = m.audioRoute == CallAudioRoute.speaker;
+        final other = m.audioRoutes.firstWhere(
+          (r) => r != m.audioRoute,
+          orElse: () => m.audioRoute,
+        );
+        final phoneAndSpeaker =
+            m.audioRoutes.length < 2 ||
+            m.audioRoutes.toSet().containsAll(const {
+              CallAudioRoute.earpiece,
+              CallAudioRoute.speaker,
+            });
         speaker = b(
           OrbitIcons.speakerHigh,
           'Speaker',
-          on ? 'Turn speaker off' : 'Turn speaker on',
+          phoneAndSpeaker
+              ? (on ? 'Turn speaker off' : 'Turn speaker on')
+              : 'Audio output: ${_route(m.audioRoute).$2}',
           on: on,
-          onPressed: () => a.selectAudioRoute?.call(
-            on ? CallAudioRoute.earpiece : CallAudioRoute.speaker,
-          ),
+          enabled: m.audioRoutes.length > 1,
+          onPressed: () => a.selectAudioRoute?.call(other),
         );
       }
     }
@@ -608,7 +667,10 @@ class _CallScreenState extends State<CallScreen>
               'Video',
               m.cameraOn ? 'Turn camera off' : 'Turn camera on',
               on: m.cameraOn,
-              enabled: m.stage == CallStage.active,
+              // The app's rule: from connecting on (the prototype: active).
+              enabled:
+                  m.stage == CallStage.active ||
+                  m.stage == CallStage.connecting,
               onPressed: () => a.setCamera?.call(!m.cameraOn),
             ),
             mute,
@@ -688,7 +750,21 @@ class _CallScreenState extends State<CallScreen>
     final size = MediaQuery.sizeOf(context);
     Widget stand(String swatch) =>
         DecoratedBox(decoration: BoxDecoration(gradient: orbitSwatch(swatch)));
-    Widget theirs() => m.remoteCameraOff && !dialing
+    // What the app's pictures show until frames arrive: their picture on the
+    // gradient, or a small one in the tile.
+    Widget waiting({required bool small}) => DecoratedBox(
+      decoration: BoxDecoration(gradient: t.brandGradient),
+      child: Center(
+        child: OrbitAvatar(avatar: m.avatar, size: small ? 48 : 120),
+      ),
+    );
+    Widget remote({required bool small}) =>
+        widget.remoteVideo?.call(context, waiting(small: small)) ??
+        stand('ph-e');
+    Widget local({bool small = false}) =>
+        widget.localVideo?.call(context, waiting(small: small)) ??
+        stand('ph-c');
+    Widget theirs({bool small = false}) => m.remoteCameraOff && !dialing
         ? DecoratedBox(
             decoration: BoxDecoration(gradient: t.brandGradient),
             child: DecoratedBox(
@@ -741,12 +817,15 @@ class _CallScreenState extends State<CallScreen>
             ),
           )
         : dialing
-        ? (widget.localVideo?.call(context) ?? stand('ph-c'))
-        : (widget.remoteVideo?.call(context) ?? stand('ph-e'));
-    Widget mine() => widget.localVideo?.call(context) ?? stand('ph-c');
-    final showTile = !dialing && m.cameraOn;
-    final big = _swapped && showTile ? mine() : theirs();
-    final small = _swapped ? theirs() : mine();
+        ? local()
+        : remote(small: small);
+    // The app's tile needs your camera's picture; the preview's is drawn.
+    final showTile =
+        !dialing &&
+        m.cameraOn &&
+        (widget.localVideo == null || m.hasLocalVideo);
+    final big = _swapped && showTile ? local() : theirs();
+    final small = _swapped ? theirs(small: true) : local(small: true);
     final hide = _controlsOff;
     Widget hideable(Widget w) => IgnorePointer(
       ignoring: hide,
@@ -755,21 +834,50 @@ class _CallScreenState extends State<CallScreen>
         duration: MediaQuery.disableAnimationsOf(context)
             ? Duration.zero
             : const Duration(milliseconds: 180),
-        child: w,
+        // Hidden controls leave the screen reader's tree too.
+        child: ExcludeSemantics(excluding: hide, child: w),
       ),
     );
-    final tile = _tile ?? Offset(size.width - 16 - 104, 132);
+    // The tile starts at the top end and stays inside the safe area.
+    final pad = MediaQuery.paddingOf(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    Offset inside(Offset at) => Offset(
+      at.dx.clamp(
+        pad.left + 12,
+        (size.width - pad.right - 12 - 104).clamp(
+          pad.left + 12,
+          double.infinity,
+        ),
+      ),
+      at.dy.clamp(
+        pad.top + 12,
+        (size.height - pad.bottom - 12 - 150).clamp(
+          pad.top + 12,
+          double.infinity,
+        ),
+      ),
+    );
+    final tile = inside(_tile ?? Offset(rtl ? 16 : size.width - 16 - 104, 132));
+    final bigLabel = dialing || (_swapped && showTile)
+        ? 'Your camera'
+        : 'Video from ${m.title}';
     return ColoredBox(
       color: const Color(0xFF000000),
       child: Stack(
         children: [
           Positioned.fill(
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () => setState(() => _controlsOff = !_controlsOff),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  big,
+                  Semantics(
+                    container: true,
+                    label: bigLabel,
+                    excludeSemantics: true,
+                    child: big,
+                  ),
                   const IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -816,14 +924,24 @@ class _CallScreenState extends State<CallScreen>
                           m.title,
                           style: t.display(size: 22, color: t.callText),
                         ),
-                        OrbitText(
-                          dialing
-                              ? m.statusText.toUpperCase()
-                              : m.elapsedLabel ?? '00:00',
-                          style: t.mono.style(
-                            size: 13,
-                            color: dialing ? t.callMuted : t.callLive,
-                            letterSpacingEm: 0.12,
+                        Semantics(
+                          container: true,
+                          liveRegion: true,
+                          label: dialing || m.elapsedLabel == null
+                              ? m.statusText
+                              : 'Call duration ${m.elapsedLabel}',
+                          excludeSemantics: true,
+                          child: OrbitText(
+                            dialing || m.elapsedLabel == null
+                                ? m.statusText.toUpperCase()
+                                : m.elapsedLabel!,
+                            style: t.mono.style(
+                              size: 13,
+                              color: dialing || m.elapsedLabel == null
+                                  ? t.callMuted
+                                  : t.callLive,
+                              letterSpacingEm: 0.12,
+                            ),
                           ),
                         ),
                       ],
@@ -838,29 +956,44 @@ class _CallScreenState extends State<CallScreen>
               left: tile.dx,
               top: tile.dy,
               child: GestureDetector(
-                onPanUpdate: (d) => setState(() => _tile = tile + d.delta),
+                onPanUpdate: (d) =>
+                    setState(() => _tile = inside(tile + d.delta)),
                 onTap: () => setState(() => _swapped = !_swapped),
                 child: Tooltip(
                   message: _swapped
-                      ? 'Show your camera full screen'
-                      : 'Show ${m.title} full screen',
+                      ? 'Show ${m.title} full screen'
+                      : 'Show your camera full screen',
                   excludeFromSemantics: true,
-                  child: Container(
-                    width: 104,
-                    height: 150,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x66000000),
-                          offset: Offset(0, 10),
-                          blurRadius: 30,
+                  child: Semantics(
+                    container: true,
+                    button: true,
+                    excludeSemantics: true,
+                    label: _swapped
+                        ? 'Show ${m.title} full screen'
+                        : 'Show your camera full screen',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.move,
+                      child: Container(
+                        width: 104,
+                        height: 150,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x66000000),
+                              offset: Offset(0, 10),
+                              blurRadius: 30,
+                            ),
+                            BoxShadow(
+                              color: Color(0x2EFFFFFF),
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
-                        BoxShadow(color: Color(0x2EFFFFFF), spreadRadius: 1),
-                      ],
+                        child: small,
+                      ),
                     ),
-                    child: small,
                   ),
                 ),
               ),
@@ -871,7 +1004,15 @@ class _CallScreenState extends State<CallScreen>
             left: 14,
             bottom: 30,
             width: (size.width - 28).clamp(0.0, 440.0),
-            child: hideable(_tray(t, ended: false)),
+            child: hideable(
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (m.notice != null) _notice(t),
+                  _tray(t, ended: false),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -1127,8 +1268,10 @@ class CallDetailActions {
     this.retry,
   });
 
-  final VoidCallback? voiceCall;
-  final VoidCallback? videoCall;
+  /// Places the call; the sentence to show when it could not start (null
+  /// when it started: the call screen opens by itself).
+  final Future<String?> Function()? voiceCall;
+  final Future<String?> Function()? videoCall;
   final VoidCallback? openContact;
   final VoidCallback? deleteAll;
   final VoidCallback? retry;
@@ -1136,7 +1279,7 @@ class CallDetailActions {
 
 /// `call-detail`: one person's calls. Their picture and name, Voice call,
 /// Video call and Contact, and every call with them, newest first.
-class CallDetailScreen extends StatelessWidget {
+class CallDetailScreen extends StatefulWidget {
   const CallDetailScreen({
     super.key,
     required this.model,
@@ -1147,10 +1290,33 @@ class CallDetailScreen extends StatelessWidget {
   final CallDetailActions actions;
 
   @override
+  State<CallDetailScreen> createState() => _CallDetailScreenState();
+}
+
+class _CallDetailScreenState extends State<CallDetailScreen> {
+  /// The call being placed: its button spins.
+  bool? _placing;
+
+  Future<void> _call({required bool video}) async {
+    final place = video ? widget.actions.videoCall : widget.actions.voiceCall;
+    if (place == null || _placing != null) return;
+    setState(() => _placing = video);
+    final String? refusal;
+    try {
+      refusal = await place();
+    } finally {
+      if (mounted) setState(() => _placing = null);
+    }
+    if (refusal != null && mounted) {
+      showOrbitToast(context, refusal, error: true);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
-    final m = model;
-    final a = actions;
+    final m = widget.model;
+    final a = widget.actions;
     final top = MediaQuery.paddingOf(context).top;
     final n = m.rows.length;
     final Widget body = switch (m.status) {
@@ -1158,7 +1324,7 @@ class CallDetailScreen extends StatelessWidget {
       CallDetailStatus.error => ListView(
         children: [
           OrbitLoadFailed(
-            title: 'Call details could not be loaded.',
+            title: 'This call could not be loaded.',
             onRetry: a.retry,
           ),
         ],
@@ -1179,16 +1345,26 @@ class CallDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
             child: Column(
               children: [
-                OrbitAvatar(avatar: m.avatar, size: 72),
+                Semantics(
+                  container: true,
+                  image: true,
+                  label: 'Picture of ${m.title}',
+                  excludeSemantics: true,
+                  child: OrbitAvatar(avatar: m.avatar, size: 72),
+                ),
                 const SizedBox(height: 12),
-                OrbitText(
-                  m.title,
-                  textAlign: TextAlign.center,
-                  style: t.font.style(
-                    size: 22,
-                    weight: 640,
-                    color: t.ink,
-                    letterSpacingEm: -0.02,
+                Semantics(
+                  container: true,
+                  header: true,
+                  child: OrbitText(
+                    m.title,
+                    textAlign: TextAlign.center,
+                    style: t.font.style(
+                      size: 22,
+                      weight: 640,
+                      color: t.ink,
+                      letterSpacingEm: -0.02,
+                    ),
                   ),
                 ),
                 if ((m.subtitle ?? '').isNotEmpty) ...[
@@ -1233,9 +1409,19 @@ class CallDetailScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (m.canCall) ...[
-                  _Round(OrbitIcons.phone, 'Voice call', a.voiceCall),
+                  _Round(
+                    OrbitIcons.phone,
+                    'Voice call',
+                    () => _call(video: false),
+                    busy: _placing == false,
+                  ),
                   const SizedBox(width: 18),
-                  _Round(OrbitIcons.videoCamera, 'Video call', a.videoCall),
+                  _Round(
+                    OrbitIcons.videoCamera,
+                    'Video call',
+                    () => _call(video: true),
+                    busy: _placing == true,
+                  ),
                   const SizedBox(width: 18),
                 ],
                 _Round(OrbitIcons.userCircle, 'Contact', a.openContact),
@@ -1320,11 +1506,14 @@ class CallDetailScreen extends StatelessWidget {
 /// `.quick-item`: a 56px tile (corner 20) on `--surface` with an
 /// `--accent` icon, its label under it.
 class _Round extends StatelessWidget {
-  const _Round(this.icon, this.label, this.onPressed);
+  const _Round(this.icon, this.label, this.onPressed, {this.busy = false});
 
   final OrbitGlyph icon;
   final String label;
   final VoidCallback? onPressed;
+
+  /// Waiting for its action: a spinner in place of the icon.
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -1354,7 +1543,9 @@ class _Round extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Center(
-                    child: OrbitIcon(icon, size: 23, color: t.accent),
+                    child: busy
+                        ? OrbitSpinner(size: 23, color: t.accent)
+                        : OrbitIcon(icon, size: 23, color: t.accent),
                   ),
                 ),
                 const SizedBox(height: 6),

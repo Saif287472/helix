@@ -61,6 +61,11 @@ abstract final class CallCopy {
       'The microphone or camera could not be started for this call.',
   };
 
+  /// On the call details of someone who blocked this account, in place of
+  /// the call buttons (the conversation header's sentence).
+  static String blockedYou(String name) =>
+      "$name has blocked you. You can't message or call them.";
+
   /// A refusal of the microphone or camera, with what to do about it.
   static const microphoneDenied =
       'Helix needs the microphone to make calls. Allow it in your phone\'s '

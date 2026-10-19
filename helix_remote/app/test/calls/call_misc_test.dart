@@ -162,12 +162,21 @@ void main() {
         logRow('other', peer: 'peer-2', at: DateTime(2026, 10, 1, 9)),
       ]);
 
-    Future<FakeCallsPort> pump(WidgetTester tester, String id) async {
+    Future<FakeCallsPort> pump(
+      WidgetTester tester,
+      String id, {
+      bool blocksMe = false,
+    }) async {
       final port = withCalls();
       await tester.pumpWidget(
         harness(
           home: CallDetailScreen(callId: id),
-          overrides: callOverrides(port: port, names: names, clock: () => now),
+          overrides: callOverrides(
+            port: port,
+            names: names,
+            clock: () => now,
+            blocksMe: blocksMe,
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -195,6 +204,30 @@ void main() {
       expect(port.calls, ['start peer-1 video:true']);
     });
 
+    testWidgets('a refused call says why', (tester) async {
+      final port = await pump(tester, 'c1');
+      port.failWith = const CallFailedException(CallFailure.busy);
+
+      await tester.tap(find.text('Voice call'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('You are already in a call.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('someone who blocked you offers no call buttons, and says '
+        'why', (tester) async {
+      await pump(tester, 'c1', blocksMe: true);
+
+      expect(find.text('Voice call'), findsNothing);
+      expect(find.text('Video call'), findsNothing);
+      expect(find.text('Contact'), findsOneWidget);
+      expect(
+        find.textContaining('Ada Lovelace has blocked you'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('Contact opens the person page', (tester) async {
       final port = withCalls();
       await tester.pumpWidget(
@@ -219,6 +252,14 @@ void main() {
 
       await tester.tap(find.byTooltip('Delete from call history'));
       await tester.pumpAndSettle();
+      // Every call with them is counted.
+      expect(
+        find.text(
+          'These 2 calls with Ada Lovelace will be removed from your call '
+          'history.',
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
 
@@ -229,13 +270,17 @@ void main() {
       await pump(tester, 'gone');
 
       expect(find.text('Call not found'), findsOneWidget);
+      expect(
+        find.text('This call is no longer in your call history.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('meets the guidelines', (tester) async {
       await pump(tester, 'c1');
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
-      expect(find.byType(HelixAvatar), findsOneWidget);
+      expect(find.bySemanticsLabel('Picture of Ada Lovelace'), findsOneWidget);
     });
   });
 }

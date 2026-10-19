@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -233,5 +234,139 @@ void main() {
     );
     expect(find.byTooltip('Voice call'), findsNothing);
     expect(find.byTooltip('Contact'), findsOneWidget);
+  });
+
+  group("the app's hooks", () {
+    testWidgets('the status is announced in words, the clock as a duration', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        CallScreen(
+          model: call(CallStage.incoming, status: 'Incoming voice call'),
+        ),
+      );
+      expect(find.bySemanticsLabel('Incoming voice call'), findsOneWidget);
+      expect(find.bySemanticsLabel('Picture of Nadia Rahman'), findsOneWidget);
+      await show(tester, CallScreen(model: call(CallStage.active)));
+      expect(find.bySemanticsLabel('Call duration 00:12'), findsOneWidget);
+    });
+
+    testWidgets('a live call says Connected until its clock ticks', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        const CallScreen(
+          model: CallModel(
+            callId: 'c',
+            title: 'Nadia Rahman',
+            avatar: HelixAvatarModel(name: 'Nadia Rahman'),
+            stage: CallStage.active,
+            statusText: 'Connected',
+          ),
+        ),
+      );
+      expect(find.text('CONNECTED'), findsOneWidget);
+      expect(find.text('00:00'), findsNothing);
+    });
+
+    testWidgets('with two outputs the toggle picks the other one', (
+      tester,
+    ) async {
+      final picked = <CallAudioRoute>[];
+      await show(
+        tester,
+        CallScreen(
+          model: call(
+            CallStage.active,
+            routes: const [CallAudioRoute.speaker, CallAudioRoute.wiredHeadset],
+            route: CallAudioRoute.wiredHeadset,
+          ),
+          actions: CallActions(selectAudioRoute: picked.add),
+        ),
+      );
+      await tester.tap(find.byTooltip('Audio output: Headset'));
+      expect(picked, [CallAudioRoute.speaker]);
+    });
+
+    testWidgets('the app draws the pictures, with a stand-in until frames', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        CallScreen(
+          model: const CallModel(
+            callId: 'c',
+            title: 'Nadia Rahman',
+            avatar: HelixAvatarModel(name: 'Nadia Rahman'),
+            stage: CallStage.active,
+            statusText: '',
+            elapsedLabel: '00:12',
+            video: true,
+            cameraOn: true,
+            videoLayout: true,
+            hasLocalVideo: true,
+          ),
+          remoteVideo: (context, placeholder) => placeholder,
+          localVideo: (context, placeholder) => const Text('mine'),
+        ),
+      );
+      // Their picture waits on the gradient; yours is in the tile.
+      expect(find.text('NR'), findsWidgets);
+      expect(find.text('mine'), findsOneWidget);
+      expect(find.bySemanticsLabel('Video from Nadia Rahman'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Show your camera full screen'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('mine'));
+      await tester.pump();
+      expect(find.bySemanticsLabel('Your camera'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Show Nadia Rahman full screen'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('your tile cannot be dragged off the screen', (tester) async {
+      await show(
+        tester,
+        CallScreen(
+          model: call(CallStage.active, video: true, videoLayout: true),
+        ),
+      );
+      final tile = find.bySemanticsLabel('Show your camera full screen');
+      await tester.drag(tile, const Offset(-5000, 5000));
+      await tester.pump();
+      final at = tester.getRect(tile);
+      expect(at.left, greaterThanOrEqualTo(0));
+      expect(at.bottom, lessThanOrEqualTo(866));
+    });
+
+    testWidgets("call details wait on a call and say why it did not start", (
+      tester,
+    ) async {
+      final placing = Completer<String?>();
+      await show(
+        tester,
+        CallDetailScreen(
+          model: const CallDetailModel(
+            title: 'Ammu',
+            avatar: HelixAvatarModel(name: 'Ammu'),
+          ),
+          actions: CallDetailActions(voiceCall: () => placing.future),
+        ),
+      );
+      await tester.tap(find.byTooltip('Voice call'));
+      await tester.pump();
+      expect(find.byType(OrbitSpinner), findsOneWidget);
+      placing.complete('You are already in a call.');
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(OrbitSpinner), findsNothing);
+      expect(find.text('You are already in a call.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
   });
 }

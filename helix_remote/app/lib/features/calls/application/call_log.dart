@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/people/people_names.dart';
@@ -197,6 +198,23 @@ final class CallDetailRow {
   final String? spokenDuration;
 
   String get directionLabel => CallCopy.directionWord(direction);
+
+  /// The row's title: "Incoming voice call", "Video call failed",
+  /// "Unanswered voice call" (the design's words; "No answer voice call"
+  /// did not read).
+  String get label {
+    final kind = video ? 'video call' : 'voice call';
+    return switch (direction) {
+      CallLogDirection.failed => '${video ? 'Video' : 'Voice'} call failed',
+      CallLogDirection.noAnswer => 'Unanswered $kind',
+      _ => '$directionLabel $kind',
+    };
+  }
+
+  /// Missed and failed calls are drawn as problems.
+  bool get isProblem =>
+      direction == CallLogDirection.missed ||
+      direction == CallLogDirection.failed;
 }
 
 /// Everything the call-detail page shows: the person and every call with them.
@@ -273,6 +291,14 @@ String? _spokenOf(CallLogRow row) {
       ? null
       : spokenCallDuration(Duration(seconds: seconds));
 }
+
+/// Whether [peer] has blocked this account (ADR-030; the server tells the
+/// blocked person at once): their call details then offer no call buttons.
+final callPeerBlocksMeProvider = StreamProvider.autoDispose
+    .family<bool, String>((ref, peer) async* {
+      final gateway = await ref.watch(chatGatewayProvider.future);
+      yield* gateway.watchBlocksMe(peer);
+    });
 
 /// What a person does on the call log.
 final callLogActionsProvider = Provider<CallLogActions>(CallLogActions.new);
