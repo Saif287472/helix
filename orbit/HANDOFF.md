@@ -1,130 +1,139 @@
-# Orbit: start here (handoff, 2026-10-18)
+# Orbit Part B: where it stands (handoff, 2026-10-20)
 
-For any agent picking up the Orbit redesign. Read this first, then the files
-below in order.
+For picking the port up on another machine or in a cloud session. The plan
+of record is `PORT_PLAN.md` (Part B); what each screen needs is in
+`contracts/`; every difference from the prototype is in `DEVIATIONS.md`;
+the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 
-## Where things stand
+## The branch
 
-| Phase (`PORT_PLAN.md`) | State | Commit |
-|---|---|---|
-| 0: freeze the prototype (Windows layout, restyled pages, interactions) | approved | `c623f15` |
-| 1: contracts and the gap list | approved | `eeb1eb2` |
-| 1b: the state kit, and the Review 1 answers drawn | approved | `da028d3` |
-| 2: the Flutter foundation | approved (Review 2) | see `git log` |
-| **3: the components** | **done: 3.1 approved; 3.2 to 3.5 pending review** (`PORT_PLAN.md`) | see `git log` |
-| 4: 10 screen batches | later | |
-| Part B: into `helix_remote/` | only when the owner says so | |
-| Part C: downloadable themes, animations, ringtones | after Part B | |
+- Work happens on `orbit-ui`, never on `main`. On the main PC it is the
+  worktree `J:/wt/orbit`; elsewhere, check the branch out. It was pushed to
+  `origin` on 2026-10-20 so it can be continued away from that PC. Push it
+  again only when the owner asks. Never merge it into `main`: the owner
+  merges after review.
+- One commit per batch, marked "(pending review)" in the message and in
+  `PORT_PLAN.md`'s progress notes.
 
-**Nothing under `helix_remote/` has been changed by this work** (the B1 to B4
-fixes below were separate `helix_remote` work).
+## Done (pending the owner's review)
 
-Separately, four bugs in the live app (B1 to B4 in `GAPS.md`) were fixed in
-`helix_remote` commit `95407da` (2026-10-18): disappearing messages now start
-their timer on display, take-over can finish on Helix Global, the reset screen
-no longer treats every startup error as "could not be decrypted", and the
-recovery-secret route after sign-in is reachable. They were done through the
-`helix-feature` process. B5 to B13 remain open.
+| Commit | What |
+|---|---|
+| f900131 | Step 1: `orbit_ui` moved into the workspace |
+| 6f0ae55 | Batch 1: sign-in and the entry screens |
+| 4d44ff1 | Batch 2: Home |
+| 03c6e4c | Batch 3: the conversation |
+| db2e996 | Batch 4: the conversation's pages |
+| e6ab767 | Batch 5: calls |
+| c69ae8e | Batch 6: people |
+| 2cccf91 | Batch 7: groups |
+| 6e4b53a | S3: the server lists a group's live invite links (groups migration 4) |
+| 49a75a4 | **WIP** batch 8: You, profile, Appearance (unfinished) |
 
-## Read in this order
+## Batch 8, what is left
 
-1. `PORT_PLAN.md`, the plan of record:
-   - the decisions table;
-   - every phase, with its progress checkboxes;
-   - "Rules for every agent". These go into `orbit/flutter/AGENTS.md` in
-     Phase 2.
-2. `prototype/README.md`: how to run the prototype, its tools, the design
-   decisions and the file map.
-3. `prototype/SCREENS.md`:
-   - the app's feature checklist;
-   - "Design changes you approved", items 1 to 20.
-4. `contracts/README.md`, then the eight contracts. Each ends with
-   "Decisions and Phase 1b".
-5. `GAPS.md`: everything Review 1 decided, and what to build or not build in
-   Part B.
-6. `prototype/INTERACTIONS.md`: 307 behaviours. Each one becomes a widget
-   test.
-7. The repo's `AGENTS.md` at the root. Its rules apply in full.
+`contracts/you.md` is the spec. Already done in 49a75a4:
+- orbit_ui behaviour for every batch 8 screen. The 17 states are identical
+  to Review 4.
+- The theme setting (`core/theme/orbit_app_theme.dart`: a device file,
+  Orbit and Orbit Night), and the retired light-only rule.
+- The checkup (`shared/you_checkup.dart`), `DeviceHealth`, the You
+  connector (`shared/widgets/orbit_you_connector.dart`), Appearance
+  (`features/settings/presentation/appearance_page.dart`), and Edit profile
+  (`features/profile/presentation/profile_page.dart`).
 
-## Phase 2, as built (approved at Review 2)
+To do:
+1. **Connectors** in `features/settings/presentation/`, each replacing the
+   old page of the same file name, over the existing providers:
+   - `privacy_page.dart`: `PrivacyController`, `SettingsActions`, app lock
+     and blocked. The keys `onChanged` sends: lastSeen, online, groups,
+     receipts, typing, timer ('Off', '24 h', '7 d', '90 d'), byNumber,
+     byName, lock, lockAfter ('Now', '1 min', '5 min', '30 min').
+     `askNumber` comes from `PrivacyState.needsNumber`. The viewer's name is
+     the most recent chat's name, or "Someone". Read the chats through
+     `core/chat/chat_gateway.dart`, because a feature may not import another.
+   - `notifications_page.dart`: alerts, sound, vibrate and previews, the OS
+     permission, and muted chats ("Muted" or "Muted until …").
+     `showRingtone: false` until an Orbit ringtone sound is bundled (it needs
+     a sound from the owner; log it in DEVIATIONS).
+   - `chats_page.dart`: text size 90/100/115/130, Enter sends, and the four
+     media policies (`DownloadWhen` ↔ `MediaDownloadPolicy`).
+   - `storage_page.dart`: `storageSummaryProvider`. The chat list stays empty
+     until E2 is built.
+   - `account_page.dart`: the overview, `AccountActions` (export, sign out),
+     and delete. "Export first" only exports. For "Since Sep 2026", add
+     `createdAt` in `EngineSettingsGateway.account()`.
+2. **Tests.** `test/settings/settings_pages_test.dart` and
+   `a3b_rules_test.dart` still use the deleted `SettingsTab`, and
+   `test/profile/profile_page_test.dart` tests the old page. Port them to the
+   Orbit screens and keep what each one proves. Add tests for the checkup
+   rules, the theme choice and Appearance.
+3. **The approved backend items**, each as its own commit (helix-feature
+   skill):
+   - S1: the share link `/u/<~name>`, app links and scan-to-chat.
+   - E1: share the profile photo with people you message.
+   - E2: storage size by kind and by chat.
+   - E3: free one chat's media and keep its messages.
+4. **Docs.** `DEVIATIONS.md` gets a "Part B batch 8" section, `PORT_PLAN.md`
+   a progress note, and the settings and profile `FEATURE.md` files need
+   updating.
 
-`PORT_PLAN.md`, Phase 2, has the checklist. In short:
-- **`orbit/flutter/`** is the workspace. `packages/orbit_ui` is the design
-  system (tokens, theme, fonts, icons, the logo, motion, the effect registry,
-  the first screen, `OrbitStartup`). `apps/orbit_preview` is the viewer,
-  built for Windows.
-- **Themes are data.** `prototype/tools/themes.py` writes
-  `packages/orbit_ui/assets/themes/*.json`, and `OrbitTokens` loads them.
-- **Fonts.** A family that `orbit_ui` bundles is
-  `packages/orbit_ui/<family>` to Flutter; always go through
-  `OrbitFontStack.family` or `.style()`, never a bare family name. The
-  preview registers the six pack themes' fonts with `OrbitFonts.registerPack`.
-- **The compare tool** (`flutter/tools/compare/README.md`): `shoot_html.py`
-  for the prototype, `orbit_preview.exe --shoot <key>` for Flutter, and a
-  report page. A screen is ported by adding it to
-  `apps/orbit_preview/lib/ported.dart`.
-- **Not done:** the effect painters (pattern, scanlines, cursor, rules,
-  stripes) move to Phase 3; the Windows title bar arrives with the window
-  layouts.
+After batch 8 comes batch 9: settings pages, devices and backup
+(`contracts/devices_backup.md`, with E4, E5 and E6). Then batch 10, the
+wide Windows layout (`contracts/frame.md`). Then Part B steps 3 to 5: the
+Orbit rename, deleting `helix_remote_ui`, and the full verify.
 
-Next: Phase 3 (the components), only when the owner says so.
+## How every batch is checked
 
-## Rules that matter most
+From `helix_remote/`:
+- `flutter analyze`
+- `dart analyze server tool`
+- `dart format --output=none --set-exit-if-changed app admin server packages tool`
+- `dart run tool/check_governance_controls.dart`
+- `flutter test` in `app`, `packages/orbit_ui`, `packages/helix_remote_ui`
+  and `packages/helix_remote_architecture_rules`, plus any package you
+  changed.
+- Also `flutter analyze` in `orbit/flutter/apps/orbit_preview`.
 
-- **The prototype is the specification.** Sizes, colours and spacing come
-  from its CSS and tokens, never from guesses. Anything that can't be
-  matched goes in `DEVIATIONS.md`, and you ask the owner.
-- **A screen never reads providers, the database, the router or the
-  engine.** Model in, actions out (`contracts/`).
-- **Small batches, stop at each review.**
-  - After the owner approves a batch, commit all uncommitted work, with
-    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-  - Never push.
-- **Never touch `helix_local/`.** Production (Helix Global) runs on the
-  owner's PC: never stop or restart it, and never run deploy scripts.
+Server tests need PostgreSQL 17 and `HELIX_TEST_DATABASE_URL`: run
+`HELIX_REQUIRE_TEST_DATABASE=1 dart test --concurrency=3` in `server/`,
+never at the same time as the Flutter tests.
 
-## Gotchas found the hard way
+`flutter pub get` dirties the plugin registrants. `git checkout --` them
+unless their content changed.
 
-- **Shell.** It is Git Bash on Windows; every command prints an "ng
-  completion" warning, so ignore it. Heredocs with apostrophes, `\b` or
-  `\n` break or write control characters into files. Write multi-line
-  patches as a Python file with the Write tool, then run it with
-  `python -I`.
-- **Prototype server.**
-  - `python prototype/serve.py` serves on port 5317.
-  - A side session may already serve it there; just use it.
-  - Launch config: `helix-prototype` in `.claude/launch.json`.
-- **Screen list.** `python prototype/tools/manifest.py` writes
-  `screens.json` and `INTERACTIONS.md`.
-  - It runs the scripts in Node (`tools/manifest_node.js`), with no
-    browser.
-  - It refuses to write if any screen is missing or has no `interactions`
-    list.
-- **Screenshots.**
-  - `python prototype/tools/shoot.py --device phone|window-m|window-l --theme <id> [--query scroll=760] <keys>`.
-  - Run one at a time (the default).
-  - Headless Chrome sometimes captures a page before every script has
-    loaded, so a shot can come out blank or unstyled. Retake it, or use
-    `flutter/tools/compare/shoot_html.py`, which waits for readiness.
-  - Phone shots are 640 px wide with the phone at the left.
-- **Bare mode.** `?bare&device=…&theme=…&scroll=…#key` shows one screen alone.
-- **Reduce motion.** The in-app browser pane has it on. Never use
-  near-zero transitions on every element: colours freeze when frames don't
-  run. Turn animation and transitions off instead.
-- **Prototype screens.** Each screen's interactions live next to its code
-  (`interactions: [[gesture, on, does, layout?]]`), and a new screen needs
-  that list.
-- **Themes.** `python prototype/tools/themes.py` regenerates
-  `css/themes.css` and `js/themes.js`. It must report "0 contrast failures".
-- **The state kit.** Lists use `Kit.skeleton`, pages `Kit.loading`, and
-  failures `Kit.loadFailed`. Also `Kit.permission`, `Kit.fieldLock`, and
-  `App.snack(text, action, {tone: 'error'})`. Never draw a one-off loading
-  or error state.
+**Pixel check (Windows only).** Run
+`orbit/flutter/tools/compare/partb/compare.sh <keys>`. Every key a batch
+touches must keep its Review 4 score (`partb/review4_scores.txt`) unless
+the change is deliberate and logged in DEVIATIONS. The prototype shots are
+not committed; make them with `tools/compare/shoot_html.py` (see the
+compare README). A cloud or Linux session cannot run this check, so it
+must say so.
 
-## Owner preferences
+## Lessons that cost time
 
-- Plain English.
-- Ask before decisions that are theirs.
-- Show screenshots at reviews.
-- Before large or outward-facing steps, propose and wait. Nothing goes into
-  the main app before Part B.
+- Pixel parity is mandatory. A 48px field that moved a hint by 1px was
+  reverted. A fixed-height row that overflows at 2x text becomes
+  `ConstrainedBox(minHeight:)`, which stays pixel-identical.
+- Orbit toasts leave a timer of up to 4 s. A widget test ends by pumping a
+  `SizedBox` and then 5 s (the `chatTest`, `contactTest` and `groupTest`
+  wrappers do this). Orbit menus run their item 60 ms after closing:
+  `pumpAndSettle` after a tap.
+- Semantics labels merge with their siblings unless they are
+  `container: true`. `find.bySemanticsLabel` with a String is an exact
+  match.
+- `OrbitTapArea` gives a 48px target without moving pixels, but only when
+  its parents' bounds contain it, so put it outermost.
+  `OrbitTapArea(merge: true)` merges a field's own semantics.
+- Presentation imports only its own `application/`, `shared/`, `orbit_ui`,
+  `helix_remote_ui` and `helix_remote_domain`. Something that reads several
+  features goes in `shared/` (see `orbit_home_connector.dart` and
+  `orbit_you_connector.dart`). orbit_ui changes are behaviour only.
+
+## Waiting on the owner
+
+- Review of every "(pending review)" commit and the DEVIATIONS entries.
+- The admin test "only the last four phone digits are ever handled" has
+  failed since ADR-030 (AGENTS.md). Should the rule change?
+- A sound for the Orbit ringtone.
+- The privacy policy text after ADR-030 (GAPS.md W2).
