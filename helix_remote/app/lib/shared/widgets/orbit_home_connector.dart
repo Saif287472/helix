@@ -18,6 +18,7 @@ import 'package:helix_remote/shared/navigation/chat_locations.dart';
 import 'package:helix_remote/shared/navigation/group_paths.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart' as app_mute;
+import 'package:helix_remote/shared/you_checkup.dart';
 import 'package:helix_remote/shared/widgets/orbit_people_panel.dart';
 import 'package:orbit_ui/orbit_ui.dart' hide PhoneBookStatus;
 
@@ -167,7 +168,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
 
     final model = HomeModel(
       me: me,
-      meNeedsAttention: false,
+      meNeedsAttention: ref.watch(youNeedsAttentionProvider),
       chats: chatsTab,
       calls: callsTab,
     );

@@ -143,10 +143,12 @@ instructions. `docs/codebase/` is a gitignored code dump - never read it.
 - **English only.** UI text is plain English string literals. There is no
   localization layer (ARB/gen-l10n and Bengali were removed on 2026-09-28) -
   never add one back.
-- **Light theme only.** Colours come from `Theme.of(context).colorScheme` or
-  tokens in `helix_remote_ui`; no `Color(0x…)`/`Colors.x` in `app/lib`
-  (`product_rules_test`). Sign-in pages use `HelixThemes.signIn()` (the app
-  icon's blue).
+- **Themes.** The app draws the Orbit theme chosen on You > Appearance (a
+  device setting, kept across sign-outs): Orbit or Orbit Night today, more as
+  downloadable packs later. Colours come from the theme (`OrbitTokens`,
+  `Theme.of(context)`); no `Color(0x…)`/`Colors.x` in `app/lib`
+  (`product_rules_test`), and no second dark or high-contrast theme. (Until
+  2026-10-20 the app was light theme only.)
 - **Screenshots are allowed everywhere.** No FLAG_SECURE, no Windows display
   affinity, no per-screen capture blocking (removed 2026-09-30 - people need
   to screenshot chats; `product_rules_test`, and the governance check). Never

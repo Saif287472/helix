@@ -44,6 +44,36 @@ final devicesProvider = StreamProvider<List<DeviceRowView>>((ref) async* {
       .map((devices) => [for (final d in devices) _row(d, now)]);
 });
 
+/// How many devices the account has, and how many besides this one have not
+/// been used for 30 days (the You page's checkup).
+final deviceHealthProvider = StreamProvider<DeviceHealth>((ref) async* {
+  final now = ref.watch(clockProvider)();
+  yield* ref
+      .watch(devicesGatewayProvider)
+      .watch()
+      .map(
+        (devices) => DeviceHealth(
+          count: devices.length,
+          unused: devices.where((d) {
+            if (d.isThisDevice) return false;
+            final seen = d.lastActiveAt ?? d.linkedAt;
+            return seen != null &&
+                now.difference(seen) >= DeviceHealth.unusedAfter;
+          }).length,
+        ),
+      );
+});
+
+final class DeviceHealth {
+  const DeviceHealth({required this.count, required this.unused});
+
+  /// A device this long without use needs a look (Review 1).
+  static const unusedAfter = Duration(days: 30);
+
+  final int count;
+  final int unused;
+}
+
 DeviceRowView _row(DeviceItem d, DateTime now) {
   final platform = switch (d.platform) {
     'android' => 'Android',

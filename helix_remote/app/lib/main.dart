@@ -49,14 +49,19 @@ Future<void> main(List<String> args) async {
       registerPushBackgroundHandler();
       await LocalNotifications.init();
       await CallNotifications.init();
-      // The theme is read before the first frame, so no screen ever draws
-      // without its tokens.
-      final orbit = await loadOrbitTokens();
+      // The themes and the chosen one are read before the first frame, so
+      // no screen ever draws without its tokens.
+      final themes = await loadBuiltInThemes();
+      final theme =
+          await const FileDeviceSettingsStore().readTheme() ?? defaultThemeId;
 
       // Every screen below is a ConsumerWidget, so the scope is the root.
       runApp(
         ProviderScope(
-          overrides: [orbitTokensProvider.overrideWithValue(orbit)],
+          overrides: [
+            orbitThemeLibraryProvider.overrideWithValue(themes),
+            initialThemeIdProvider.overrideWithValue(theme),
+          ],
           child: HelixRemoteApp(initialLink: _initialLink(args)),
         ),
       );
@@ -148,8 +153,9 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     return MaterialApp.router(
       title: 'Helix Remote',
       debugShowCheckedModeBanner: false,
+      // The theme chosen on Appearance, light or dark; there is no separate
+      // high-contrast theme, so the chosen one always shows.
       theme: OrbitTheme.of(orbit),
-      themeMode: ThemeMode.light,
       routerConfig: router,
       builder: (context, child) => AppLifecycleHost(
         // The call host keeps calls working under every screen and opens the

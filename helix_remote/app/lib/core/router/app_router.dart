@@ -16,10 +16,10 @@ import 'package:helix_remote/features/conversation/conversation_routes.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/features/profile/profile_routes.dart';
-import 'package:helix_remote/features/settings/presentation/settings_tab.dart';
 import 'package:helix_remote/features/settings/settings_routes.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
+import 'package:helix_remote/shared/widgets/orbit_you_connector.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/shared/widgets/reset_screen.dart';
 
@@ -92,7 +92,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.settings,
-        builder: (context, state) => const SettingsTab(),
+        builder: (context, state) => const OrbitYouConnector(),
       ),
       ...chatsRoutes,
       ...conversationRoutes,

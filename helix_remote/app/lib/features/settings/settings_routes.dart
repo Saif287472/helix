@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/settings/presentation/about_page.dart';
 import 'package:helix_remote/features/settings/presentation/account_page.dart';
 import 'package:helix_remote/features/settings/presentation/advanced_page.dart';
+import 'package:helix_remote/features/settings/presentation/appearance_page.dart';
 import 'package:helix_remote/features/settings/presentation/blocked_page.dart';
 import 'package:helix_remote/features/settings/presentation/change_password_page.dart';
 import 'package:helix_remote/features/settings/presentation/chats_page.dart';
@@ -12,9 +13,14 @@ import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 
-/// The settings pages, added to the router with one line. The tab itself is
-/// built by the home screen; these are what its rows open.
+/// The settings pages, added to the router with one line. The You page
+/// itself is `shared/widgets/orbit_you_connector.dart`; these are what its
+/// tiles and rows open.
 final List<RouteBase> settingsRoutes = [
+  GoRoute(
+    path: RoutePaths.appearance,
+    builder: (context, state) => const AppearancePage(),
+  ),
   GoRoute(
     path: RoutePaths.account,
     builder: (context, state) => const AccountPage(),

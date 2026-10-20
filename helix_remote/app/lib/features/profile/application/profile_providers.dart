@@ -126,6 +126,29 @@ final class ProfileEditor extends Notifier<ProfileEditState> {
     }
   }
 
+  /// Edit profile's one Save: the name and about line, then the `~name` when
+  /// it changed ([current] is the one held now; an empty field keeps it, as
+  /// only "Remove my ~name" removes it). True when all of it was saved;
+  /// otherwise [state] says what was not (a field's error, or `error`).
+  Future<bool> saveAll({
+    required String name,
+    required String about,
+    required String helixName,
+    String? current,
+  }) async {
+    await save(name: name, about: about);
+    final saved = state;
+    if (saved.nameError != null ||
+        saved.aboutError != null ||
+        saved.error != null) {
+      return false;
+    }
+    final wanted = ProfileRules.normaliseHelixName(helixName);
+    if (wanted.isEmpty || wanted == current) return true;
+    await saveHelixName(wanted);
+    return state.helixNameError == null && state.error == null;
+  }
+
   Future<void> saveHelixName(String input) async {
     final problem = ProfileRules.helixNameProblem(input);
     if (problem != null) {

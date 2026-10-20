@@ -8,6 +8,7 @@ import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/page_parts.dart';
 import 'package:orbit_ui/src/components/pages.dart';
+import 'package:orbit_ui/src/components/state_kit.dart';
 import 'package:orbit_ui/src/components/you_parts.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -250,10 +251,18 @@ Widget _foot(String text) => OrbitSectionFoot(text);
 
 // ================================================================= Privacy
 
+/// Whether the server's privacy choices have come.
+enum PrivacyServerStatus { loading, failed, ready }
+
 class PrivacyModel {
   const PrivacyModel({
     required this.meName,
     required this.meAvatar,
+    this.server = PrivacyServerStatus.ready,
+    this.saving = false,
+    this.error,
+    this.contacts = const {},
+    this.viewerName = 'Nadia',
     this.lastSeenEveryone = true,
     this.onlineEveryone = true,
     this.groupsEveryone = true,
@@ -272,6 +281,23 @@ class PrivacyModel {
 
   final String meName;
   final HelixAvatarModel meAvatar;
+
+  /// "Who can see" and "Being found" are the server's: hidden until they
+  /// come, with Try again when they could not be read.
+  final PrivacyServerStatus server;
+
+  /// A server choice is being sent: those controls wait.
+  final bool saving;
+
+  /// Why the last change, or the load, did not work.
+  final String? error;
+
+  /// The "Who can see" keys whose choice is "My contacts" (set by another
+  /// app): they get a third segment.
+  final Set<String> contacts;
+
+  /// "What Nadia sees": your most recent chat's name, or "Someone".
+  final String viewerName;
   final bool lastSeenEveryone;
   final bool onlineEveryone;
   final bool groupsEveryone;
@@ -301,12 +327,21 @@ class PrivacyActions {
     this.onChanged,
     this.onOpenBlocked,
     this.onPhoneNumber,
+    this.onCancelNumber,
+    this.onRetry,
   });
 
   /// One setting changed: its key ("lastSeen", "receipts", …) and value.
-  final void Function(String key, Object value)? onChanged;
+  /// Answers a sentence when it could not be changed (the app lock without
+  /// a screen lock), which the page toasts.
+  final Future<String?> Function(String key, Object value)? onChanged;
   final VoidCallback? onOpenBlocked;
-  final ValueChanged<String>? onPhoneNumber;
+
+  /// The number typed in "Your phone number"; false when it is not a number
+  /// with its country code (the dialog opens again).
+  final Future<bool> Function(String number)? onPhoneNumber;
+  final VoidCallback? onCancelNumber;
+  final VoidCallback? onRetry;
 }
 
 /// `privacy`: who sees your status, receipts and typing, being found, app
@@ -344,31 +379,56 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.model.askNumber) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        showOrbitInputDialog(
-          context,
-          title: 'Your phone number',
-          label: 'With its country code, like +88017XXXXXXXX',
-          value: '+880 ',
-          maxLength: 20,
-          confirmLabel: 'Turn on',
-          onConfirm: widget.actions.onPhoneNumber,
-        );
-      });
-    }
+    if (widget.model.askNumber) _askLater();
   }
 
   @override
   void didUpdateWidget(PrivacyScreen old) {
     super.didUpdateWidget(old);
     if (old.model != widget.model) _v = _from(widget.model);
+    if (widget.model.askNumber && !old.model.askNumber) _askLater();
   }
 
-  void _set(String key, Object value) {
+  void _askLater() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) _askNumber();
+  });
+
+  /// "Your phone number", again until it is one or the person cancels.
+  Future<void> _askNumber() async {
+    final a = widget.actions;
+    while (mounted) {
+      String? typed;
+      await showOrbitInputDialog(
+        context,
+        title: 'Your phone number',
+        label: 'With its country code, like +88017XXXXXXXX',
+        value: '+880 ',
+        maxLength: 20,
+        confirmLabel: 'Turn on',
+        onConfirm: (v) => typed = v,
+      );
+      final number = typed;
+      if (number == null) {
+        a.onCancelNumber?.call();
+        return;
+      }
+      final submit = a.onPhoneNumber;
+      if (submit == null || await submit(number) || !mounted) return;
+      showOrbitToast(
+        context,
+        'Enter the number with its country code, like +88017XXXXXXXX.',
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _set(String key, Object value) async {
     setState(() => _v[key] = value);
-    widget.actions.onChanged?.call(key, value);
+    final refused = await widget.actions.onChanged?.call(key, value);
+    if (refused == null || !mounted) return;
+    // Not changed: back to what holds, and why.
+    setState(() => _v = _from(widget.model));
+    showOrbitToast(context, refused, error: true);
   }
 
   bool _b(String k) => _v[k]! as bool;
@@ -378,38 +438,64 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     final t = OrbitTokens.of(context);
     final m = widget.model;
     final hidden = [!_b('lastSeen'), !_b('online')].where((x) => x).length;
-    const everyone = ['Everyone', 'Nobody'];
-    OrbitSegRow<String> who(String key, String title, OrbitGlyph icon, int c) =>
-        OrbitSegRow<String>(
-          title: title,
-          icon: icon,
-          iconColor: c,
-          options: _segs(everyone),
-          value: _b(key) ? 'Everyone' : 'Nobody',
-          onChanged: (v) => _set(key, v == 'Everyone'),
-        );
+    final waiting = m.saving;
+    OrbitSegRow<String> who(String key, String title, OrbitGlyph icon, int c) {
+      final contacts = m.contacts.contains(key);
+      return OrbitSegRow<String>(
+        title: title,
+        icon: icon,
+        iconColor: c,
+        options: _segs(['Everyone', if (contacts) 'My contacts', 'Nobody']),
+        value: contacts
+            ? 'My contacts'
+            : _b(key)
+            ? 'Everyone'
+            : 'Nobody',
+        onChanged: waiting
+            ? null
+            : (v) {
+                if (v != 'My contacts') _set(key, v == 'Everyone');
+              },
+      );
+    }
+
     OrbitListRow sw(
       String key,
       String title,
       String sub,
       OrbitGlyph i,
-      int c,
-    ) => OrbitListRow(
+      int c, {
+      bool server = false,
+    }) => OrbitListRow(
       icon: i,
       iconColor: c,
       title: title,
       sub: sub,
       end: OrbitRowEnd.toggle,
       on: _b(key),
-      onChanged: (v) => _set(key, v),
+      onChanged: server && waiting ? null : (v) => _set(key, v),
     );
+    final ready = m.server == PrivacyServerStatus.ready;
+    // The server's sections while its choices have not come.
+    List<Widget> notYet() => [
+      if (m.server == PrivacyServerStatus.loading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 18),
+          child: OrbitPageLoading(),
+        )
+      else
+        OrbitLoadFailed(
+          title: 'Your privacy choices could not be loaded.',
+          onRetry: widget.actions.onRetry,
+        ),
+    ];
     final status = _b('online')
         ? 'online'
         : _b('lastSeen')
         ? 'last seen today at 08:12'
         : '';
     final preview = _PreviewBox(
-      label: 'What Nadia sees',
+      label: 'What ${m.viewerName} sees',
       children: [
         Container(
           padding: const EdgeInsets.only(bottom: 10),
@@ -486,6 +572,8 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     return OrbitYouPage(
       title: 'Privacy',
       children: [
+        if (m.error != null && ready)
+          OrbitInlineNotice(kind: OrbitNoticeKind.error, text: m.error!),
         OrbitHeroCard(
           icon: OrbitIcons.shieldCheck,
           title: 'Your privacy',
@@ -511,15 +599,25 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               ),
           ],
         ),
-        OrbitSection(
-          title: 'Who can see',
-          footer: 'Orbit applies these on its server, to everyone else.',
-          rows: [
-            who('lastSeen', 'Last seen', OrbitIcons.clock, 0),
-            who('online', 'Online status', OrbitIcons.circle, 3),
-            who('groups', 'Who can add me to groups', OrbitIcons.usersThree, 2),
-          ],
-        ),
+        if (ready)
+          OrbitSection(
+            title: 'Who can see',
+            footer: 'Orbit applies these on its server, to everyone else.',
+            rows: [
+              who('lastSeen', 'Last seen', OrbitIcons.clock, 0),
+              who('online', 'Online status', OrbitIcons.circle, 3),
+              who(
+                'groups',
+                'Who can add me to groups',
+                OrbitIcons.usersThree,
+                2,
+              ),
+            ],
+          )
+        else ...[
+          const OrbitGroupTitle('Who can see'),
+          ...notYet(),
+        ],
         OrbitSection(
           title: 'Messages',
           footer:
@@ -550,25 +648,28 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
             ),
           ],
         ),
-        OrbitSection(
-          title: 'Being found',
-          rows: [
-            sw(
-              'byNumber',
-              'By phone number',
-              'People who have your number can find you',
-              OrbitIcons.phone,
-              3,
-            ),
-            sw(
-              'byName',
-              'By ~Orbit name',
-              'People who know your ~name can find you',
-              OrbitIcons.at,
-              1,
-            ),
-          ],
-        ),
+        if (ready)
+          OrbitSection(
+            title: 'Being found',
+            rows: [
+              sw(
+                'byNumber',
+                'By phone number',
+                'People who have your number can find you',
+                OrbitIcons.phone,
+                3,
+                server: true,
+              ),
+              sw(
+                'byName',
+                'By ~Orbit name',
+                'People who know your ~name can find you',
+                OrbitIcons.at,
+                1,
+                server: true,
+              ),
+            ],
+          ),
         OrbitSection(
           title: 'App lock',
           footer: lock ? 'Calls still ring while Orbit is locked.' : '',
@@ -639,6 +740,9 @@ class MutedChatItem {
 class NotificationsModel {
   const NotificationsModel({
     this.osOff = false,
+    this.mutedLoading = false,
+    this.mutedFailed = false,
+    this.showRingtone = true,
     this.messages = true,
     this.groups = true,
     this.calls = true,
@@ -654,6 +758,13 @@ class NotificationsModel {
 
   /// Notifications are off for Orbit in the phone's settings.
   final bool osOff;
+
+  /// The muted chats are still being read, or could not be.
+  final bool mutedLoading;
+  final bool mutedFailed;
+
+  /// The ringtone row; hidden until there is an Orbit ringtone to choose.
+  final bool showRingtone;
   final bool messages;
   final bool groups;
   final bool calls;
@@ -680,7 +791,9 @@ class NotificationsActions {
   /// "phoneRingtone", and its new value.
   final void Function(String key, bool value)? onChanged;
   final VoidCallback? onOpenSystemSettings;
-  final ValueChanged<String>? onUnmute;
+
+  /// Unmutes the chat; the page then says "Unmuted".
+  final Future<void> Function(String chatId)? onUnmute;
 }
 
 /// `notifications`: the alerts, sound and lock screen (with a preview of
@@ -823,54 +936,76 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               OrbitIcons.eye,
               1,
             ),
-            OrbitListRow(
-              icon: OrbitIcons.phoneCall,
-              iconColor: 0,
-              title: 'Ringtone',
-              sub: 'For incoming calls',
-              value: _v['phoneRingtone']!
-                  ? 'Phone’s ringtone'
-                  : 'Orbit (default)',
-              end: OrbitRowEnd.chevron,
-              onTap: () => showOrbitSheet(
-                context,
-                title: 'Ringtone',
-                text: 'More ringtones to download are coming.',
-                items: [
-                  OrbitMenuItem(
-                    icon: OrbitIcons.musicNote,
-                    label: 'Orbit (default)',
-                    on: !_v['phoneRingtone']!,
-                    onTap: () => _set('phoneRingtone', false),
-                  ),
-                  OrbitMenuItem(
-                    icon: OrbitIcons.deviceMobile,
-                    label: 'Phone’s ringtone',
-                    on: _v['phoneRingtone']!,
-                    onTap: () => _set('phoneRingtone', true),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        OrbitSection(
-          title: 'Muted chats · ${m.muted.length}',
-          footer: 'Mute a chat from the chat itself.',
-          rows: [
-            for (final c in m.muted)
+            if (m.showRingtone)
               OrbitListRow(
-                leading: OrbitAvatar(avatar: c.avatar, size: 40),
-                title: c.title,
-                sub: c.label,
-                trailing: OrbitButton(
-                  label: 'Unmute',
-                  kind: OrbitButtonKind.ghost,
-                  onPressed: () => widget.actions.onUnmute?.call(c.id),
+                icon: OrbitIcons.phoneCall,
+                iconColor: 0,
+                title: 'Ringtone',
+                sub: 'For incoming calls',
+                value: _v['phoneRingtone']!
+                    ? 'Phone’s ringtone'
+                    : 'Orbit (default)',
+                end: OrbitRowEnd.chevron,
+                onTap: () => showOrbitSheet(
+                  context,
+                  title: 'Ringtone',
+                  text: 'More ringtones to download are coming.',
+                  items: [
+                    OrbitMenuItem(
+                      icon: OrbitIcons.musicNote,
+                      label: 'Orbit (default)',
+                      on: !_v['phoneRingtone']!,
+                      onTap: () => _set('phoneRingtone', false),
+                    ),
+                    OrbitMenuItem(
+                      icon: OrbitIcons.deviceMobile,
+                      label: 'Phone’s ringtone',
+                      on: _v['phoneRingtone']!,
+                      onTap: () => _set('phoneRingtone', true),
+                    ),
+                  ],
                 ),
               ),
           ],
         ),
+        if (m.mutedLoading) ...const [
+          OrbitGroupTitle('Muted chats'),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: OrbitPageLoading(),
+          ),
+        ] else if (m.mutedFailed) ...const [
+          OrbitGroupTitle('Muted chats'),
+          OrbitInlineNotice(
+            kind: OrbitNoticeKind.error,
+            text: 'Muted chats could not be loaded.',
+          ),
+        ] else if (m.muted.isEmpty) ...[
+          const OrbitGroupTitle('Muted chats'),
+          _foot('No muted chats. Mute a chat from the chat itself.'),
+        ] else
+          OrbitSection(
+            title: 'Muted chats · ${m.muted.length}',
+            footer: 'Mute a chat from the chat itself.',
+            rows: [
+              for (final c in m.muted)
+                OrbitListRow(
+                  leading: OrbitAvatar(avatar: c.avatar, size: 40),
+                  title: c.title,
+                  sub: c.label,
+                  trailing: OrbitButton(
+                    label: 'Unmute',
+                    kind: OrbitButtonKind.ghost,
+                    onPressed: () async {
+                      final unmute = widget.actions.onUnmute;
+                      if (unmute == null) return;
+                      await unmute(c.id);
+                      if (context.mounted) showOrbitToast(context, 'Unmuted');
+                    },
+                  ),
+                ),
+            ],
+          ),
       ],
     );
   }
@@ -1173,12 +1308,27 @@ class ChatsSettingsScreen extends StatefulWidget {
 class _ChatsSettingsScreenState extends State<ChatsSettingsScreen> {
   late var _size = widget.model.textSize;
   late var _enter = widget.model.enterSends;
-  late final Map<String, DownloadWhen> _dl = {
-    'photos': widget.model.photos,
-    'voice': widget.model.voice,
-    'videos': widget.model.videos,
-    'documents': widget.model.documents,
+  late final Map<String, DownloadWhen> _dl = _downloads(widget.model);
+
+  static Map<String, DownloadWhen> _downloads(ChatsSettingsModel m) => {
+    'photos': m.photos,
+    'voice': m.voice,
+    'videos': m.videos,
+    'documents': m.documents,
   };
+
+  @override
+  void didUpdateWidget(ChatsSettingsScreen old) {
+    super.didUpdateWidget(old);
+    // What is saved wins once it has come (the settings load after the
+    // first frame).
+    final m = widget.model;
+    if (old.model != m) {
+      _size = m.textSize;
+      _enter = m.enterSends;
+      _dl.addAll(_downloads(m));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1380,8 +1530,12 @@ class StorageChatItem {
   final String documentsLabel;
 }
 
+/// Whether the storage figures have been read.
+enum StorageStatus { loading, failed, ready }
+
 class StorageModel {
   const StorageModel({
+    this.status = StorageStatus.ready,
     required this.totalLabel,
     required this.splitLabel,
     this.messagesShare = 0.15,
@@ -1391,6 +1545,8 @@ class StorageModel {
     this.downloadSummary = '',
     this.backupOverMobile = false,
   });
+
+  final StorageStatus status;
 
   /// "1.2 GB on this phone".
   final String totalLabel;
@@ -1411,12 +1567,16 @@ class StorageActions {
     this.onFreeDocuments,
     this.onOpenChatsSettings,
     this.onOpenBackup,
+    this.onRetry,
   });
 
-  final ValueChanged<String>? onFreeMedia;
-  final ValueChanged<String>? onFreeDocuments;
+  /// Removes the chat's photos and videos, or documents, keeping its
+  /// messages; answers what to say ("412 MB freed", a failure).
+  final Future<String?> Function(String chatId)? onFreeMedia;
+  final Future<String?> Function(String chatId)? onFreeDocuments;
   final VoidCallback? onOpenChatsSettings;
   final VoidCallback? onOpenBackup;
+  final VoidCallback? onRetry;
 }
 
 /// `storage`: what Orbit keeps on this phone, the biggest chats, and data
@@ -1498,80 +1658,96 @@ class StorageScreen extends StatelessWidget {
         ),
       ],
     );
+    Future<void> free(Future<String?> Function(String)? run, String id) async {
+      final said = run == null ? null : await run(id);
+      if (said != null && context.mounted) showOrbitToast(context, said);
+    }
+
     return OrbitYouPage(
       title: 'Storage and data',
       children: [
-        OrbitHeroCard(
-          icon: OrbitIcons.hardDrives,
-          title: m.totalLabel,
-          sub: m.splitLabel,
-          slot: slot,
-        ),
-        const OrbitGroupTitle('Biggest chats'),
-        OrbitCard(
-          children: [
-            for (final c in m.chats)
-              OrbitListRow(
-                leading: OrbitAvatar(avatar: c.avatar, size: 40),
-                title: c.title,
-                titleWidget: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    OrbitText(
-                      c.title,
-                      style: t.font.style(
-                        size: OrbitType.body,
-                        weight: 520,
-                        color: t.ink,
+        if (m.status == StorageStatus.loading) ...const [
+          SizedBox(height: 120),
+          OrbitPageLoading(),
+        ] else if (m.status == StorageStatus.failed)
+          OrbitLoadFailed(
+            title: 'The storage figures could not be read.',
+            onRetry: a.onRetry,
+          )
+        else
+          OrbitHeroCard(
+            icon: OrbitIcons.hardDrives,
+            title: m.totalLabel,
+            sub: m.splitLabel,
+            slot: slot,
+          ),
+        if (m.chats.isNotEmpty) ...[
+          const OrbitGroupTitle('Biggest chats'),
+          OrbitCard(
+            children: [
+              for (final c in m.chats)
+                OrbitListRow(
+                  leading: OrbitAvatar(avatar: c.avatar, size: 40),
+                  title: c.title,
+                  titleWidget: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      OrbitText(
+                        c.title,
+                        style: t.font.style(
+                          size: OrbitType.body,
+                          weight: 520,
+                          color: t.ink,
+                        ),
                       ),
-                    ),
-                    Container(
-                      height: 4,
-                      margin: const EdgeInsets.only(top: 7),
-                      decoration: BoxDecoration(
-                        color: t.line,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: c.share.clamp(0, 1),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: t.cyan,
-                            borderRadius: BorderRadius.circular(4),
+                      Container(
+                        height: 4,
+                        margin: const EdgeInsets.only(top: 7),
+                        decoration: BoxDecoration(
+                          color: t.line,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: c.share.clamp(0, 1),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: t.cyan,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  trailing: Text(
+                    c.sizeLabel,
+                    style: t.mono.style(size: OrbitType.small, color: t.ink3),
+                  ),
+                  onTap: () => showOrbitSheet(
+                    context,
+                    title: 'Free up space in ${c.title}',
+                    text:
+                        'Messages stay. Removed files can be downloaded again '
+                        'while the sender’s copy is on the server.',
+                    items: [
+                      OrbitMenuItem(
+                        icon: OrbitIcons.images,
+                        label: 'Remove photos and videos · ${c.mediaLabel}',
+                        onTap: () => free(a.onFreeMedia, c.id),
+                      ),
+                      OrbitMenuItem(
+                        icon: OrbitIcons.fileText,
+                        label: 'Remove documents · ${c.documentsLabel}',
+                        onTap: () => free(a.onFreeDocuments, c.id),
+                      ),
+                    ],
+                  ),
                 ),
-                trailing: Text(
-                  c.sizeLabel,
-                  style: t.mono.style(size: OrbitType.small, color: t.ink3),
-                ),
-                onTap: () => showOrbitSheet(
-                  context,
-                  title: 'Free up space in ${c.title}',
-                  text:
-                      'Messages stay. Removed files can be downloaded again '
-                      'while the sender’s copy is on the server.',
-                  items: [
-                    OrbitMenuItem(
-                      icon: OrbitIcons.images,
-                      label: 'Remove photos and videos · ${c.mediaLabel}',
-                      onTap: () => a.onFreeMedia?.call(c.id),
-                    ),
-                    OrbitMenuItem(
-                      icon: OrbitIcons.fileText,
-                      label: 'Remove documents · ${c.documentsLabel}',
-                      onTap: () => a.onFreeDocuments?.call(c.id),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-        _foot('Tap a chat to free space without deleting its messages.'),
+            ],
+          ),
+          _foot('Tap a chat to free space without deleting its messages.'),
+        ],
         OrbitSection(
           title: 'Data use',
           rows: [
@@ -1604,6 +1780,9 @@ class AccountModel {
   const AccountModel({
     required this.name,
     required this.avatar,
+    this.loadFailed = false,
+    this.busy = false,
+    this.notice,
     this.phoneMasked = '',
     this.helixName,
     this.hasPassword = true,
@@ -1614,6 +1793,17 @@ class AccountModel {
 
   final String name;
   final HelixAvatarModel avatar;
+
+  /// The account's details could not be read (offline): the hero shows the
+  /// name only, with Try again.
+  final bool loadFailed;
+
+  /// Exporting or signing out.
+  final bool busy;
+
+  /// What the last action said ("The export was ready but could not be
+  /// shared from this device.").
+  final String? notice;
   final String phoneMasked;
   final String? helixName;
   final bool hasPassword;
@@ -1634,16 +1824,22 @@ class AccountActions {
     this.onSignOut,
     this.onExportFirst,
     this.onDelete,
+    this.onRetry,
   });
 
   final VoidCallback? onPassword;
   final VoidCallback? onActivity;
-  final VoidCallback? onExport;
+
+  /// Shares the export; answers what to say when it did not work.
+  final Future<String?> Function()? onExport;
   final VoidCallback? onSignOut;
-  final VoidCallback? onExportFirst;
+
+  /// "Export first" in the delete dialog: the export only.
+  final Future<String?> Function()? onExportFirst;
 
   /// Continue to the delete page.
   final VoidCallback? onDelete;
+  final VoidCallback? onRetry;
 }
 
 /// `account`: who you are, sign-in, your data, and sign out or delete.
@@ -1662,9 +1858,26 @@ class AccountScreen extends StatelessWidget {
     final m = model;
     final a = actions;
     final pass = m.hasPassword;
+    Future<void> say(Future<String?> Function()? run) async {
+      final said = run == null ? null : await run();
+      if (said != null && context.mounted) {
+        showOrbitToast(context, said, error: true);
+      }
+    }
+
     return OrbitYouPage(
       title: 'Account',
       children: [
+        if (m.loadFailed)
+          OrbitInlineNotice(
+            kind: OrbitNoticeKind.error,
+            text:
+                'Your account details could not be loaded. You may be '
+                'offline.',
+            action: OrbitNoticeAction('Try again', a.onRetry ?? _none),
+          ),
+        if (m.notice != null)
+          OrbitInlineNotice(kind: OrbitNoticeKind.info, text: m.notice!),
         OrbitHeroCard(
           art: OrbitAvatar(avatar: m.avatar, size: 48),
           title: m.name,
@@ -1673,11 +1886,12 @@ class AccountScreen extends StatelessWidget {
             if ((m.helixName ?? '').isNotEmpty) '~${m.helixName}',
           ].join(' · '),
           pills: [
-            OrbitHeroPill(
-              icon: pass ? OrbitIcons.checkCircle : OrbitIcons.warningCircle,
-              text: pass ? 'Password set' : 'No password',
-              tone: pass ? OrbitPillTone.ok : OrbitPillTone.warn,
-            ),
+            if (!m.loadFailed)
+              OrbitHeroPill(
+                icon: pass ? OrbitIcons.checkCircle : OrbitIcons.warningCircle,
+                text: pass ? 'Password set' : 'No password',
+                tone: pass ? OrbitPillTone.ok : OrbitPillTone.warn,
+              ),
             OrbitHeroPill(
               icon: OrbitIcons.devices,
               text: m.deviceCount == 1
@@ -1725,7 +1939,7 @@ class AccountScreen extends StatelessWidget {
                   'Account details, devices and settings. No messages: the '
                   'server never had them readable.',
               end: OrbitRowEnd.chevron,
-              onTap: a.onExport,
+              onTap: m.busy ? null : () => say(a.onExport),
             ),
           ],
         ),
@@ -1766,7 +1980,10 @@ class AccountScreen extends StatelessWidget {
                     'good. Want a copy of your account data first?',
                 actions: [
                   const OrbitDialogAction('Cancel'),
-                  OrbitDialogAction('Export first', onPressed: a.onExportFirst),
+                  OrbitDialogAction(
+                    'Export first',
+                    onPressed: () => say(a.onExportFirst),
+                  ),
                   OrbitDialogAction(
                     'Continue',
                     kind: OrbitButtonKind.danger,

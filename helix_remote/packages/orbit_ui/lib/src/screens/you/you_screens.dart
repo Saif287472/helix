@@ -13,6 +13,7 @@ import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/page_parts.dart';
 import 'package:orbit_ui/src/components/pages.dart';
+import 'package:orbit_ui/src/components/state_kit.dart';
 import 'package:orbit_ui/src/components/you_parts.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -607,7 +608,10 @@ class YouActions {
   final VoidCallback? openProfile;
   final ValueChanged<YouTopic>? openTopic;
   final VoidCallback? fixRecovery;
-  final VoidCallback? turnOnAppLock;
+
+  /// After "Turn on app lock?": the phone's own unlock follows. Answers a
+  /// sentence when the lock could not be turned on, which the page toasts.
+  final Future<String?> Function()? turnOnAppLock;
   final VoidCallback? copyShareLink;
   final VoidCallback? shareLink;
   final VoidCallback? scanCode;
@@ -747,10 +751,21 @@ class _YouScreenState extends State<YouScreen> {
           OrbitDialogAction(
             'Turn on',
             kind: OrbitButtonKind.primary,
-            onPressed: _a.turnOnAppLock,
+            onPressed: _turnOnLock,
           ),
         ],
       );
+    } else {
+      // The other checks are fixed on their own page.
+      final opens = _m.checks.where((c) => c.key == key).firstOrNull?.opens;
+      if (opens != null) _open(opens);
+    }
+  }
+
+  Future<void> _turnOnLock() async {
+    final refused = await _a.turnOnAppLock?.call();
+    if (refused != null && mounted) {
+      showOrbitToast(context, refused, error: true);
     }
   }
 
@@ -1237,19 +1252,32 @@ class _ShareSheet extends StatelessWidget {
   return (true, '~$n looks good. Orbit checks that it is free when you save.');
 }
 
+/// Whether the saved profile has come.
+enum ProfileEditStatus { loading, failed, ready }
+
 class ProfileEditModel {
   const ProfileEditModel({
+    this.status = ProfileEditStatus.ready,
     this.name = '',
     this.about = '',
     this.helixName = '',
     this.currentHelixName,
     this.photo,
+    this.avatarColor = 0,
+    this.canPickPhoto = true,
     this.nameTaken = false,
+    this.nameError,
+    this.aboutError,
+    this.helixNameError,
+    this.findableByName = true,
     this.deviceCount = 1,
     this.meta = '',
     this.saving = false,
   });
 
+  final ProfileEditStatus status;
+
+  /// What is saved: the fields start from it once.
   final String name;
   final String about;
   final String helixName;
@@ -1258,8 +1286,23 @@ class ProfileEditModel {
   final String? currentHelixName;
   final ImageProvider? photo;
 
-  /// The server refused the ~name on Save.
+  /// [HelixAvatarModel.colorIndex] for the preview without a photo.
+  final int avatarColor;
+
+  /// False where the platform cannot pick a picture: no photo buttons.
+  final bool canPickPhoto;
+
+  /// The server refused the ~name on Save (the preview's sample).
   final bool nameTaken;
+
+  /// Why Save did not take a field, under it ([helixNameError] is the
+  /// server's refusal when it has one).
+  final String? nameError;
+  final String? aboutError;
+  final String? helixNameError;
+
+  /// "Find me by ~name" is on: the ~name row says anyone can look it up.
+  final bool findableByName;
   final int deviceCount;
   final String meta;
   final bool saving;
@@ -1271,12 +1314,22 @@ class ProfileEditActions {
     this.onChoosePhoto,
     this.onRemovePhoto,
     this.onRemoveHelixName,
+    this.onRetry,
   });
 
-  final void Function(String name, String about, String helixName)? onSave;
-  final VoidCallback? onChoosePhoto;
-  final VoidCallback? onRemovePhoto;
-  final VoidCallback? onRemoveHelixName;
+  /// Saves the three fields. Null when everything was saved: the page says
+  /// "Profile saved" and closes. Otherwise a sentence to toast (empty when
+  /// the reason is under a field).
+  final Future<String?> Function(String name, String about, String helixName)?
+  onSave;
+
+  /// The answer to toast ("Photo updated.", a failure); null says nothing.
+  final Future<String?> Function()? onChoosePhoto;
+  final Future<String?> Function()? onRemovePhoto;
+
+  /// Null when the ~name was removed; else why not.
+  final Future<String?> Function()? onRemoveHelixName;
+  final VoidCallback? onRetry;
 }
 
 /// `profile`: a live preview of your orbit as you type, the photo, Name,
@@ -1301,6 +1354,32 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   late final _helix = TextEditingController(text: widget.model.helixName);
   late var _taken = widget.model.nameTaken;
 
+  /// The server's refusal of the ~name, until the field changes.
+  late String? _helixRefusal = widget.model.helixNameError;
+
+  @override
+  void didUpdateWidget(ProfileEditScreen old) {
+    super.didUpdateWidget(old);
+    final m = widget.model;
+    // The fields start from the saved profile once, when it arrives.
+    if (old.model.status != ProfileEditStatus.ready &&
+        m.status == ProfileEditStatus.ready) {
+      _name.text = m.name;
+      _about.text = m.about;
+      _helix.text = m.helixName;
+    }
+    if (m.helixNameError != old.model.helixNameError) {
+      _helixRefusal = m.helixNameError;
+    }
+  }
+
+  Future<void> _say(Future<String?> Function()? action) async {
+    final said = await action?.call();
+    if (said != null && said.isNotEmpty && mounted) {
+      showOrbitToast(context, said);
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -1309,7 +1388,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final ns = orbitNameState(
       _helix.text,
       current: widget.model.currentHelixName,
@@ -1322,11 +1401,32 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       showOrbitToast(context, 'Enter the name people should see.');
       return;
     }
-    widget.actions.onSave?.call(
+    final save = widget.actions.onSave;
+    if (save == null) return;
+    final said = await save(
       _name.text.trim(),
       _about.text.trim(),
       _helix.text.replaceFirst(RegExp('^~'), '').trim().toLowerCase(),
     );
+    if (!mounted) return;
+    if (said == null) {
+      showOrbitToast(context, 'Profile saved');
+      Navigator.maybePop(context);
+    } else if (said.isNotEmpty) {
+      showOrbitToast(context, said, error: true);
+    }
+  }
+
+  Future<void> _removeHelixName() async {
+    final remove = widget.actions.onRemoveHelixName;
+    final refused = remove == null ? null : await remove();
+    if (!mounted) return;
+    if (refused == null) {
+      setState(_helix.clear);
+      if (remove != null) showOrbitToast(context, 'Your ~name is removed.');
+    } else {
+      showOrbitToast(context, refused, error: true);
+    }
   }
 
   @override
@@ -1340,6 +1440,38 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         : m.currentHelixName ?? '';
     final hasPhoto = m.photo != null;
     final top = MediaQuery.paddingOf(context).top;
+    if (m.status != ProfileEditStatus.ready) {
+      return OrbitPageBackground(
+        child: Padding(
+          padding: EdgeInsets.only(top: top),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OrbitAppBar(
+                title: 'Edit profile',
+                onLead: () => Navigator.maybePop(context),
+              ),
+              if (m.status == ProfileEditStatus.loading) ...const [
+                SizedBox(height: 120),
+                OrbitPageLoading(),
+              ] else
+                OrbitLoadFailed(
+                  title: 'Your profile could not be loaded.',
+                  onRetry: a.onRetry,
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    final helixError = ns != null && !ns.$1
+        ? ns.$2
+        : _helixRefusal ??
+              (_taken
+                  ? 'That name is not available. It may already be taken, or '
+                        'it may be one that could be mistaken for Orbit staff. '
+                        'Try another.'
+                  : '');
     Widget vis(OrbitGlyph icon, String what, String who, Widget tag) =>
         OrbitListRow(
           leading: Container(
@@ -1412,41 +1544,49 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           avatar: HelixAvatarModel(
                             name: _name.text.isEmpty ? 'You' : _name.text,
                             image: m.photo,
+                            colorIndex: m.avatarColor,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      OrbitSpace.gutter,
-                      4,
-                      OrbitSpace.gutter,
-                      0,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OrbitButton(
-                            label: hasPhoto ? 'Change photo' : 'Choose a photo',
-                            icon: OrbitIcons.image,
-                            kind: OrbitButtonKind.secondary,
-                            block: true,
-                            onPressed: a.onChoosePhoto ?? _none,
+                  if (m.canPickPhoto)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        OrbitSpace.gutter,
+                        4,
+                        OrbitSpace.gutter,
+                        0,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OrbitButton(
+                              label: hasPhoto
+                                  ? 'Change photo'
+                                  : 'Choose a photo',
+                              icon: OrbitIcons.image,
+                              kind: OrbitButtonKind.secondary,
+                              block: true,
+                              onPressed: m.saving
+                                  ? null
+                                  : () => _say(a.onChoosePhoto),
+                            ),
                           ),
-                        ),
-                        if (hasPhoto) ...[
-                          const SizedBox(width: 8),
-                          OrbitButton(
-                            label: 'Remove',
-                            kind: OrbitButtonKind.ghost,
-                            tint: t.danger,
-                            onPressed: a.onRemovePhoto ?? _none,
-                          ),
+                          if (hasPhoto) ...[
+                            const SizedBox(width: 8),
+                            OrbitButton(
+                              label: 'Remove',
+                              kind: OrbitButtonKind.ghost,
+                              tint: t.danger,
+                              onPressed: m.saving
+                                  ? null
+                                  : () => _say(a.onRemovePhoto),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                       OrbitSpace.gutter,
@@ -1463,6 +1603,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           maxLength: 50,
                           counter: true,
                           hint: 'How people see you',
+                          error: m.nameError ?? '',
                           onChanged: (_) => setState(() {}),
                         ),
                         OrbitTextField(
@@ -1471,6 +1612,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           maxLength: 139,
                           counter: true,
                           hint: 'A line about you',
+                          error: m.aboutError ?? '',
                           onChanged: (_) => setState(() {}),
                         ),
                         OrbitTextField(
@@ -1479,19 +1621,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           prefix: '~',
                           mono: true,
                           hint: 'anna.k',
-                          error: ns != null && !ns.$1
-                              ? ns.$2
-                              : _taken
-                              ? 'That name is not available. It may already '
-                                    'be taken, or it may be one that could be '
-                                    'mistaken for Orbit staff. Try another.'
-                              : '',
-                          helper: ns != null && ns.$1 && !_taken
+                          error: helixError,
+                          helper: ns != null && ns.$1 && helixError.isEmpty
                               ? ns.$2
                               : '3 to 32 letters, numbers, dots or '
                                     'underscores, starting with a letter.',
-                          helperOk: ns != null && ns.$1 && !_taken,
-                          onChanged: (_) => setState(() => _taken = false),
+                          helperOk: ns != null && ns.$1 && helixError.isEmpty,
+                          onChanged: (_) => setState(() {
+                            _taken = false;
+                            _helixRefusal = null;
+                          }),
                         ),
                       ],
                     ),
@@ -1515,12 +1654,24 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           icon: OrbitIcons.lockSimple,
                         ),
                       ),
-                      vis(
-                        OrbitIcons.at,
-                        '~Orbit name',
-                        'Anyone can look it up to message you',
-                        const OrbitTag(label: 'Public'),
-                      ),
+                      if (m.findableByName)
+                        vis(
+                          OrbitIcons.at,
+                          '~Orbit name',
+                          'Anyone can look it up to message you',
+                          const OrbitTag(label: 'Public'),
+                        )
+                      else
+                        vis(
+                          OrbitIcons.at,
+                          '~Orbit name',
+                          'Nobody can look it up while “Find me by ~name” is '
+                              'off',
+                          const OrbitTag(
+                            label: 'Hidden',
+                            tone: OrbitTagTone.accent,
+                          ),
+                        ),
                       vis(
                         OrbitIcons.phone,
                         'Phone number',
@@ -1552,10 +1703,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                               OrbitDialogAction(
                                 'Remove',
                                 kind: OrbitButtonKind.danger,
-                                onPressed: () {
-                                  setState(_helix.clear);
-                                  a.onRemoveHelixName?.call();
-                                },
+                                onPressed: _removeHelixName,
                               ),
                             ],
                           ),
@@ -1592,7 +1740,9 @@ class AppearanceModel {
 class AppearanceActions {
   const AppearanceActions({this.onPick});
 
-  final ValueChanged<String>? onPick;
+  /// Draws the app in this theme from now on; the page then says
+  /// "Orbit Night theme on".
+  final Future<void> Function(String id)? onPick;
 }
 
 /// `appearance`: the current theme, then a card per theme drawn in that
@@ -1626,7 +1776,17 @@ class AppearanceScreen extends StatelessWidget {
                 on: c.tokens.meta.id == cur.id,
                 onTap: c.tokens.meta.id == cur.id
                     ? null
-                    : () => actions.onPick?.call(c.tokens.meta.id),
+                    : () async {
+                        final pick = actions.onPick;
+                        if (pick == null) return;
+                        await pick(c.tokens.meta.id);
+                        if (context.mounted) {
+                          showOrbitToast(
+                            context,
+                            '${c.tokens.meta.name} theme on',
+                          );
+                        }
+                      },
               ),
           ],
         ),

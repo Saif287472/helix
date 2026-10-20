@@ -147,6 +147,16 @@ String formatAgo(DateTime? at, DateTime now) {
   return d == 1 ? 'Yesterday' : '$d days ago';
 }
 
+/// "Just now", "5 min ago", "5 h ago", "3 d ago": [formatAgo] for a tile.
+String formatAgoShort(DateTime? at, DateTime now) {
+  if (at == null) return 'Never';
+  final diff = now.difference(at);
+  if (diff.inSeconds < 60) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return '${diff.inHours} h ago';
+  return '${diff.inDays} d ago';
+}
+
 int _daysBetween(DateTime day, DateTime now) {
   final today = DateTime(now.year, now.month, now.day);
   final that = DateTime(day.year, day.month, day.day);

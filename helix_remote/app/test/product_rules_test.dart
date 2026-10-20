@@ -154,27 +154,28 @@ void main() {
     );
   });
 
-  test('light theme only: no dark theme is declared or selected', () {
+  test('the theme chosen on Appearance is the one theme the app draws', () {
+    // Light or dark is the theme's own (Orbit, Orbit Night): MaterialApp gets
+    // that one theme, with no second dark or high-contrast theme that could
+    // replace it behind the person's back. (Retired 2026-10-20, Orbit Part B:
+    // the app was light theme only.)
     final offenders = <String>[];
     for (final file in _sources('lib')) {
       final code = _code(file.readAsStringSync());
       for (final needle in const [
         'darkTheme:',
-        'ThemeMode.dark',
-        'ThemeMode.system',
-        'Brightness.dark',
-        'highContrastDark',
+        'highContrastTheme:',
+        'highContrastDarkTheme:',
+        'themeMode:',
       ]) {
         if (code.contains(needle)) offenders.add('${file.path}: $needle');
       }
     }
-    expect(offenders, isEmpty, reason: 'Helix is light theme only');
-
-    // And the one place it must be pinned positively.
+    expect(offenders, isEmpty, reason: 'one theme, the chosen one');
     expect(
       File('lib/main.dart').readAsStringSync(),
-      contains('themeMode: ThemeMode.light'),
-      reason: 'the light theme is the app theme, not merely the default',
+      contains('theme: OrbitTheme.of(orbit)'),
+      reason: 'the chosen Orbit theme is the app theme',
     );
   });
 

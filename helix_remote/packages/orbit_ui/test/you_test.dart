@@ -96,7 +96,12 @@ void main() {
       tester,
       YouScreen(
         model: you(good: false),
-        actions: YouActions(turnOnAppLock: () => on++),
+        actions: YouActions(
+          turnOnAppLock: () async {
+            on++;
+            return null;
+          },
+        ),
       ),
     );
     await tester.tap(find.text('Turn on'));
@@ -156,7 +161,12 @@ void main() {
           helixName: 'hasan',
           currentHelixName: 'hasan',
         ),
-        actions: ProfileEditActions(onSave: (n, a, h) => saved = (n, a, h)),
+        actions: ProfileEditActions(
+          onSave: (n, a, h) async {
+            saved = (n, a, h);
+            return '';
+          },
+        ),
       ),
     );
     await tester.enterText(find.byType(EditableText).first, 'Hasan K');
@@ -180,12 +190,15 @@ void main() {
             ThemeChoice(tokens: night),
           ],
         ),
-        actions: AppearanceActions(onPick: (id) => picked = id),
+        actions: AppearanceActions(onPick: (id) async => picked = id),
       ),
     );
     expect(find.bySemanticsLabel('Orbit theme, selected'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('${night.meta.name} theme'));
     expect(picked, 'night');
+    await tester.pump();
+    expect(find.text('Orbit Night theme on'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('privacy: choices update the preview at once', (tester) async {
@@ -197,7 +210,12 @@ void main() {
           meName: 'Hasan',
           meAvatar: HelixAvatarModel(name: 'Hasan'),
         ),
-        actions: PrivacyActions(onChanged: (k, v) => changes.add((k, v))),
+        actions: PrivacyActions(
+          onChanged: (k, v) async {
+            changes.add((k, v));
+            return null;
+          },
+        ),
       ),
     );
     expect(find.text('online'), findsOneWidget);

@@ -33,6 +33,13 @@ abstract final class AppPaths {
     return File(p.join(dir.path, 'profile_avatar.png'));
   }
 
+  /// Settings that belong to this device, not the account (the theme). Kept
+  /// when the account is signed out, and only ever plain choices.
+  static Future<File> deviceSettingsFile() async {
+    final dir = await _base();
+    return File(p.join(dir.path, 'device_settings.json'));
+  }
+
   /// Everything the app keeps on disk, for the storage page.
   static Future<Directory> appDirectory() => _base();
 

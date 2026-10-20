@@ -152,17 +152,17 @@ class _PreviewProfileState extends State<_PreviewProfile> {
       meta: '$_masked · $_server',
     ),
     actions: ProfileEditActions(
-      onSave: (name, about, helix) {
+      onSave: (name, about, helix) async {
         final bad =
             helix != 'hasan' &&
             (RegExp('admin|support|orbit|helix|official').hasMatch(helix) ||
                 const ['nadia', 'arif', 'sadia'].contains(helix));
-        if (bad) {
-          setState(() {
-            _taken = true;
-            _key++;
-          });
-        }
+        if (!bad) return null;
+        setState(() {
+          _taken = true;
+          _key++;
+        });
+        return '';
       },
     ),
   );
