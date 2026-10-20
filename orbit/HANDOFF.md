@@ -137,3 +137,89 @@ must say so.
   failed since ADR-030 (AGENTS.md). Should the rule change?
 - A sound for the Orbit ringtone.
 - The privacy policy text after ADR-030 (GAPS.md W2).
+
+# From the earlier handoff (2026-10-18, Part A)
+
+Still useful. The phase table that came with it is out of date: Part A is
+finished (Phase 4 and Review 4), and Part B is above. "Never push" now has
+one exception: the owner had `orbit-ui` pushed on 2026-10-20.
+
+### Read in this order
+
+1. `PORT_PLAN.md`, the plan of record:
+   - the decisions table;
+   - every phase, with its progress checkboxes;
+   - "Rules for every agent". These go into `orbit/flutter/AGENTS.md` in
+     Phase 2.
+2. `prototype/README.md`: how to run the prototype, its tools, the design
+   decisions and the file map.
+3. `prototype/SCREENS.md`:
+   - the app's feature checklist;
+   - "Design changes you approved", items 1 to 20.
+4. `contracts/README.md`, then the eight contracts. Each ends with
+   "Decisions and Phase 1b".
+5. `GAPS.md`: everything Review 1 decided, and what to build or not build in
+   Part B.
+6. `prototype/INTERACTIONS.md`: 307 behaviours. Each one becomes a widget
+   test.
+7. The repo's `AGENTS.md` at the root. Its rules apply in full.
+
+### Rules that matter most
+
+- **The prototype is the specification.** Sizes, colours and spacing come
+  from its CSS and tokens, never from guesses. Anything that can't be
+  matched goes in `DEVIATIONS.md`, and you ask the owner.
+- **A screen never reads providers, the database, the router or the
+  engine.** Model in, actions out (`contracts/`).
+- **Small batches, stop at each review.**
+  - After the owner approves a batch, commit all uncommitted work, with
+    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+  - Never push.
+- **Never touch `helix_local/`.** Production (Helix Global) runs on the
+  owner's PC: never stop or restart it, and never run deploy scripts.
+
+### Gotchas found the hard way
+
+- **Shell.** It is Git Bash on Windows; every command prints an "ng
+  completion" warning, so ignore it. Heredocs with apostrophes, `\b` or
+  `\n` break or write control characters into files. Write multi-line
+  patches as a Python file with the Write tool, then run it with
+  `python -I`.
+- **Prototype server.**
+  - `python prototype/serve.py` serves on port 5317.
+  - A side session may already serve it there; just use it.
+  - Launch config: `helix-prototype` in `.claude/launch.json`.
+- **Screen list.** `python prototype/tools/manifest.py` writes
+  `screens.json` and `INTERACTIONS.md`.
+  - It runs the scripts in Node (`tools/manifest_node.js`), with no
+    browser.
+  - It refuses to write if any screen is missing or has no `interactions`
+    list.
+- **Screenshots.**
+  - `python prototype/tools/shoot.py --device phone|window-m|window-l --theme <id> [--query scroll=760] <keys>`.
+  - Run one at a time (the default).
+  - Headless Chrome sometimes captures a page before every script has
+    loaded, so a shot can come out blank or unstyled. Retake it, or use
+    `flutter/tools/compare/shoot_html.py`, which waits for readiness.
+  - Phone shots are 640 px wide with the phone at the left.
+- **Bare mode.** `?bare&device=…&theme=…&scroll=…#key` shows one screen alone.
+- **Reduce motion.** The in-app browser pane has it on. Never use
+  near-zero transitions on every element: colours freeze when frames don't
+  run. Turn animation and transitions off instead.
+- **Prototype screens.** Each screen's interactions live next to its code
+  (`interactions: [[gesture, on, does, layout?]]`), and a new screen needs
+  that list.
+- **Themes.** `python prototype/tools/themes.py` regenerates
+  `css/themes.css` and `js/themes.js`. It must report "0 contrast failures".
+- **The state kit.** Lists use `Kit.skeleton`, pages `Kit.loading`, and
+  failures `Kit.loadFailed`. Also `Kit.permission`, `Kit.fieldLock`, and
+  `App.snack(text, action, {tone: 'error'})`. Never draw a one-off loading
+  or error state.
+
+### Owner preferences
+
+- Plain English.
+- Ask before decisions that are theirs.
+- Show screenshots at reviews.
+- Before large or outward-facing steps, propose and wait. Nothing goes into
+  the main app before Part B.
