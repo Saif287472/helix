@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
 import 'package:helix_remote/core/platform/storage_usage.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
@@ -487,34 +490,41 @@ void main() {
     });
 
     youTest('app lock needs the phone unlock to turn on', (tester) async {
-      final (_, settings, auth) = await open(tester);
+      final (_, _, auth) = await open(tester);
+      DeviceLock? lock() => ProviderScope.containerOf(
+        tester.element(find.byType(PrivacyPage)),
+      ).read(accountsProvider).lock;
       await reveal(tester, find.text('Lock Orbit'));
       auth.passes = false;
       await tester.tap(find.text('Lock Orbit'));
       await settle(tester);
-      expect(settings.read(AppSettings.appLockEnabled), isFalse);
+      expect(lock(), isNull);
       expect(find.textContaining('unlock was not completed'), findsOneWidget);
 
       auth.passes = true;
       await tester.tap(find.text('Lock Orbit'));
       await settle(tester);
-      expect(settings.read(AppSettings.appLockEnabled), isTrue);
+      // The device's lock, for every account on it.
+      expect(lock(), const DeviceLock(enabled: true, relockAfterSeconds: 60));
 
       await reveal(tester, find.text('Lock again'));
       await tester.tap(segment('Lock again', '5 min'));
       await settle(tester);
-      expect(settings.read(AppSettings.appLockRelockAfterSeconds), 300);
+      expect(lock(), const DeviceLock(enabled: true, relockAfterSeconds: 300));
     });
 
     youTest('no screen lock: the app lock explains why it cannot start', (
       tester,
     ) async {
-      final (_, settings, auth) = await open(tester);
+      final (_, _, auth) = await open(tester);
       auth.available = false;
       await reveal(tester, find.text('Lock Orbit'));
       await tester.tap(find.text('Lock Orbit'));
       await settle(tester);
-      expect(settings.read(AppSettings.appLockEnabled), isFalse);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PrivacyPage)),
+      );
+      expect(container.read(accountsProvider).lock, isNull);
       expect(find.textContaining('no screen lock'), findsOneWidget);
     });
 

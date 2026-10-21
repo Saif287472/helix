@@ -4,12 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/notification_permission.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
 import 'package:helix_remote/core/platform/profile_image_source.dart';
 import 'package:helix_remote/core/platform/secret_clipboard.dart';
@@ -842,20 +844,20 @@ List<Override> a3bOverrides({
   final clock = now ?? DateTime(2026, 10, 3, 10);
   final store = settings ?? FakeLocalSettings();
   return [
-    // The lock reads its setting through a core provider that would open an
-    // engine; here it reads the same fake store the switches write.
-    appLockSettingProvider.overrideWith(
-      (ref) => store
-          .watch(AppSettings.appLockEnabled)
-          .map(
-            (enabled) => AppLockSetting(
-              enabled: enabled,
-              relockAfterSeconds: store.read(
-                AppSettings.appLockRelockAfterSeconds,
-              ),
-            ),
-          ),
+    // The lock is the device's, in the account list; that list is kept in
+    // memory here rather than in the platform keystore.
+    accountSlotStoreProvider.overrideWithValue(
+      AccountSlotStore(storage: MemorySecureStorage()),
     ),
+    appLockSettingProvider.overrideWith((ref) {
+      final lock = ref.watch(accountsProvider.select((a) => a.lock));
+      return Stream.value(
+        AppLockSetting(
+          enabled: lock?.enabled ?? false,
+          relockAfterSeconds: lock?.relockAfterSeconds ?? 60,
+        ),
+      );
+    }),
     clockProvider.overrideWithValue(() => clock),
     orbitThemeLibraryProvider.overrideWithValue(orbitTestThemes),
     localSettingsProvider.overrideWithValue(store),
@@ -888,6 +890,32 @@ final class _NoRuntime implements RuntimeFactory {
   @override
   Future<Never> open({required String account, required Uri serverUrl}) =>
       throw StateError('these tests must not open an engine');
+}
+
+/// The platform keystore's read, write and delete, in memory.
+final class MemorySecureStorage implements FlutterSecureStorage {
+  final values = <String, String>{};
+
+  @override
+  Object? noSuchMethod(Invocation invocation) {
+    final key = invocation.namedArguments[#key] as String?;
+    switch (invocation.memberName) {
+      case #read:
+        return Future<String?>.value(values[key]);
+      case #write:
+        final value = invocation.namedArguments[#value] as String?;
+        if (value == null) {
+          values.remove(key);
+        } else {
+          values[key!] = value;
+        }
+        return Future<void>.value();
+      case #delete:
+        values.remove(key);
+        return Future<void>.value();
+    }
+    return super.noSuchMethod(invocation);
+  }
 }
 
 /// A container that does not retry failed providers. Riverpod 3 retries a

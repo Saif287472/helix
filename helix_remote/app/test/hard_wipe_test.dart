@@ -12,6 +12,7 @@ import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/picker_cleanup.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote_crypto/v2.dart'
     show DeviceAddress, Ed25519KeyPair, LocalDeviceKeys, SecureCryptoRandom;
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -295,6 +296,54 @@ void main() {
       (await AccountSlotStore().load()).byId(AppPaths.firstAccount),
       isNull,
     );
+  });
+
+  test('the lock an account kept in its own database becomes the device\'s, '
+      'and the device\'s is what locks', () async {
+    final key = await seedSignedInDevice();
+    final runtime = await open(key);
+    await runtime.engine.settings.set(AppSettings.appLockEnabled, true);
+    await runtime.engine.settings.set(
+      AppSettings.appLockRelockAfterSeconds,
+      300,
+    );
+    await AccountSlotStore().save(
+      const AccountSlots(
+        active: AppPaths.firstAccount,
+        slots: [
+          AccountSlot(
+            id: AppPaths.firstAccount,
+            server: 'http://127.0.0.1:9',
+            signedIn: true,
+          ),
+        ],
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        runtimeFactoryProvider.overrideWithValue(_Single(runtime)),
+        secureKeyStoreProvider.overrideWithValue(keys),
+        accountSlotStoreProvider.overrideWithValue(AccountSlotStore()),
+      ],
+      retry: (_, _) => null,
+    );
+    addTearDown(container.dispose);
+    await container.read(accountsProvider.notifier).restore();
+    container.listen(appLockSettingProvider, (_, _) {});
+
+    final moved = await container.read(appLockSettingProvider.future);
+    expect((moved.enabled, moved.relockAfterSeconds), (true, 300));
+    await pumpEventQueue();
+    const device = DeviceLock(enabled: true, relockAfterSeconds: 300);
+    expect(container.read(accountsProvider).lock, device);
+    expect((await AccountSlotStore().load()).lock, device);
+
+    // From now on the account's own copy is not read.
+    await container
+        .read(accountsProvider.notifier)
+        .setLock(const DeviceLock(enabled: false, relockAfterSeconds: 300));
+    await pumpEventQueue();
+    expect(container.read(appLockSettingProvider).value?.enabled, isFalse);
   });
 
   test('a deletion the server did not accept wipes nothing', () async {

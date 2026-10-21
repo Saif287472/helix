@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/features/backup/application/backup_models.dart';
 import 'package:helix_remote/features/devices/application/devices_models.dart';
@@ -22,17 +23,17 @@ void main() {
       FakeSettingsGateway? settingsGateway,
       bool lock = true,
     }) async {
-      final settings = FakeLocalSettings();
-      await settings.set(AppSettings.appLockEnabled, lock);
       final container = newContainer(
         a3bOverrides(
-          settings: settings,
           backup: backup ?? FakeBackupGateway(),
           devices: devices ?? FakeDevicesGateway(),
           settingsGateway: settingsGateway ?? FakeSettingsGateway(),
         ),
       );
       addTearDown(container.dispose);
+      await container
+          .read(accountsProvider.notifier)
+          .setLock(DeviceLock(enabled: lock, relockAfterSeconds: 60));
       container.listen(youChecksProvider, (_, _) {});
       container.listen(youNeedsAttentionProvider, (_, _) {});
       await Future<void>.delayed(const Duration(milliseconds: 100));

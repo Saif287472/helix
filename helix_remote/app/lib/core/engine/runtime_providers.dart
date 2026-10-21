@@ -246,12 +246,7 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
   /// No account on screen: the next screen is sign-in on Helix Global. A
   /// slot whose sign-in never finished is dropped (its folder goes at the
   /// next start).
-  void leave() => state = AccountSlots(
-    slots: [
-      for (final s in state.slots)
-        if (s.signedIn) s,
-    ],
-  );
+  void leave() => state = state.signedInOnly();
 
   /// The account on screen finished signing in: it is kept, and opened again
   /// at the next start.
@@ -275,13 +270,7 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
     final slot = state.byId(id);
     if (slot == null || !slot.signedIn) return;
     final now = ref.read(clockProvider)();
-    state = AccountSlots(
-      active: id,
-      slots: [
-        for (final s in state.slots)
-          if (s.id == id) s.copyWith(lastUsed: now) else if (s.signedIn) s,
-      ],
-    );
+    state = state.signedInOnly().put(slot.copyWith(lastUsed: now)).activate(id);
     await ref.read(accountSlotStoreProvider).save(state);
   }
 
@@ -335,6 +324,13 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
     );
     if (next == slot) return;
     state = state.put(next);
+    await ref.read(accountSlotStoreProvider).save(state);
+  }
+
+  /// The app lock for every account on this device (Settings > Privacy).
+  Future<void> setLock(DeviceLock lock) async {
+    if (lock == state.lock) return;
+    state = state.withLock(lock);
     await ref.read(accountSlotStoreProvider).save(state);
   }
 }

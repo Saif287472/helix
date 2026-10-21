@@ -92,14 +92,47 @@ final class AccountSlot {
   int get hashCode => Object.hash(id, server, signedIn, e164, name, lastUsed);
 }
 
-/// The accounts on this device and the one on screen.
+/// The app lock, a setting of the device rather than of one account: it
+/// covers every account here. It goes with the last signed-in account.
+final class DeviceLock {
+  const DeviceLock({required this.enabled, required this.relockAfterSeconds});
+
+  final bool enabled;
+  final int relockAfterSeconds;
+
+  static DeviceLock? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final on = json['on'];
+    final after = json['after'];
+    if (on is! bool || after is! int) return null;
+    return DeviceLock(enabled: on, relockAfterSeconds: after);
+  }
+
+  Map<String, Object?> toJson() => {'on': enabled, 'after': relockAfterSeconds};
+
+  @override
+  bool operator ==(Object other) =>
+      other is DeviceLock &&
+      other.enabled == enabled &&
+      other.relockAfterSeconds == relockAfterSeconds;
+
+  @override
+  int get hashCode => Object.hash(enabled, relockAfterSeconds);
+}
+
+/// The accounts on this device, the one on screen, and the app lock that
+/// covers them all.
 final class AccountSlots {
-  const AccountSlots({this.active, this.slots = const []});
+  const AccountSlots({this.active, this.slots = const [], this.lock});
 
   /// The id of the account the app shows, or null on sign-in.
   final String? active;
 
   final List<AccountSlot> slots;
+
+  /// Null until the lock was first set or read on this device (a device from
+  /// before several accounts kept it in the account's own database).
+  final DeviceLock? lock;
 
   AccountSlot? get current => active == null ? null : byId(active!);
 
@@ -134,25 +167,36 @@ final class AccountSlots {
   }
 
   /// [slot] in place of the one with its id, or added.
-  AccountSlots put(AccountSlot slot, {String? active}) => AccountSlots(
-    active: active ?? this.active,
-    slots: [
-      for (final s in slots)
-        if (s.id != slot.id) s,
-      slot,
-    ],
-  );
+  AccountSlots put(AccountSlot slot, {String? active}) =>
+      _with(active ?? this.active, [
+        for (final s in slots)
+          if (s.id != slot.id) s,
+        slot,
+      ]);
 
   /// Without the slot [id]; the active one becomes null if it was [id].
-  AccountSlots without(String id) => AccountSlots(
-    active: active == id ? null : active,
-    slots: [
-      for (final s in slots)
-        if (s.id != id) s,
-    ],
+  AccountSlots without(String id) => _with(active == id ? null : active, [
+    for (final s in slots)
+      if (s.id != id) s,
+  ]);
+
+  AccountSlots activate(String? id) => _with(id, slots);
+
+  /// [slots] with [active]; the lock is kept while one of them is signed in.
+  AccountSlots _with(String? active, List<AccountSlot> slots) => AccountSlots(
+    active: active,
+    slots: slots,
+    lock: slots.any((s) => s.signedIn) ? lock : null,
   );
 
-  AccountSlots activate(String? id) => AccountSlots(active: id, slots: slots);
+  /// Only the signed-in slots, and none on screen.
+  AccountSlots signedInOnly() => _with(null, [
+    for (final s in slots)
+      if (s.signedIn) s,
+  ]);
+
+  AccountSlots withLock(DeviceLock lock) =>
+      AccountSlots(active: active, slots: slots, lock: lock);
 
   /// An id for a new slot: the first account's while no slot holds it (so a
   /// one-account device keeps the old file names), a random one after that.
@@ -172,6 +216,7 @@ final class AccountSlots {
   bool operator ==(Object other) =>
       other is AccountSlots &&
       other.active == active &&
+      other.lock == lock &&
       _sameSlots(other.slots, slots);
 
   static bool _sameSlots(List<AccountSlot> a, List<AccountSlot> b) {
@@ -183,7 +228,7 @@ final class AccountSlots {
   }
 
   @override
-  int get hashCode => Object.hash(active, Object.hashAll(slots));
+  int get hashCode => Object.hash(active, lock, Object.hashAll(slots));
 }
 
 /// The signed-in accounts and the one last on screen, in the keystore (the
@@ -216,7 +261,8 @@ final class AccountSlotStore {
     return migrated;
   }
 
-  /// Writes the signed-in slots and the active one, if it is signed in.
+  /// Writes the signed-in slots, the active one if it is signed in, and the
+  /// lock. With none signed in the entry goes, the lock with it.
   Future<void> save(AccountSlots accounts) async {
     final kept = [
       for (final s in accounts.slots)
@@ -232,6 +278,7 @@ final class AccountSlotStore {
       value: jsonEncode({
         'active': ?active,
         'accounts': [for (final s in kept) s.toJson()],
+        'lock': ?accounts.lock?.toJson(),
       }),
     );
   }
@@ -250,6 +297,7 @@ final class AccountSlotStore {
       return AccountSlots(
         active: known ? active as String : null,
         slots: slots,
+        lock: slots.isEmpty ? null : DeviceLock.fromJson(json['lock']),
       );
     } on FormatException {
       // Never written by this code: as good as no accounts.

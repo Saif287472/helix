@@ -247,6 +247,27 @@ void main() {
       return (first, c.read(activeAccountProvider)!.id);
     }
 
+    test('one app lock covers every account and goes with the last', () async {
+      final c = container();
+      final (first, second) = await two(c);
+      final accounts = c.read(accountsProvider.notifier);
+      const lock = DeviceLock(enabled: true, relockAfterSeconds: 0);
+      await accounts.setLock(lock);
+
+      await accounts.switchTo(first);
+      expect(c.read(accountsProvider).lock, lock);
+      accounts.leave();
+      expect(c.read(accountsProvider).lock, lock);
+      await accounts.switchTo(second);
+      expect((await AccountSlotStore().load()).lock, lock);
+
+      await accounts.removeCurrent();
+      expect(c.read(activeAccountProvider)?.id, first);
+      expect(c.read(accountsProvider).lock, lock);
+      await accounts.removeCurrent();
+      expect(c.read(accountsProvider).lock, isNull);
+      expect((await AccountSlotStore().load()).lock, isNull);
+    });
     test('switching opens the other account and is remembered', () async {
       final c = container();
       final (first, _) = await two(c);

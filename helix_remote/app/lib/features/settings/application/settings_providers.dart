@@ -2,7 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/notification_permission.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/profile_image_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/core/security/device_auth.dart';
@@ -227,13 +229,25 @@ final class AppLockActions {
             'was not completed.';
       }
     }
-    await _ref.read(localSettingsProvider).set(AppSettings.appLockEnabled, on);
+    await _write(enabled: on);
     return null;
   }
 
-  Future<void> setRelockAfter(int seconds) => _ref
-      .read(localSettingsProvider)
-      .set(AppSettings.appLockRelockAfterSeconds, seconds);
+  Future<void> setRelockAfter(int seconds) =>
+      _write(relockAfterSeconds: seconds);
+
+  /// The lock is the device's, so it changes for every account here.
+  Future<void> _write({bool? enabled, int? relockAfterSeconds}) async {
+    final now = _ref.read(appLockViewProvider).value ?? const AppLockView();
+    await _ref
+        .read(accountsProvider.notifier)
+        .setLock(
+          DeviceLock(
+            enabled: enabled ?? now.enabled,
+            relockAfterSeconds: relockAfterSeconds ?? now.relockAfterSeconds,
+          ),
+        );
+  }
 }
 
 // ------------------------------------------------- notification permission
