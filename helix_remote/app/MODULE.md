@@ -15,17 +15,20 @@ lib/
                                 MaterialApp.router
   core/                         shared wiring, no feature state
     engine/
-      helix_runtime.dart        owns the db + api + engine for one server;
+      helix_runtime.dart        owns the db + api + engine for one account;
                                 `headless` for the FCM isolate
-      runtime_providers.dart    the seam: RuntimeFactory, serverUrl,
-                                runtimeProvider
+      runtime_providers.dart    the seam: RuntimeFactory, the account list
+                                (accountsProvider), runtimeProvider for the
+                                account on screen
       session_providers.dart    engine status -> AppAuthState, sign-out,
-                                destructive reset
+                                removing an account, destructive reset
     router/app_router.dart      go_router, the redirect, deep-link routing
     links/                      HelixDeepLink, the HLX-INV-/HLX-REC- codecs,
                                 the warm-start MethodChannel
-    platform/                   AppPaths, SecureKeyStore (SQLCipher key),
-                                ServerUrlStore, DevicePhoneBook
+    platform/                   AppPaths (a folder per account), SecureKeyStore
+                                (a SQLCipher key per account), AccountSlotStore
+                                (the accounts and the app lock, in the
+                                keystore), DevicePhoneBook
     lifecycle/                  resume -> reconnect + syncOnce, clear the
                                 message notification
     security/                   AppLock + gate, AppSettings
@@ -398,6 +401,10 @@ Proximity/earpiece playback is not done.
   "Lock again" is a real grace period: backgrounded for at least that long (or
   a clock set backwards) locks on return; "Immediately" locks on background.
   A call lifts the lock only once connecting or active, not while ringing.
+  The setting is the device's, not an account's (2026-10-21): a `DeviceLock`
+  in the account list (`AccountSlots.lock`), so one lock covers every account
+  signed in here and goes with the last one. A lock an account kept in its own
+  database before then is read once and moved there.
 - **Servers** (`core/engine/server_policy.dart`). https only; `http` reaches
   `localhost`/`127.0.0.1`/`10.0.2.2` in debug builds only; no user info, query,
   fragment or non-ASCII host. Enforced in sign-in (before any request), on the
@@ -431,8 +438,9 @@ Proximity/earpiece playback is not done.
   in the engine is the second line of defence). A lost lease never deletes the
   file, which now belongs to the other engine.
 - **Local files**. Windows data lives in the local (non-roaming) app-data
-  folder, not Documents (OneDrive). Sign-out and the destructive reset delete
-  the avatar and attachments, clear the file picker's temporary copies (also
+  folder, not Documents (OneDrive). Each account has its own folder.
+  "Sign out and remove" and the destructive reset delete that account's
+  avatar and attachments, clear the file picker's temporary copies (also
   after every media send), and the reset works from the files alone.
 - **Contacts** read access is requested up front; write only at a rename.
 - **Call notifications** name the caller, and are `public`, only with message
@@ -465,8 +473,9 @@ The engine's security-review pass (CRYPTO_V2.md section 14, engine
   `Engine(hardWipe:)`: after the engine has deleted every row, the database is
   closed, `destroyDatabaseFiles` overwrites and deletes the file, the keystore
   key goes, and so do the avatar, downloaded attachments and the picker's
-  copies (`HelixRuntime.hardWipe`, `appWipe`). It runs on sign-out, on deleting
-  the account and on a revocation that wipes; every step is tried even if one
+  copies (`HelixRuntime.hardWipe`, `appWipe`), for that one account; the
+  others signed in on the device are not touched. It runs on "Sign out and
+  remove", on deleting the account and on a revocation that wipes; every step is tried even if one
   fails. `SignOutAction` also calls `runtime.ensureWiped()` (an engine with
   nothing to sign out returns early) and `wipedRuntimeResetProvider` opens a new
   runtime after a revocation wipe, so the next sign-in gets a new file and key.

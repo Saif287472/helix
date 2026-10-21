@@ -18,7 +18,7 @@ the checkup here only reads from them.
 | Failure sentences | Every `error` below is a sentence from `describeFailure` (`core/engine/failure_copy.dart`). The screen never formats an exception. |
 | Toasts | "Profile saved", "Unblocked", "<Theme> theme on", "Link copied" are drawn by the screen when an action's `Future` completes and the model shows no error. |
 | `UnlockMethod` | `biometricOrPin` / `windowsHello`: derive from the platform (`Platform.isWindows`). Today's app says "fingerprint, face or phone PIN" everywhere. Shared with frame.md's lock screen. |
-| `YouTopic` | `profile`, `appearance`, `privacy`, `notifications`, `chats`, `devices`, `backup`, `account`, `storage`, `about`, `advanced`, `recovery`, `password`, `blocked`, `securityActivity`, `legal`. |
+| `YouTopic` | `profile`, `appearance`, `privacy`, `notifications`, `chats`, `devices`, `backup`, `account`, `accounts`, `storage`, `about`, `advanced`, `recovery`, `password`, `blocked`, `securityActivity`, `legal`. |
 
 ## You (`settings-page`)
 
@@ -500,7 +500,8 @@ Dart: `AccountScreen`, `AccountModel`, `AccountActions`.
 | `openPassword` | `void Function()` | have | `context.push(RoutePaths.changePassword)` | Change or Set. |
 | `openSecurityActivity` | `void Function()` | have | `context.push(RoutePaths.devicesActivity)` | |
 | `exportData` | `Future<bool> Function()` | have | `AccountActions.exportData` | Shares `helix-account-export-<date>.json`; the design says `orbit-account.json`. |
-| `signOut` | `Future<void> Function()` | have | `AccountActions.signOut` | Confirmation kept inside. |
+| `signOut` | `Future<void> Function()` | have | `AccountActions.signOut` | "Sign out and remove": signs this account out of this phone and deletes its data here; the other accounts stay. Confirmation kept inside. |
+| `onSwitchAccount` | `VoidCallback?` | have | `context.push(RoutePaths.accounts)` | "Switch account", offered in the sign-out dialog; keeps this account signed in. Null hides it. |
 | `startDelete` | `Future<void> Function({required bool exportFirst})` | have | `AccountActions.exportData`, then `context.push(RoutePaths.deleteAccount)` | Dialog kept inside. Today "Export first" exports and then goes on to the delete page; the prototype only exports. |
 | `retry` | `void Function()` | have | `ref.invalidate(accountOverviewProvider)` | |
 
@@ -512,7 +513,7 @@ The sign-out and delete dialogs.
 |---|---|
 | Change or set a password / Security activity | `openPassword`, `openSecurityActivity` |
 | Export my data | `exportData` |
-| Sign out (asks first) | dialog kept inside, then `signOut` |
+| Sign out (asks first: Switch account, or Sign out and remove) | dialog kept inside, then `onSwitchAccount` or `signOut` |
 | Delete my account (Export first or Continue) | dialog kept inside, then `startDelete` |
 
 ### Slots
@@ -528,6 +529,29 @@ The sign-out and delete dialogs.
 | "Your account details could not be loaded. You may be offline." with Try again | `account_page.dart` | Keep; the hero then shows name only. |
 | "Phone number hidden" when no number is known | `account_page.dart` | Keep: hide it in the hero. |
 | The `~name` row opens the profile | `account_page.dart` | Dropped by the design; fine. |
+
+## Accounts (`accounts`)
+
+Dart: `AccountsScreen`, `AccountsModel`, `AccountsActions`, `AccountsEntry`.
+No prototype screen (added 2026-10-21 with saved accounts; drawn in the
+Account page's style). Route `RoutePaths.accounts`, reached from Account >
+Sign out > Switch account and from the You tile.
+
+### Model
+| Field | Type | Tag | Comes from today | Notes |
+|---|---|---|---|---|
+| `accounts` | `List<AccountsEntry>` (`id`, `title`, `detail`, `avatar`, `current`) | have | `accountLinesProvider` (`features/settings/application/accounts_providers.dart`), from `accountsProvider` (`core/engine/runtime_providers.dart`) | The account on screen first, then the others, most recent first. Title: the name, else the masked number; detail: the masked number under a name, else the server. |
+| `busy`, `notice` | `bool`, `String?` | have | `accountsPageProvider` → `AccountsPageState` (`busy`, `error`) | Removing; the last failure. |
+
+### Actions
+| Action | Signature | Tag | Calls today | Notes |
+|---|---|---|---|---|
+| `onOpen` | `ValueChanged<String>?` | have | `accountsPageProvider.open` → `accountsProvider.notifier.switchTo` | Closes the account on screen (it stays signed in) and opens the other. |
+| `onAdd` | `VoidCallback?` | have | `accountsPageProvider.add` → `accountsProvider.notifier.addAccount` | Sign in one more; the others stay. |
+| `onRemove` | `ValueChanged<String>?` | have | `accountsPageProvider.remove` | Signs that account out of this phone and wipes its data here. Asks first ("Remove <title>?"). |
+
+### Kept inside the screen
+The remove dialog.
 
 ## Change password (`password`)
 

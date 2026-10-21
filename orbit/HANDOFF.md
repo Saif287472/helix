@@ -93,6 +93,28 @@ A cheaper first step if tokens are short: remember numbers and names only
 on the sign-in page (tap one, type its password). Switching is then sign
 out and sign in, with the data of the old account wiped as today.
 
+Done on `main`, not pushed, 2026-10-21 (every commit "pending review"; the
+owner skipped the prototype, so Accounts has no prototype or preview screen):
+- 0af3bf2: the cheap step. Saved numbers on the sign-in page, Remember me.
+- a1c49e6: items 1 and 2. The account list (`AccountSlotStore`, a keystore
+  entry), a database, SQLCipher key and folder per account, and
+  `runtimeProvider` opening the active one.
+- 3c09375: item 3. Switching; "Sign out and remove" wipes that account only
+  and opens the next one signed in.
+- 558e8a3: item 4. A wake-up reads every account not on screen
+  (`wakeSignedInAccounts`), notifications and calls open their account, and
+  the push isolate now starts the notification plugin before the call
+  channel (it did not before).
+- 725c7bb: item 5. The Accounts page (`contracts/you.md`, "Accounts") and
+  "Switch account" in the sign-out dialog.
+- fc62339: the app lock is now the device's (`DeviceLock`), one for every
+  account; an old per-account lock is moved over once.
+- (next commit): item 6's docs. THREAT_MODEL T-11, `app/MODULE.md`,
+  `contracts/you.md`. No ADR: one foreground runtime still runs at a time.
+No server change or migration. A new APK is needed to try it. Known gap: a
+rotated FCM token reaches only the account on screen; the others get it
+when they are next opened.
+
 Deferred until the owner asks: every backend item (S1, E1 to E6), the
 pixel checks, DEVIATIONS and FEATURE.md updates, batch 10 (the wide
 Windows layout), and Part B steps 3 to 5 (the rename, deleting

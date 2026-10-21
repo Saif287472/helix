@@ -148,3 +148,21 @@ metadata). The cryptography has **not been externally reviewed**
   query or job cannot stall a node (A-04, A-07).
 - **Residual risk**: A single PC node tops out near 80 sends per second (`docs/operations/LOAD_TESTING.md`);
   a determined flood is an availability problem, not a confidentiality one.
+
+### T-11: Several accounts on one phone
+- **Description**: Since 2026-10-21 the app keeps several signed-in accounts on one device and
+  switches between them. Whoever holds the unlocked phone, or reads its storage, reaches all of
+  them; and one server sees accounts that share a phone.
+- **Mitigation**: Each account has its own SQLCipher database, its own key in the platform keystore,
+  its own session and its own folder for attachments and its picture; only one runs in the
+  foreground. The list of accounts (ids, servers, numbers and names, no password and no session),
+  the numbers sign-in remembers ("Remember me") and the app lock live in the keystore. The app lock
+  is one setting for the device and covers every account; it goes with the last account. "Sign out
+  and remove" wipes that account's database, key and files only, the others stay. A notification
+  for an account not on screen names it only when message previews are on, like the text. The push
+  wake-up carries no account; the app reads every account's mailbox for it.
+- **Residual risk**: Every account here registers the same push token, so a server that holds two of
+  them can tell they share a phone (a person who needs two unlinkable accounts should keep them on
+  different phones or servers). The numbers in the account list are as readable as the keystore. A
+  rotated push token reaches only the account on screen; the others get it when next opened, and
+  until then a wake-up for them does not come.
