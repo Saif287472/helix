@@ -1,67 +1,45 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/settings/application/about_providers.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
-/// Settings > Help and about > Terms and Privacy Policy.
-///
-/// The documents come from the server with their version numbers, so what is
-/// shown is what the server holds you to. When the server cannot be reached
-/// the copy shipped with the app is shown, and says so.
-class LegalPage extends ConsumerStatefulWidget {
+/// Connector: the Terms and the Privacy Policy, from the server (or the copy
+/// shipped with the app), drawn by `orbit_ui`'s [orbit.LegalScreen].
+class LegalPage extends ConsumerWidget {
   const LegalPage({super.key});
 
   @override
-  ConsumerState<LegalPage> createState() => _LegalPageState();
-}
-
-class _LegalPageState extends ConsumerState<LegalPage> {
-  var _privacy = false;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final legal = ref.watch(legalProvider);
-    final theme = Theme.of(context);
-
-    return HelixSettingsScaffold(
-      title: 'Terms and Privacy Policy',
-      body: switch (legal) {
-        AsyncData(:final value) => ListView(
-          padding: const EdgeInsets.all(HelixSpace.md),
-          children: [
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Terms')),
-                ButtonSegment(value: true, label: Text('Privacy')),
-              ],
-              selected: {_privacy},
-              onSelectionChanged: (v) => setState(() => _privacy = v.first),
-            ),
-            const SizedBox(height: HelixSpace.md),
-            Text(
-              _privacy ? value.privacyTitle : value.termsTitle,
-              style: theme.textTheme.titleLarge,
-            ),
-            Text(
-              'Version ${_privacy ? value.privacyVersion : value.termsVersion}'
-              '${value.fromServer ? '' : ' (copy shipped with the app)'}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: HelixSpace.md),
-            Text(_privacy ? value.privacy : value.terms),
-          ],
+    final value = legal.value;
+    if (value == null) {
+      return orbit.OrbitYouPage(
+        title: 'Terms and Privacy Policy',
+        children: [
+          if (legal.hasError)
+            orbit.OrbitLoadFailed(
+              title: 'The documents could not be loaded.',
+              onRetry: () => ref.invalidate(legalProvider),
+            )
+          else
+            const orbit.OrbitPageLoading(),
+        ],
+      );
+    }
+    final shipped = value.fromServer ? '' : ' (copy shipped with the app)';
+    return orbit.LegalScreen(
+      model: orbit.LegalModel(
+        terms: orbit.LegalDocument(
+          title: value.termsTitle,
+          version: '${value.termsVersion}$shipped',
+          body: value.terms,
         ),
-        AsyncError() => HelixErrorState(
-          message: 'The documents could not be loaded.',
-          onRetry: () => ref.invalidate(legalProvider),
+        privacy: orbit.LegalDocument(
+          title: value.privacyTitle,
+          version: '${value.privacyVersion}$shipped',
+          body: value.privacy,
         ),
-        _ => const Padding(
-          padding: EdgeInsets.all(HelixSpace.lg),
-          child: LinearProgressIndicator(),
-        ),
-      },
+      ),
     );
   }
 }

@@ -311,7 +311,9 @@ class DeleteAccountActions {
     this.onCancel,
   });
 
-  final VoidCallback? onSendCode;
+  /// Texts a code; [phone] is the number typed when the device does not
+  /// know it ([DeleteAccountModel.needsPhoneNumber]).
+  final void Function({String? phone})? onSendCode;
   final VoidCallback? onResendCode;
 
   /// With the proof: the password, the SMS code, or nothing for the key.
@@ -353,7 +355,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     final m = widget.model;
     final a = widget.actions;
     if (m.proof == DeleteProof.sms && !m.codeSent) {
-      a.onSendCode?.call();
+      a.onSendCode?.call(phone: m.needsPhoneNumber ? _phone.text : null);
       return;
     }
     if (_typed.text != 'DELETE') {
@@ -427,6 +429,13 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           ),
         ),
       ],
+      if (m.proof == DeleteProof.sms && !m.codeSent && m.needsPhoneNumber)
+        OrbitTextField(
+          label: 'Your phone number',
+          controller: _phone,
+          keyboardType: TextInputType.phone,
+          helper: 'The code goes to it. With its country code',
+        ),
       if (m.proof == DeleteProof.sms && !m.codeSent)
         Padding(
           padding: const EdgeInsets.fromLTRB(2, 0, 2, 14),

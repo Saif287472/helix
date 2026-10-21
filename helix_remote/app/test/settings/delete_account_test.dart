@@ -8,12 +8,21 @@ import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException, NetworkException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 import '../support/a3b_fakes.dart';
 
 /// Deleting the account: the type-DELETE confirmation, then the proof the
 /// account needs (password, a texted code, or this phone's own key), and what
 /// the person sees when the server says no.
+/// Ends by taking the page down and letting the last Orbit toast go.
+void deleteTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+
 void main() {
   Future<FakeSettingsGateway> open(
     WidgetTester tester, {
@@ -51,24 +60,27 @@ void main() {
     expect(find.text('Delete your account?'), findsOneWidget);
     await tester.tap(find.text('Continue'));
     await settle(tester);
-    expect(find.text('This cannot be undone'), findsOneWidget);
+    expect(find.text('Type DELETE to confirm'), findsOneWidget);
   }
 
+  /// The text in the Orbit field labelled [label].
+  Finder field(String label) => find.descendant(
+    of: find.widgetWithText(orbit.OrbitTextField, label),
+    matching: find.byType(EditableText),
+  );
+
   Future<void> typeDelete(WidgetTester tester, [String word = 'DELETE']) async {
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Type DELETE to confirm'),
-      word,
-    );
+    await tester.enterText(field('Type DELETE to confirm'), word);
   }
 
   Future<void> press(WidgetTester tester, String label) async {
-    final button = find.widgetWithText(FilledButton, label);
+    final button = find.widgetWithText(orbit.OrbitButton, label);
     await reveal(tester, button);
     await tester.tap(button);
     await settle(tester);
   }
 
-  testWidgets('"Export first" only exports', (tester) async {
+  deleteTest('"Export first" only exports', (tester) async {
     final share = FakeShareAdapter();
     final g = await open(tester, share: share);
     await reveal(tester, find.text('Delete my account'));
@@ -79,12 +91,12 @@ void main() {
     expect(g.calls, contains('export'));
     expect(share.shared, hasLength(1));
     // The delete page is a step the person takes again, after the export.
-    expect(find.text('This cannot be undone'), findsNothing);
+    expect(find.text('Type DELETE to confirm'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('cancelling anywhere deletes nothing', (tester) async {
+  deleteTest('cancelling anywhere deletes nothing', (tester) async {
     final g = await open(tester);
     await reveal(tester, find.text('Delete my account'));
     await tester.tap(find.text('Delete my account'));
@@ -96,7 +108,7 @@ void main() {
 
     await openDeletePage(tester);
     await press(tester, 'Cancel');
-    expect(find.text('This cannot be undone'), findsNothing);
+    expect(find.text('Type DELETE to confirm'), findsNothing);
     expect(g.calls, isNot(contains('deleteAccount')));
   });
 
@@ -109,32 +121,26 @@ void main() {
         hasPassword: true,
       );
 
-    testWidgets('needs the word DELETE, and nothing is sent without it', (
+    deleteTest('needs the word DELETE, and nothing is sent without it', (
       tester,
     ) async {
       final g = await open(tester, gateway: withPassword());
       await openDeletePage(tester);
       await typeDelete(tester, 'delete');
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your password'),
-        'correct horse',
-      );
+      await tester.enterText(field('Your password'), 'correct horse');
       await press(tester, 'Delete my account');
       expect(g.calls, isNot(contains('deleteAccount')));
-      expect(
-        find.textContaining('Type DELETE in capital letters'),
-        findsOneWidget,
-      );
+      expect(find.text('Type DELETE to confirm.'), findsOneWidget);
     });
 
-    testWidgets('asks for the password, and an empty one is not sent', (
+    deleteTest('asks for the password, and an empty one is not sent', (
       tester,
     ) async {
       final g = await open(tester, gateway: withPassword());
       await openDeletePage(tester);
-      expect(find.widgetWithText(TextField, 'Your password'), findsOneWidget);
+      expect(field('Your password'), findsOneWidget);
       // The number is known on this phone: not asked.
-      expect(find.widgetWithText(TextField, 'Your phone number'), findsNothing);
+      expect(field('Your phone number'), findsNothing);
 
       await typeDelete(tester);
       await press(tester, 'Delete my account');
@@ -142,22 +148,19 @@ void main() {
       expect(g.calls, isNot(contains('deleteAccount')));
     });
 
-    testWidgets('a wrong password is said under the field', (tester) async {
+    deleteTest('a wrong password is said under the field', (tester) async {
       final g = await open(tester, gateway: withPassword());
       await openDeletePage(tester);
       await typeDelete(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your password'),
-        'wrong',
-      );
+      await tester.enterText(field('Your password'), 'wrong');
       await press(tester, 'Delete my account');
       expect(find.text('That is not your password.'), findsOneWidget);
       expect(g.deletedWithPassword, isNull);
       // The page is still there to try again.
-      expect(find.text('This cannot be undone'), findsOneWidget);
+      expect(find.text('Type DELETE to confirm'), findsOneWidget);
     });
 
-    testWidgets('a locked account says to wait', (tester) async {
+    deleteTest('a locked account says to wait', (tester) async {
       final g = withPassword()
         ..deleteFails = const ApiException(
           status: 423,
@@ -166,29 +169,23 @@ void main() {
       await open(tester, gateway: g);
       await openDeletePage(tester);
       await typeDelete(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your password'),
-        'anything',
-      );
+      await tester.enterText(field('Your password'), 'anything');
       await press(tester, 'Delete my account');
       expect(find.textContaining('Too many wrong attempts'), findsOneWidget);
     });
 
-    testWidgets('the right password deletes and signs out', (tester) async {
+    deleteTest('the right password deletes and signs out', (tester) async {
       final g = await open(tester, gateway: withPassword());
       await openDeletePage(tester);
       await typeDelete(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your password'),
-        'correct horse',
-      );
+      await tester.enterText(field('Your password'), 'correct horse');
       await press(tester, 'Delete my account');
       expect(g.deletedWithPassword, 'correct horse');
       expect(g.deletedWithNumber, isNull);
       expect(find.textContaining('Your account was deleted'), findsOneWidget);
     });
 
-    testWidgets('a device that does not know the number asks for it once', (
+    deleteTest('a device that does not know the number asks for it once', (
       tester,
     ) async {
       final g = withPassword()
@@ -199,42 +196,30 @@ void main() {
         );
       await open(tester, gateway: g);
       await openDeletePage(tester);
-      expect(
-        find.widgetWithText(TextField, 'Your phone number'),
-        findsOneWidget,
-      );
+      expect(field('Your phone number'), findsOneWidget);
 
       await typeDelete(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your password'),
-        'correct horse',
-      );
+      await tester.enterText(field('Your password'), 'correct horse');
       // Without a country code the number is refused before anything is sent.
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your phone number'),
-        '01711000001',
-      );
+      await tester.enterText(field('Your phone number'), '01711000001');
       await press(tester, 'Delete my account');
       expect(find.textContaining('with its country code'), findsWidgets);
       expect(g.calls, isNot(contains('deleteAccount')));
 
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your phone number'),
-        '+88 01711 000001',
-      );
+      await tester.enterText(field('Your phone number'), '+88 01711 000001');
       await press(tester, 'Delete my account');
       expect(g.deletedWithNumber, '+8801711000001');
       expect(g.deletedWithPassword, 'correct horse');
     });
 
-    testWidgets('the password is hidden until asked for', (tester) async {
+    deleteTest('the password is hidden until asked for', (tester) async {
       await open(tester, gateway: withPassword());
       await openDeletePage(tester);
-      final field = find.widgetWithText(TextField, 'Your password');
-      expect(tester.widget<TextField>(field).obscureText, isTrue);
-      await tester.tap(find.text('Show password'));
+      final input = field('Your password');
+      expect(tester.widget<EditableText>(input).obscureText, isTrue);
+      await tester.tap(find.byTooltip('Show password'));
       await settle(tester);
-      expect(tester.widget<TextField>(field).obscureText, isFalse);
+      expect(tester.widget<EditableText>(input).obscureText, isFalse);
     });
   });
 
@@ -245,13 +230,13 @@ void main() {
         helixName: 'anna.k',
       );
 
-    testWidgets('proves it with this phone\'s key and asks for nothing', (
+    deleteTest('proves it with this phone\'s key and asks for nothing', (
       tester,
     ) async {
       final g = await open(tester, gateway: noPassword());
       await openDeletePage(tester);
-      expect(find.widgetWithText(TextField, 'Your password'), findsNothing);
-      expect(find.widgetWithText(TextField, 'Code'), findsNothing);
+      expect(field('Your password'), findsNothing);
+      expect(field('Code'), findsNothing);
       expect(
         find.textContaining('prove it is yours with its own key'),
         findsOne,
@@ -263,7 +248,7 @@ void main() {
       expect(find.textContaining('Your account was deleted'), findsOneWidget);
     });
 
-    testWidgets('a server that texts asks for the code, then deletes', (
+    deleteTest('a server that texts asks for the code, then deletes', (
       tester,
     ) async {
       final g = noPassword()..serverWantsCode = true;
@@ -280,30 +265,30 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.enterText(find.widgetWithText(TextField, 'Code'), '000000');
+      await tester.enterText(field('Code'), '000000');
       await press(tester, 'Delete my account');
       expect(find.textContaining('That code did not match'), findsOneWidget);
       expect(g.deletedWithToken, isNull);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Code'), '123456');
+      await tester.enterText(field('Code'), '123456');
       await press(tester, 'Delete my account');
       expect(g.deletedWithToken, 'token-ok');
       expect(find.textContaining('Your account was deleted'), findsOneWidget);
     });
 
-    testWidgets('a code that is not six digits is not sent', (tester) async {
+    deleteTest('a code that is not six digits is not sent', (tester) async {
       final g = noPassword()..serverWantsCode = true;
       await open(tester, gateway: g);
       await openDeletePage(tester);
       await typeDelete(tester);
       await press(tester, 'Delete my account');
-      await tester.enterText(find.widgetWithText(TextField, 'Code'), '12');
+      await tester.enterText(field('Code'), '12');
       await press(tester, 'Delete my account');
       expect(find.text('The code is 6 digits.'), findsOneWidget);
       expect(g.calls, isNot(contains('verifyDeletionCode')));
     });
 
-    testWidgets('a new code can be asked for', (tester) async {
+    deleteTest('a new code can be asked for', (tester) async {
       final g = noPassword()..serverWantsCode = true;
       await open(tester, gateway: g);
       await openDeletePage(tester);
@@ -314,7 +299,7 @@ void main() {
       expect(g.calls.where((c) => c == 'requestDeletionCode'), hasLength(2));
     });
 
-    testWidgets('a device without the number asks for it before texting', (
+    deleteTest('a device without the number asks for it before texting', (
       tester,
     ) async {
       final g = noPassword()
@@ -325,21 +310,15 @@ void main() {
       await typeDelete(tester);
       await press(tester, 'Delete my account');
 
-      expect(
-        find.widgetWithText(TextField, 'Your phone number'),
-        findsOneWidget,
-      );
+      expect(field('Your phone number'), findsOneWidget);
       expect(g.sentCodesTo, isEmpty);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Your phone number'),
-        '+8801711000001',
-      );
+      await tester.enterText(field('Your phone number'), '+8801711000001');
       await press(tester, 'Send me a code');
       expect(g.sentCodesTo, ['+8801711000001']);
       expect(find.textContaining('We sent a 6-digit code'), findsOneWidget);
     });
 
-    testWidgets('a code that could not be sent is explained', (tester) async {
+    deleteTest('a code that could not be sent is explained', (tester) async {
       final g = noPassword()
         ..serverWantsCode = true
         ..codeRequestFails = const ApiException(
@@ -356,7 +335,7 @@ void main() {
   });
 
   group('when the server says no', () {
-    testWidgets('offline says so and deletes nothing', (tester) async {
+    deleteTest('offline says so and deletes nothing', (tester) async {
       final g = FakeSettingsGateway()
         ..overview = const AccountOverview(phoneMasked: '+88017*****01')
         ..deleteFails = const NetworkException();
@@ -368,7 +347,7 @@ void main() {
       expect(find.textContaining('Your account was deleted'), findsNothing);
     });
 
-    testWidgets('a refused delete is explained', (tester) async {
+    deleteTest('a refused delete is explained', (tester) async {
       final g = FakeSettingsGateway()
         ..overview = const AccountOverview(phoneMasked: '+88017*****01')
         ..deleteFails = const ApiException(
@@ -384,11 +363,11 @@ void main() {
     });
   });
 
-  testWidgets('the page fits at 2x text', (tester) async {
+  deleteTest('the page fits at 2x text', (tester) async {
     final g = FakeSettingsGateway();
     await open(tester, gateway: g, textScale: 2);
     await openDeletePage(tester);
     expect(tester.takeException(), isNull);
-    expect(find.widgetWithText(TextField, 'Your password'), findsOneWidget);
+    expect(field('Your password'), findsOneWidget);
   });
 }

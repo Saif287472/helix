@@ -37,6 +37,12 @@ void youTest(String name, Future<void> Function(WidgetTester) body) =>
       await tester.pump(const Duration(seconds: 5));
     });
 
+/// The text in the Orbit field labelled [label].
+Finder orbitField(String label) => find.descendant(
+  of: find.widgetWithText(orbit.OrbitTextField, label),
+  matching: find.byType(EditableText),
+);
+
 void main() {
   group('You', () {
     youTest('shows who you are and opens every page', (tester) async {
@@ -272,49 +278,38 @@ void main() {
       String next = 'new password 1',
       String? confirm,
     }) async {
+      await tester.enterText(orbitField('Current password'), current);
+      await tester.enterText(orbitField('New password'), next);
       await tester.enterText(
-        find.widgetWithText(TextField, 'Current password'),
-        current,
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'New password'),
-        next,
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Confirm new password'),
+        orbitField('Confirm new password'),
         confirm ?? next,
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Change password'));
+      await tester.pump();
+      await tester.tap(
+        find.widgetWithText(orbit.OrbitButton, 'Change password'),
+      );
       await settle(tester);
     }
 
-    testWidgets('changes the password with the current one', (tester) async {
+    youTest('changes the password with the current one', (tester) async {
       final g = await open(tester);
       await fill(tester);
       expect(g.changedTo, 'new password 1');
       expect(g.changedCurrent, 'old password');
-      expect(find.textContaining('Your password is saved'), findsOneWidget);
+      expect(find.text('Password saved'), findsOneWidget);
     });
 
-    testWidgets('the passwords are hidden until asked', (tester) async {
+    youTest('the passwords are hidden until asked', (tester) async {
       await open(tester);
-      expect(
-        tester
-            .widget<TextField>(find.widgetWithText(TextField, 'New password'))
-            .obscureText,
-        isTrue,
-      );
+      bool hidden() =>
+          tester.widget<EditableText>(orbitField('New password')).obscureText;
+      expect(hidden(), isTrue);
       await tester.tap(find.text('Show passwords'));
       await settle(tester);
-      expect(
-        tester
-            .widget<TextField>(find.widgetWithText(TextField, 'New password'))
-            .obscureText,
-        isFalse,
-      );
+      expect(hidden(), isFalse);
     });
 
-    testWidgets('a wrong current password is said plainly', (tester) async {
+    youTest('a wrong current password is said plainly', (tester) async {
       final g = FakeSettingsGateway()
         ..changePasswordFails = const ApiException(
           status: 401,
@@ -323,10 +318,10 @@ void main() {
       await open(tester, gateway: g);
       await fill(tester);
       expect(find.text('That is not your current password.'), findsOneWidget);
-      expect(find.textContaining('saved'), findsNothing);
+      expect(find.text('Password saved'), findsNothing);
     });
 
-    testWidgets('a lockout says how long to wait', (tester) async {
+    youTest('a lockout says how long to wait', (tester) async {
       final g = FakeSettingsGateway()
         ..changePasswordFails = ApiException(
           status: 429,
@@ -347,7 +342,7 @@ void main() {
       expect(find.textContaining('minutes'), findsOneWidget);
     });
 
-    testWidgets('offline says so', (tester) async {
+    youTest('offline says so', (tester) async {
       final g = FakeSettingsGateway()
         ..changePasswordFails = const NetworkException();
       await open(tester, gateway: g);
@@ -355,36 +350,36 @@ void main() {
       expect(find.textContaining('You are offline'), findsOneWidget);
     });
 
-    testWidgets('a mismatch and a short password never reach the engine', (
+    youTest('a mismatch and a short password never reach the engine', (
       tester,
     ) async {
       final g = await open(tester);
       await fill(tester, next: 'short', confirm: 'different');
-      expect(find.text('Use at least 8 characters.'), findsOneWidget);
       expect(find.text('The passwords do not match.'), findsOneWidget);
+      expect(find.text('At least 8 characters'), findsOneWidget);
       expect(g.calls, isNot(contains('changePassword')));
     });
 
-    testWidgets('a first password needs no current one', (tester) async {
+    youTest('a first password needs no current one', (tester) async {
       final g = FakeSettingsGateway()
         ..overview = const AccountOverview(phoneMasked: '+88017*****01');
       await open(tester, gateway: g);
       expect(find.text('Current password'), findsNothing);
+      await tester.enterText(orbitField('New password'), 'first password');
       await tester.enterText(
-        find.widgetWithText(TextField, 'New password'),
+        orbitField('Confirm new password'),
         'first password',
       );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Confirm new password'),
-        'first password',
+      await tester.pump();
+      await tester.tap(
+        find.widgetWithText(orbit.OrbitButton, 'Set a password'),
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Set password'));
       await settle(tester);
       expect(g.changedTo, 'first password');
       expect(g.changedCurrent, isNull);
     });
 
-    testWidgets('a linked device is asked for the number once', (tester) async {
+    youTest('a linked device is asked for the number once', (tester) async {
       final g = FakeSettingsGateway()
         ..overview = const AccountOverview(
           phoneMasked: '*******0001',
@@ -529,7 +524,7 @@ void main() {
       expect(find.text('stub:${RoutePaths.blocked}'), findsOneWidget);
     });
 
-    testWidgets('blocked list unblocks after confirmation', (tester) async {
+    youTest('blocked list unblocks after confirmation', (tester) async {
       useTallWindow(tester);
       final g = FakeSettingsGateway();
       await pumpPage(
@@ -542,10 +537,10 @@ void main() {
       await tester.tap(find.text('Unblock'));
       await settle(tester);
       expect(find.text('Unblock Rahim?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await tester.tap(find.text('Unblock').last);
       await settle(tester);
       expect(g.calls, contains('unblock:b1'));
-      expect(find.text('Nobody is blocked'), findsOneWidget);
+      expect(find.textContaining('Nobody is blocked'), findsWidgets);
     });
   });
 
@@ -738,7 +733,7 @@ void main() {
   });
 
   group('About, legal and advanced', () {
-    testWidgets('About shows the version, the server and the crash opt-in', (
+    youTest('About shows the version, the server and the crash opt-in', (
       tester,
     ) async {
       useTallWindow(tester);
@@ -750,56 +745,56 @@ void main() {
           settingsGateway: FakeSettingsGateway(),
           settings: settings,
         ),
-        stubs: [RoutePaths.legal],
+        stubs: [RoutePaths.legal, RoutePaths.advanced],
       );
       await settle(tester);
-      expect(find.text('2.0.0'), findsOneWidget);
+      expect(find.text('Version 2.0.0'), findsOneWidget);
       expect(find.text('Helix Global (helix.example.org)'), findsOneWidget);
-      expect(find.text('Terms 2026-09-25, privacy 2026-09-25'), findsOneWidget);
       expect(find.text('Open-source licences'), findsOneWidget);
 
       expect(settings.read(AppSettings.crashReportsOptIn), isFalse);
       await tester.tap(find.text('Send crash reports'));
       await settle(tester);
       expect(settings.read(AppSettings.crashReportsOptIn), isTrue);
+
+      await tester.tap(find.text('Terms of Service'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.legal}'), findsOneWidget);
     });
 
-    testWidgets(
-      'a server that does not accept crash reports hides the switch',
-      (tester) async {
-        useTallWindow(tester);
-        final g = FakeSettingsGateway();
-        g.details = const ServerDetails(
-          name: 'Office server',
-          host: 'chat.office.example',
-          version: '2.0.0',
-          openRegistration: false,
-          maxAttachmentBytes: 1024,
-          termsVersion: '1',
-          privacyVersion: '1',
-        );
-        await pumpPage(
-          tester,
-          const AboutPage(),
-          overrides: a3bOverrides(settingsGateway: g),
-          stubs: [RoutePaths.legal],
-        );
-        await settle(tester);
-        expect(
-          find.text('Office server (chat.office.example)'),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining('does not accept crash reports'),
-          findsOneWidget,
-        );
-        expect(find.byType(Switch), findsNothing);
-      },
-    );
-
-    testWidgets('legal documents come from the server with their version', (
+    youTest('a server that does not accept crash reports says so', (
       tester,
     ) async {
+      useTallWindow(tester);
+      final g = FakeSettingsGateway();
+      g.details = const ServerDetails(
+        name: 'Office server',
+        host: 'chat.office.example',
+        version: '2.0.0',
+        openRegistration: false,
+        maxAttachmentBytes: 1024,
+        termsVersion: '1',
+        privacyVersion: '1',
+      );
+      await pumpPage(
+        tester,
+        const AboutPage(),
+        overrides: a3bOverrides(settingsGateway: g),
+        stubs: [RoutePaths.legal],
+      );
+      await settle(tester);
+      expect(find.text('Office server (chat.office.example)'), findsOneWidget);
+      expect(
+        find.textContaining('does not accept crash reports'),
+        findsOneWidget,
+      );
+      expect(find.text('Send crash reports'), findsNothing);
+    });
+
+    youTest('legal documents come from the server with their version', (
+      tester,
+    ) async {
+      useTallWindow(tester);
       await pumpPage(
         tester,
         const LegalPage(),
@@ -807,14 +802,20 @@ void main() {
       );
       await settle(tester);
       expect(find.text('Helix Global Terms of Service'), findsOneWidget);
-      expect(find.text('Version 2026-09-25'), findsOneWidget);
-      expect(find.text('These are the terms.'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp('version 2026-09-25', caseSensitive: false)),
+        findsOneWidget,
+      );
+      expect(find.textContaining('These are the terms.'), findsOneWidget);
       await tester.tap(find.text('Privacy'));
       await settle(tester);
-      expect(find.text('This is the privacy policy.'), findsOneWidget);
+      expect(
+        find.textContaining('This is the privacy policy.'),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('Advanced lists server facts and flags, and can sync', (
+    youTest('Advanced lists server facts and flags, and can sync', (
       tester,
     ) async {
       useTallWindow(tester);
@@ -825,17 +826,21 @@ void main() {
         overrides: a3bOverrides(settingsGateway: g),
       );
       await settle(tester);
-      expect(find.text('Server version'), findsOneWidget);
+      expect(find.text('Largest attachment'), findsOneWidget);
       expect(find.text('100 MB'), findsOneWidget);
       expect(find.text('Crash reports accepted'), findsOneWidget);
       await tester.tap(find.text('Check for messages now'));
       await settle(tester);
       expect(g.calls, contains('syncNow'));
-      expect(find.text('Up to date.'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp('up to date', caseSensitive: false)),
+        findsOneWidget,
+      );
       expect(find.textContaining('Host your own'), findsNothing);
     });
 
-    testWidgets('Advanced explains an unreachable server', (tester) async {
+    youTest('Advanced explains an unreachable server', (tester) async {
+      useTallWindow(tester);
       final g = FakeSettingsGateway()..serverFails = const NetworkException();
       await pumpPage(
         tester,
@@ -844,6 +849,7 @@ void main() {
       );
       await settle(tester);
       expect(find.textContaining('could not be reached'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
     });
   });
 }

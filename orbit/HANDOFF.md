@@ -29,7 +29,35 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 2cccf91 | Batch 7: groups |
 | 6e4b53a | S3: the server lists a group's live invite links (groups migration 4) |
 | 49a75a4 | **WIP** batch 8: You, profile, Appearance (unfinished) |
-| (next) | Batch 8: the settings connectors and the tests (still WIP: items below) |
+| 77ee515 | Batch 8: the settings connectors and the tests (WIP: items below) |
+| (next) | Batch 9 connectors (the shorter plan) |
+
+## The shorter plan (owner, 2026-10-21)
+
+Get the app standing on Orbit first; polish later.
+
+Done (commit after 77ee515, "batch 9 connectors"): Orbit connectors for
+password, delete account, blocked, about, legal, advanced, devices,
+security activity and backup, with their tests ported (and the journey
+test). Fixes found on the way: the password page's "set" and "change"
+were the wrong way round in the first draft (fixed before commit); the
+delete page can now ask for the number before texting a code (orbit_ui,
+behaviour only: `onSendCode` takes the phone).
+
+Still on the old pages, on purpose:
+- Approve a new device: the Orbit screen has no place for the account key
+  code the old page shows to compare, which is part of the trust check.
+  Add it to `ApproveDeviceModel` before porting.
+- Transfer and Recovery backup: incoming offers and the recovery secret
+  need careful mapping; the old pages work.
+- Link this device and Restore history: no Orbit screens yet.
+
+Next: the owner tries a debug APK.
+
+Deferred until the owner asks: every backend item (S1, E1 to E6), the
+pixel checks, DEVIATIONS and FEATURE.md updates, batch 10 (the wide
+Windows layout), and Part B steps 3 to 5 (the rename, deleting
+`helix_remote_ui`, the full verify). The lists below keep their detail.
 
 ## Batch 8, what is left
 

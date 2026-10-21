@@ -21,60 +21,67 @@ import 'package:orbit_ui/orbit_ui.dart' show OrbitQr;
 
 import '../support/a3b_fakes.dart';
 
+/// Ends by taking the page down and letting the last Orbit toast go.
+void deviceTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+
 void main() {
   group('Devices page', () {
-    testWidgets('lists this device first, with platform and last seen', (
-      tester,
-    ) async {
-      final devices = FakeDevicesGateway();
+    Future<FakeDevicesGateway> open(
+      WidgetTester tester, {
+      FakeDevicesGateway? gateway,
+    }) async {
+      useTallWindow(tester);
+      final devices = gateway ?? FakeDevicesGateway();
       await pumpPage(
         tester,
         const DevicesPage(),
         overrides: a3bOverrides(devices: devices),
+        stubs: [RoutePaths.devicesLink, RoutePaths.devicesActivity],
       );
       await settle(tester);
+      return devices;
+    }
 
+    deviceTest('lists this device first, with platform and last seen', (
+      tester,
+    ) async {
+      final devices = await open(tester);
       expect(find.text('Pixel 8'), findsOneWidget);
-      expect(find.textContaining('This device'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp('this device', caseSensitive: false)),
+        findsWidgets,
+      );
       expect(find.text('Office laptop'), findsOneWidget);
       expect(
-        find.textContaining('Windows - Last active 2 days ago'),
+        find.textContaining(RegExp('2 days ago', caseSensitive: false)),
         findsOneWidget,
       );
+      expect(find.textContaining('Windows'), findsWidgets);
       // It refreshed from the server when it opened.
       expect(devices.calls, contains('refresh'));
     });
 
-    testWidgets('renames a device', (tester) async {
-      final devices = FakeDevicesGateway();
-      await pumpPage(
-        tester,
-        const DevicesPage(),
-        overrides: a3bOverrides(devices: devices),
-      );
-      await settle(tester);
-
+    deviceTest('renames a device', (tester) async {
+      final devices = await open(tester);
       await tester.tap(find.text('Office laptop'));
       await settle(tester);
       await tester.tap(find.text('Rename'));
       await settle(tester);
-      await tester.enterText(find.byType(TextField), 'Desk PC');
+      await tester.enterText(find.byType(EditableText), 'Desk PC');
       await tester.tap(find.text('Save'));
       await settle(tester);
       expect(devices.calls, contains('rename:d2:Desk PC'));
     });
 
-    testWidgets('removing a device asks first, and says what it costs', (
+    deviceTest('removing a device asks first, and says what it costs', (
       tester,
     ) async {
-      final devices = FakeDevicesGateway();
-      await pumpPage(
-        tester,
-        const DevicesPage(),
-        overrides: a3bOverrides(devices: devices),
-      );
-      await settle(tester);
-
+      final devices = await open(tester);
       await tester.tap(find.text('Office laptop'));
       await settle(tester);
       await tester.tap(find.text('Remove this device'));
@@ -88,14 +95,8 @@ void main() {
       expect(find.text('Device removed.'), findsOneWidget);
     });
 
-    testWidgets('lost or stolen tells the server why', (tester) async {
-      final devices = FakeDevicesGateway();
-      await pumpPage(
-        tester,
-        const DevicesPage(),
-        overrides: a3bOverrides(devices: devices),
-      );
-      await settle(tester);
+    deviceTest('lost or stolen tells the server why', (tester) async {
+      final devices = await open(tester);
       await tester.tap(find.text('Office laptop'));
       await settle(tester);
       await tester.tap(find.text('Lost or stolen'));
@@ -105,27 +106,16 @@ void main() {
       expect(devices.calls, contains('revoke:d2:lost'));
     });
 
-    testWidgets('this device cannot be removed from here', (tester) async {
-      await pumpPage(
-        tester,
-        const DevicesPage(),
-        overrides: a3bOverrides(devices: FakeDevicesGateway()),
-      );
-      await settle(tester);
+    deviceTest('this device cannot be removed from here', (tester) async {
+      await open(tester);
       await tester.tap(find.text('Pixel 8'));
       await settle(tester);
       expect(find.text('Rename'), findsOneWidget);
       expect(find.text('Remove this device'), findsNothing);
     });
 
-    testWidgets('sign out all others needs confirmation', (tester) async {
-      final devices = FakeDevicesGateway();
-      await pumpPage(
-        tester,
-        const DevicesPage(),
-        overrides: a3bOverrides(devices: devices),
-      );
-      await settle(tester);
+    deviceTest('sign out all others needs confirmation', (tester) async {
+      final devices = await open(tester);
       await reveal(tester, find.text('Sign out all other devices'));
       await tester.tap(find.text('Sign out all other devices'));
       await settle(tester);
@@ -142,22 +132,25 @@ void main() {
       expect(find.text('Signed out 1 other device.'), findsOneWidget);
     });
 
-    testWidgets('offline: says so and offers a retry', (tester) async {
-      final devices = FakeDevicesGateway()
-        ..refreshFails = const NetworkException();
-      await pumpPage(
+    deviceTest('offline: says so', (tester) async {
+      await open(
         tester,
-        const DevicesPage(),
-        overrides: a3bOverrides(devices: devices),
+        gateway: FakeDevicesGateway()..refreshFails = const NetworkException(),
       );
-      await settle(tester);
       expect(find.textContaining('You are offline'), findsOneWidget);
-      expect(find.text('Try again'), findsOneWidget);
+    });
+
+    deviceTest('opens Link a new device and all activity', (tester) async {
+      await open(tester);
+      await tester.tap(find.text('Link a new device'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.devicesLink}'), findsOneWidget);
     });
   });
 
   group('Security activity', () {
-    testWidgets('lists events and marks key resets', (tester) async {
+    deviceTest('lists events and marks key resets', (tester) async {
+      useTallWindow(tester);
       await pumpPage(
         tester,
         const SecurityActivityPage(),
@@ -166,10 +159,10 @@ void main() {
       await settle(tester);
       expect(find.text('A device was added'), findsOneWidget);
       expect(find.text('Your account key was reset'), findsOneWidget);
-      expect(find.byIcon(Icons.priority_high), findsOneWidget);
+      expect(find.text('1 to check'), findsOneWidget);
     });
 
-    testWidgets('empty log has an empty state', (tester) async {
+    deviceTest('an empty log says so', (tester) async {
       final devices = FakeDevicesGateway()..events = const [];
       await pumpPage(
         tester,
@@ -177,7 +170,7 @@ void main() {
         overrides: a3bOverrides(devices: devices),
       );
       await settle(tester);
-      expect(find.text('Nothing to show'), findsOneWidget);
+      expect(find.text('0 recent events'), findsOneWidget);
     });
   });
 

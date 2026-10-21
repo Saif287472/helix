@@ -163,7 +163,7 @@ void main() {
     expect(find.text('Pixel 8'), findsOneWidget);
     expect(find.text('Office laptop'), findsOneWidget);
 
-    await tapAndSettle(tester, find.byType(BackButton));
+    await tapAndSettle(tester, find.byTooltip('Back'));
     expect(find.text('Devices'), findsOneWidget);
     expect(find.text('Pixel 8'), findsNothing);
   });

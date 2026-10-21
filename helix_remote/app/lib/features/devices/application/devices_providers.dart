@@ -27,11 +27,19 @@ class DeviceRowView {
     required this.subtitle,
     required this.isThisDevice,
     required this.kind,
+    this.platform = 'Device',
+    this.seen = '',
   });
 
   final String id;
   final String title;
   final String subtitle;
+
+  /// "Android", "Windows"; "Device" when unknown.
+  final String platform;
+
+  /// "This device" / "Active 2 days ago".
+  final String seen;
   final bool isThisDevice;
   final DevicePlatformKind kind;
 }
@@ -90,6 +98,10 @@ DeviceRowView _row(DeviceItem d, DateTime now) {
     id: d.id,
     title: d.name.isEmpty ? (platform ?? 'Unnamed device') : d.name,
     subtitle: [?platform, seen].join(' - '),
+    platform: platform ?? 'Device',
+    seen: d.isThisDevice
+        ? seen
+        : 'Active ${formatAgo(d.lastActiveAt ?? d.linkedAt, now).toLowerCase()}',
     isThisDevice: d.isThisDevice,
     kind: switch (d.platform) {
       'android' || 'ios' => DevicePlatformKind.phone,
@@ -169,11 +181,15 @@ class SecurityEventView {
     required this.title,
     required this.when,
     required this.needsAttention,
+    required this.at,
+    required this.type,
     this.detail,
   });
 
   final String title;
   final String when;
+  final DateTime at;
+  final SecurityEventType type;
   final String? detail;
 
   /// A key change or a recovery: worth a second look.
@@ -198,6 +214,8 @@ final securityEventsProvider =
             },
             detail: e.deviceName,
             when: formatAgo(e.at, now),
+            at: e.at,
+            type: e.type,
             needsAttention:
                 e.type == SecurityEventType.recoveryUsed ||
                 e.type == SecurityEventType.identityChanged,

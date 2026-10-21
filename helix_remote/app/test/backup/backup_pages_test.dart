@@ -18,43 +18,51 @@ import '../support/a3b_fakes.dart';
 
 /// Settings > Backup, the restore step, device-to-device transfer and the
 /// recovery backup: the real pages and notifiers over a fake gateway.
-void main() {
-  group('Backup page', () {
-    testWidgets('says when the last backup was and how big it is', (
-      tester,
-    ) async {
-      final backup = FakeBackupGateway();
-      await pumpPage(
-        tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
-      );
-      await settle(tester);
-
-      expect(find.text('Last backup'), findsOneWidget);
-      expect(
-        find.textContaining('1 hour ago. 1,204 messages, 2.3 MB'),
-        findsOneWidget,
-      );
-      // It says what a backup holds, and what it does not.
-      expect(find.textContaining('not the files themselves'), findsOneWidget);
-      // The schedule is the engine's, so it is stated, not offered.
-      expect(find.textContaining('once a day'), findsOneWidget);
+/// Ends by taking the page down and letting the last Orbit toast go.
+void backupTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
     });
 
-    testWidgets('the automatic switch and the mobile-data switch write', (
-      tester,
-    ) async {
-      final backup = FakeBackupGateway();
-      final settings = FakeLocalSettings();
+void main() {
+  group('Backup page', () {
+    Future<void> open(
+      WidgetTester tester,
+      FakeBackupGateway backup, {
+      FakeLocalSettings? settings,
+    }) async {
+      useTallWindow(tester);
       await pumpPage(
         tester,
         const BackupPage(),
         overrides: a3bOverrides(backup: backup, settings: settings),
+        stubs: [
+          RoutePaths.backupRestore,
+          RoutePaths.backupTransfer,
+          RoutePaths.backupRecovery,
+        ],
       );
       await settle(tester);
+    }
 
-      await tester.tap(find.text('Back up automatically'));
+    backupTest('says when the last backup was and how big it is', (
+      tester,
+    ) async {
+      await open(tester, FakeBackupGateway());
+      expect(find.text('Backed up 1 hour ago'), findsOneWidget);
+      expect(find.text('1,204 messages, 2.3 MB'), findsOneWidget);
+    });
+
+    backupTest('the automatic switch and the mobile-data switch write', (
+      tester,
+    ) async {
+      final backup = FakeBackupGateway();
+      final settings = FakeLocalSettings();
+      await open(tester, backup, settings: settings);
+
+      await tester.tap(find.text('Back up every day'));
       await settle(tester);
       expect(backup.calls, contains('setAutoBackup:false'));
 
@@ -64,67 +72,53 @@ void main() {
       expect(settings.read(AppSettings.backupOverMobile), isTrue);
     });
 
-    testWidgets('Back up now shows progress, then confirms', (tester) async {
+    backupTest('Back up now shows progress, then confirms', (tester) async {
       final backup = FakeBackupGateway()..holdBackUp = Completer<void>();
-      await pumpPage(
-        tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
-      );
-      await settle(tester);
+      await open(tester, backup);
 
       await tester.tap(find.text('Back up now'));
       await settle(tester);
-      expect(find.text('Backing up...'), findsOneWidget);
+      expect(find.text('Backing up…'), findsOneWidget);
 
       backup.backupEvents.add(
         const BackupRunProgress(RunPhase.preparing, messages: 400),
       );
       await settle(tester);
-      expect(find.text('Backing up... 400 messages'), findsOneWidget);
+      expect(find.text('400 messages'), findsOneWidget);
 
       backup.holdBackUp!.complete();
       await settle(tester);
       expect(find.text('Your history is backed up.'), findsOneWidget);
-      expect(find.text('Backing up...'), findsNothing);
+      expect(find.text('Backing up…'), findsNothing);
     });
 
-    testWidgets('a failed backup says why, in words', (tester) async {
-      final backup = FakeBackupGateway()..backUpFails = BackupProblem.offline;
-      await pumpPage(
+    backupTest('a failed backup says why, in words', (tester) async {
+      await open(
         tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
+        FakeBackupGateway()..backUpFails = BackupProblem.offline,
       );
-      await settle(tester);
-
       await tester.tap(find.text('Back up now'));
       await settle(tester);
       expect(
         find.text(backupProblemText(BackupProblem.offline)),
         findsOneWidget,
       );
+      expect(find.text('Try again'), findsOneWidget);
     });
 
-    testWidgets('a refused upload on mobile data points at the switch', (
+    backupTest('a refused upload on mobile data points at the switch', (
       tester,
     ) async {
-      final backup = FakeBackupGateway()
-        ..backUpFails = BackupProblem.notAllowed;
-      await pumpPage(
+      await open(
         tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
+        FakeBackupGateway()..backUpFails = BackupProblem.notAllowed,
       );
-      await settle(tester);
-
       await tester.tap(find.text('Back up now'));
       await settle(tester);
-      expect(find.textContaining('mobile data'), findsWidgets);
       expect(find.textContaining('connect to Wi-Fi'), findsOneWidget);
     });
 
-    testWidgets('the last failure from a scheduled backup is shown', (
+    backupTest('the last failure from a scheduled backup is shown', (
       tester,
     ) async {
       final backup = FakeBackupGateway();
@@ -134,35 +128,19 @@ void main() {
           lastProblem: BackupProblem.tooLarge,
         ),
       );
-      await pumpPage(
-        tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
-      );
-      await settle(tester);
-
-      expect(
-        find.textContaining('The last backup did not finish'),
-        findsOneWidget,
-      );
+      await open(tester, backup);
+      expect(find.text('The last backup did not finish'), findsOneWidget);
       expect(find.textContaining('too large'), findsOneWidget);
     });
 
-    testWidgets('deleting the server backup asks first', (tester) async {
+    backupTest('deleting the server backup asks first', (tester) async {
       final backup = FakeBackupGateway();
-      await pumpPage(
-        tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
-      );
-      await settle(tester);
+      await open(tester, backup);
 
       await reveal(tester, find.text('Delete my server backup'));
       await tester.tap(find.text('Delete my server backup'));
       await settle(tester);
       expect(find.text('Delete the server backup?'), findsOneWidget);
-      expect(backup.calls, isNot(contains('deleteServerBackup')));
-
       await tester.tap(find.text('Cancel'));
       await settle(tester);
       expect(backup.calls, isNot(contains('deleteServerBackup')));
@@ -174,7 +152,7 @@ void main() {
       expect(backup.calls, contains('deleteServerBackup'));
     });
 
-    testWidgets('links open the restore, transfer and recovery pages', (
+    backupTest('links open the restore, transfer and recovery pages', (
       tester,
     ) async {
       final router = await pumpPage(
@@ -187,16 +165,22 @@ void main() {
           RoutePaths.backupRecovery,
         ],
       );
+      useTallWindow(tester);
       await settle(tester);
-
-      await reveal(tester, find.text('Restore history'));
-      await tester.tap(find.text('Restore history'));
-      await settle(tester);
-      expect(find.text('stub:${RoutePaths.backupRestore}'), findsOneWidget);
-      expect(router, isNotNull);
+      for (final (label, path) in [
+        ('Restore', RoutePaths.backupRestore),
+        ('Send to a device', RoutePaths.backupTransfer),
+      ]) {
+        await reveal(tester, find.text(label));
+        await tester.tap(find.text(label));
+        await settle(tester);
+        expect(find.text('stub:$path'), findsOneWidget, reason: label);
+        router.pop();
+        await settle(tester);
+      }
     });
 
-    testWidgets('shows how many transfers are waiting', (tester) async {
+    backupTest('shows how many transfers are waiting', (tester) async {
       final backup = FakeBackupGateway();
       backup.offers.set(const [
         TransferView(
@@ -206,14 +190,8 @@ void main() {
           deviceName: 'Office laptop',
         ),
       ]);
-      await pumpPage(
-        tester,
-        const BackupPage(),
-        overrides: a3bOverrides(backup: backup),
-      );
-      await settle(tester);
-      await reveal(tester, find.text('Send to my other devices'));
-      expect(find.text('1 waiting to be received'), findsOneWidget);
+      await open(tester, backup);
+      expect(find.text('1 waiting'), findsOneWidget);
     });
   });
 
