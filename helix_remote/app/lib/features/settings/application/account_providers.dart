@@ -24,6 +24,28 @@ final passwordSubtitleProvider = Provider.autoDispose<String?>((ref) {
   return 'Changed ${formatAgo(changed, ref.read(clockProvider)()).toLowerCase()}';
 });
 
+/// "Since Sep 2026": when the account was made, on the Account page.
+final accountSinceProvider = Provider.autoDispose<String>((ref) {
+  final created = ref.watch(accountOverviewProvider).value?.createdAt;
+  if (created == null) return '';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final local = created.toLocal();
+  return 'Since ${months[local.month - 1]} ${local.year}';
+});
+
 // -------------------------------------------------------- change password
 
 abstract final class PasswordRules {

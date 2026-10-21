@@ -6,6 +6,7 @@ import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException, NetworkException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 import '../support/a3b_fakes.dart';
 
@@ -13,6 +14,14 @@ import '../support/a3b_fakes.dart';
 /// from the account's own number (and checks it against the verified one), so
 /// the number has to reach `setPrivacy`: from the engine when it knows it,
 /// typed once when not, and the refusal is said.
+/// Ends by taking the page down and letting the last Orbit toast go.
+void numberTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+
 void main() {
   Future<FakeSettingsGateway> open(
     WidgetTester tester,
@@ -34,23 +43,18 @@ void main() {
         ..prefs = const PrivacyPrefs(discoverableByPhone: false);
 
   Future<void> toggle(WidgetTester tester) async {
-    await tester.tap(find.text('Find me by phone number'));
+    await reveal(tester, find.text('By phone number'));
+    await tester.tap(find.text('By phone number'));
     await settle(tester);
   }
 
   bool isOn(WidgetTester tester) => tester
-      .widget<Switch>(
-        find.descendant(
-          of: find.ancestor(
-            of: find.text('Find me by phone number'),
-            matching: find.byType(InkWell),
-          ),
-          matching: find.byType(Switch),
-        ),
+      .widget<orbit.OrbitListRow>(
+        find.widgetWithText(orbit.OrbitListRow, 'By phone number'),
       )
-      .value;
+      .on;
 
-  testWidgets('a device that knows the number turns it on without asking', (
+  numberTest('a device that knows the number turns it on without asking', (
     tester,
   ) async {
     final g = await open(tester, discoveryOff());
@@ -64,7 +68,7 @@ void main() {
     expect(isOn(tester), isTrue);
   });
 
-  testWidgets('a device without the number asks once, with the country code', (
+  numberTest('a device without the number asks once, with the country code', (
     tester,
   ) async {
     final g = await open(tester, discoveryOff()..privacyNeedsNumber = true);
@@ -76,14 +80,14 @@ void main() {
     expect(isOn(tester), isFalse);
 
     // Not a number with a country code: asked again, nothing sent.
-    await tester.enterText(find.byType(TextField), '01711000001');
+    await tester.enterText(find.byType(EditableText), '01711000001');
     await tester.tap(find.text('Turn on'));
     await settle(tester);
     expect(find.textContaining('country code'), findsWidgets);
     expect(g.savedPrefs, isNull);
     expect(find.text('Your phone number'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), '+88 01711 000001');
+    await tester.enterText(find.byType(EditableText), '+88 01711 000001');
     await tester.tap(find.text('Turn on'));
     await settle(tester);
     expect(g.privacyNumber, '+8801711000001');
@@ -91,7 +95,7 @@ void main() {
     expect(isOn(tester), isTrue);
   });
 
-  testWidgets('declining to give the number leaves it off', (tester) async {
+  numberTest('declining to give the number leaves it off', (tester) async {
     final g = await open(tester, discoveryOff()..privacyNeedsNumber = true);
     await toggle(tester);
     await tester.tap(find.text('Cancel'));
@@ -102,7 +106,7 @@ void main() {
     expect(find.text('Your phone number'), findsNothing);
   });
 
-  testWidgets('the server refusing the number is said in plain words', (
+  numberTest('the server refusing the number is said in plain words', (
     tester,
   ) async {
     final g = discoveryOff()
@@ -113,7 +117,7 @@ void main() {
       );
     await open(tester, g);
     await toggle(tester);
-    await tester.enterText(find.byType(TextField), '+8801799999999');
+    await tester.enterText(find.byType(EditableText), '+8801799999999');
     await tester.tap(find.text('Turn on'));
     await settle(tester);
 
@@ -123,7 +127,7 @@ void main() {
     expect(isOn(tester), isFalse);
   });
 
-  testWidgets('being offline is not blamed on the number', (tester) async {
+  numberTest('being offline is not blamed on the number', (tester) async {
     final g = discoveryOff()..privacySaveFails = const NetworkException();
     await open(tester, g);
     await toggle(tester);
@@ -131,7 +135,7 @@ void main() {
     expect(find.textContaining('did not turn this on'), findsNothing);
   });
 
-  testWidgets('turning it off never asks for a number', (tester) async {
+  numberTest('turning it off never asks for a number', (tester) async {
     final g = FakeSettingsGateway()..privacyNeedsNumber = true;
     await open(tester, g);
     expect(isOn(tester), isTrue);

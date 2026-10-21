@@ -24,15 +24,16 @@ import 'package:helix_remote/features/profile/presentation/profile_page.dart';
 import 'package:helix_remote/features/settings/presentation/about_page.dart';
 import 'package:helix_remote/features/settings/presentation/account_page.dart';
 import 'package:helix_remote/features/settings/presentation/advanced_page.dart';
+import 'package:helix_remote/features/settings/presentation/appearance_page.dart';
 import 'package:helix_remote/features/settings/presentation/blocked_page.dart';
 import 'package:helix_remote/features/settings/presentation/change_password_page.dart';
 import 'package:helix_remote/features/settings/presentation/chats_page.dart';
 import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
-import 'package:helix_remote/features/settings/presentation/settings_tab.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_controller.dart';
+import 'package:helix_remote/shared/widgets/orbit_you_connector.dart';
 import 'package:helix_remote_api/v2.dart'
     show ApiException, NetworkException, SignedOutException, SignedOutReason;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
@@ -48,7 +49,8 @@ import '../support/a3b_fakes.dart';
 /// guidelines, plus source scans and the small units the pages rest on.
 void main() {
   final pages = <String, Widget Function()>{
-    'Settings tab': () => const SettingsTab(),
+    'You': () => const OrbitYouConnector(),
+    'Appearance': () => const AppearancePage(),
     'Account': () => const AccountPage(),
     'Change password': () => const ChangePasswordPage(),
     'Privacy': () => const PrivacyPage(),
@@ -101,7 +103,7 @@ void main() {
 
         // Pages with a ticking countdown stop it with the page.
         await tester.pumpWidget(const SizedBox());
-        await tester.pump(const Duration(seconds: 2));
+        await tester.pump(const Duration(seconds: 5));
       });
     }
   }

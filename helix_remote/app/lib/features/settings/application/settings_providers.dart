@@ -52,6 +52,44 @@ final mediaAudioProvider = settingProvider(AppSettings.mediaAudio);
 final mediaVideoProvider = settingProvider(AppSettings.mediaVideo);
 final mediaDocumentsProvider = settingProvider(AppSettings.mediaDocuments);
 
+/// Whether backups may use mobile data (the Backup page sets it; Storage
+/// shows it).
+final backupOverMobileSettingProvider = settingProvider(
+  AppSettings.backupOverMobile,
+);
+
+/// "Photos on Wi-Fi, voice always, videos and documents never": the media
+/// policies in a line, kinds with the same policy named together.
+String downloadSummary({
+  required MediaDownloadPolicy photos,
+  required MediaDownloadPolicy voice,
+  required MediaDownloadPolicy videos,
+  required MediaDownloadPolicy documents,
+}) {
+  final groups = <MediaDownloadPolicy, List<String>>{};
+  for (final (kind, policy) in [
+    ('photos', photos),
+    ('voice', voice),
+    ('videos', videos),
+    ('documents', documents),
+  ]) {
+    (groups[policy] ??= []).add(kind);
+  }
+  final parts = [
+    for (final MapEntry(key: policy, value: kinds) in groups.entries)
+      '${switch (kinds) {
+        [final one] => one,
+        _ => '${kinds.sublist(0, kinds.length - 1).join(', ')} and ${kinds.last}',
+      }} ${switch (policy) {
+        MediaDownloadPolicy.never => 'never',
+        MediaDownloadPolicy.wifi => 'on Wi-Fi',
+        MediaDownloadPolicy.always => 'always',
+      }}',
+  ];
+  final line = parts.join(', ');
+  return line[0].toUpperCase() + line.substring(1);
+}
+
 final crashReportsOptInProvider = settingProvider(
   AppSettings.crashReportsOptIn,
 );

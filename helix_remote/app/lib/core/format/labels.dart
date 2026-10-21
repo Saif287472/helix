@@ -35,6 +35,13 @@ String formatDateSeparator(DateTime at, DateTime now) {
   return '${local.day} ${_months[local.month - 1]} ${local.year}';
 }
 
+/// "Friday, 16 October": the date a lock screen shows.
+String formatLongDay(DateTime at) {
+  final local = at.toLocal();
+  return '${_weekdayLong(local.weekday)}, ${local.day} '
+      '${_months[local.month - 1]}';
+}
+
 /// The line under a person's name in a conversation header.
 String formatLastSeen(DateTime at, DateTime now) {
   final local = at.toLocal();

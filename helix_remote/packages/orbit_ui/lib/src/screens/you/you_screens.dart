@@ -447,17 +447,21 @@ class _Checkup extends StatelessWidget {
           if (!showAll)
             Align(
               alignment: Alignment.centerLeft,
-              child: GestureDetector(
-                onTap: onSeeAll,
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 40),
-                  padding: const EdgeInsets.only(top: 10, bottom: 6),
-                  child: Text(
-                    good ? 'See all checks' : 'See all ${checks.length} checks',
-                    style: t.font.style(
-                      size: 13,
-                      weight: 600,
-                      color: t.accentInk,
+              child: OrbitTapArea(
+                child: GestureDetector(
+                  onTap: onSeeAll,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 40),
+                    padding: const EdgeInsets.only(top: 10, bottom: 6),
+                    child: Text(
+                      good
+                          ? 'See all checks'
+                          : 'See all ${checks.length} checks',
+                      style: t.font.style(
+                        size: 13,
+                        weight: 600,
+                        color: t.accentInk,
+                      ),
                     ),
                   ),
                 ),

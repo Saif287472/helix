@@ -394,8 +394,11 @@ class OrbitSegmented<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
+    // The 4px above and below each segment answer its taps too (a segment
+    // is drawn 36 or 40px tall), and its tap area is reported as at least
+    // 48px; nothing moves on screen.
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: t.field,
         borderRadius: BorderRadius.circular(t.rMd),
@@ -404,7 +407,7 @@ class OrbitSegmented<T> extends StatelessWidget {
         children: [
           for (final (i, o) in options.indexed) ...[
             if (i > 0) const SizedBox(width: 4),
-            Expanded(child: _segment(t, o)),
+            Expanded(child: OrbitTapArea(child: _segment(t, o))),
           ],
         ],
       ),
@@ -423,6 +426,7 @@ class OrbitSegmented<T> extends StatelessWidget {
         onTap: change == null ? null : () => change(o.value),
         child: Container(
           height: small ? 36 : 40,
+          margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             color: on ? t.surface : null,
             borderRadius: BorderRadius.circular(10),

@@ -7,11 +7,17 @@ import 'package:orbit_ui/orbit_ui.dart';
 
 /// The Orbit theme the app draws with (`core/theme/orbit_app_theme.dart`),
 /// read from `orbit_ui`'s asset file so a test needs no asset bundle.
-final OrbitTokens orbitTestTokens = OrbitTokens.fromThemeJson(
+final OrbitTokens orbitTestTokens = _theme('orbit');
+
+/// The built-in themes, as `main.dart` loads them before the first frame.
+final Map<String, OrbitTokens> orbitTestThemes = {
+  'orbit': orbitTestTokens,
+  'night': _theme('night'),
+};
+
+OrbitTokens _theme(String id) => OrbitTokens.fromThemeJson(
   jsonDecode(
-        File(
-          '../packages/orbit_ui/assets/themes/orbit.json',
-        ).readAsStringSync(),
+        File('../packages/orbit_ui/assets/themes/$id.json').readAsStringSync(),
       )
       as Map<String, Object?>,
 );

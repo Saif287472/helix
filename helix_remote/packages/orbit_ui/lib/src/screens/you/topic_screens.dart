@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:orbit_ui/src/brand/orbit_mark.dart';
@@ -397,17 +399,26 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
   Future<void> _askNumber() async {
     final a = widget.actions;
     while (mounted) {
-      String? typed;
-      await showOrbitInputDialog(
-        context,
-        title: 'Your phone number',
-        label: 'With its country code, like +88017XXXXXXXX',
-        value: '+880 ',
-        maxLength: 20,
-        confirmLabel: 'Turn on',
-        onConfirm: (v) => typed = v,
+      // The dialog runs Turn on a beat after it has closed, so its answer
+      // is waited for; closed without one (Cancel) is null.
+      final answer = Completer<String?>();
+      unawaited(
+        showOrbitInputDialog(
+          context,
+          title: 'Your phone number',
+          label: 'With its country code, like +88017XXXXXXXX',
+          value: '+880 ',
+          maxLength: 20,
+          confirmLabel: 'Turn on',
+          onConfirm: answer.complete,
+        ).then(
+          (_) => Timer(const Duration(milliseconds: 120), () {
+            if (!answer.isCompleted) answer.complete(null);
+          }),
+        ),
       );
-      final number = typed;
+      final number = await answer.future;
+      if (!mounted) return;
       if (number == null) {
         a.onCancelNumber?.call();
         return;
@@ -879,12 +890,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           sub:
               '$on of 3 alerts on · previews '
               '${_v['previews']! ? 'shown' : 'hidden'}',
-          slot: _LockPreview(
-            title: _v['previews']! ? m.previewName : 'Orbit',
-            body: _v['previews']! ? m.previewText : 'New message',
-            date: m.dateLabel,
-            sound: _v['sound']!,
-            vibrate: _v['vibrate']!,
+          // A picture of a lock screen, white on the brand gradient: read
+          // out as one line rather than as text to be checked for contrast.
+          slot: Semantics(
+            container: true,
+            label:
+                'Your lock screen: '
+                '${_v['previews']! ? '${m.previewName}, ${m.previewText}' : 'Orbit, New message'}',
+            child: ExcludeSemantics(
+              child: _LockPreview(
+                title: _v['previews']! ? m.previewName : 'Orbit',
+                body: _v['previews']! ? m.previewText : 'New message',
+                date: m.dateLabel,
+                sound: _v['sound']!,
+                vibrate: _v['vibrate']!,
+              ),
+            ),
           ),
         ),
         const OrbitGroupTitle('Alerts'),

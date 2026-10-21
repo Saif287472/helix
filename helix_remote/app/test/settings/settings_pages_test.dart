@@ -14,22 +14,35 @@ import 'package:helix_remote/features/settings/presentation/chats_page.dart';
 import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
-import 'package:helix_remote/features/settings/presentation/settings_tab.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
+import 'package:helix_remote/features/settings/application/settings_providers.dart'
+    show downloadSummary;
 import 'package:helix_remote/shared/route_paths.dart';
+import 'package:helix_remote/shared/widgets/orbit_you_connector.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException, NetworkException;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show EngineSettings, MediaSettings;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 import '../support/a3b_fakes.dart';
 
+/// A widget test that ends by taking the page down and letting the last Orbit
+/// toast (4 s at most) go, so no timer is left pending.
+void youTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+
 void main() {
-  group('Settings tab', () {
-    testWidgets('shows who you are and opens every page', (tester) async {
+  group('You', () {
+    youTest('shows who you are and opens every page', (tester) async {
       useTallWindow(tester);
       final paths = [
+        RoutePaths.appearance,
         RoutePaths.account,
         RoutePaths.privacy,
         RoutePaths.notifications,
@@ -43,15 +56,16 @@ void main() {
       ];
       final router = await pumpPage(
         tester,
-        const SettingsTab(),
+        const OrbitYouConnector(),
         overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
         stubs: paths,
       );
       await settle(tester);
 
-      expect(find.text('Anna Khan'), findsOneWidget);
-      expect(find.textContaining('helix.example.org'), findsOneWidget);
+      expect(find.text('Anna Khan'), findsWidgets);
+      expect(find.textContaining('helix.example.org'), findsWidgets);
       for (final (label, path) in [
+        ('Appearance', RoutePaths.appearance),
         ('Account', RoutePaths.account),
         ('Privacy', RoutePaths.privacy),
         ('Notifications', RoutePaths.notifications),
@@ -62,7 +76,8 @@ void main() {
         ('Help and about', RoutePaths.about),
         ('Advanced', RoutePaths.advanced),
       ]) {
-        await tester.tap(find.text(label));
+        await reveal(tester, find.text(label).last);
+        await tester.tap(find.text(label).last);
         await settle(tester);
         expect(find.text('stub:$path'), findsOneWidget, reason: label);
         router.pop();
@@ -73,49 +88,45 @@ void main() {
       expect(find.textContaining('host your own'), findsNothing);
     });
 
-    testWidgets('the header opens the profile', (tester) async {
+    youTest('Edit profile opens the profile', (tester) async {
+      useTallWindow(tester);
       await pumpPage(
         tester,
-        const SettingsTab(),
+        const OrbitYouConnector(),
         overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
         stubs: [RoutePaths.profile],
       );
       await settle(tester);
-      await tester.tap(find.text('Anna Khan'));
+      await tester.tap(find.text('Edit profile').first);
       await settle(tester);
       expect(find.text('stub:${RoutePaths.profile}'), findsOneWidget);
     });
   });
 
   group('Settings search', () {
-    testWidgets('narrows the rows and says when nothing matches', (
-      tester,
-    ) async {
+    youTest('narrows the rows and says when nothing matches', (tester) async {
       useTallWindow(tester);
       await pumpPage(
         tester,
-        const SettingsTab(),
+        const OrbitYouConnector(),
         overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
       );
       await settle(tester);
 
-      await tester.enterText(find.byType(TextField), 'receipts');
-      await tester.pump();
-      expect(find.text('Privacy'), findsOneWidget);
+      await tester.tap(find.byTooltip('Search settings'));
+      await settle(tester);
+      await tester.enterText(find.byType(EditableText), 'receipts');
+      await settle(tester);
+      expect(find.text('Privacy'), findsWidgets);
       expect(find.text('Backup'), findsNothing);
-      expect(find.text('Search results'), findsOneWidget);
-      // The profile card steps aside while searching.
-      expect(find.text('Anna Khan'), findsNothing);
 
-      await tester.enterText(find.byType(TextField), 'zzzz');
-      await tester.pump();
-      expect(find.text('No settings found'), findsOneWidget);
+      await tester.enterText(find.byType(EditableText), 'zzzz');
+      await settle(tester);
       expect(find.textContaining('No settings match'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Clear search'));
-      await tester.pump();
-      expect(find.text('Anna Khan'), findsOneWidget);
-      expect(find.text('Backup'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close search'));
+      await settle(tester);
+      expect(find.text('Backup'), findsWidgets);
     });
   });
 
@@ -135,37 +146,48 @@ void main() {
           RoutePaths.changePassword,
           RoutePaths.profile,
           RoutePaths.devicesActivity,
+          RoutePaths.deleteAccount,
         ],
       );
       await settle(tester);
       return g;
     }
 
-    testWidgets('shows the phone number masked and the ~name', (tester) async {
+    youTest('shows the phone number masked and the ~name', (tester) async {
       await open(tester);
-      expect(find.text('+88017*****01'), findsOneWidget);
-      expect(find.text('~anna.k'), findsOneWidget);
+      expect(find.textContaining('+88017*****01'), findsOneWidget);
+      expect(find.textContaining('~anna.k'), findsOneWidget);
       expect(find.text('Change password'), findsOneWidget);
+      expect(find.text('Password set'), findsOneWidget);
     });
 
-    testWidgets('without a password it offers to set one', (tester) async {
+    youTest('without a password it offers to set one', (tester) async {
       final g = FakeSettingsGateway()
         ..overview = const AccountOverview(phoneMasked: '+88017*****01');
       await open(tester, gateway: g);
       expect(find.text('Set a password'), findsOneWidget);
-      expect(find.textContaining('Not set'), findsOneWidget);
+      expect(find.text('No password'), findsOneWidget);
     });
 
-    testWidgets('offline: the page says so and can retry', (tester) async {
+    youTest('says since when the account exists', (tester) async {
+      final g = FakeSettingsGateway()
+        ..overview = AccountOverview(
+          phoneMasked: '+88017*****01',
+          hasPassword: true,
+          createdAt: DateTime(2026, 9, 12),
+        );
+      await open(tester, gateway: g);
+      expect(find.text('Since Sep 2026'), findsOneWidget);
+    });
+
+    youTest('offline: the page says so and can retry', (tester) async {
       final g = FakeSettingsGateway()..accountFails = const NetworkException();
       await open(tester, gateway: g);
       expect(find.textContaining('could not be loaded'), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
     });
 
-    testWidgets('sign out is confirmed and warns about the wipe', (
-      tester,
-    ) async {
+    youTest('sign out is confirmed and warns about the wipe', (tester) async {
       await open(tester);
       await tester.tap(find.text('Sign out'));
       await settle(tester);
@@ -176,7 +198,7 @@ void main() {
       expect(find.text('Sign out?'), findsNothing);
     });
 
-    testWidgets('export shares a file named for the day', (tester) async {
+    youTest('export shares a file named for the day', (tester) async {
       final share = FakeShareAdapter();
       final g = await open(tester, share: share);
       await tester.tap(find.text('Export my data'));
@@ -189,7 +211,7 @@ void main() {
       expect(share.shared.single.mimeType, 'application/json');
     });
 
-    testWidgets('an export that cannot be shared says so', (tester) async {
+    youTest('an export that cannot be shared says so', (tester) async {
       final share = FakeShareAdapter()..result = false;
       await open(tester, share: share);
       await tester.tap(find.text('Export my data'));
@@ -197,12 +219,34 @@ void main() {
       expect(find.textContaining('could not be shared'), findsOneWidget);
     });
 
-    testWidgets('an export that fails offline says so', (tester) async {
+    youTest('an export that fails offline says so', (tester) async {
       final g = FakeSettingsGateway()..exportFails = const NetworkException();
       await open(tester, gateway: g);
       await tester.tap(find.text('Export my data'));
       await settle(tester);
       expect(find.textContaining('You are offline'), findsOneWidget);
+    });
+
+    youTest('delete offers the export first, then goes to its own page', (
+      tester,
+    ) async {
+      final share = FakeShareAdapter();
+      final g = await open(tester, share: share);
+      await reveal(tester, find.text('Delete my account'));
+      await tester.tap(find.text('Delete my account'));
+      await settle(tester);
+      expect(find.text('Delete your account?'), findsOneWidget);
+      await tester.tap(find.text('Export first'));
+      await settle(tester);
+      expect(g.calls, contains('export'));
+      // "Export first" only exports: the page has not moved on.
+      expect(find.text('stub:${RoutePaths.deleteAccount}'), findsNothing);
+
+      await tester.tap(find.text('Delete my account'));
+      await settle(tester);
+      await tester.tap(find.text('Continue'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.deleteAccount}'), findsOneWidget);
     });
   });
 
@@ -373,106 +417,116 @@ void main() {
       return (g, settings, auth);
     }
 
-    testWidgets('loads the server\'s values and saves a change', (
-      tester,
-    ) async {
+    /// The segment [option] in the segmented row titled [row].
+    Finder segment(String row, String option) => find.descendant(
+      of: find.byWidgetPredicate(
+        (w) => w is orbit.OrbitSegRow && w.title == row,
+      ),
+      matching: find.text(option),
+    );
+
+    youTest('loads the server\'s values and saves a change', (tester) async {
       final (g, _, _) = await open(tester);
       expect(find.text('Last seen'), findsOneWidget);
-      await tester.tap(find.text('Last seen'));
-      await settle(tester);
-      await tester.tap(find.text('Nobody'));
+      await tester.tap(segment('Last seen', 'Nobody'));
       await settle(tester);
       expect(g.savedPrefs?.lastSeen, AudienceChoice.nobody);
       // "My contacts" is not offered: the contact list is not uploaded.
-      await tester.tap(find.text('Online status'));
-      await settle(tester);
       expect(find.text('My contacts'), findsNothing);
     });
 
-    testWidgets('a change that fails goes back and says why', (tester) async {
+    youTest('a change that fails goes back and says why', (tester) async {
       final g = FakeSettingsGateway()
         ..privacySaveFails = const NetworkException();
       await open(tester, gateway: g);
-      await tester.tap(find.text('Last seen'));
-      await settle(tester);
-      await tester.tap(find.text('Nobody'));
+      await tester.tap(segment('Last seen', 'Nobody'));
       await settle(tester);
       expect(find.textContaining('That was not saved'), findsOneWidget);
-      expect(find.text('Everyone'), findsWidgets);
+      expect(g.savedPrefs, isNull);
     });
 
-    testWidgets('a load failure offers a retry', (tester) async {
+    youTest('a load failure offers a retry', (tester) async {
       final g = FakeSettingsGateway()
         ..privacyLoadFails = const NetworkException();
       await open(tester, gateway: g);
-      expect(find.textContaining('You are offline'), findsOneWidget);
+      expect(find.textContaining('could not be loaded'), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
       // The local settings are still there.
       expect(find.text('Read receipts'), findsOneWidget);
     });
 
-    testWidgets('read receipts and typing are local switches', (tester) async {
+    youTest('read receipts and typing are local switches', (tester) async {
       final (_, settings, _) = await open(tester);
       expect(settings.read(EngineSettings.sendReadReceipts), isTrue);
       await tester.tap(find.text('Read receipts'));
       await settle(tester);
       expect(settings.read(EngineSettings.sendReadReceipts), isFalse);
-      await tester.tap(find.text('Typing indicators'));
+      await tester.tap(find.text('Typing indicator'));
       await settle(tester);
       expect(settings.read(EngineSettings.sendTyping), isFalse);
     });
 
-    testWidgets('the disappearing default can be set and turned off', (
+    youTest('the disappearing default can be set and turned off', (
       tester,
     ) async {
+      const row = 'Disappearing messages for new chats';
       final (_, settings, _) = await open(tester);
-      await reveal(tester, find.text('Disappearing messages'));
-      await tester.tap(find.text('Disappearing messages'));
-      await settle(tester);
-      await tester.tap(find.text('7 days'));
+      await reveal(tester, find.text(row));
+      await tester.tap(segment(row, '7 d'));
       await settle(tester);
       expect(settings.read(EngineSettings.defaultDisappearingSeconds), 604800);
 
-      await tester.tap(find.text('Disappearing messages'));
-      await settle(tester);
-      await tester.tap(find.text('Off'));
+      await tester.tap(segment(row, 'Off'));
       await settle(tester);
       expect(settings.read(EngineSettings.defaultDisappearingSeconds), isNull);
     });
 
-    testWidgets('app lock needs the phone unlock to turn on', (tester) async {
+    youTest('app lock needs the phone unlock to turn on', (tester) async {
       final (_, settings, auth) = await open(tester);
-      await reveal(tester, find.text('Lock Helix'));
+      await reveal(tester, find.text('Lock Orbit'));
       auth.passes = false;
-      await tester.tap(find.text('Lock Helix'));
+      await tester.tap(find.text('Lock Orbit'));
       await settle(tester);
       expect(settings.read(AppSettings.appLockEnabled), isFalse);
       expect(find.textContaining('unlock was not completed'), findsOneWidget);
 
       auth.passes = true;
-      await tester.tap(find.text('Lock Helix'));
+      await tester.tap(find.text('Lock Orbit'));
       await settle(tester);
       expect(settings.read(AppSettings.appLockEnabled), isTrue);
+
+      await reveal(tester, find.text('Lock again'));
+      await tester.tap(segment('Lock again', '5 min'));
+      await settle(tester);
+      expect(settings.read(AppSettings.appLockRelockAfterSeconds), 300);
     });
 
-    testWidgets('no screen lock: the app lock explains why it cannot start', (
+    youTest('no screen lock: the app lock explains why it cannot start', (
       tester,
     ) async {
       final (_, settings, auth) = await open(tester);
       auth.available = false;
-      await reveal(tester, find.text('Lock Helix'));
-      await tester.tap(find.text('Lock Helix'));
+      await reveal(tester, find.text('Lock Orbit'));
+      await tester.tap(find.text('Lock Orbit'));
       await settle(tester);
       expect(settings.read(AppSettings.appLockEnabled), isFalse);
       expect(find.textContaining('no screen lock'), findsOneWidget);
     });
 
-    testWidgets('there is no screenshot or screen-security setting', (
+    youTest('there is no screenshot or screen-security setting', (
       tester,
     ) async {
       await open(tester);
       expect(find.textContaining('creenshot'), findsNothing);
       expect(find.textContaining('screen security'), findsNothing);
+    });
+
+    youTest('the blocked row counts and opens the list', (tester) async {
+      await open(tester);
+      await reveal(tester, find.text('1 blocked person'));
+      await tester.tap(find.text('1 blocked person'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.blocked}'), findsOneWidget);
     });
 
     testWidgets('blocked list unblocks after confirmation', (tester) async {
@@ -496,7 +550,7 @@ void main() {
   });
 
   group('Notifications', () {
-    testWidgets('switches write, a muted chat can be unmuted', (tester) async {
+    youTest('switches write, a muted chat can be unmuted', (tester) async {
       useTallWindow(tester);
       final settings = FakeLocalSettings();
       final g = FakeSettingsGateway();
@@ -511,22 +565,26 @@ void main() {
       await tester.tap(find.text('Messages'));
       await settle(tester);
       expect(settings.read(AppSettings.notifyMessages), isFalse);
-      await tester.tap(find.text('Vibrate'));
+      await tester.tap(find.text('Vibrate').last);
       await settle(tester);
       expect(settings.read(AppSettings.notifyVibrate), isFalse);
       expect(settings.read(AppSettings.notificationsPreview), isFalse);
       await tester.tap(find.text('Show message previews'));
       await settle(tester);
       expect(settings.read(AppSettings.notificationsPreview), isTrue);
+      // Orbit has no ringtone of its own yet, so there is no choice.
+      expect(find.text('Ringtone'), findsNothing);
 
       expect(find.text('Family'), findsOneWidget);
+      expect(find.text('Muted'), findsOneWidget);
+      await reveal(tester, find.text('Unmute'));
       await tester.tap(find.text('Unmute'));
       await settle(tester);
       expect(g.calls, contains('unmute:c1'));
-      expect(find.text('No muted chats'), findsOneWidget);
+      expect(find.textContaining('No muted chats'), findsOneWidget);
     });
 
-    testWidgets('a phone with notifications off says so and can ask', (
+    youTest('a phone with notifications off says so and can ask', (
       tester,
     ) async {
       useTallWindow(tester);
@@ -540,16 +598,16 @@ void main() {
         ),
       );
       await settle(tester);
-      expect(find.textContaining('turned off for Helix'), findsOneWidget);
+      expect(find.textContaining('turned off for Orbit'), findsOneWidget);
       await tester.tap(find.text('Allow notifications'));
       await settle(tester);
       expect(permission.requests, 1);
-      expect(find.textContaining('turned off for Helix'), findsNothing);
+      expect(find.textContaining('turned off for Orbit'), findsNothing);
     });
   });
 
   group('Chats', () {
-    testWidgets('text size, Enter key and media policy write', (tester) async {
+    youTest('text size, Enter key and media policy write', (tester) async {
       useTallWindow(tester);
       final settings = FakeLocalSettings();
       await pumpPage(
@@ -559,8 +617,6 @@ void main() {
       );
       await settle(tester);
 
-      await tester.tap(find.text('Text size'));
-      await settle(tester);
       await tester.tap(find.text('Large'));
       await settle(tester);
       expect(settings.read(AppSettings.fontScalePercent), 115);
@@ -569,12 +625,18 @@ void main() {
       await settle(tester);
       expect(settings.read(AppSettings.enterToSend), isTrue);
 
-      await tester.tap(find.text('Videos'));
-      await settle(tester);
-      await tester.tap(find.text('On Wi-Fi only').last);
+      await reveal(tester, find.text('Videos'));
+      await tester.tap(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (w) => w is orbit.OrbitSegRow && w.title == 'Videos',
+          ),
+          matching: find.text('Wi-Fi'),
+        ),
+      );
       await settle(tester);
       expect(settings.read(AppSettings.mediaVideo), MediaDownloadPolicy.wifi);
-      // There is no theme choice: Helix has one light theme.
+      // The theme is on its own page, Appearance.
       expect(find.textContaining('Dark'), findsNothing);
     });
   });
@@ -622,12 +684,15 @@ void main() {
   });
 
   group('Storage', () {
-    testWidgets('shows what Helix keeps and how to free it', (tester) async {
+    youTest('shows what Orbit keeps and where data use is set', (tester) async {
       useTallWindow(tester);
+      final settings = FakeLocalSettings();
+      await settings.set(AppSettings.backupOverMobile, true);
       await pumpPage(
         tester,
         const StoragePage(),
         overrides: a3bOverrides(
+          settings: settings,
           storage: FakeStorageProbe(
             const StorageUsage(
               databaseBytes: 3 * 1024 * 1024,
@@ -638,11 +703,36 @@ void main() {
         stubs: [RoutePaths.chats, RoutePaths.backup],
       );
       await settle(tester);
-      expect(find.text('23 MB'), findsOneWidget);
-      expect(find.text('3.0 MB'), findsOneWidget);
+      expect(find.text('23 MB on this phone'), findsOneWidget);
+      expect(find.textContaining('3.0 MB messages and keys'), findsOneWidget);
       expect(
-        find.textContaining('delete messages or a whole chat'),
+        find.text('Photos on Wi-Fi, voice always, videos and documents never'),
         findsOneWidget,
+      );
+      expect(find.text('Allowed'), findsOneWidget);
+      await tester.tap(find.text('Download automatically'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.chats}'), findsOneWidget);
+    });
+
+    test('the download line names kinds with the same policy together', () {
+      expect(
+        downloadSummary(
+          photos: MediaDownloadPolicy.always,
+          voice: MediaDownloadPolicy.always,
+          videos: MediaDownloadPolicy.always,
+          documents: MediaDownloadPolicy.always,
+        ),
+        'Photos, voice, videos and documents always',
+      );
+      expect(
+        downloadSummary(
+          photos: MediaDownloadPolicy.never,
+          voice: MediaDownloadPolicy.wifi,
+          videos: MediaDownloadPolicy.never,
+          documents: MediaDownloadPolicy.always,
+        ),
+        'Photos and videos never, voice on Wi-Fi, documents always',
       );
     });
   });

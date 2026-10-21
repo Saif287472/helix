@@ -17,6 +17,7 @@ import 'package:helix_remote/core/platform/share_adapter.dart';
 import 'package:helix_remote/core/platform/storage_usage.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/core/security/device_auth.dart';
+import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/features/backup/application/backup_gateway.dart';
 import 'package:helix_remote/features/backup/application/backup_models.dart';
 import 'package:helix_remote/features/devices/application/devices_gateway.dart';
@@ -856,6 +857,7 @@ List<Override> a3bOverrides({
           ),
     ),
     clockProvider.overrideWithValue(() => clock),
+    orbitThemeLibraryProvider.overrideWithValue(orbitTestThemes),
     localSettingsProvider.overrideWithValue(store),
     if (backup != null) backupGatewayProvider.overrideWithValue(backup),
     if (devices != null) devicesGatewayProvider.overrideWithValue(devices),

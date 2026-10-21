@@ -29,6 +29,7 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 2cccf91 | Batch 7: groups |
 | 6e4b53a | S3: the server lists a group's live invite links (groups migration 4) |
 | 49a75a4 | **WIP** batch 8: You, profile, Appearance (unfinished) |
+| (next) | Batch 8: the settings connectors and the tests (still WIP: items below) |
 
 ## Batch 8, what is left
 
@@ -42,32 +43,30 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   (`features/settings/presentation/appearance_page.dart`), and Edit profile
   (`features/profile/presentation/profile_page.dart`).
 
+Done after 49a75a4 (the commit after it):
+- The five connectors (`privacy_page`, `notifications_page`, `chats_page`,
+  `storage_page`, `account_page`), with `privacyViewerNameProvider`, the
+  muted lines and lock-screen date, `downloadSummary`,
+  `backupOverMobileSettingProvider`, `AccountOverview.createdAt` and
+  `accountSinceProvider`. `choice_sheet.dart` is gone (nothing used it).
+- The tests: `settings_pages_test`, `a3b_rules_test`, `privacy_number_test`,
+  `delete_account_test` and `profile_page_test` ported to the Orbit
+  screens; `you_checkup_test` is new (the checkup rules, the theme choice,
+  Appearance). Tests get the built-in themes from `a3bOverrides`.
+- orbit_ui, behaviour only: segments answer taps 4px above and below and
+  report a 48px target; "See all checks" reports 48px; the lock-screen
+  preview is read as one line; Privacy waits for the phone-number dialog's
+  answer (it read it before the dialog's 60ms-late Turn on, so a typed
+  number always counted as Cancel).
+- Not run: the pixel check (`compare.sh`) on the batch 8 keys.
+
 To do:
-1. **Connectors** in `features/settings/presentation/`, each replacing the
-   old page of the same file name, over the existing providers:
-   - `privacy_page.dart`: `PrivacyController`, `SettingsActions`, app lock
-     and blocked. The keys `onChanged` sends: lastSeen, online, groups,
-     receipts, typing, timer ('Off', '24 h', '7 d', '90 d'), byNumber,
-     byName, lock, lockAfter ('Now', '1 min', '5 min', '30 min').
-     `askNumber` comes from `PrivacyState.needsNumber`. The viewer's name is
-     the most recent chat's name, or "Someone". Read the chats through
-     `core/chat/chat_gateway.dart`, because a feature may not import another.
-   - `notifications_page.dart`: alerts, sound, vibrate and previews, the OS
-     permission, and muted chats ("Muted" or "Muted until …").
-     `showRingtone: false` until an Orbit ringtone sound is bundled (it needs
-     a sound from the owner; log it in DEVIATIONS).
-   - `chats_page.dart`: text size 90/100/115/130, Enter sends, and the four
-     media policies (`DownloadWhen` ↔ `MediaDownloadPolicy`).
-   - `storage_page.dart`: `storageSummaryProvider`. The chat list stays empty
-     until E2 is built.
-   - `account_page.dart`: the overview, `AccountActions` (export, sign out),
-     and delete. "Export first" only exports. For "Since Sep 2026", add
-     `createdAt` in `EngineSettingsGateway.account()`.
-2. **Tests.** `test/settings/settings_pages_test.dart` and
-   `a3b_rules_test.dart` still use the deleted `SettingsTab`, and
-   `test/profile/profile_page_test.dart` tests the old page. Port them to the
-   Orbit screens and keep what each one proves. Add tests for the checkup
-   rules, the theme choice and Appearance.
+1. Run the pixel check on the batch 8 keys (the segment change moves no
+   pixels, but check).
+2. Log in DEVIATIONS "Part B batch 8": no ringtone row (needs a sound
+   from the owner); the storage bar is messages against all media and the
+   chat list is empty until E2; the notifications preview text is a fixed
+   sample; "Export first" only exports.
 3. **The approved backend items**, each as its own commit (helix-feature
    skill):
    - S1: the share link `/u/<~name>`, app links and scan-to-chat.

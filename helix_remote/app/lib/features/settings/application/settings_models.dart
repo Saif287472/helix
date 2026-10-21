@@ -9,6 +9,7 @@ final class AccountOverview {
     this.hasPassword = false,
     this.passwordUpdatedAt,
     this.phoneKnownOnDevice = true,
+    this.createdAt,
   });
 
   /// `+88017*****01`. Never the whole number.
@@ -21,6 +22,9 @@ final class AccountOverview {
   /// linked rather than signed in with a password does not, and then checking
   /// the current password needs the number typed once.
   final bool phoneKnownOnDevice;
+
+  /// When the account was made (the server's `created_at`).
+  final DateTime? createdAt;
 }
 
 /// The server refused to delete the account on this device's word alone: it

@@ -142,6 +142,7 @@ final class EngineSettingsGateway implements SettingsGateway {
       hasPassword: info.hasPassword,
       passwordUpdatedAt: info.passwordUpdatedAt,
       phoneKnownOnDevice: phone != null,
+      createdAt: info.createdAt,
     );
   }
 

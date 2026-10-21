@@ -7,6 +7,7 @@ import 'package:helix_remote/features/profile/presentation/profile_page.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException, NetworkException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 import '../support/a3b_fakes.dart';
 
@@ -19,6 +20,15 @@ final Uint8List _png = Uint8List.fromList(const [
   0x00, 0x05, 0xfe, 0x02, 0xfe, 0xa7, 0x35, 0x81, 0x84, 0x00, 0x00, 0x00,
   0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
+
+/// A widget test that ends by taking the page down and letting the last Orbit
+/// toast (4 s at most) go, so no timer is left pending.
+void profileTest(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      await body(tester);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
 
 void main() {
   Future<FakeProfileGateway> open(
@@ -42,41 +52,43 @@ void main() {
     return profile;
   }
 
-  Finder field(String label) => find.widgetWithText(TextField, label);
+  /// The text in the Orbit field labelled [label].
+  Finder field(String label) => find.descendant(
+    of: find.widgetWithText(orbit.OrbitTextField, label),
+    matching: find.byType(EditableText),
+  );
 
-  testWidgets('starts from the saved profile and says who can see what', (
+  String textOf(WidgetTester tester, String label) =>
+      tester.widget<EditableText>(field(label)).controller.text;
+
+  profileTest('starts from the saved profile and says who sees what', (
     tester,
   ) async {
     await open(tester);
+    expect(textOf(tester, 'Name'), 'Anna Khan');
+    expect(textOf(tester, 'About'), 'Busy');
     expect(
-      tester.widget<TextField>(field('Name')).controller!.text,
-      'Anna Khan',
-    );
-    expect(tester.widget<TextField>(field('About')).controller!.text, 'Busy');
-    expect(
-      find.textContaining('Only people you have messaged'),
+      find.textContaining(RegExp('who sees what', caseSensitive: false)),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('stored on the server, not encrypted'),
-      findsOneWidget,
-    );
-    expect(find.text('+88017*****01'), findsOneWidget);
-    // The number is masked, never complete.
+    // ADR-030: the operator sees the name; about and photo are encrypted.
+    expect(find.textContaining('and Orbit’s operator'), findsOneWidget);
+    expect(find.text('Only people you message'), findsOneWidget);
+    // The number is never shown complete.
     expect(find.textContaining('88017123'), findsNothing);
   });
 
-  testWidgets('saves the name and about together', (tester) async {
+  profileTest('saves the name and about together', (tester) async {
     final profile = await open(tester);
     await tester.enterText(field('Name'), '  Anna K  ');
     await tester.enterText(field('About'), 'At work');
     await tester.tap(find.text('Save'));
     await settle(tester);
     expect(profile.calls, contains('save:Anna K:At work'));
-    expect(find.text('Saved.'), findsOneWidget);
+    expect(find.text('Profile saved'), findsOneWidget);
   });
 
-  testWidgets('an empty name is refused before anything is sent', (
+  profileTest('an empty name is refused before anything is sent', (
     tester,
   ) async {
     final profile = await open(tester);
@@ -87,7 +99,7 @@ void main() {
     expect(profile.calls.where((c) => c.startsWith('save')), isEmpty);
   });
 
-  testWidgets('offline: save fails with words, not an exception', (
+  profileTest('offline: save fails with words, not an exception', (
     tester,
   ) async {
     final profile = FakeProfileGateway()..saveFails = const NetworkException();
@@ -98,14 +110,16 @@ void main() {
     expect(find.textContaining('NetworkException'), findsNothing);
   });
 
-  group('~Helix name', () {
-    testWidgets('claims a normalised name', (tester) async {
+  group('~Orbit name', () {
+    profileTest('Save claims a normalised name with the profile', (
+      tester,
+    ) async {
       final profile = await open(tester);
-      await tester.enterText(field('Your ~name'), '~Anna.K2');
-      await tester.tap(find.text('Save ~name'));
+      await tester.enterText(field('~Orbit name'), 'Anna.K2');
+      await tester.tap(find.text('Save'));
       await settle(tester);
       expect(profile.calls, contains('helix:anna.k2'));
-      expect(find.text('Your ~name is saved.'), findsOneWidget);
+      expect(find.text('Profile saved'), findsOneWidget);
     });
 
     for (final (input, message) in [
@@ -113,17 +127,19 @@ void main() {
       ('1abc', 'Names start with a letter.'),
       ('an na', 'Use only letters, numbers, dots and underscores.'),
     ]) {
-      testWidgets('"$input" is refused locally', (tester) async {
+      profileTest('"$input" is refused locally', (tester) async {
         final profile = await open(tester);
-        await tester.enterText(field('Your ~name'), input);
-        await tester.tap(find.text('Save ~name'));
-        await settle(tester);
+        await tester.enterText(field('~Orbit name'), input);
+        await tester.pump();
         expect(find.text(message), findsOneWidget);
+        await tester.tap(find.text('Save'));
+        await settle(tester);
+        expect(find.text('Fix your ~name first'), findsOneWidget);
         expect(profile.calls.where((c) => c.startsWith('helix')), isEmpty);
       });
     }
 
-    testWidgets(
+    profileTest(
       'the server refusing a name (taken or staff-like) is explained',
       (tester) async {
         final profile = FakeProfileGateway()
@@ -132,28 +148,28 @@ void main() {
             code: ErrorCode.nameTaken,
           );
         await open(tester, gateway: profile);
-        await tester.enterText(field('Your ~name'), 'support_team');
-        await tester.tap(find.text('Save ~name'));
+        await tester.enterText(field('~Orbit name'), 'support_team');
+        await tester.tap(find.text('Save'));
         await settle(tester);
         expect(find.text(helixNameUnavailable), findsOneWidget);
-        expect(find.textContaining('mistaken for Helix staff'), findsWidgets);
+        expect(find.text('Profile saved'), findsNothing);
       },
     );
 
-    testWidgets('removing a name asks first', (tester) async {
+    profileTest('removing a name asks first', (tester) async {
       final profile = await open(tester);
       await reveal(tester, find.text('Remove my ~name'));
       await tester.tap(find.text('Remove my ~name'));
       await settle(tester);
       expect(find.text('Remove your ~name?'), findsOneWidget);
-      await tester.tap(find.text('Remove'));
+      await tester.tap(find.text('Remove').last);
       await settle(tester);
       expect(profile.calls, contains('helix:clear'));
     });
   });
 
   group('photo', () {
-    testWidgets('choosing a photo keeps it on this phone', (tester) async {
+    profileTest('choosing a photo keeps it on this phone', (tester) async {
       final avatars = FakeAvatarStore();
       await open(
         tester,
@@ -164,15 +180,14 @@ void main() {
       await settle(tester);
       expect(avatars.saved, _png);
       expect(find.text('Photo updated.'), findsOneWidget);
-      expect(find.text('Remove photo'), findsOneWidget);
-      expect(find.textContaining('kept on this phone'), findsOneWidget);
+      expect(find.text('Change photo'), findsOneWidget);
 
-      await tester.tap(find.text('Remove photo'));
+      await tester.tap(find.text('Remove'));
       await settle(tester);
       expect(avatars.saved, isNull);
     });
 
-    testWidgets('backing out of the picker changes nothing', (tester) async {
+    profileTest('backing out of the picker changes nothing', (tester) async {
       final avatars = FakeAvatarStore();
       await open(tester, images: FakeProfileImageSource(), avatars: avatars);
       await tester.tap(find.text('Choose a photo'));
@@ -181,7 +196,7 @@ void main() {
       expect(find.text('Photo updated.'), findsNothing);
     });
 
-    testWidgets('a file that is not a picture is explained', (tester) async {
+    profileTest('a file that is not a picture is explained', (tester) async {
       await open(tester, images: FakeProfileImageSource(fails: true));
       await tester.tap(find.text('Choose a photo'));
       await settle(tester);
@@ -207,7 +222,7 @@ void main() {
     });
   });
 
-  testWidgets('works at twice the text size', (tester) async {
+  profileTest('works at twice the text size', (tester) async {
     await pumpPage(
       tester,
       const ProfilePage(),
@@ -216,6 +231,6 @@ void main() {
     );
     await settle(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Edit profile'), findsWidgets);
   });
 }

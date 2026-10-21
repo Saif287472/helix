@@ -68,7 +68,7 @@ void main() {
     await settle(tester);
   }
 
-  testWidgets('delete can start with an export', (tester) async {
+  testWidgets('"Export first" only exports', (tester) async {
     final share = FakeShareAdapter();
     final g = await open(tester, share: share);
     await reveal(tester, find.text('Delete my account'));
@@ -78,7 +78,10 @@ void main() {
     await settle(tester);
     expect(g.calls, contains('export'));
     expect(share.shared, hasLength(1));
-    expect(find.text('This cannot be undone'), findsOneWidget);
+    // The delete page is a step the person takes again, after the export.
+    expect(find.text('This cannot be undone'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('cancelling anywhere deletes nothing', (tester) async {

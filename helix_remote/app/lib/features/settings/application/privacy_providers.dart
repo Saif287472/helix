@@ -1,9 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/chat/chat_gateway.dart';
+import 'package:helix_remote/core/chat/chat_naming.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
+import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/settings/application/settings_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
+import 'package:helix_remote_db/helix_remote_db.dart' show ConversationRow;
 
 /// Server-side privacy: who may see last seen and online, who may add this
 /// account to a group, and whether people can find it by number or `~name`.
@@ -158,6 +163,28 @@ List<AudienceChoice> audienceChoicesFor(AudienceChoice current) => [
   AudienceChoice.nobody,
 ];
 
+/// Who the "What … sees" preview is drawn for: the person in your most
+/// recent one-to-one chat, or "Someone" when there is none.
+final privacyViewerNameProvider = StreamProvider.autoDispose<String>((
+  ref,
+) async* {
+  final gateway = await ref.watch(chatGatewayProvider.future);
+  final people = ref.watch(peopleDirectoryProvider).value;
+  yield* gateway.watchChats().map((chats) {
+    ConversationRow? latest;
+    for (final item in chats) {
+      final chat = item.conversation;
+      if (peerOfConversation(chat.id) == null) continue;
+      final at = chat.lastMessageAt;
+      if (at == null) continue;
+      if (latest == null || at.isAfter(latest.lastMessageAt!)) latest = chat;
+    }
+    if (latest == null || people == null) return 'Someone';
+    final name = chatTitleOf(latest, people).trim();
+    return name.isEmpty ? 'Someone' : name;
+  });
+});
+
 // ------------------------------------------------------------- blocked list
 
 final blockedProvider = StreamProvider.autoDispose<List<BlockedPerson>>(
@@ -197,6 +224,28 @@ final class BlockedActions extends Notifier<BlockedActionState> {
 
 final mutedChatsProvider = StreamProvider.autoDispose<List<MutedChat>>(
   (ref) => ref.watch(settingsGatewayProvider).watchMuted(),
+);
+
+/// A muted chat's line: "Muted", or "Muted until Today, 18:00".
+String mutedLabel(MutedChat chat, DateTime now) {
+  final until = chat.until;
+  return until == null ? 'Muted' : 'Muted until ${formatWhen(until, now)}';
+}
+
+/// The muted chats with their lines, against the clock.
+final mutedLinesProvider =
+    Provider.autoDispose<AsyncValue<List<(MutedChat, String)>>>((ref) {
+      final now = ref.watch(clockProvider)();
+      return ref
+          .watch(mutedChatsProvider)
+          .whenData(
+            (chats) => [for (final c in chats) (c, mutedLabel(c, now))],
+          );
+    });
+
+/// Today, as the lock-screen preview shows it.
+final lockScreenDateProvider = Provider.autoDispose<String>(
+  (ref) => formatLongDay(ref.watch(clockProvider)()),
 );
 
 final mutedActionsProvider = Provider<MutedActions>(MutedActions.new);
