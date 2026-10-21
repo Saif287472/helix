@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
@@ -217,6 +218,7 @@ final class CallNotificationHandler {
   PendingCallDecision? _pending;
   StreamSubscription<CallNotificationResponse>? _responses;
   StreamSubscription<Object?>? _missed;
+  ProviderSubscription<AsyncValue<CallsPort>>? _ports;
   ProviderSubscription<CallScreenState?>? _calls;
 
   void start() {
@@ -231,27 +233,33 @@ final class CallNotificationHandler {
     _calls = _ref.listen<CallScreenState?>(callScreenStateProvider, (_, next) {
       if (next != null) unawaited(_applyPending(next));
     });
-    unawaited(_listenMissed());
+    _listenMissed();
   }
 
-  Future<void> _listenMissed() async {
-    try {
-      final port = await _ref.read(callsPortProvider.future);
+  /// Follows the engine that is running, so a switch of account keeps
+  /// raising "Missed call" for the account now open.
+  void _listenMissed() {
+    _ports = _ref.listen<AsyncValue<CallsPort>>(callsPortProvider, (_, next) {
+      unawaited(_missed?.cancel());
+      _missed = null;
+      final port = next.isLoading ? null : next.value;
+      // No runtime (signed out): nothing rings, so nothing is missed.
+      if (port == null) return;
+      final account = _ref.read(runtimeProvider).value?.account;
       _missed = port.missedCalls.listen((event) {
         final lifecycle = WidgetsBinding.instance.lifecycleState;
         if (lifecycle == AppLifecycleState.resumed) return;
         final people =
             _ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
-        unawaited(_showMissed(event, people));
+        unawaited(_showMissed(event, people, account));
       });
-    } on Object {
-      // No runtime (signed out): nothing rings, so nothing is missed.
-    }
+    }, fireImmediately: true);
   }
 
   Future<void> _showMissed(
     MissedCallEvent event,
     PeopleDirectory people,
+    String? account,
   ) async {
     var showCaller = false;
     try {
@@ -265,12 +273,14 @@ final class CallNotificationHandler {
       callId: event.notice.messageId,
       callerName: people.displayOf(event.notice.sender),
       showCaller: showCaller,
+      account: account,
     );
   }
 
   void dispose() {
     _responses?.cancel();
     _missed?.cancel();
+    _ports?.close();
     _calls?.close();
   }
 

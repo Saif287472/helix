@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/notifications/call_notifications.dart';
+import 'package:helix_remote/core/notifications/notification_accounts.dart';
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 
@@ -268,6 +272,82 @@ void main() {
       c.read(accountsProvider.notifier).leave();
       await c.read(accountsProvider.notifier).switchTo(pending);
       expect(c.read(activeAccountProvider), isNull);
+    });
+
+    test(
+      'a notification that started the app opens its account, remembered',
+      () async {
+        final (first, second) = await two(container());
+        final c = container();
+        await c.read(accountsProvider.notifier).restore(prefer: first);
+        expect(c.read(activeAccountProvider)?.id, first);
+        final next = container();
+        await next.read(accountsProvider.notifier).restore();
+        expect(next.read(activeAccountProvider)?.id, first);
+        // One no longer here is ignored.
+        final other = container();
+        await other.read(accountsProvider.notifier).restore(prefer: 'gone');
+        expect(other.read(activeAccountProvider)?.id, first);
+        expect(second, isNot(first));
+      },
+    );
+
+    test('a press on another account\'s notification opens it', () async {
+      final presses = StreamController<NotificationResponse>();
+      addTearDown(presses.close);
+      final c = ProviderContainer(
+        overrides: [
+          accountSlotStoreProvider.overrideWithValue(AccountSlotStore()),
+          secureKeyStoreProvider.overrideWithValue(keys),
+          clockProvider.overrideWithValue(() => at),
+          notificationResponsesProvider.overrideWithValue(presses.stream),
+        ],
+      );
+      addTearDown(c.dispose);
+      final (first, second) = await two(c);
+      c.read(notificationAccountSwitchProvider);
+
+      presses.add(
+        NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: CallNotifications.payloadFor('c1', account: first),
+        ),
+      );
+      await pumpEventQueue();
+      expect(c.read(activeAccountProvider)?.id, first);
+
+      // A notification from before there were several accounts, or not one
+      // of this device's: nothing changes.
+      presses.add(
+        const NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: 'call_id=c2',
+        ),
+      );
+      presses.add(
+        const NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: 'account=gone',
+        ),
+      );
+      await pumpEventQueue();
+      expect(c.read(activeAccountProvider)?.id, first);
+      expect(second, isNot(first));
+    });
+
+    test('notifications name the account only on a shared device', () async {
+      final c = container();
+      final (first, second) = await two(c);
+      var slots = c.read(accountsProvider);
+      expect(slots.notificationLabel(first), 'Number ending 0001');
+      await c.read(accountsProvider.notifier).describe(second, name: 'Work');
+      slots = c.read(accountsProvider);
+      expect(slots.notificationLabel(second), 'Work');
+      await c.read(accountsProvider.notifier).removeCurrent();
+      expect(c.read(accountsProvider).notificationLabel(first), isNull);
     });
 
     test('removing the account on screen opens the other one', () async {

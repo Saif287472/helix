@@ -26,6 +26,10 @@ abstract interface class PushTokens {
 
   /// Every token the platform rotates to, after [prepare].
   Stream<String> get refreshes;
+
+  /// Wake-ups that arrive while the app is in front, after [prepare]: the
+  /// platform hands those to the running app, not the background handler.
+  Stream<void> get wakeUps;
 }
 
 /// Firebase Cloud Messaging tokens, on Android.
@@ -89,4 +93,9 @@ final class PushTokenSource implements PushTokens {
   @override
   Stream<String> get refreshes =>
       _messaging?.onTokenRefresh ?? const Stream<String>.empty();
+
+  @override
+  Stream<void> get wakeUps => _messaging == null
+      ? const Stream<void>.empty()
+      : FirebaseMessaging.onMessage.map((_) {});
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:helix_remote/core/platform/app_storage.dart';
 
 /// The local notifications the app raises.
 ///
@@ -101,18 +102,28 @@ abstract final class LocalNotifications {
     return await android.requestNotificationsPermission() ?? false;
   }
 
-  /// One notification for a run of new messages, so a busy chat does not fill
-  /// the shade. It carries no sender and no text.
+  /// The message notification's id for [account]: one per account, so one
+  /// account's run never replaces another's. The first account keeps 0, the
+  /// id from before there were several.
+  static int messagesIdFor(String account) => account == AppPaths.firstAccount
+      ? 0
+      : ('messages-$account'.hashCode & 0x7fffffff) | 1;
+
+  /// One notification for a run of new messages of [account], so a busy chat
+  /// does not fill the shade. It carries no sender and no text.
   ///
   /// [sound] and [vibrate] pick the channel (Settings > Notifications).
   /// [preview] is the text of a single new message, passed only when the
   /// person turned message previews on; otherwise the body says nothing about
-  /// what arrived.
+  /// what arrived. [accountLabel] names the account, on a device with
+  /// several.
   static Future<void> showMessages({
+    required String account,
     required int count,
     bool sound = true,
     bool vibrate = true,
     String? preview,
+    String? accountLabel,
   }) async {
     final plugin = _plugin;
     if (plugin == null || count <= 0) return;
@@ -123,9 +134,9 @@ abstract final class LocalNotifications {
       (false, true) => _messagesVibrateOnly,
     };
     await plugin.show(
-      // One id for the whole group: a newer run replaces an older one rather
-      // than stacking up.
-      id: 0,
+      // One id per account: a newer run replaces an older one rather than
+      // stacking up.
+      id: messagesIdFor(account),
       title: count == 1 ? 'New message' : '$count new messages',
       body: preview ?? 'Open Helix to read them.',
       notificationDetails: NotificationDetails(
@@ -138,16 +149,54 @@ abstract final class LocalNotifications {
           priority: Priority.defaultPriority,
           groupKey: 'helix_messages',
           onlyAlertOnce: true,
+          subText: accountLabel,
         ),
       ),
+      payload: NotificationPayload.encode({
+        NotificationPayload.account: account,
+      }),
     );
   }
 
-  /// Clears the message notification, once the app has caught up.
-  static Future<void> clearMessages() async => _plugin?.cancel(id: 0);
+  /// Clears [account]'s message notification, once the app has caught up.
+  static Future<void> clearMessages(String account) async =>
+      _plugin?.cancel(id: messagesIdFor(account));
+
+  /// The payload of the notification that started the app, if one did.
+  static Future<String?> launchPayload() async {
+    final details = await _plugin?.getNotificationAppLaunchDetails();
+    if (details == null || !details.didNotificationLaunchApp) return null;
+    return details.notificationResponse?.payload;
+  }
 
   static AndroidFlutterLocalNotificationsPlugin? _android() => _plugin
       ?.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
       >();
+}
+
+/// What a notification's payload carries: `key=value` fields joined by `;`.
+/// Ids only (a call id, an account id), never content.
+abstract final class NotificationPayload {
+  static const account = 'account';
+  static const callId = 'call_id';
+
+  static String encode(Map<String, String> fields) =>
+      [for (final e in fields.entries) '${e.key}=${e.value}'].join(';');
+
+  static Map<String, String> decode(String? payload) {
+    final fields = <String, String>{};
+    if (payload == null) return fields;
+    for (final part in payload.split(';')) {
+      final eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      final value = part.substring(eq + 1);
+      if (value.isNotEmpty) fields[part.substring(0, eq)] = value;
+    }
+    return fields;
+  }
+
+  /// The account a notification belongs to; null for one from before there
+  /// were several.
+  static String? accountOf(String? payload) => decode(payload)[account];
 }

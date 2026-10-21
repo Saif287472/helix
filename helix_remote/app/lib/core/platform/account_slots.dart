@@ -121,6 +121,18 @@ final class AccountSlots {
     return list;
   }
 
+  /// What a notification for account [id] calls it: nothing on a device with
+  /// one account, else its name, else the end of its number.
+  String? notificationLabel(String id) {
+    if (signedIn.length < 2) return null;
+    final slot = byId(id);
+    if (slot == null) return null;
+    if (slot.name.isNotEmpty) return slot.name;
+    final digits = slot.e164.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 4) return null;
+    return 'Number ending ${digits.substring(digits.length - 4)}';
+  }
+
   /// [slot] in place of the one with its id, or added.
   AccountSlots put(AccountSlot slot, {String? active}) => AccountSlots(
     active: active ?? this.active,

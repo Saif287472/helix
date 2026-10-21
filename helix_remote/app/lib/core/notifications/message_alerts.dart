@@ -16,8 +16,10 @@ typedef ReadFlag = Future<bool> Function(Setting<bool> setting);
 typedef ShowMessageAlert =
     Future<void> Function(
       ReadFlag read, {
+      required String account,
       required int count,
       IncomingNotice? only,
+      String? accountLabel,
     });
 
 /// Which new messages alert, and the one notification for them.
@@ -38,20 +40,27 @@ abstract final class MessageAlerts {
     );
   }
 
-  /// Shows, or replaces, the one notification for [count] new messages.
-  /// [only] is the message when there is exactly one: its text appears only
-  /// when the person turned previews on, and it comes from this phone's own
-  /// decrypted copy, never from a push.
+  /// Shows, or replaces, [account]'s one notification for [count] new
+  /// messages. [only] is the message when there is exactly one: its text
+  /// appears only when the person turned previews on, and it comes from this
+  /// phone's own decrypted copy, never from a push. [accountLabel] (on a
+  /// device with several accounts) follows the same setting: it names whose
+  /// phone this is.
   static Future<void> show(
     ReadFlag read, {
+    required String account,
     required int count,
     IncomingNotice? only,
+    String? accountLabel,
   }) async {
+    final previews = await read(AppSettings.notificationsPreview);
     await LocalNotifications.showMessages(
+      account: account,
       count: count,
       sound: await read(AppSettings.notifySound),
       vibrate: await read(AppSettings.notifyVibrate),
       preview: await preview(read, count: count, only: only),
+      accountLabel: previews ? accountLabel : null,
     );
   }
 
@@ -79,37 +88,75 @@ abstract final class MessageAlerts {
 final class RunningAppAlerts {
   RunningAppAlerts({
     required this.inForeground,
+    required this.onScreen,
+    String? Function(String account)? label,
     ShowMessageAlert? show,
-    Future<void> Function()? clear,
-  }) : _show = show ?? MessageAlerts.show,
+    Future<void> Function(String account)? clear,
+  }) : _label = label ?? _noLabel,
+       _show = show ?? MessageAlerts.show,
        _clear = clear ?? LocalNotifications.clearMessages;
 
   /// Whether the person is looking at the app (then nothing is raised).
   final bool Function() inForeground;
-  final ShowMessageAlert _show;
-  final Future<void> Function() _clear;
 
+  /// The account on screen, or null on sign-in.
+  final String? Function() onScreen;
+
+  final String? Function(String account) _label;
+  final ShowMessageAlert _show;
+  final Future<void> Function(String account) _clear;
+
+  static String? _noLabel(String account) => null;
+
+  /// The account whose run [_count] counts.
+  String? _account;
   int _count = 0;
 
-  /// A new message arrived through the running engine.
-  Future<void> onNotice(IncomingNotice notice, ReadFlag read) async {
+  /// A new message arrived for [account] through the running engine.
+  Future<void> onNotice(
+    IncomingNotice notice,
+    ReadFlag read, {
+    required String account,
+  }) async {
     if (inForeground()) return;
     try {
       if (!await MessageAlerts.alerts(notice, read)) return;
+      if (_account != account) {
+        _account = account;
+        _count = 0;
+      }
       final count = ++_count;
-      await _show(read, count: count, only: count == 1 ? notice : null);
+      await _show(
+        read,
+        account: account,
+        count: count,
+        only: count == 1 ? notice : null,
+        accountLabel: _label(account),
+      );
     } on Object {
       // Settings unreadable (the runtime is closing) or no notifications on
       // this platform: the message is in the chat list either way.
     }
   }
 
-  /// Back in the foreground: the chats are on screen, so the notification
-  /// goes, and the next background run counts from one again.
+  /// [account]'s engine started (a launch or a switch): with the app in
+  /// front its chats are on screen, so its notification goes.
+  Future<void> opened(String account) async {
+    if (inForeground()) await _clearFor(account);
+  }
+
+  /// Back in the foreground: the chats are on screen, so their account's
+  /// notification goes, and the next background run counts from one again.
+  /// Other accounts' notifications stay until they are opened.
   Future<void> resumed() async {
-    _count = 0;
+    final account = onScreen();
+    if (account != null) await _clearFor(account);
+  }
+
+  Future<void> _clearFor(String account) async {
+    if (_account == account) _count = 0;
     try {
-      await _clear();
+      await _clear(account);
     } on Object {
       // No notifications on this platform.
     }
@@ -129,17 +176,29 @@ bool appInForeground() => switch (WidgetsBinding.instance.lifecycleState) {
 /// Follows the running engine's new-message events for [RunningAppAlerts].
 /// Read once, by the app root, and kept for the whole run.
 final runningAppAlertsProvider = Provider<RunningAppAlerts>((ref) {
-  final alerts = RunningAppAlerts(inForeground: appInForeground);
+  final alerts = RunningAppAlerts(
+    inForeground: appInForeground,
+    onScreen: () => ref.read(activeAccountProvider)?.id,
+    label: (account) => ref.read(accountsProvider).notificationLabel(account),
+  );
   StreamSubscription<EngineEvent>? events;
   ref.listen<AsyncValue<HelixRuntime>>(runtimeProvider, (_, next) {
     unawaited(events?.cancel());
     events = null;
     if (next.isLoading) return;
-    final engine = next.value?.engine;
-    if (engine == null) return;
+    final runtime = next.value;
+    if (runtime == null) return;
+    final engine = runtime.engine;
+    unawaited(alerts.opened(runtime.account));
     events = engine.events.listen((event) {
       if (event is IncomingMessageEvent) {
-        unawaited(alerts.onNotice(event.notice, engine.settings.get));
+        unawaited(
+          alerts.onNotice(
+            event.notice,
+            engine.settings.get,
+            account: runtime.account,
+          ),
+        );
       }
     });
   }, fireImmediately: true);

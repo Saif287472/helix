@@ -40,23 +40,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   DartPluginRegistrant.ensureInitialized();
   try {
     await Firebase.initializeApp();
-    final accounts = await AccountSlotStore().load();
-    final keys = SecureKeyStore();
-    // Signed out everywhere: nothing to wake for.
-    for (final account in accounts.signedIn) {
-      final uri = Uri.tryParse(account.server);
-      if (uri == null || !uri.hasScheme) continue;
-      try {
-        await _wakeAccount(account.id, uri, keys);
-      } on EngineAlreadyRunning {
-        // The running app owns this account's database and fetches the
-        // mailbox itself; a second engine here would race it over the same
-        // ratchets.
-      } on Object catch (error) {
-        // One account that cannot be read does not stop the others.
-        debugPrint('[push] background wake failed: ${error.runtimeType}');
-      }
-    }
+    await wakeSignedInAccounts();
   } on Object catch (error) {
     // A background isolate must never crash the app, and must never log
     // anything that could name content, a key or a number.
@@ -64,7 +48,42 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-Future<void> _wakeAccount(String account, Uri uri, SecureKeyStore keys) async {
+/// Reads the mailbox of every account signed in on this device, except
+/// [except] (the one the running app has open), raising notifications for
+/// what arrived. Shared by the background handler and, for the accounts not
+/// on screen, the running app (`ForegroundWakes`).
+Future<void> wakeSignedInAccounts({String? except}) async {
+  final accounts = await AccountSlotStore().load();
+  final keys = SecureKeyStore();
+  // Signed out everywhere: nothing to wake for.
+  for (final account in accounts.signedIn) {
+    if (account.id == except) continue;
+    final uri = Uri.tryParse(account.server);
+    if (uri == null || !uri.hasScheme) continue;
+    try {
+      await _wakeAccount(
+        account.id,
+        uri,
+        keys,
+        label: accounts.notificationLabel(account.id),
+      );
+    } on EngineAlreadyRunning {
+      // The running app owns this account's database and fetches the
+      // mailbox itself; a second engine here would race it over the same
+      // ratchets.
+    } on Object catch (error) {
+      // One account that cannot be read does not stop the others.
+      debugPrint('[push] wake failed: ${error.runtimeType}');
+    }
+  }
+}
+
+Future<void> _wakeAccount(
+  String account,
+  Uri uri,
+  SecureKeyStore keys, {
+  String? label,
+}) async {
   final file = await AppPaths.databaseFile(account);
   final key = await keys.keyFor(account, file);
   final runtime = await HelixRuntime.open(
@@ -97,11 +116,16 @@ Future<void> _wakeAccount(String account, Uri uri, SecureKeyStore keys) async {
       await LocalNotifications.init();
       await MessageAlerts.show(
         settings.get,
+        account: account,
         count: audible.length,
         only: audible.length == 1 ? audible.first : null,
+        accountLabel: label,
       );
     }
     if (summary.pendingCalls.isNotEmpty) {
+      // The call channel lives on the plugin, which a fresh isolate has not
+      // started unless a message was shown first.
+      await LocalNotifications.init();
       await CallNotifications.init();
     }
     // A call that rang while the app was closed: the offer waits on the
@@ -122,6 +146,8 @@ Future<void> _wakeAccount(String account, Uri uri, SecureKeyStore keys) async {
             ? PersonName.unknown(call.caller).display
             : PersonName.fromRow(person).display,
         fullScreen: true,
+        // Its buttons open this account before the call rings.
+        account: account,
       );
     }
   } finally {

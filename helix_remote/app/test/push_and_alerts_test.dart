@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
+import 'package:helix_remote/core/notifications/call_notifications.dart';
+import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote/core/push/push_registration.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
@@ -139,20 +141,38 @@ void main() {
   });
 
   group('RunningAppAlerts (E-01)', () {
-    late List<({int count, IncomingNotice? only})> shown;
-    late int cleared;
+    late List<
+      ({String account, int count, IncomingNotice? only, String? label})
+    >
+    shown;
+    late List<String> cleared;
     late bool foreground;
+    late String? onScreen;
     late RunningAppAlerts alerts;
 
     setUp(() {
       shown = [];
-      cleared = 0;
+      cleared = [];
       foreground = false;
+      onScreen = 'primary';
       alerts = RunningAppAlerts(
         inForeground: () => foreground,
-        show: (read, {required count, only}) async =>
-            shown.add((count: count, only: only)),
-        clear: () async => cleared++,
+        onScreen: () => onScreen,
+        label: (account) => account == 'b' ? 'Work' : null,
+        show:
+            (
+              read, {
+              required account,
+              required count,
+              only,
+              accountLabel,
+            }) async => shown.add((
+              account: account,
+              count: count,
+              only: only,
+              label: accountLabel,
+            )),
+        clear: (account) async => cleared.add(account),
       );
     });
 
@@ -160,55 +180,171 @@ void main() {
       'in the background, new messages raise one counting notification',
       () async {
         final first = _notice('m1', preview: 'hello');
-        await alerts.onNotice(first, _settings());
-        await alerts.onNotice(_notice('m2'), _settings());
-        expect(shown, [(count: 1, only: first), (count: 2, only: null)]);
+        await alerts.onNotice(first, _settings(), account: 'primary');
+        await alerts.onNotice(_notice('m2'), _settings(), account: 'primary');
+        expect(shown.map((e) => (e.count, e.only)), [(1, first), (2, null)]);
+        expect(shown.map((e) => e.account), everyElement('primary'));
       },
     );
 
     test('in the foreground nothing is raised', () async {
       foreground = true;
-      await alerts.onNotice(_notice('m1'), _settings());
+      await alerts.onNotice(_notice('m1'), _settings(), account: 'primary');
       expect(shown, isEmpty);
     });
 
     test('muted chats and switched-off kinds stay quiet', () async {
-      await alerts.onNotice(_notice('m1', muted: true), _settings());
+      await alerts.onNotice(
+        _notice('m1', muted: true),
+        _settings(),
+        account: 'primary',
+      );
       await alerts.onNotice(
         _notice('m2', group: true),
         _settings({AppSettings.notifyGroups: false}),
+        account: 'primary',
       );
       await alerts.onNotice(
         _notice('m3'),
         _settings({AppSettings.notifyMessages: false}),
+        account: 'primary',
       );
       expect(shown, isEmpty);
       await alerts.onNotice(
         _notice('m4', group: true),
         _settings({AppSettings.notifyMessages: false}),
+        account: 'primary',
       );
       expect(shown.single.count, 1, reason: 'groups still alert');
     });
 
     test('resuming clears the notification and the count', () async {
-      await alerts.onNotice(_notice('m1'), _settings());
-      await alerts.onNotice(_notice('m2'), _settings());
+      await alerts.onNotice(_notice('m1'), _settings(), account: 'primary');
+      await alerts.onNotice(_notice('m2'), _settings(), account: 'primary');
       await alerts.resumed();
-      expect(cleared, 1);
-      await alerts.onNotice(_notice('m3'), _settings());
+      expect(cleared, ['primary']);
+      await alerts.onNotice(_notice('m3'), _settings(), account: 'primary');
       expect(shown.last.count, 1);
+    });
+
+    test(
+      'each account has its own notification, named on a shared device',
+      () async {
+        await alerts.onNotice(_notice('m1'), _settings(), account: 'primary');
+        await alerts.onNotice(_notice('m2'), _settings(), account: 'primary');
+        // A switch while away: the other account's run counts from one.
+        await alerts.onNotice(_notice('m3'), _settings(), account: 'b');
+        expect(shown.last.account, 'b');
+        expect(shown.last.count, 1);
+        expect(shown.last.label, 'Work');
+        onScreen = 'b';
+        await alerts.resumed();
+        expect(cleared, ['b'], reason: 'the other account keeps its own');
+      },
+    );
+
+    test('an account opened in front clears its notification', () async {
+      await alerts.opened('b');
+      expect(cleared, isEmpty, reason: 'opened in the background');
+      foreground = true;
+      await alerts.opened('b');
+      expect(cleared, ['b']);
     });
 
     test('a failing notification never escapes', () async {
       final failing = RunningAppAlerts(
         inForeground: () => false,
-        show: (read, {required count, only}) async =>
-            throw StateError('no plugin'),
-        clear: () async => throw StateError('no plugin'),
+        onScreen: () => 'primary',
+        show:
+            (
+              read, {
+              required account,
+              required count,
+              only,
+              accountLabel,
+            }) async => throw StateError('no plugin'),
+        clear: (account) async => throw StateError('no plugin'),
       );
-      await failing.onNotice(_notice('m1'), _settings());
+      await failing.onNotice(_notice('m1'), _settings(), account: 'primary');
       await failing.resumed();
     });
+  });
+
+  group('notification payloads', () {
+    test('carry the account and the call, and read old ones', () {
+      final payload = CallNotifications.payloadFor('c1', account: 'b');
+      expect(CallNotifications.callIdOf(payload), 'c1');
+      expect(NotificationPayload.accountOf(payload), 'b');
+      expect(CallNotifications.callIdOf('call_id=c2'), 'c2');
+      expect(NotificationPayload.accountOf('call_id=c2'), isNull);
+      expect(NotificationPayload.accountOf(null), isNull);
+      expect(
+        NotificationPayload.accountOf(
+          NotificationPayload.encode({NotificationPayload.account: 'primary'}),
+        ),
+        'primary',
+      );
+    });
+
+    test('each account has its own message notification id', () {
+      expect(LocalNotifications.messagesIdFor('primary'), 0);
+      final b = LocalNotifications.messagesIdFor('b1');
+      expect(b, isNot(0));
+      expect(b, LocalNotifications.messagesIdFor('b1'));
+      expect(b, isNot(LocalNotifications.messagesIdFor('b2')));
+    });
+  });
+
+  group('ForegroundWakes', () {
+    test('one pass at a time, and one more for a wake-up during it', () async {
+      var passes = 0;
+      var running = 0;
+      var most = 0;
+      final gate = Completer<void>();
+      final wakes = ForegroundWakes(() async {
+        passes++;
+        running++;
+        most = running > most ? running : most;
+        if (passes == 1) await gate.future;
+        running--;
+      });
+      final first = wakes.wake();
+      unawaited(wakes.wake());
+      unawaited(wakes.wake());
+      gate.complete();
+      await first;
+      expect(passes, 2);
+      expect(most, 1);
+      await wakes.wake();
+      expect(passes, 3);
+    });
+
+    test('a failed pass does not stop the next', () async {
+      var passes = 0;
+      final wakes = ForegroundWakes(() async {
+        passes++;
+        throw StateError('offline');
+      });
+      await wakes.wake();
+      await wakes.wake();
+      expect(passes, 2);
+    });
+  });
+
+  test('a wake-up while the app is in front reaches onWake', () async {
+    final tokens = _FakeTokens(token: 'token-1');
+    var woken = 0;
+    final registration = PushRegistration(
+      tokens,
+      current: () => null,
+      onWake: () => woken++,
+    );
+    await registration.engineRunning();
+    await registration.engineRunning();
+    tokens.wake();
+    await pumpEventQueue();
+    expect(woken, 1, reason: 'one listener for the run');
+    await registration.dispose();
   });
 
   group('MessageAlerts.preview', () {
@@ -258,7 +394,11 @@ final class _FakeTokens implements PushTokens {
   final _refreshes = StreamController<String>.broadcast();
   int listeners = 0;
 
+  final _wakeUps = StreamController<void>.broadcast();
+
   void rotate(String value) => _refreshes.add(value);
+
+  void wake() => _wakeUps.add(null);
 
   @override
   Future<bool> prepare() async => available;
@@ -271,4 +411,7 @@ final class _FakeTokens implements PushTokens {
     listeners++;
     return _refreshes.stream;
   }
+
+  @override
+  Stream<void> get wakeUps => _wakeUps.stream;
 }

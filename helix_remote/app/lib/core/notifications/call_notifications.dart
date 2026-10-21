@@ -54,7 +54,6 @@ abstract final class CallNotifications {
 
   static const acceptActionId = 'accept_call';
   static const declineActionId = 'decline_call';
-  static const _payloadPrefix = 'call_id=';
 
   /// How long a call keeps ringing: the engine's ring timeout, and the
   /// server keeps a pending offer no longer.
@@ -74,14 +73,17 @@ abstract final class CallNotifications {
   /// A stable notification id for a call, so a re-post replaces the first.
   static int idFor(String callId) => callId.hashCode & 0x7fffffff;
 
-  static String payloadFor(String callId) => '$_payloadPrefix$callId';
+  /// The payload of [callId]'s notifications. [account] is the account the
+  /// call rang for, so a press opens that account first.
+  static String payloadFor(String callId, {String? account}) =>
+      NotificationPayload.encode({
+        NotificationPayload.callId: callId,
+        NotificationPayload.account: ?account,
+      });
 
   /// The call id in a notification payload, or null when it is not a call's.
-  static String? callIdOf(String? payload) {
-    if (payload == null || !payload.startsWith(_payloadPrefix)) return null;
-    final id = payload.substring(_payloadPrefix.length);
-    return id.isEmpty ? null : id;
-  }
+  static String? callIdOf(String? payload) =>
+      NotificationPayload.decode(payload)[NotificationPayload.callId];
 
   /// Creates the ringing channel. Called by [LocalNotifications.init]'s owner
   /// once at start-up; safe to repeat.
@@ -102,6 +104,7 @@ abstract final class CallNotifications {
     required String callId,
     required String callerName,
     bool showCaller = false,
+    String? account,
   }) async {
     if (!Platform.isAndroid) return;
     final plugin = LocalNotifications.plugin;
@@ -122,7 +125,7 @@ abstract final class CallNotifications {
           autoCancel: true,
         ),
       ),
-      payload: payloadFor(callId),
+      payload: payloadFor(callId, account: account),
     );
   }
 
@@ -139,6 +142,7 @@ abstract final class CallNotifications {
     bool? video,
     bool fullScreen = false,
     bool showCaller = false,
+    String? account,
   }) async {
     if (!Platform.isAndroid) return;
     final plugin = LocalNotifications.plugin;
@@ -200,7 +204,7 @@ abstract final class CallNotifications {
           ],
         ),
       ),
-      payload: payloadFor(callId),
+      payload: payloadFor(callId, account: account),
     );
   }
 
@@ -214,18 +218,20 @@ abstract final class CallNotifications {
   /// (message notifications) is ignored.
   static Stream<CallNotificationResponse> get responses => LocalNotifications
       .responses
-      .map((response) {
-        final callId = callIdOf(response.payload);
-        if (callId == null) return null;
-        final action = switch (response.actionId) {
-          acceptActionId => CallNotificationAction.accept,
-          declineActionId => CallNotificationAction.decline,
-          _ => CallNotificationAction.open,
-        };
-        return CallNotificationResponse(callId, action);
-      })
+      .map(responseOf)
       .where((response) => response != null)
       .cast<CallNotificationResponse>();
+
+  /// The press [response] as a call's, or null when it is not a call's.
+  static CallNotificationResponse? responseOf(NotificationResponse response) {
+    final callId = callIdOf(response.payload);
+    if (callId == null) return null;
+    return CallNotificationResponse(callId, switch (response.actionId) {
+      acceptActionId => CallNotificationAction.accept,
+      declineActionId => CallNotificationAction.decline,
+      _ => CallNotificationAction.open,
+    });
+  }
 
   /// The press that started the app, if a call notification did.
   static Future<CallNotificationResponse?> launchedBy() async {
@@ -238,12 +244,6 @@ abstract final class CallNotifications {
         response == null) {
       return null;
     }
-    final callId = callIdOf(response.payload);
-    if (callId == null) return null;
-    return CallNotificationResponse(callId, switch (response.actionId) {
-      acceptActionId => CallNotificationAction.accept,
-      declineActionId => CallNotificationAction.decline,
-      _ => CallNotificationAction.open,
-    });
+    return responseOf(response);
   }
 }

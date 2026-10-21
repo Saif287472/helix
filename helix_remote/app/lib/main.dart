@@ -11,6 +11,7 @@ import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
+import 'package:helix_remote/core/notifications/notification_accounts.dart';
 import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_registration.dart';
 import 'package:helix_remote/core/router/app_router.dart';
@@ -124,6 +125,7 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       ref.read(anomalyLogInstallProvider);
       ref.read(wipedRuntimeResetProvider);
       ref.read(accountListUpkeepProvider);
+      ref.read(notificationAccountSwitchProvider);
       ref.listenManual(mediaPolicySyncProvider, (_, _) {});
       // Listened rather than read, so they stay active whatever else happens
       // to watch the providers they follow.
@@ -133,11 +135,21 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
   }
 
   /// Points the app at the account last on screen, so a signed-in device
-  /// opens its chats instead of sign-in again. A device with no account - a
-  /// first install, or one whose accounts were all removed - stays on Helix
+  /// opens its chats instead of sign-in again, or at the account whose
+  /// notification started the app. A device with no account - a first
+  /// install, or one whose accounts were all removed - stays on Helix
   /// Global's sign-in.
   Future<void> _restoreServer() async {
-    final restored = await ref.read(accountsProvider.notifier).restore();
+    String? launched;
+    try {
+      launched = await ref.read(notificationLaunchAccountProvider);
+    } on Object {
+      // No notifications on this platform.
+    }
+    if (!mounted) return;
+    final restored = await ref
+        .read(accountsProvider.notifier)
+        .restore(prefer: launched);
     if (!mounted) return;
     ref.read(sessionRestoreProvider.notifier).finish(restored: restored);
   }

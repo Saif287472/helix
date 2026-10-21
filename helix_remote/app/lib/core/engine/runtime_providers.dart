@@ -156,14 +156,25 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
   @override
   AccountSlots build() => const AccountSlots();
 
-  /// Reads the accounts back and points the app at the one last on screen.
-  /// Returns whether there was one to open.
+  /// Reads the accounts back and points the app at the one last on screen,
+  /// or at [prefer] when that is a signed-in account (a notification of it
+  /// started the app). Returns whether there was one to open.
   ///
   /// The folders of accounts the device no longer lists (a sign-in that
   /// never finished) are deleted with their keys first.
-  Future<bool> restore() async {
-    final loaded = await ref.read(accountSlotStoreProvider).load();
+  Future<bool> restore({String? prefer}) async {
+    var loaded = await ref.read(accountSlotStoreProvider).load();
     await _deleteUnlisted(loaded);
+    final preferred = prefer == null ? null : loaded.byId(prefer);
+    final switched =
+        preferred != null &&
+        preferred.signedIn &&
+        preferred.id != loaded.active;
+    if (switched) {
+      loaded = loaded
+          .put(preferred.copyWith(lastUsed: ref.read(clockProvider)()))
+          .activate(preferred.id);
+    }
     final current = loaded.current;
     // A remembered address that is not https (or not an address at all) is
     // not used: the device opens on sign-in rather than talking to it in the
@@ -172,6 +183,9 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
     final usable =
         uri != null && uri.hasScheme && ServerPolicy.check(uri) == null;
     state = usable ? loaded : loaded.activate(null);
+    if (usable && switched) {
+      await ref.read(accountSlotStoreProvider).save(state);
+    }
     return usable;
   }
 
