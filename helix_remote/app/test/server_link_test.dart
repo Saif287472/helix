@@ -241,6 +241,9 @@ void main() {
       opened.clear();
 
       await controller.submitPhone();
+      // The number alone opens nothing; the first request (a code here) goes
+      // to Helix Global.
+      await controller.useCodeInstead();
       expect(opened, [kGlobalServerUrl]);
     });
   });

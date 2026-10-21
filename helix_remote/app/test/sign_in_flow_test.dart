@@ -298,7 +298,7 @@ void main() {
 
     testWidgets('the box is on the last page on Helix Global', (tester) async {
       final container = await pumpScreen(tester);
-      container.read(signInControllerProvider.notifier).forgotPassword();
+      container.read(signInControllerProvider.notifier).showSetupPageForTest();
       await tester.pumpAndSettle();
 
       expect(find.text(_termsBox), findsOneWidget);
@@ -308,7 +308,7 @@ void main() {
     testWidgets('and absent on a personal server', (tester) async {
       final container = await pumpScreen(tester);
       unawaitedOpen(container.read(signInControllerProvider.notifier));
-      container.read(signInControllerProvider.notifier).forgotPassword();
+      container.read(signInControllerProvider.notifier).showSetupPageForTest();
       await tester.pumpAndSettle();
 
       expect(container.read(signInControllerProvider).page, SignInPage.name);
@@ -336,6 +336,23 @@ void main() {
         expect(notifier.state.errorMessage, SignInCopy.phoneTooShort);
       },
     );
+
+    test('a number goes straight to the password, with no code', () async {
+      final notifier = _container().read(signInControllerProvider.notifier);
+      notifier.updateDigits('1711000001');
+      // The runtime factory throws if reached: nothing is sent for a code.
+      expect(await notifier.submitPhone(), isTrue);
+      expect(notifier.state.page, SignInPage.password);
+    });
+
+    test('coming in by code always sets a password', () async {
+      final notifier = _container().read(signInControllerProvider.notifier);
+      notifier.updateDigits('1711000001');
+      notifier.showSetupPageForTest();
+      // No verified code yet, so it stops there; with one it would still
+      // need the password (checked before anything is sent).
+      expect(await notifier.completeSetup(), isFalse);
+    });
 
     test('Back from the password goes to the number', () {
       final container = _container();

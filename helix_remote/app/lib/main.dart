@@ -175,7 +175,9 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
                   child: AppTextScale(
                     child: Material(
                       color: orbit.bg,
-                      child: child ?? const SizedBox.shrink(),
+                      child: _AboveKeyboard(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),
@@ -183,6 +185,30 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Keeps every screen above the on-screen keyboard. The Orbit pages have no
+/// Scaffold to do it, so the whole app is laid out in the space the keyboard
+/// leaves, the way Android's `adjustResize` means; the inset is then taken
+/// out of the [MediaQuery] so a page that does have a Scaffold does not lift
+/// itself a second time.
+class _AboveKeyboard extends StatelessWidget {
+  const _AboveKeyboard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: MediaQuery.removeViewInsets(
+        context: context,
+        removeBottom: true,
+        child: child,
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/global_server.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
@@ -320,7 +321,11 @@ final class SignInController extends Notifier<SignInState> {
 
   // ----------------------------------------------------------- the phone page
 
-  /// Texts a code to the number and moves to it.
+  /// Moves to the password: an account with one signs in with the number
+  /// and the password alone, never a code (the owner, 2026-10-21). A wrong
+  /// password and a number with no account get the same answer, so this
+  /// page tells nobody who has an account. "Use a code instead" is the way
+  /// for a new number, an account with no password, or a forgotten one.
   Future<bool> submitPhone() async {
     final number = state.e164;
     if (number == null) return _fail(SignInCopy.badPhoneNumber);
@@ -330,7 +335,21 @@ final class SignInController extends Notifier<SignInState> {
       return _fail(SignInCopy.phoneTooShort);
     }
 
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(
+      page: SignInPage.password,
+      password: '',
+      clearError: true,
+    );
+    return true;
+  }
+
+  /// "Use a code instead": texts a code to the number and moves to it. After
+  /// the code the person sets a password (a new account, an account without
+  /// one, or a forgotten one).
+  Future<bool> useCodeInstead() async {
+    final number = state.e164;
+    if (number == null) return _fail(SignInCopy.badPhoneNumber);
+    state = state.copyWith(isLoading: true, clearError: true, password: '');
     try {
       final runtime = await _currentRuntime();
       final challenge = await runtime.engine.account.requestPhoneCode(number);
@@ -367,8 +386,10 @@ final class SignInController extends Notifier<SignInState> {
       // until then.
       _verificationToken = verified.verificationToken;
       _verifiedAccountId = verified.accountId;
+      // The code is only asked for when the password is not the way in, so
+      // the next page always sets one.
       state = state.copyWith(
-        page: verified.hasPassword ? SignInPage.password : SignInPage.name,
+        page: SignInPage.name,
         accountExists: verified.accountExists,
         hasPassword: verified.hasPassword,
         isLoading: false,
@@ -434,16 +455,13 @@ final class SignInController extends Notifier<SignInState> {
     }
   }
 
-  /// "Forgot password?": the SMS code was already verified, so instead of a
-  /// password the account moves to this phone and the other devices are
-  /// signed out.
-  void forgotPassword() {
-    state = state.copyWith(
-      page: SignInPage.name,
-      password: '',
-      clearError: true,
-    );
-  }
+  /// "Use a code instead" on the password page.
+  Future<bool> forgotPassword() => useCodeInstead();
+
+  /// Opens the setup page directly, as a verified code does.
+  @visibleForTesting
+  void showSetupPageForTest() =>
+      state = state.copyWith(page: SignInPage.name, clearError: true);
 
   // ------------------------------------------------------------ the name page
 
@@ -457,6 +475,11 @@ final class SignInController extends Notifier<SignInState> {
     if (token == null) {
       state = state.copyWith(page: SignInPage.otp);
       return _fail(SignInCopy.enterCodeFirst);
+    }
+    // Everyone who comes in by code leaves with a password, so the next
+    // sign-in needs only the number and the password.
+    if (state.newPassword.length < 8) {
+      return _fail('Set a password of at least 8 characters.');
     }
     final number = state.e164;
     if (number == null) return _fail(SignInCopy.badPhoneNumber);
@@ -473,7 +496,7 @@ final class SignInController extends Notifier<SignInState> {
       await runtime.engine.account.register(
         verificationToken: token,
         inviteCode: invite,
-        password: state.newPassword.isEmpty ? null : state.newPassword,
+        password: state.newPassword,
         accountId: state.accountExists ? _verifiedAccountId : null,
         replaceExisting: state.accountExists,
         phoneNumber: number,

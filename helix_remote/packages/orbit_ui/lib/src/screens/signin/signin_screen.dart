@@ -614,8 +614,8 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(2, 0, 2, 4 - 4),
                 child: OrbitText(
-                  'Your other devices stay signed in. Signing in with an SMS '
-                  'code instead signs them out.',
+                  'New here, or no password yet? Use a code instead. A code '
+                  'signs your other devices out.',
                   style: t.font.style(
                     size: OrbitType.caption,
                     color: t.ink3,
@@ -631,7 +631,7 @@ class _SignInScreenState extends State<SignInScreen> {
               height: 44,
             ),
           ],
-          secondary: 'Forgot password?',
+          secondary: 'Use a code instead',
           onSecondary: a.onForgotPassword,
           primary: 'Sign in',
           onPrimary: _tap(a.onSignIn),
@@ -654,8 +654,8 @@ class _SignInScreenState extends State<SignInScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(2, 4, 2, 8),
               child: OrbitText(
-                'Set a password (optional) so you can sign back in on a new '
-                'phone without another device.',
+                'Set a password, at least 8 characters. Next time you sign '
+                'in with your number and this password, no code.',
                 style: t.font.style(
                   size: OrbitType.caption,
                   color: t.ink3,
@@ -665,7 +665,7 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
             OrbitTextField(
               key: const ValueKey('newPassword'),
-              label: 'Password (optional)',
+              label: 'Password',
               eye: true,
               autofillHints: const [AutofillHints.newPassword],
               onChanged: a.onNewPasswordChanged,
@@ -687,6 +687,25 @@ class _SignInScreenState extends State<SignInScreen> {
               'other devices out.',
             ),
             ...terms,
+            OrbitTextField(
+              key: const ValueKey('newPassword'),
+              label: 'New password',
+              eye: true,
+              autofillHints: const [AutofillHints.newPassword],
+              onChanged: a.onNewPasswordChanged,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+              child: OrbitText(
+                'At least 8 characters. Next time you sign in with your '
+                'number and this password, no code.',
+                style: t.font.style(
+                  size: OrbitType.caption,
+                  color: t.ink3,
+                  height: 1.45,
+                ),
+              ),
+            ),
           ],
           secondary: 'Link from another device instead',
           onSecondary: a.onLinkInstead,

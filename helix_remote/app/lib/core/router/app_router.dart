@@ -52,7 +52,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // reports a session.
   final refresh = ValueNotifier<int>(0);
   void poke() => refresh.value++;
-  ref.listen(authStateProvider, (_, _) => poke());
+  late final GoRouter router;
+  ref.listen(authStateProvider, (was, now) {
+    poke();
+    // Signing out (here or on another device) leaves at once, whatever page
+    // is on top: a redirect alone does not clear pages pushed over home.
+    // (A cold start, which has no earlier state, is the redirect's to place.)
+    final before = was?.value;
+    final after = now.value;
+    if (before != null &&
+        before != after &&
+        (after == AppAuthState.signedOut || after == AppAuthState.revoked)) {
+      router.go(AppRoutes.signIn);
+    }
+  });
   ref.listen(postSignInProvider, (_, _) => poke());
   ref.listen(sessionRestoreProvider, (_, _) => poke());
   ref.onDispose(refresh.dispose);
@@ -62,7 +75,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // runtime and authState briefly reports "starting" again.
   var startupDone = false;
 
-  final router = GoRouter(
+  router = GoRouter(
     initialLocation: AppRoutes.signIn,
     // The launcher's intent URL reaches Flutter as the platform's default
     // route name. Without this go_router would start on it, so a crafted
