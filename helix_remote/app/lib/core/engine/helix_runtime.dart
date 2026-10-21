@@ -22,14 +22,16 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 /// One live device: the encrypted database, the API client for one server and
 /// the engine that ties them together.
 ///
-/// The app builds exactly one of these at a time. Changing server (sign-out,
-/// or an invite code naming a personal server) closes it and opens the next,
-/// so two engines never hold the database file.
+/// The app shows one of these at a time. Changing account or server (a
+/// switch, a sign-out, or an invite code naming a personal server) closes it
+/// and opens the next. Each account has its own database file, and the lease
+/// on it keeps two engines from holding the same one.
 ///
 /// The engine decides whether it runs a socket, timers, or nothing at all;
 /// see [Engine.start]. This class only owns lifetimes.
 final class HelixRuntime {
   HelixRuntime._({
+    required this.account,
     required this.db,
     required this.api,
     required this.engine,
@@ -41,8 +43,8 @@ final class HelixRuntime {
        _wipe = wipe,
        _runHardWipe = runHardWipe;
 
-  /// Opens the database at [dbFile] with [key] and starts an engine against
-  /// [serverUrl].
+  /// Opens [account]'s database at [dbFile] with [key] and starts an engine
+  /// against [serverUrl].
   ///
   /// Throws [DbEncryptionException] when the key is wrong or the file is
   /// plaintext, and [KeyUnavailable] when there is no key at all for an
@@ -72,10 +74,11 @@ final class HelixRuntime {
   /// a revocation that wipes; the rest is this app's (`Engine(hardWipe:)`, see
   /// [hardWipe]): the database is closed and its files overwritten and
   /// deleted, the SQLCipher key leaves [keys] (which is what makes anything
-  /// left on the flash unreadable), and the avatar, downloaded attachments and
-  /// the file picker's copies go. [keys] defaults to the platform keystore;
-  /// [afterWipe] replaces the last two steps (tests).
+  /// left on the flash unreadable), and the account's avatar, downloaded
+  /// attachments and the file picker's copies go. [keys] defaults to the
+  /// platform keystore; [afterWipe] replaces the last two steps (tests).
   static Future<HelixRuntime> open({
+    required String account,
     required File dbFile,
     required DatabaseKey key,
     required Uri serverUrl,
@@ -100,6 +103,7 @@ final class HelixRuntime {
     );
     try {
       return await _open(
+        account: account,
         lease: lease,
         dbFile: dbFile,
         key: key,
@@ -111,7 +115,7 @@ final class HelixRuntime {
         headless: headless,
         network: network,
         pinning: pinning ?? TlsPinPolicy.forThisBuild(),
-        afterWipe: afterWipe ?? appWipe(keys ?? SecureKeyStore()),
+        afterWipe: afterWipe ?? appWipe(keys ?? SecureKeyStore(), account),
       );
     } on Object {
       await lease.release();
@@ -120,6 +124,7 @@ final class HelixRuntime {
   }
 
   static Future<HelixRuntime> _open({
+    required String account,
     required EngineLease lease,
     required File dbFile,
     required DatabaseKey key,
@@ -168,6 +173,7 @@ final class HelixRuntime {
     );
     await engine.start(realtime: !headless, background: !headless);
     final runtime = HelixRuntime._(
+      account: account,
       db: db,
       api: api,
       engine: engine,
@@ -270,23 +276,29 @@ final class HelixRuntime {
     if (first != null) Error.throwWithStackTrace(first!, firstStack!);
   }
 
-  /// What this app deletes besides the database after a hard wipe: the
-  /// SQLCipher key in [keys], the profile picture and downloaded attachments,
-  /// and the file picker's temporary copies. Each part is tried on its own.
-  static Future<void> Function() appWipe(SecureKeyStore keys) => () async {
-    try {
-      await keys.forget();
-    } on Object {
-      // Tried again by sign-out; the files below must still go.
-    }
-    await AppPaths.wipeLocalFiles();
-    await PickerTemporaryFiles.clear();
-  };
+  /// What this app deletes besides the database after a hard wipe of
+  /// [account]: its SQLCipher key in [keys], its profile picture and
+  /// downloaded attachments, and the file picker's temporary copies. Each part
+  /// is tried on its own. Other accounts on the device are not touched.
+  static Future<void> Function() appWipe(SecureKeyStore keys, String account) =>
+      () async {
+        try {
+          await keys.forget(account);
+        } on Object {
+          // Tried again by sign-out; the files below must still go.
+        }
+        await AppPaths.wipeLocalFiles(account);
+        await PickerTemporaryFiles.clear();
+      };
 
   final EngineLease? _lease;
   StreamSubscription<LeaseRole>? _leaseSub;
   final _WipeRecord _wipe;
   final Future<void> Function() _runHardWipe;
+
+  /// The device-local id of the account this runtime opened (see
+  /// `AccountSlot`).
+  final String account;
   final HelixDb db;
   final HelixApi api;
   final Engine engine;

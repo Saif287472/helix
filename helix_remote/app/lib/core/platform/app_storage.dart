@@ -12,24 +12,67 @@ import 'package:path_provider/path_provider.dart';
 /// The database key is **not** here: it lives in the platform keystore, in
 /// [SecureKeyStore].
 abstract final class AppPaths {
+  /// The id of the first account on a device. Its files keep the names a
+  /// one-account install always had, directly in the app folder; every other
+  /// account has its own folder, `accounts/<id>/`.
+  static const firstAccount = 'primary';
+
+  static final _accountId = RegExp(r'^[a-z0-9]{1,32}$');
+
+  /// Where [account]'s database, attachments and picture live.
+  static Future<Directory> accountDirectory(String account) async {
+    if (!_accountId.hasMatch(account)) {
+      throw ArgumentError.value(account, 'account', 'not an account id');
+    }
+    final base = await _base();
+    if (account == firstAccount) return base;
+    return Directory(p.join(base.path, 'accounts', account))
+      ..createSync(recursive: true);
+  }
+
+  /// The folders of accounts other than the first, by id, whether or not the
+  /// device still lists them (a sign-in that never finished leaves one).
+  static Future<List<String>> accountFolders() async {
+    final dir = Directory(p.join((await _base()).path, 'accounts'));
+    if (!await dir.exists()) return const [];
+    return [
+      for (final entity in dir.listSync())
+        if (entity is Directory) p.basename(entity.path),
+    ].where(_accountId.hasMatch).toList();
+  }
+
+  /// Deletes the folder of an account other than the first, with whatever
+  /// is left in it.
+  static Future<void> deleteAccountFolder(String account) async {
+    if (account == firstAccount) return;
+    final dir = await accountDirectory(account);
+    try {
+      await dir.delete(recursive: true);
+    } on Object {
+      // Tried again at the next start.
+    }
+  }
+
+  /// `<account folder>/helix_remote.db`; for the first account that is
   /// `<app data>/helix_remote/helix_remote.db` (see `_base`).
-  static Future<File> databaseFile() async {
-    final dir = await _base();
+  static Future<File> databaseFile(String account) async {
+    final dir = await accountDirectory(account);
     return File(p.join(dir.path, 'helix_remote.db'));
   }
 
-  /// Where attachment downloads are written before they are shown. The engine
-  /// stores `transfer: remote` rows in C3b; C4's transfer queue fills this.
-  static Future<Directory> attachmentCache() async {
-    final dir = await _base();
+  /// Where [account]'s attachment downloads are written before they are
+  /// shown.
+  static Future<Directory> attachmentCache(String account) async {
+    final dir = await accountDirectory(account);
     return Directory(p.join(dir.path, 'attachments'))
       ..createSync(recursive: true);
   }
 
-  /// The profile picture chosen on this phone (PNG). Not synced: the engine
-  /// does not publish avatars yet, so it is only ever shown on this device.
-  static Future<File> profileAvatarFile() async {
-    final dir = await _base();
+  /// The profile picture chosen on this phone for [account] (PNG). Not
+  /// synced: the engine does not publish avatars yet, so it is only ever shown
+  /// on this device.
+  static Future<File> profileAvatarFile(String account) async {
+    final dir = await accountDirectory(account);
     return File(p.join(dir.path, 'profile_avatar.png'));
   }
 
@@ -75,27 +118,31 @@ abstract final class AppPaths {
       ..createSync(recursive: true);
   }
 
-  /// Deletes what a signed-out device must not keep: the avatar picture (a
+  /// Deletes what a signed-out account must not leave: the avatar picture (a
   /// plaintext PNG) and every downloaded attachment. With [includeDatabase],
-  /// the database file and its journal files go too (the destructive reset).
+  /// the database file and its journal files go too (the destructive reset),
+  /// and so does the account's own folder once it is empty.
   ///
   /// Works from the paths alone, so it still finishes when the engine, the
   /// database or the keystore cannot be opened. Each file is tried on its own:
   /// one that cannot be deleted does not stop the rest.
-  static Future<void> wipeLocalFiles({bool includeDatabase = false}) async {
-    final Directory base;
+  static Future<void> wipeLocalFiles(
+    String account, {
+    bool includeDatabase = false,
+  }) async {
+    final Directory dir;
     try {
-      base = await _base();
+      dir = await accountDirectory(account);
     } on Object {
       // No app folder can be found (no platform plugin), so none was written.
       return;
     }
     final targets = <FileSystemEntity>[
-      File(p.join(base.path, 'profile_avatar.png')),
-      Directory(p.join(base.path, 'attachments')),
+      File(p.join(dir.path, 'profile_avatar.png')),
+      Directory(p.join(dir.path, 'attachments')),
       if (includeDatabase)
         for (final suffix in const ['', '-wal', '-shm', '-journal'])
-          File(p.join(base.path, 'helix_remote.db$suffix')),
+          File(p.join(dir.path, 'helix_remote.db$suffix')),
     ];
     for (final entity in targets) {
       try {
@@ -106,6 +153,13 @@ abstract final class AppPaths {
         }
       } on Object {
         // Nothing sensible to do about one stuck file; the others still go.
+      }
+    }
+    if (includeDatabase && account != firstAccount) {
+      try {
+        await dir.delete();
+      } on Object {
+        // Not empty (a file above was stuck): left for the next clean-up.
       }
     }
   }
@@ -122,33 +176,38 @@ final class SecureKeyStore {
     : _storage =
           storage ?? const FlutterSecureStorage(aOptions: AndroidOptions());
 
-  static const _accountName = 'helix_remote_db_key';
+  /// The keystore entry for [account]'s key. The first account keeps the
+  /// name a one-account install always used.
+  static String _entry(String account) => account == AppPaths.firstAccount
+      ? 'helix_remote_db_key'
+      : 'helix_remote_db_key.$account';
 
   final FlutterSecureStorage _storage;
 
-  /// The key for [file], generating and storing one the first time.
+  /// [account]'s key for [file], generating and storing one the first time.
   ///
   /// When [file] already exists but the keystore has no key, the database was
   /// written by an install whose keystore is gone (a restore onto new
   /// hardware). That is not recoverable, so it throws [KeyUnavailable] rather
   /// than generating a second key that cannot open anything.
-  Future<DatabaseKey> keyFor(File file) async {
-    final stored = await _read();
+  Future<DatabaseKey> keyFor(String account, File file) async {
+    final stored = await _read(account);
     if (stored != null) return stored;
     if (await file.exists()) throw const KeyUnavailable();
     final key = DatabaseKey.generate();
-    await _write(key);
+    await _write(account, key);
     return key;
   }
 
-  /// Whether a key is already stored, without reading its bytes.
-  Future<bool> hasKey() async => (await _read()) != null;
+  /// Whether [account] has a key stored, without reading its bytes.
+  Future<bool> hasKey(String account) async => (await _read(account)) != null;
 
-  /// Forgets the key. Only ever called after the database has been deleted.
-  Future<void> forget() => _storage.delete(key: _accountName);
+  /// Forgets [account]'s key. Only ever called after its database has been
+  /// deleted.
+  Future<void> forget(String account) => _storage.delete(key: _entry(account));
 
-  Future<DatabaseKey?> _read() async {
-    final encoded = await _storage.read(key: _accountName);
+  Future<DatabaseKey?> _read(String account) async {
+    final encoded = await _storage.read(key: _entry(account));
     if (encoded == null || encoded.isEmpty) return null;
     try {
       final bytes = base64Decode(encoded);
@@ -159,8 +218,8 @@ final class SecureKeyStore {
     }
   }
 
-  Future<void> _write(DatabaseKey key) =>
-      _storage.write(key: _accountName, value: base64Encode(key.bytes));
+  Future<void> _write(String account, DatabaseKey key) =>
+      _storage.write(key: _entry(account), value: base64Encode(key.bytes));
 }
 
 /// The database exists but its key is not in the keystore.
@@ -172,27 +231,4 @@ final class KeyUnavailable implements Exception {
 
   @override
   String toString() => 'the local database key is not available';
-}
-
-/// The server this device is signed in to, remembered between launches.
-///
-/// An empty value means "no server chosen yet", which is the state right
-/// after a wipe or a first install: sign-in opens on Helix Global.
-final class ServerUrlStore {
-  ServerUrlStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
-
-  static const _accountName = 'helix_remote_server_url';
-
-  final FlutterSecureStorage _storage;
-
-  Future<String?> load() async {
-    final value = await _storage.read(key: _accountName);
-    return (value == null || value.isEmpty) ? null : value;
-  }
-
-  Future<void> save(String url) =>
-      _storage.write(key: _accountName, value: url);
-
-  Future<void> clear() => _storage.delete(key: _accountName);
 }

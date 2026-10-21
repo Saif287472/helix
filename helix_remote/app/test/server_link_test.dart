@@ -115,8 +115,8 @@ void main() {
       final c = container();
       expect(
         () => c
-            .read(serverUrlProvider.notifier)
-            .use(Uri.parse('http://chat.example.org')),
+            .read(accountsProvider.notifier)
+            .useServer(Uri.parse('http://chat.example.org')),
         throwsA(isA<InsecureServerUrl>()),
       );
       expect(c.read(serverUrlProvider), isNull);
@@ -234,8 +234,8 @@ void main() {
       await controller.openWithCode(invite('https://chat.example.org'));
       await controller.confirmServer();
       c
-          .read(serverUrlProvider.notifier)
-          .use(Uri.parse('https://chat.example.org'));
+          .read(accountsProvider.notifier)
+          .useServer(Uri.parse('https://chat.example.org'));
       controller.leaveAdvancedMode();
       controller.updateDigits('1700000000');
       opened.clear();
@@ -427,7 +427,7 @@ final class _Recording implements RuntimeFactory {
   final List<Uri> _log;
 
   @override
-  Future<Never> open({required Uri serverUrl}) {
+  Future<Never> open({required String account, required Uri serverUrl}) {
     _log.add(serverUrl);
     return Future.error(StateError('refused by the test'));
   }

@@ -886,7 +886,7 @@ List<Override> a3bOverrides({
 
 final class _NoRuntime implements RuntimeFactory {
   @override
-  Future<Never> open({required Uri serverUrl}) =>
+  Future<Never> open({required String account, required Uri serverUrl}) =>
       throw StateError('these tests must not open an engine');
 }
 

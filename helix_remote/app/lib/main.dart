@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/calls/call_host.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
-import 'package:helix_remote/core/engine/server_policy.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/lifecycle/app_lifecycle_host.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
@@ -132,20 +131,14 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     });
   }
 
-  /// Points the app at the remembered server, so a signed-in device opens its
-  /// chats instead of sign-in again. A device with no remembered server - a
-  /// first install, or one whose data was reset - stays on Helix Global.
+  /// Points the app at the account last on screen, so a signed-in device
+  /// opens its chats instead of sign-in again. A device with no account - a
+  /// first install, or one whose accounts were all removed - stays on Helix
+  /// Global's sign-in.
   Future<void> _restoreServer() async {
-    final saved = await ref.read(serverUrlStoreProvider).load();
-    final uri = saved == null ? null : Uri.tryParse(saved);
-    // A remembered address that is not https (or not an address at all) is
-    // not used: the device opens on Helix Global's sign-in rather than
-    // talking to it in the clear.
-    final usable =
-        uri != null && uri.hasScheme && ServerPolicy.check(uri) == null;
-    if (usable) ref.read(serverUrlProvider.notifier).use(uri);
+    final restored = await ref.read(accountsProvider.notifier).restore();
     if (!mounted) return;
-    ref.read(sessionRestoreProvider.notifier).finish(restored: usable);
+    ref.read(sessionRestoreProvider.notifier).finish(restored: restored);
   }
 
   @override

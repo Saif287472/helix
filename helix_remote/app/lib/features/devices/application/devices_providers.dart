@@ -533,7 +533,7 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
       // Sign-in opens on Helix Global: a device that has not chosen another
       // server links to that one.
       if (ref.read(serverUrlProvider) == null) {
-        ref.read(serverUrlProvider.notifier).use(kGlobalServerUrl);
+        ref.read(accountsProvider.notifier).useServer(kGlobalServerUrl);
       }
       final config = await ref.read(engineConfigProvider.future);
       final session = await ref
@@ -599,10 +599,7 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
     _linked = true;
     if (_stale) return;
     state = const LinkThisDeviceState(step: LinkThisStep.finishing);
-    final url = ref.read(serverUrlProvider);
-    if (url != null) {
-      await ref.read(serverUrlStoreProvider).save(url.toString());
-    }
+    await ref.read(accountsProvider.notifier).signedIn();
   }
 
   void _fail(LinkProblem problem) {

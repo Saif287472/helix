@@ -46,16 +46,12 @@ AppAuthState _authStateOf(EngineStatus status) => switch (status) {
   EngineStatus.revoked => AppAuthState.revoked,
 };
 
-final secureKeyStoreProvider = Provider<SecureKeyStore>(
-  (ref) => SecureKeyStore(),
-);
-
-/// Signs the device out, and forgets the server with it.
+/// Signs the account on screen out of this device and removes it.
 ///
 /// The engine's own `signOut` revokes this device on the server (best effort)
-/// and **always wipes the local database**: a device that kept its keys could
-/// sign itself back in with its signing key. The keystore's database key goes
-/// too, because the next account on this device gets a new one.
+/// and **always wipes the account's local database**: a device that kept its
+/// keys could sign itself back in with its signing key. The account's keystore
+/// key goes too. Other accounts on the device keep their data.
 final signOutProvider = Provider<SignOutAction>(SignOutAction.new);
 
 final class SignOutAction {
@@ -65,25 +61,25 @@ final class SignOutAction {
 
   Future<void> call() async {
     final runtime = await _ref.read(runtimeProvider.future);
+    final account = runtime.account;
     await runtime.engine.signOut();
     // The engine's sign-out ends in the hard wipe (database file destroyed,
     // key and plaintext files deleted, see `HelixRuntime.hardWipe`); this
     // covers an engine that had nothing to sign out.
     await runtime.ensureWiped();
-    await _ref.read(secureKeyStoreProvider).forget();
-    await _ref.read(serverUrlStoreProvider).clear();
-    await _wipeLeftovers();
+    await _ref.read(secureKeyStoreProvider).forget(account);
+    await _wipeLeftovers(account);
     // Rebuilding the runtime is what makes the wipe visible to the UI.
     _ref.invalidate(runtimeProvider);
-    _ref.read(serverUrlProvider.notifier).forget();
+    await _ref.read(accountsProvider.notifier).removeCurrent();
   }
 
-  /// What the engine's wipe does not reach: the avatar picture, downloaded
-  /// attachments, the file picker's temporary copies, and any link still
-  /// parked for the next sign-in.
-  Future<void> _wipeLeftovers() async {
+  /// What the engine's wipe does not reach: the account's avatar picture and
+  /// downloaded attachments, the file picker's temporary copies, and any link
+  /// still parked for the next sign-in.
+  Future<void> _wipeLeftovers(String account) async {
     _ref.read(pendingLinkProvider.notifier).set(null);
-    await AppPaths.wipeLocalFiles();
+    await AppPaths.wipeLocalFiles(account);
     await PickerTemporaryFiles.clear();
   }
 }
@@ -102,8 +98,8 @@ final wipedRuntimeResetProvider = Provider<void>((ref) {
   });
 });
 
-/// Deletes the encrypted database and the key, so a device that cannot open
-/// its own data can start again. Only ever offered behind an explicit
+/// Deletes the encrypted database and the key of the account on screen, so a
+/// device that cannot open that account's data can start again. Only ever offered behind an explicit
 /// confirmation, because it is not recoverable.
 final destructiveResetProvider = Provider<DestructiveReset>(
   DestructiveReset.new,
@@ -119,6 +115,8 @@ final class DestructiveReset {
   /// runtime is closed first if there is one, but a runtime that failed to
   /// open (the usual reason to be here) only means there is nothing to close.
   Future<void> call() async {
+    final account =
+        _ref.read(activeAccountProvider)?.id ?? AppPaths.firstAccount;
     HelixRuntime? runtime;
     try {
       runtime = await _ref.read(runtimeProvider.future);
@@ -133,12 +131,12 @@ final class DestructiveReset {
         // Closing is best effort; the files are deleted regardless.
       }
     }
-    _ref.read(serverUrlProvider.notifier).forget();
+    await _ref.read(accountsProvider.notifier).removeCurrent();
     _ref.read(pendingLinkProvider.notifier).set(null);
-    await AppPaths.wipeLocalFiles(includeDatabase: true);
+    await AppPaths.wipeLocalFiles(account, includeDatabase: true);
+    await AppPaths.deleteAccountFolder(account);
     await PickerTemporaryFiles.clear();
-    await _ref.read(secureKeyStoreProvider).forget();
-    await _ref.read(serverUrlStoreProvider).clear();
+    await _ref.read(secureKeyStoreProvider).forget(account);
     _ref.invalidate(runtimeProvider);
   }
 }

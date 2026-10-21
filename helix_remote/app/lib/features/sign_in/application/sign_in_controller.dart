@@ -447,7 +447,7 @@ final class SignInController extends Notifier<SignInState> {
         phoneNumber: number,
         password: state.password,
       );
-      await _rememberServer(runtime.serverUrl);
+      await _keepAccount(number);
       if (remember) await _rememberAccount(number, runtime.serverUrl);
       state = state.copyWith(
         completed: true,
@@ -520,7 +520,7 @@ final class SignInController extends Notifier<SignInState> {
           // The profile can be set again from Settings.
         }
       }
-      await _rememberServer(runtime.serverUrl);
+      await _keepAccount(number, name: name);
       if (remember) {
         await _rememberAccount(number, runtime.serverUrl, name: name);
       }
@@ -548,7 +548,7 @@ final class SignInController extends Notifier<SignInState> {
     final current = ref.read(serverUrlProvider);
     final wantGlobal = !state.isAdvanced;
     if (current == null || (wantGlobal && !ServerPolicy.isGlobal(current))) {
-      ref.read(serverUrlProvider.notifier).use(kGlobalServerUrl);
+      ref.read(accountsProvider.notifier).useServer(kGlobalServerUrl);
     }
     return ref.read(runtimeProvider.future);
   }
@@ -564,13 +564,15 @@ final class SignInController extends Notifier<SignInState> {
   /// server tears the old runtime down first, so two never hold the database.
   Future<HelixRuntime> _runtimeFor(Uri serverUrl) {
     if (ref.read(serverUrlProvider) != serverUrl) {
-      ref.read(serverUrlProvider.notifier).use(serverUrl);
+      ref.read(accountsProvider.notifier).useServer(serverUrl);
     }
     return ref.read(runtimeProvider.future);
   }
 
-  Future<void> _rememberServer(Uri serverUrl) =>
-      ref.read(serverUrlStoreProvider).save(serverUrl.toString());
+  /// The account is signed in on this device: it is listed, and opened again
+  /// at the next start.
+  Future<void> _keepAccount(String number, {String name = ''}) =>
+      ref.read(accountsProvider.notifier).signedIn(e164: number, name: name);
 
   /// Adds the number to the sign-in page's saved accounts, most recent
   /// first. The list lives on the device across sign-outs; a password is

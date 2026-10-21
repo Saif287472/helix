@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
@@ -15,14 +18,14 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show DevicePlatform;
 
-/// Opens the app's one live [HelixRuntime] for a server.
+/// Opens the app's one live [HelixRuntime] for an account on a server.
 ///
 /// This is the seam between the app and the engine. Everything above it works
 /// with a runtime it was handed; tests and the widget suite replace this with
 /// one backed by an in-memory database, so no test ever opens a real file,
 /// a keystore or a socket.
 abstract interface class RuntimeFactory {
-  Future<HelixRuntime> open({required Uri serverUrl});
+  Future<HelixRuntime> open({required String account, required Uri serverUrl});
 }
 
 /// The real factory: keystore, encrypted file on disk, live network.
@@ -48,15 +51,19 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
   );
 
   @override
-  Future<HelixRuntime> open({required Uri serverUrl}) async {
-    final file = await AppPaths.databaseFile();
+  Future<HelixRuntime> open({
+    required String account,
+    required Uri serverUrl,
+  }) async {
+    final file = await AppPaths.databaseFile(account);
     return HelixRuntime.open(
+      account: account,
       dbFile: file,
-      key: await _keys.keyFor(file),
+      key: await _keys.keyFor(account, file),
       serverUrl: serverUrl,
       phoneBook: _phoneBook,
       config: await _config(),
-      blobs: AppBlobStore(await AppPaths.attachmentCache()),
+      blobs: AppBlobStore(await AppPaths.attachmentCache(account)),
       mediaProcessor: FlutterMediaProcessor(),
       keys: _keys,
     );
@@ -77,10 +84,16 @@ final runtimeFactoryProvider = Provider<RuntimeFactory>(
 /// and the people search. See [PhoneCountry].
 final phoneCountryProvider = Provider<PhoneCountry>((ref) => PhoneCountry());
 
-/// The remembered server URL, in the keystore. Overridden in tests so nothing
-/// writes to the platform.
-final serverUrlStoreProvider = Provider<ServerUrlStore>(
-  (ref) => ServerUrlStore(),
+/// The keystore that holds each account's database key. Overridden in tests
+/// so nothing writes to the platform.
+final secureKeyStoreProvider = Provider<SecureKeyStore>(
+  (ref) => SecureKeyStore(),
+);
+
+/// The accounts on this device, in the keystore. Overridden in tests so
+/// nothing writes to the platform.
+final accountSlotStoreProvider = Provider<AccountSlotStore>(
+  (ref) => AccountSlotStore(),
 );
 
 /// The sign-in page's remembered numbers, in the keystore. Overridden in
@@ -127,36 +140,140 @@ final class SavedAccountsNotifier extends Notifier<List<SavedAccountEntry>> {
   }
 }
 
-/// The server this device talks to.
+/// The accounts on this device and the one on screen.
 ///
-/// Null until something chooses one. Sign-in opens on Helix Global, so the
-/// app has a server before it has an account; the choice is remembered in the
-/// keystore by [ServerUrlStore] once an account exists on it.
-final serverUrlProvider = NotifierProvider<ServerUrlNotifier, Uri?>(
-  ServerUrlNotifier.new,
+/// Empty until [AccountsNotifier.restore] has read the keystore at start.
+/// Sign-in makes a slot for the account it is signing in
+/// ([AccountsNotifier.useServer]) and keeps it once that succeeds
+/// ([AccountsNotifier.signedIn]); only then is it written to the keystore.
+final accountsProvider = NotifierProvider<AccountsNotifier, AccountSlots>(
+  AccountsNotifier.new,
 );
 
-final class ServerUrlNotifier extends Notifier<Uri?> {
-  @override
-  Uri? build() => null;
+final class AccountsNotifier extends Notifier<AccountSlots> {
+  final _random = Random.secure();
 
-  /// Points the app at [url], which tears the runtime down and opens a new one
-  /// (see [runtimeProvider]). Used by sign-in and by the sign-out path.
+  @override
+  AccountSlots build() => const AccountSlots();
+
+  /// Reads the accounts back and points the app at the one last on screen.
+  /// Returns whether there was one to open.
+  ///
+  /// The folders of accounts the device no longer lists (a sign-in that
+  /// never finished) are deleted with their keys first.
+  Future<bool> restore() async {
+    final loaded = await ref.read(accountSlotStoreProvider).load();
+    await _deleteUnlisted(loaded);
+    final current = loaded.current;
+    // A remembered address that is not https (or not an address at all) is
+    // not used: the device opens on sign-in rather than talking to it in the
+    // clear.
+    final uri = current == null ? null : Uri.tryParse(current.server);
+    final usable =
+        uri != null && uri.hasScheme && ServerPolicy.check(uri) == null;
+    state = usable ? loaded : loaded.activate(null);
+    return usable;
+  }
+
+  Future<void> _deleteUnlisted(AccountSlots listed) async {
+    final List<String> folders;
+    try {
+      folders = await AppPaths.accountFolders();
+    } on Object {
+      return; // No app folder on this host.
+    }
+    for (final id in folders) {
+      if (listed.byId(id) != null) continue;
+      await AppPaths.wipeLocalFiles(id, includeDatabase: true);
+      await AppPaths.deleteAccountFolder(id);
+      try {
+        await ref.read(secureKeyStoreProvider).forget(id);
+      } on Object {
+        // The files are gone, so the key guards nothing.
+      }
+    }
+  }
+
+  /// Points the app at [url] for the account being signed in, which tears the
+  /// runtime down and opens a new one (see [runtimeProvider]).
+  ///
+  /// The slot is the one still signing in if there is one, so changing server
+  /// halfway reuses its files. A signed-in account is never moved to another
+  /// server: with one on screen, a new slot is made.
   ///
   /// Throws [InsecureServerUrl] for an address [ServerPolicy] refuses (not
   /// https, outside a debug build's development hosts), so nothing downstream
   /// ever builds a client for it.
-  void use(Uri url) {
+  void useServer(Uri url) {
     final problem = ServerPolicy.check(url);
     if (problem != null) throw InsecureServerUrl(problem);
-    state = url;
+    final server = url.toString();
+    final current = state.current;
+    if (current != null && !current.signedIn) {
+      if (current.server != server) {
+        state = state.put(current.copyWith(server: server));
+      }
+      return;
+    }
+    AccountSlot? pending;
+    for (final s in state.slots) {
+      if (!s.signedIn) pending = s;
+    }
+    final slot =
+        pending?.copyWith(server: server) ??
+        AccountSlot(id: state.newId(_random), server: server);
+    state = state.put(slot, active: slot.id);
   }
 
-  /// Forgets the server, so the next screen is sign-in on Helix Global.
-  void forget() => state = null;
+  /// No account on screen: the next screen is sign-in on Helix Global. A
+  /// slot whose sign-in never finished is dropped (its folder goes at the
+  /// next start).
+  void leave() => state = AccountSlots(
+    slots: [
+      for (final s in state.slots)
+        if (s.signedIn) s,
+    ],
+  );
+
+  /// The account on screen finished signing in: it is kept, and opened again
+  /// at the next start.
+  Future<void> signedIn({String e164 = '', String name = ''}) async {
+    final current = state.current;
+    if (current == null) return;
+    state = state.put(
+      current.copyWith(
+        signedIn: true,
+        e164: e164.isEmpty ? null : e164,
+        name: name.isEmpty ? null : name,
+        lastUsed: ref.read(clockProvider)(),
+      ),
+    );
+    await ref.read(accountSlotStoreProvider).save(state);
+  }
+
+  /// The account on screen was signed out and its data wiped: it is no
+  /// longer listed, and sign-in shows.
+  Future<void> removeCurrent() async {
+    final id = state.active;
+    if (id == null) return;
+    state = state.without(id);
+    await ref.read(accountSlotStoreProvider).save(state);
+  }
 }
 
-/// Whether the remembered server has been read back from the keystore yet.
+/// The account on screen and its server, or null on sign-in. A record, so a
+/// change elsewhere in the list does not reopen the runtime.
+final activeAccountProvider = Provider<({String id, Uri server})?>((ref) {
+  final current = ref.watch(accountsProvider).current;
+  return current == null ? null : (id: current.id, server: current.serverUrl);
+});
+
+/// The server the account on screen talks to, or null on sign-in.
+final serverUrlProvider = Provider<Uri?>(
+  (ref) => ref.watch(activeAccountProvider)?.server,
+);
+
+/// Whether the accounts have been read back from the keystore yet.
 ///
 /// The cold-start app lock needs it: before the read, "signed out" only means
 /// "not looked yet", and a device with a saved session must not be treated as
@@ -165,7 +282,7 @@ enum SessionRestore {
   /// The keystore has not been read.
   pending,
 
-  /// A server was remembered and the app was pointed at it.
+  /// An account was remembered and the app was pointed at it.
   restored,
 
   /// Nothing remembered: a first install, a wipe or a sign-out.
@@ -187,17 +304,18 @@ class SessionRestoreNotifier extends Notifier<SessionRestore> {
 
 /// The live runtime, or the reason there is not one yet.
 ///
-/// Watching this is how the app learns that the server changed: the old
+/// Watching this is how the app learns that the account or its server
+/// changed: the old
 /// runtime is closed by [runtimeProvider]'s `onDispose` before the new one
 /// opens.
 final runtimeProvider = FutureProvider<HelixRuntime>((ref) async {
-  final serverUrl = ref.watch(serverUrlProvider);
-  if (serverUrl == null) {
+  final active = ref.watch(activeAccountProvider);
+  if (active == null) {
     throw const NoServerChosen();
   }
   final runtime = await ref
       .watch(runtimeFactoryProvider)
-      .open(serverUrl: serverUrl);
+      .open(account: active.id, serverUrl: active.server);
   ref.onDispose(runtime.close);
   // Another engine took the database lease over (a push isolate while this
   // app was frozen). The old engine has stopped; opening a new runtime takes

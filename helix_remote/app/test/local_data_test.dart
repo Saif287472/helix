@@ -39,7 +39,7 @@ void main() {
       'Windows keeps it in the local app-data folder, not Documents',
       () async {
         AppPaths.isWindows = () => true;
-        final db = await AppPaths.databaseFile();
+        final db = await AppPaths.databaseFile(AppPaths.firstAccount);
         expect(
           db.path.replaceAll(r'\', '/'),
           startsWith('${local.path.replaceAll(r'\', '/')}/helix_remote/'),
@@ -50,7 +50,7 @@ void main() {
 
     test('Android keeps its private files directory', () async {
       AppPaths.isWindows = () => false;
-      final db = await AppPaths.databaseFile();
+      final db = await AppPaths.databaseFile(AppPaths.firstAccount);
       expect(db.path.replaceAll(r'\', '/'), contains('/private/helix_remote/'));
     });
   });
@@ -58,11 +58,13 @@ void main() {
   group('plaintext leftovers (M5)', () {
     Future<File> seed() async {
       AppPaths.isWindows = () => false;
-      final avatar = await AppPaths.profileAvatarFile();
+      final avatar = await AppPaths.profileAvatarFile(AppPaths.firstAccount);
       avatar.writeAsBytesSync([1, 2, 3]);
-      final attachments = await AppPaths.attachmentCache();
+      final attachments = await AppPaths.attachmentCache(AppPaths.firstAccount);
       File('${attachments.path}/photo.jpg').writeAsBytesSync([9]);
-      (await AppPaths.databaseFile()).writeAsBytesSync([7]);
+      (await AppPaths.databaseFile(
+        AppPaths.firstAccount,
+      )).writeAsBytesSync([7]);
       return avatar;
     }
 
@@ -70,17 +72,29 @@ void main() {
       'wiping removes the avatar and the attachments, keeps the database',
       () async {
         final avatar = await seed();
-        await AppPaths.wipeLocalFiles();
+        await AppPaths.wipeLocalFiles(AppPaths.firstAccount);
         expect(avatar.existsSync(), isFalse);
-        expect((await AppPaths.attachmentCache()).listSync(), isEmpty);
-        expect((await AppPaths.databaseFile()).existsSync(), isTrue);
+        expect(
+          (await AppPaths.attachmentCache(AppPaths.firstAccount)).listSync(),
+          isEmpty,
+        );
+        expect(
+          (await AppPaths.databaseFile(AppPaths.firstAccount)).existsSync(),
+          isTrue,
+        );
       },
     );
 
     test('the destructive reset wipes the database too', () async {
       await seed();
-      await AppPaths.wipeLocalFiles(includeDatabase: true);
-      expect((await AppPaths.databaseFile()).existsSync(), isFalse);
+      await AppPaths.wipeLocalFiles(
+        AppPaths.firstAccount,
+        includeDatabase: true,
+      );
+      expect(
+        (await AppPaths.databaseFile(AppPaths.firstAccount)).existsSync(),
+        isFalse,
+      );
     });
 
     test(
@@ -95,8 +109,8 @@ void main() {
         );
         addTearDown(container.dispose);
         container
-            .read(serverUrlProvider.notifier)
-            .use(Uri.parse('https://chat.example.org'));
+            .read(accountsProvider.notifier)
+            .useServer(Uri.parse('https://chat.example.org'));
         await expectLater(
           container.read(runtimeProvider.future),
           throwsA(isA<StateError>()),
@@ -105,7 +119,10 @@ void main() {
         await container.read(destructiveResetProvider)();
 
         expect(avatar.existsSync(), isFalse);
-        expect((await AppPaths.databaseFile()).existsSync(), isFalse);
+        expect(
+          (await AppPaths.databaseFile(AppPaths.firstAccount)).existsSync(),
+          isFalse,
+        );
         expect(container.read(serverUrlProvider), isNull);
         expect(pickerCleared, 1);
       },
@@ -274,6 +291,6 @@ void main() {
 
 final class _Broken implements RuntimeFactory {
   @override
-  Future<Never> open({required Uri serverUrl}) =>
+  Future<Never> open({required String account, required Uri serverUrl}) =>
       Future.error(StateError('the database cannot be opened'));
 }

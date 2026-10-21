@@ -184,6 +184,6 @@ final RuntimeFactory _unreachable = _UnreachableFactory();
 
 final class _UnreachableFactory implements RuntimeFactory {
   @override
-  Future<Never> open({required Uri serverUrl}) =>
+  Future<Never> open({required String account, required Uri serverUrl}) =>
       throw StateError('these checks must not open an engine');
 }

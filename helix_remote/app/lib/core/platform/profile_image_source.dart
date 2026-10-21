@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 
 /// Where a profile picture comes from.
@@ -96,13 +97,16 @@ abstract interface class ProfileAvatarStore {
   Future<void> clear();
 }
 
+/// [account]'s picture file (see [AppPaths.profileAvatarFile]).
 final class FileProfileAvatarStore implements ProfileAvatarStore {
-  const FileProfileAvatarStore();
+  const FileProfileAvatarStore(this.account);
+
+  final String account;
 
   @override
   Future<Uint8List?> load() async {
     try {
-      final file = await AppPaths.profileAvatarFile();
+      final file = await AppPaths.profileAvatarFile(account);
       if (!await file.exists()) return null;
       return await file.readAsBytes();
     } on Object {
@@ -112,19 +116,22 @@ final class FileProfileAvatarStore implements ProfileAvatarStore {
 
   @override
   Future<void> save(Uint8List png) async {
-    final file = await AppPaths.profileAvatarFile();
+    final file = await AppPaths.profileAvatarFile(account);
     await file.writeAsBytes(png, flush: true);
   }
 
   @override
   Future<void> clear() async {
-    final file = await AppPaths.profileAvatarFile();
+    final file = await AppPaths.profileAvatarFile(account);
     if (await file.exists()) await file.delete();
   }
 }
 
+/// The picture store of the account on screen; a switch rebuilds it.
 final profileAvatarStoreProvider = Provider<ProfileAvatarStore>(
-  (ref) => const FileProfileAvatarStore(),
+  (ref) => FileProfileAvatarStore(
+    ref.watch(activeAccountProvider)?.id ?? AppPaths.firstAccount,
+  ),
 );
 
 /// The picture on this device, or null. Changing it rebuilds everything that
@@ -136,7 +143,7 @@ final profileAvatarProvider =
 
 final class ProfileAvatarNotifier extends AsyncNotifier<Uint8List?> {
   @override
-  Future<Uint8List?> build() => ref.read(profileAvatarStoreProvider).load();
+  Future<Uint8List?> build() => ref.watch(profileAvatarStoreProvider).load();
 
   Future<void> set(Uint8List png) async {
     await ref.read(profileAvatarStoreProvider).save(png);

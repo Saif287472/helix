@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
@@ -38,7 +39,7 @@ void main() {
     AppPaths.isWindows = () => false;
     FlutterSecureStorage.setMockInitialValues({});
     keys = SecureKeyStore();
-    dbFile = await AppPaths.databaseFile();
+    dbFile = await AppPaths.databaseFile(AppPaths.firstAccount);
     pickerCleared = 0;
     PickerTemporaryFiles.clearer = () async => pickerCleared++;
   });
@@ -58,7 +59,7 @@ void main() {
   /// the engine's account service does (minus the server, which needs none to
   /// be signed in), plus the plaintext files the app keeps beside it.
   Future<DatabaseKey> seedSignedInDevice() async {
-    final key = await keys.keyFor(dbFile);
+    final key = await keys.keyFor(AppPaths.firstAccount, dbFile);
     final db = await HelixDb.open(dbFile, key: key);
     final random = SecureCryptoRandom();
     final aik = await Ed25519KeyPair.generate(random);
@@ -98,14 +99,17 @@ void main() {
     );
     await db.close();
     // The plaintext leftovers sign-out must not keep.
-    (await AppPaths.profileAvatarFile()).writeAsBytesSync([1, 2, 3]);
+    (await AppPaths.profileAvatarFile(
+      AppPaths.firstAccount,
+    )).writeAsBytesSync([1, 2, 3]);
     File(
-      '${(await AppPaths.attachmentCache()).path}/photo.jpg',
+      '${(await AppPaths.attachmentCache(AppPaths.firstAccount)).path}/photo.jpg',
     ).writeAsBytesSync([9]);
     return key;
   }
 
   Future<HelixRuntime> open(DatabaseKey key) => HelixRuntime.open(
+    account: AppPaths.firstAccount,
     dbFile: dbFile,
     key: key,
     serverUrl: Uri.parse('http://127.0.0.1:9'),
@@ -124,9 +128,19 @@ void main() {
         reason: 'database file$suffix',
       );
     }
-    expect(await keys.hasKey(), isFalse, reason: 'the SQLCipher key');
-    expect((await AppPaths.profileAvatarFile()).existsSync(), isFalse);
-    expect((await AppPaths.attachmentCache()).listSync(), isEmpty);
+    expect(
+      await keys.hasKey(AppPaths.firstAccount),
+      isFalse,
+      reason: 'the SQLCipher key',
+    );
+    expect(
+      (await AppPaths.profileAvatarFile(AppPaths.firstAccount)).existsSync(),
+      isFalse,
+    );
+    expect(
+      (await AppPaths.attachmentCache(AppPaths.firstAccount)).listSync(),
+      isEmpty,
+    );
     expect(pickerCleared, greaterThan(0));
   }
 
@@ -140,7 +154,7 @@ void main() {
       expect(runtime.wasWiped, isFalse);
       // Nothing is wiped just by opening.
       expect(dbFile.existsSync(), isTrue);
-      expect(await keys.hasKey(), isTrue);
+      expect(await keys.hasKey(AppPaths.firstAccount), isTrue);
     },
   );
 
@@ -168,7 +182,7 @@ void main() {
 
       // What sign-in does next: a key is made because there is no file, and an
       // empty database opens with it.
-      final fresh = await keys.keyFor(dbFile);
+      final fresh = await keys.keyFor(AppPaths.firstAccount, dbFile);
       expect(fresh.bytes, isNot(key.bytes));
       final next = await open(fresh);
       addTearDown(next.close);
@@ -180,8 +194,10 @@ void main() {
       'that had nothing to sign out)', () async {
     // No account in this database: Engine.signOut returns at once, so only the
     // app's own step can leave the file and key gone.
-    final key = await keys.keyFor(dbFile);
-    (await AppPaths.profileAvatarFile()).writeAsBytesSync([1]);
+    final key = await keys.keyFor(AppPaths.firstAccount, dbFile);
+    (await AppPaths.profileAvatarFile(
+      AppPaths.firstAccount,
+    )).writeAsBytesSync([1]);
     final first = await open(key);
     expect(first.engine.account.isSignedIn, isFalse);
 
@@ -189,14 +205,14 @@ void main() {
       overrides: [
         runtimeFactoryProvider.overrideWithValue(_Single(first)),
         secureKeyStoreProvider.overrideWithValue(keys),
-        serverUrlStoreProvider.overrideWithValue(ServerUrlStore()),
+        accountSlotStoreProvider.overrideWithValue(AccountSlotStore()),
       ],
       retry: (_, _) => null,
     );
     addTearDown(container.dispose);
     container
-        .read(serverUrlProvider.notifier)
-        .use(Uri.parse('http://127.0.0.1:9'));
+        .read(accountsProvider.notifier)
+        .useServer(Uri.parse('http://127.0.0.1:9'));
     await container.read(runtimeProvider.future);
 
     await container.read(signOutProvider)();
@@ -215,14 +231,14 @@ void main() {
         overrides: [
           runtimeFactoryProvider.overrideWithValue(_Single(runtime)),
           secureKeyStoreProvider.overrideWithValue(keys),
-          serverUrlStoreProvider.overrideWithValue(ServerUrlStore()),
+          accountSlotStoreProvider.overrideWithValue(AccountSlotStore()),
         ],
         retry: (_, _) => null,
       );
       addTearDown(container.dispose);
       container
-          .read(serverUrlProvider.notifier)
-          .use(Uri.parse('http://127.0.0.1:9'));
+          .read(accountsProvider.notifier)
+          .useServer(Uri.parse('http://127.0.0.1:9'));
       await container.read(runtimeProvider.future);
 
       await container.read(signOutProvider)();
@@ -243,8 +259,11 @@ void main() {
     expect(runtime.wasWiped, isFalse);
     expect(runtime.engine.account.isSignedIn, isTrue);
     expect(dbFile.existsSync(), isTrue);
-    expect(await keys.hasKey(), isTrue);
-    expect((await AppPaths.profileAvatarFile()).existsSync(), isTrue);
+    expect(await keys.hasKey(AppPaths.firstAccount), isTrue);
+    expect(
+      (await AppPaths.profileAvatarFile(AppPaths.firstAccount)).existsSync(),
+      isTrue,
+    );
   });
 
   test('a failing step does not stop the others, and is reported', () async {
@@ -279,7 +298,7 @@ void main() {
       overrides: [
         runtimeFactoryProvider.overrideWithValue(
           _Recording(first, opened, () async {
-            final fresh = await keys.keyFor(dbFile);
+            final fresh = await keys.keyFor(AppPaths.firstAccount, dbFile);
             return open(fresh);
           }),
         ),
@@ -289,8 +308,8 @@ void main() {
     );
     addTearDown(container.dispose);
     container
-        .read(serverUrlProvider.notifier)
-        .use(Uri.parse('http://127.0.0.1:9'));
+        .read(accountsProvider.notifier)
+        .useServer(Uri.parse('http://127.0.0.1:9'));
     await container.read(runtimeProvider.future);
     container.listen(authStateProvider, (_, _) {});
     container.read(wipedRuntimeResetProvider);
@@ -329,8 +348,8 @@ void main() {
       );
       addTearDown(container.dispose);
       container
-          .read(serverUrlProvider.notifier)
-          .use(Uri.parse('http://127.0.0.1:9'));
+          .read(accountsProvider.notifier)
+          .useServer(Uri.parse('http://127.0.0.1:9'));
       expect(await container.read(runtimeProvider.future), same(first));
 
       // Another engine took the lease over: the file says so, and this engine's
@@ -370,7 +389,10 @@ final class _Single implements RuntimeFactory {
   final HelixRuntime _runtime;
 
   @override
-  Future<HelixRuntime> open({required Uri serverUrl}) async => _runtime;
+  Future<HelixRuntime> open({
+    required String account,
+    required Uri serverUrl,
+  }) async => _runtime;
 }
 
 /// The first open gives [first]; later ones call [again].
@@ -382,7 +404,10 @@ final class _Recording implements RuntimeFactory {
   final Future<HelixRuntime> Function() again;
 
   @override
-  Future<HelixRuntime> open({required Uri serverUrl}) async {
+  Future<HelixRuntime> open({
+    required String account,
+    required Uri serverUrl,
+  }) async {
     final runtime = opened.isEmpty ? first : await again();
     opened.add(runtime);
     return runtime;
