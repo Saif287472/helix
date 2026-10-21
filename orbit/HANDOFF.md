@@ -54,6 +54,45 @@ Still on the old pages, on purpose:
 
 Next: the owner tries a debug APK.
 
+Done after that (2026-10-21, the owner's urgent list):
+- 610c519: the anomaly log. Every build sends problem reports to its own
+  server (`client_anomaly` lines; `server/tool/anomalies.dart` shows them).
+  Live only after production runs this branch and restarts.
+- bdfaa2c: screens stay above the keyboard; sign-out leaves at once;
+  sign-in is number then password, no code for an account with one.
+- (next commit): "Use a code instead" first shows the number and asks the
+  person to confirm, saying the operator may charge for the text.
+
+### Next: saved accounts and switching (a long session)
+
+The owner wants "Remember me" at sign-in, saved accounts on the sign-in
+page, and switching from an Accounts page in You, in Orbit's style
+(prototype first, then the port, as for every screen).
+
+Why it is long: today one database, one key and one session belong to the
+signed-in account, and signing out wipes them (`SignOutAction`,
+`HelixRuntime.hardWipe`). Several accounts on one device need:
+1. A device-level account list (`DeviceSettingsStore` or a new file): id,
+   server, number (masked), name, avatar, last used. No passwords.
+2. One database, keystore key and session per account (paths and key
+   names keyed by account id), and `runtimeProvider` opening the chosen
+   one; switching closes one engine and opens another.
+3. Sign-out split in two: "Sign out and remove from this device" (today's
+   wipe, for that account only) and "Switch account" (keeps it).
+4. Push and notifications for accounts not on screen (one FCM token per
+   device; the server maps it to several devices, one per account), and
+   calls ringing for any account.
+5. UI: sign-in shows saved accounts (tap, then the password; "Remember me"
+   on by default), You gets an Accounts page (current, others, Add
+   account, Remove). Prototype screens, then orbit_ui, then connectors.
+6. Tests across engine, app and journeys; the security docs (THREAT_MODEL:
+   several accounts' keys on one device; the app lock covers all).
+   Needs an ADR if it changes plan sections 3 to 6.
+
+A cheaper first step if tokens are short: remember numbers and names only
+on the sign-in page (tap one, type its password). Switching is then sign
+out and sign in, with the data of the old account wiped as today.
+
 Deferred until the owner asks: every backend item (S1, E1 to E6), the
 pixel checks, DEVIATIONS and FEATURE.md updates, batch 10 (the wide
 Windows layout), and Part B steps 3 to 5 (the rename, deleting

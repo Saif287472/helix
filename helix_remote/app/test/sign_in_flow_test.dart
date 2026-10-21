@@ -259,6 +259,30 @@ void main() {
     );
   });
 
+  group('asking for a code', () {
+    testWidgets('the number is checked and agreed to before anything is sent', (
+      tester,
+    ) async {
+      final container = await pumpScreen(tester);
+      final notifier = container.read(signInControllerProvider.notifier);
+      notifier.updateDigits('1711000001');
+      await notifier.submitPhone();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Use a code instead'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Send a code to +880 1711000001'), findsOne);
+      expect(find.textContaining('may charge you'), findsOneWidget);
+
+      // Changing the number sends nothing (the runtime factory would throw).
+      await tester.tap(find.text('Change number'));
+      await tester.pumpAndSettle();
+      expect(container.read(signInControllerProvider).page, SignInPage.phone);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+  });
+
   group('the terms', () {
     test('are required before an account is created on Helix Global', () async {
       final container = _container();

@@ -38,6 +38,27 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     });
   }
 
+  /// Nothing is texted until the person has checked the number and agreed:
+  /// a code goes to it, and the operator may charge for the message.
+  void _confirmCode(BuildContext context, String number) {
+    final c = ref.read(signInControllerProvider.notifier);
+    orbit.showOrbitDialog(
+      context,
+      title: 'Send a code to $number?',
+      text:
+          'Check that this is your number. We will text a 6-digit code to '
+          'it, and your mobile operator may charge you for the message.',
+      actions: [
+        orbit.OrbitDialogAction('Change number', onPressed: c.goBack),
+        orbit.OrbitDialogAction(
+          'Send the code',
+          kind: orbit.OrbitButtonKind.primary,
+          onPressed: c.forgotPassword,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(signInControllerProvider);
@@ -55,7 +76,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         onResendCode: c.resendOtp,
         onPasswordChanged: c.updatePassword,
         onSignIn: c.signInWithPassword,
-        onForgotPassword: c.forgotPassword,
+        onForgotPassword: () => _confirmCode(context, state.phoneLabel),
         onLinkInstead: c.linkFromAnotherDevice,
         onNameChanged: c.updateDisplayName,
         onNewPasswordChanged: c.updateNewPassword,
