@@ -66,6 +66,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       router.go(AppRoutes.signIn);
     }
   });
+  // Switching accounts closes whatever the last one had open: the pages
+  // pushed over home belong to it.
+  ref.listen(activeAccountProvider, (was, now) {
+    if (was != null && now != null && was.id != now.id) {
+      router.go(AppRoutes.home);
+    }
+  });
   ref.listen(postSignInProvider, (_, _) => poke());
   ref.listen(sessionRestoreProvider, (_, _) => poke());
   ref.onDispose(refresh.dispose);
@@ -167,7 +174,9 @@ String? _redirectFor(
     }
     setStartupDone(true);
   }
-  if (state == null) return null; // Still opening the database.
+  // Still opening the database, or the engine of an account just switched
+  // to is still deciding: the screen stays.
+  if (state == null || state == AppAuthState.starting) return null;
   if (state == AppAuthState.ready) {
     // The step after signing in on a new device comes before the tabs, once.
     final step = ref.read(postSignInProvider);

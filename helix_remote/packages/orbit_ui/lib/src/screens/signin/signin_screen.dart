@@ -190,12 +190,14 @@ class SignInActions {
 enum SignInSheet { none, legal, countries }
 
 /// An account this device remembers, shown on the phone step: tap it and
-/// type its password. Both lines arrive ready to show.
+/// type its password, or, for one still signed in here, open it. Both lines
+/// arrive ready to show.
 class SavedAccountModel {
   const SavedAccountModel({
     required this.id,
     required this.title,
     required this.subtitle,
+    this.forgettable = true,
   });
 
   /// Opaque to the screen; the app matches the row's tap and x back to the
@@ -207,6 +209,10 @@ class SavedAccountModel {
 
   /// The second line: the masked number, or the server.
   final String subtitle;
+
+  /// Whether the row has an x. An account still signed in on the device has
+  /// none: it is removed by signing it out.
+  final bool forgettable;
 }
 
 /// `signin` (`prototype/js/screens/signin.js`; `.si-*` in `css/pages.css`):
@@ -1012,11 +1018,12 @@ class _SavedAccountRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                    OrbitIconButton(
-                      icon: OrbitIcons.x,
-                      tooltip: 'Forget ${account.title}',
-                      onPressed: onForget,
-                    ),
+                    if (account.forgettable)
+                      OrbitIconButton(
+                        icon: OrbitIcons.x,
+                        tooltip: 'Forget ${account.title}',
+                        onPressed: onForget,
+                      ),
                   ],
                 ),
               ),

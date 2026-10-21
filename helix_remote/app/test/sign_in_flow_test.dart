@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/global_server.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/helix_code.dart';
+import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/saved_accounts.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_controller.dart';
@@ -522,6 +524,70 @@ void main() {
       expect(lines.single.detail, 'Helix Global');
     });
 
+    /// [number] is signed in on this device as account `abc`, and also on
+    /// the remembered list.
+    Future<void> seedSignedIn(ProviderContainer container) async {
+      FlutterSecureStorage.setMockInitialValues({
+        SavedAccountsStore.keystoreKey: jsonEncode([
+          {'n': number, 's': kGlobalServerUrl.toString(), 'name': 'Rahman'},
+        ]),
+        AccountSlotStore.keystoreKey: jsonEncode({
+          'accounts': [
+            {
+              'id': 'abc',
+              's': kGlobalServerUrl.toString(),
+              'n': number,
+              'name': 'Rahman',
+            },
+          ],
+        }),
+      });
+      await container.read(accountsProvider.notifier).restore();
+    }
+
+    testWidgets('an account signed in here is listed once, opens on a tap, '
+        'and has no x', (tester) async {
+      final container = await pumpScreen(tester);
+      await tester.runAsync(() => seedSignedIn(container));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Rahman'), findsOneWidget);
+      expect(find.text('+880 ••••• 0001 · signed in'), findsOneWidget);
+      expect(find.byTooltip('Forget Rahman'), findsNothing);
+      await tester.tap(find.text('Rahman'));
+      await tester.pump();
+      expect(container.read(activeAccountProvider)?.id, 'abc');
+    });
+
+    test('typing the number of an account signed in here opens it', () async {
+      // Opening the account is the runtime's business; here it never ends.
+      final container = ProviderContainer(
+        overrides: [runtimeFactoryProvider.overrideWithValue(_NeverOpens())],
+      );
+      addTearDown(container.dispose);
+      await seedSignedIn(container);
+      final notifier = container.read(signInControllerProvider.notifier);
+      notifier.updateDigits('1711000001');
+      expect(await notifier.submitPhone(), isTrue);
+      expect(container.read(activeAccountProvider)?.id, 'abc');
+      expect(notifier.state.page, isNot(SignInPage.password));
+    });
+
+    test('a signed-in account on a personal server says where it is', () {
+      final lines = signedInAccountLines(const [
+        AccountSlot(
+          id: 'x1',
+          server: 'https://chat.example.org',
+          signedIn: true,
+        ),
+      ]);
+      expect(lines.single.id, '${signedInLinePrefix}x1');
+      expect(lines.single.title, 'Account on chat.example.org');
+      expect(lines.single.detail, 'chat.example.org · signed in');
+      expect(opensSignedInAccount(lines.single), isTrue);
+    });
+
     test('Remember me is on until it is turned off', () {
       final container = _container();
       final notifier = container.read(signInControllerProvider.notifier);
@@ -579,4 +645,10 @@ final class _UnreachableFactory implements RuntimeFactory {
   @override
   Future<Never> open({required String account, required Uri serverUrl}) =>
       throw StateError('these tests must not open an engine');
+}
+
+final class _NeverOpens implements RuntimeFactory {
+  @override
+  Future<Never> open({required String account, required Uri serverUrl}) =>
+      Completer<Never>().future;
 }

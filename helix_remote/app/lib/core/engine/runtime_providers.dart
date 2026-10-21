@@ -225,6 +225,10 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
     state = state.put(slot, active: slot.id);
   }
 
+  /// "Add account": sign-in shows, and the accounts already signed in stay
+  /// listed there to come back to.
+  void addAccount() => leave();
+
   /// No account on screen: the next screen is sign-in on Helix Global. A
   /// slot whose sign-in never finished is dropped (its folder goes at the
   /// next start).
@@ -251,12 +255,64 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
     await ref.read(accountSlotStoreProvider).save(state);
   }
 
+  /// Opens [id], a signed-in account, in place of the one on screen. A
+  /// sign-in that had not finished is dropped.
+  Future<void> switchTo(String id) async {
+    final slot = state.byId(id);
+    if (slot == null || !slot.signedIn) return;
+    final now = ref.read(clockProvider)();
+    state = AccountSlots(
+      active: id,
+      slots: [
+        for (final s in state.slots)
+          if (s.id == id) s.copyWith(lastUsed: now) else if (s.signedIn) s,
+      ],
+    );
+    await ref.read(accountSlotStoreProvider).save(state);
+  }
+
   /// The account on screen was signed out and its data wiped: it is no
-  /// longer listed, and sign-in shows.
-  Future<void> removeCurrent() async {
+  /// longer listed. The most recently used other account opens, or sign-in
+  /// if there is none; returns the one opened.
+  Future<String?> removeCurrent() async {
     final id = state.active;
-    if (id == null) return;
-    state = state.without(id);
+    if (id == null) return null;
+    var next = state.without(id);
+    final other = next.signedIn.isEmpty ? null : next.signedIn.first;
+    if (other != null) {
+      next = next
+          .put(other.copyWith(lastUsed: ref.read(clockProvider)()))
+          .activate(other.id);
+    }
+    state = next;
+    await ref.read(accountSlotStoreProvider).save(state);
+    return other?.id;
+  }
+
+  /// Account [id] is no longer signed in here (the server revoked this
+  /// device, or its session is gone): it leaves the list. If it is the one
+  /// on screen it stays there for sign-in, which reuses its folder.
+  Future<void> lost(String id) async {
+    final slot = state.byId(id);
+    if (slot == null || !slot.signedIn) return;
+    state = id == state.active
+        ? state.put(slot.copyWith(signedIn: false))
+        : state.without(id);
+    await ref.read(accountSlotStoreProvider).save(state);
+  }
+
+  /// What account [id] calls itself, as its own database says, so the lists
+  /// show a number and a name even for an account that was linked or kept
+  /// from before there were several.
+  Future<void> describe(String id, {String? e164, String? name}) async {
+    final slot = state.byId(id);
+    if (slot == null || !slot.signedIn) return;
+    final next = slot.copyWith(
+      e164: e164 == null || e164.isEmpty ? null : e164,
+      name: name == null || name.isEmpty ? null : name,
+    );
+    if (next == slot) return;
+    state = state.put(next);
     await ref.read(accountSlotStoreProvider).save(state);
   }
 }

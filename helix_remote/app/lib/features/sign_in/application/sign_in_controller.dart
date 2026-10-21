@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/global_server.dart';
@@ -10,6 +12,7 @@ import 'package:helix_remote/core/links/helix_code.dart';
 import 'package:helix_remote/core/platform/saved_accounts.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
+import 'package:helix_remote/features/sign_in/application/sign_in_view.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_countries.dart';
@@ -338,6 +341,13 @@ final class SignInController extends Notifier<SignInState> {
     if (national < signInMinDigits(state.countryCode)) {
       return _fail(SignInCopy.phoneTooShort);
     }
+    // Already signed in on this device: open it, rather than sign it in a
+    // second time beside itself.
+    final here = _signedInHere(number);
+    if (here != null) {
+      await ref.read(accountsProvider.notifier).switchTo(here);
+      return true;
+    }
 
     state = state.copyWith(
       page: SignInPage.password,
@@ -569,6 +579,21 @@ final class SignInController extends Notifier<SignInState> {
     return ref.read(runtimeProvider.future);
   }
 
+  /// The account on this device with [number] on the server this page signs
+  /// in to, if there is one.
+  String? _signedInHere(String number) {
+    final server = state.isAdvanced
+        ? ref.read(serverUrlProvider)
+        : kGlobalServerUrl;
+    if (server == null) return null;
+    for (final slot in ref.read(accountsProvider).signedIn) {
+      if (slot.e164 == number && slot.server == server.toString()) {
+        return slot.id;
+      }
+    }
+    return null;
+  }
+
   /// The account is signed in on this device: it is listed, and opened again
   /// at the next start.
   Future<void> _keepAccount(String number, {String name = ''}) =>
@@ -591,9 +616,19 @@ final class SignInController extends Notifier<SignInState> {
         ),
       );
 
-  /// A saved account on the phone page: its number goes in, the password
-  /// page opens. The number signed in here once, so it is not re-asked.
-  void pickSavedAccount(String e164) {
+  /// A saved account on the phone page. One still signed in on this device
+  /// opens; otherwise its number goes in and the password page opens (the
+  /// number signed in here once, so it is not re-asked).
+  void pickSavedAccount(String id) {
+    if (id.startsWith(signedInLinePrefix)) {
+      unawaited(
+        ref
+            .read(accountsProvider.notifier)
+            .switchTo(id.substring(signedInLinePrefix.length)),
+      );
+      return;
+    }
+    final e164 = id;
     var code = SignInState.defaultCountryCode;
     var best = 0;
     for (final c in signInCountries) {

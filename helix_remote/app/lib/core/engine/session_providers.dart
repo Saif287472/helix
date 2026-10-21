@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
@@ -46,7 +48,9 @@ AppAuthState _authStateOf(EngineStatus status) => switch (status) {
   EngineStatus.revoked => AppAuthState.revoked,
 };
 
-/// Signs the account on screen out of this device and removes it.
+/// Signs the account on screen out of this device and removes it ("Sign out
+/// and remove from this device"). The most recently used other account on
+/// the device opens next; with none, sign-in.
 ///
 /// The engine's own `signOut` revokes this device on the server (best effort)
 /// and **always wipes the account's local database**: a device that kept its
@@ -69,9 +73,11 @@ final class SignOutAction {
     await runtime.ensureWiped();
     await _ref.read(secureKeyStoreProvider).forget(account);
     await _wipeLeftovers(account);
-    // Rebuilding the runtime is what makes the wipe visible to the UI.
-    _ref.invalidate(runtimeProvider);
+    // The next account opens, or sign-in; either way the runtime is rebuilt,
+    // which is what makes the wipe visible to the UI.
     await _ref.read(accountsProvider.notifier).removeCurrent();
+    _ref.invalidate(runtimeProvider);
+    await AppPaths.deleteAccountFolder(account);
   }
 
   /// What the engine's wipe does not reach: the account's avatar picture and
@@ -96,6 +102,58 @@ final wipedRuntimeResetProvider = Provider<void>((ref) {
     final runtime = ref.read(runtimeProvider).value;
     if (runtime != null && runtime.wasWiped) ref.invalidate(runtimeProvider);
   });
+});
+
+/// Keeps the device's list of accounts in step with each runtime that opens:
+/// the account's number and name as its own database has them, and an
+/// account whose engine finds itself signed out or revoked leaves the list
+/// (it stays on screen for the sign-in that follows). Read once, by the app
+/// root.
+///
+/// Keyed by the runtime's own account, not the one on screen, so an engine
+/// closing behind a switch never touches the account that replaced it.
+final accountListUpkeepProvider = Provider<void>((ref) {
+  final subscriptions = <StreamSubscription<Object?>>[];
+  void stop() {
+    for (final s in subscriptions) {
+      unawaited(s.cancel());
+    }
+    subscriptions.clear();
+  }
+
+  ref.onDispose(stop);
+  ref.listen(runtimeProvider, (_, next) {
+    stop();
+    final runtime = next.value;
+    if (runtime == null) return;
+    final accounts = ref.read(accountsProvider.notifier);
+    final id = runtime.account;
+    void status(EngineStatus s) {
+      if (s == EngineStatus.signedOut || s == EngineStatus.revoked) {
+        unawaited(accounts.lost(id));
+      }
+    }
+
+    status(runtime.engine.status);
+    subscriptions
+      ..add(runtime.engine.statuses.listen(status))
+      ..add(
+        runtime.engine.account.watch().listen((row) {
+          if (row == null) return;
+          final profile = row.profileName;
+          final helix = row.helixName;
+          unawaited(
+            accounts.describe(
+              id,
+              e164: row.phoneNumber,
+              name: profile != null && profile.isNotEmpty
+                  ? profile
+                  : (helix != null && helix.isNotEmpty ? '~$helix' : null),
+            ),
+          );
+        }),
+      );
+  }, fireImmediately: true);
 });
 
 /// Deletes the encrypted database and the key of the account on screen, so a
@@ -131,12 +189,13 @@ final class DestructiveReset {
         // Closing is best effort; the files are deleted regardless.
       }
     }
-    await _ref.read(accountsProvider.notifier).removeCurrent();
     _ref.read(pendingLinkProvider.notifier).set(null);
     await AppPaths.wipeLocalFiles(account, includeDatabase: true);
     await AppPaths.deleteAccountFolder(account);
     await PickerTemporaryFiles.clear();
     await _ref.read(secureKeyStoreProvider).forget(account);
+    // Only once the files are gone: the next account (or sign-in) opens now.
+    await _ref.read(accountsProvider.notifier).removeCurrent();
     _ref.invalidate(runtimeProvider);
   }
 }

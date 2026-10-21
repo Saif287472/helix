@@ -140,6 +140,7 @@ orbit.SignInModel signInModel(SignInState state, List<SavedAccountLine> saved) {
           id: line.id,
           title: line.title,
           subtitle: line.detail,
+          forgettable: !opensSignedInAccount(line),
         ),
     ],
     remember: state.remember,

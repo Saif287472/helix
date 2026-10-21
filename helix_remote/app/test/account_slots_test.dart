@@ -230,6 +230,94 @@ void main() {
       );
     });
 
+    /// Two accounts signed in, the second on screen; returns their ids.
+    Future<(String, String)> two(ProviderContainer c) async {
+      final accounts = c.read(accountsProvider.notifier);
+      accounts.useServer(Uri.parse('https://helix.example'));
+      await accounts.signedIn(e164: '+8801711000001');
+      final first = c.read(activeAccountProvider)!.id;
+      accounts.leave();
+      accounts.useServer(Uri.parse('https://helix.example'));
+      await accounts.signedIn(e164: '+8801711000002');
+      return (first, c.read(activeAccountProvider)!.id);
+    }
+
+    test('switching opens the other account and is remembered', () async {
+      final c = container();
+      final (first, _) = await two(c);
+      final accounts = c.read(accountsProvider.notifier);
+      accounts.leave();
+      accounts.useServer(Uri.parse('https://helix.example'));
+      await accounts.switchTo(first);
+
+      expect(c.read(activeAccountProvider)?.id, first);
+      expect(
+        c.read(accountsProvider).slots,
+        hasLength(2),
+        reason: 'the unfinished sign-in is dropped',
+      );
+      final next = container();
+      await next.read(accountsProvider.notifier).restore();
+      expect(next.read(activeAccountProvider)?.id, first);
+    });
+
+    test('an account that is not signed in is never switched to', () async {
+      final c = container();
+      c.read(accountsProvider.notifier).useServer(Uri.parse('https://x.test'));
+      final pending = c.read(activeAccountProvider)!.id;
+      c.read(accountsProvider.notifier).leave();
+      await c.read(accountsProvider.notifier).switchTo(pending);
+      expect(c.read(activeAccountProvider), isNull);
+    });
+
+    test('removing the account on screen opens the other one', () async {
+      final c = container();
+      final (first, second) = await two(c);
+      expect(await c.read(accountsProvider.notifier).removeCurrent(), first);
+      expect(c.read(activeAccountProvider)?.id, first);
+      expect(c.read(accountsProvider).byId(second), isNull);
+      expect(await c.read(accountsProvider.notifier).removeCurrent(), isNull);
+      expect(c.read(activeAccountProvider), isNull);
+    });
+
+    test(
+      'a lost account leaves the list; on screen it stays for sign-in',
+      () async {
+        final c = container();
+        final (first, second) = await two(c);
+        final accounts = c.read(accountsProvider.notifier);
+        await accounts.lost(first);
+        expect(c.read(accountsProvider).byId(first), isNull);
+
+        await accounts.lost(second);
+        expect(c.read(activeAccountProvider)?.id, second);
+        expect(c.read(accountsProvider).current?.signedIn, isFalse);
+        expect(
+          await container().read(accountsProvider.notifier).restore(),
+          isFalse,
+        );
+        // Signing in again reuses the folder.
+        accounts.useServer(Uri.parse('https://helix.example'));
+        expect(c.read(activeAccountProvider)?.id, second);
+      },
+    );
+
+    test('an account learns its number and name from its database', () async {
+      final c = container();
+      final accounts = c.read(accountsProvider.notifier);
+      accounts.useServer(Uri.parse('https://helix.example'));
+      await accounts.signedIn();
+      final id = c.read(activeAccountProvider)!.id;
+      await accounts.describe(id, e164: '+8801711000001', name: 'Ada');
+      await accounts.describe(id, name: '');
+
+      final next = container();
+      await next.read(accountsProvider.notifier).restore();
+      final slot = next.read(accountsProvider).current!;
+      expect(slot.e164, '+8801711000001');
+      expect(slot.name, 'Ada');
+    });
+
     test('folders of unlisted accounts are deleted with their keys', () async {
       await AccountSlotStore().save(
         const AccountSlots(

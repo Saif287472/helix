@@ -123,6 +123,7 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       // while the app is in the background.
       ref.read(anomalyLogInstallProvider);
       ref.read(wipedRuntimeResetProvider);
+      ref.read(accountListUpkeepProvider);
       ref.listenManual(mediaPolicySyncProvider, (_, _) {});
       // Listened rather than read, so they stay active whatever else happens
       // to watch the providers they follow.
