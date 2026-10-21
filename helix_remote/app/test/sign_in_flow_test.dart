@@ -1,12 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/core/engine/global_server.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/helix_code.dart';
+import 'package:helix_remote/core/platform/saved_accounts.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_controller.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
+import 'package:helix_remote/features/sign_in/application/sign_in_view.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 import 'package:orbit_ui/orbit_ui.dart' show OrbitTokens;
@@ -388,7 +394,7 @@ void main() {
 
     test('the model follows the state', () {
       const global = SignInState();
-      final m = signInModel(global);
+      final m = signInModel(global, const []);
       expect(m.step, orbit.SignInStep.phone);
       expect(m.countries.first, ('+880', 'Bangladesh'));
       expect(m.serverBadge, isNull);
@@ -401,19 +407,137 @@ void main() {
         pendingServerHost: 'chat.example.org',
         serverName: 'Example',
       );
-      expect(signInModel(server).step, orbit.SignInStep.serverConfirm);
-      expect(signInModel(server).serverBadge, 'chat.example.org (Example)');
-      expect(signInModel(server).showTerms, isFalse);
+      expect(
+        signInModel(server, const []).step,
+        orbit.SignInStep.serverConfirm,
+      );
+      expect(
+        signInModel(server, const []).serverBadge,
+        'chat.example.org (Example)',
+      );
+      expect(signInModel(server, const []).showTerms, isFalse);
 
       final takeOver = global.copyWith(
         page: SignInPage.name,
         accountExists: true,
       );
-      expect(signInModel(takeOver).step, orbit.SignInStep.takeOver);
+      expect(signInModel(takeOver, const []).step, orbit.SignInStep.takeOver);
       expect(
-        signInModel(global.copyWith(codeString: 'HLX-REC-1')).setupCodeKind,
+        signInModel(
+          global.copyWith(codeString: 'HLX-REC-1'),
+          const [],
+        ).setupCodeKind,
         orbit.SetupCodeKind.recovery,
       );
+    });
+  });
+
+  group('saved accounts', () {
+    const number = '+8801711000001';
+
+    void seed() => FlutterSecureStorage.setMockInitialValues({
+      SavedAccountsStore.keystoreKey: jsonEncode([
+        {'n': number, 's': kGlobalServerUrl.toString(), 'name': 'Rahman'},
+      ]),
+    });
+
+    testWidgets('a remembered number is offered on the phone page', (
+      tester,
+    ) async {
+      seed();
+      await pumpScreen(tester);
+      await tester.pump();
+
+      expect(find.text('Saved accounts'), findsOneWidget);
+      expect(find.text('Rahman'), findsOneWidget);
+      expect(find.text('+880 ••••• 0001'), findsOneWidget);
+    });
+
+    testWidgets('an empty list draws nothing', (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      await pumpScreen(tester);
+      await tester.pump();
+
+      expect(find.text('Saved accounts'), findsNothing);
+    });
+
+    testWidgets('tapping one fills the number and asks for the password', (
+      tester,
+    ) async {
+      seed();
+      final container = await pumpScreen(tester);
+      await tester.pump();
+      await tester.tap(find.text('Rahman'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.byKey(const ValueKey('password')), findsOneWidget);
+      expect(find.text('Remember me on this device'), findsOneWidget);
+      expect(
+        container.read(signInControllerProvider).phoneLabel,
+        '+880 1711000001',
+      );
+    });
+
+    testWidgets('the x forgets the number', (tester) async {
+      seed();
+      final container = await pumpScreen(tester);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Forget Rahman'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rahman'), findsNothing);
+      expect(find.text('Saved accounts'), findsNothing);
+      // Gone for good, not just off the screen.
+      expect(container.read(savedAccountsProvider), isEmpty);
+    });
+
+    testWidgets('Remember me can be turned off at the password', (
+      tester,
+    ) async {
+      seed();
+      final container = await pumpScreen(tester);
+      await tester.pump();
+      await tester.tap(find.text('Rahman'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remember me on this device'));
+      await tester.pump();
+
+      expect(container.read(signInControllerProvider).remember, isFalse);
+    });
+
+    test('only the page\'s own server is offered, and a number without a '
+        'name shows the server', () {
+      final lines = savedAccountLinesForGlobalPage([
+        SavedAccountEntry(e164: number, server: kGlobalServerUrl.toString()),
+        const SavedAccountEntry(
+          e164: '+8801700000002',
+          server: 'https://chat.example.org',
+          name: 'Rahman',
+        ),
+      ]);
+      expect(lines.length, 1);
+      expect(lines.single.id, number);
+      expect(lines.single.title, '+880 ••••• 0001');
+      expect(lines.single.detail, 'Helix Global');
+    });
+
+    test('Remember me is on until it is turned off', () {
+      final container = _container();
+      final notifier = container.read(signInControllerProvider.notifier);
+      expect(notifier.state.remember, isTrue);
+      notifier.setRemember(false);
+      expect(notifier.state.remember, isFalse);
+      expect(signInModel(notifier.state, const []).remember, isFalse);
+    });
+
+    test('the model carries the rows for the screen', () {
+      final m = signInModel(const SignInState(), const [
+        (id: number, title: 'Rahman', detail: '+880 ••••• 0001'),
+      ]);
+      expect(m.savedAccounts.single.id, number);
+      expect(m.savedAccounts.single.title, 'Rahman');
+      expect(m.savedAccounts.single.subtitle, '+880 ••••• 0001');
     });
   });
 

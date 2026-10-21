@@ -41,6 +41,7 @@ final class SignInState {
     this.hasPassword = false,
     this.completed = false,
     this.showPhoneRecoveryPrompt = false,
+    this.remember = true,
   });
 
   /// Bangladesh, because that is where Helix Global starts.
@@ -96,6 +97,10 @@ final class SignInState {
   /// An invite was entered for a number that already has an account. The
   /// invite cannot be used; the way back in is a recovery code.
   final bool showPhoneRecoveryPrompt;
+
+  /// Whether a successful sign-in is remembered on this device. On by
+  /// default; the password page's box turns it off.
+  final bool remember;
 
   bool get isAdvanced => mode == SignInMode.advanced;
 
@@ -154,6 +159,7 @@ final class SignInState {
     bool? hasPassword,
     bool? completed,
     bool? showPhoneRecoveryPrompt,
+    bool? remember,
     bool clearError = false,
     bool clearCodeType = false,
     bool clearServerName = false,
@@ -183,6 +189,7 @@ final class SignInState {
     completed: completed ?? this.completed,
     showPhoneRecoveryPrompt:
         showPhoneRecoveryPrompt ?? this.showPhoneRecoveryPrompt,
+    remember: remember ?? this.remember,
   );
 
   @override
@@ -207,7 +214,8 @@ final class SignInState {
       other.accountExists == accountExists &&
       other.hasPassword == hasPassword &&
       other.completed == completed &&
-      other.showPhoneRecoveryPrompt == showPhoneRecoveryPrompt;
+      other.showPhoneRecoveryPrompt == showPhoneRecoveryPrompt &&
+      other.remember == remember;
 
   @override
   int get hashCode => Object.hashAll([
@@ -231,5 +239,6 @@ final class SignInState {
     hasPassword,
     completed,
     showPhoneRecoveryPrompt,
+    remember,
   ]);
 }

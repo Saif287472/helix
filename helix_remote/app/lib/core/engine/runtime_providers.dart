@@ -10,6 +10,7 @@ import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/platform/flutter_media_processor.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
+import 'package:helix_remote/core/platform/saved_accounts.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show DevicePlatform;
@@ -81,6 +82,50 @@ final phoneCountryProvider = Provider<PhoneCountry>((ref) => PhoneCountry());
 final serverUrlStoreProvider = Provider<ServerUrlStore>(
   (ref) => ServerUrlStore(),
 );
+
+/// The sign-in page's remembered numbers, in the keystore. Overridden in
+/// tests so nothing writes to the platform.
+final savedAccountsStoreProvider = Provider<SavedAccountsStore>(
+  (ref) => SavedAccountsStore(),
+);
+
+/// The numbers this device remembers, most recent first. Read when sign-in
+/// shows the phone page; [savedAccountsProvider.notifier] keeps the list in
+/// step with the store as it is remembered and forgotten.
+final savedAccountsProvider =
+    NotifierProvider<SavedAccountsNotifier, List<SavedAccountEntry>>(
+      SavedAccountsNotifier.new,
+    );
+
+final class SavedAccountsNotifier extends Notifier<List<SavedAccountEntry>> {
+  @override
+  List<SavedAccountEntry> build() {
+    _read();
+    return const [];
+  }
+
+  Future<void> _read() async {
+    final List<SavedAccountEntry> entries;
+    try {
+      entries = await ref.read(savedAccountsStoreProvider).load();
+    } on Object {
+      // No keystore on this host (tests): the page shows no saved accounts,
+      // and nothing that types a number depends on the list.
+      return;
+    }
+    if (ref.mounted) state = entries;
+  }
+
+  Future<void> remember(SavedAccountEntry entry) async {
+    await ref.read(savedAccountsStoreProvider).remember(entry);
+    state = [entry, ...state.where((e) => e.e164 != entry.e164)];
+  }
+
+  Future<void> forget(String e164) async {
+    await ref.read(savedAccountsStoreProvider).forget(e164);
+    state = state.where((e) => e.e164 != e164).toList();
+  }
+}
 
 /// The server this device talks to.
 ///

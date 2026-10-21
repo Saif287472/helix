@@ -67,6 +67,8 @@ class SignInModel {
     this.error,
     this.showRecoveryOffer = false,
     this.showTerms = true,
+    this.savedAccounts = const [],
+    this.remember = true,
     this.legal = LegalDocumentsModel.preview,
   });
 
@@ -105,6 +107,15 @@ class SignInModel {
   /// `SignInState.showsTerms`).
   final bool showTerms;
 
+  /// The accounts this device remembers, on the Global phone step. Empty
+  /// renders nothing, so a device without saved accounts sees the screen
+  /// exactly as before.
+  final List<SavedAccountModel> savedAccounts;
+
+  /// Whether a successful sign-in is remembered on this device ("Remember
+  /// me on this device", on by default).
+  final bool remember;
+
   /// The documents the Terms and Privacy sheet shows: the app's real ones,
   /// or the prototype's placeholder text in the preview.
   final LegalDocumentsModel legal;
@@ -141,6 +152,9 @@ class SignInActions {
     this.onConfirmServer,
     this.onCancelServer,
     this.onUseRecoveryCode,
+    this.onSavedAccountTap,
+    this.onSavedAccountForget,
+    this.onRememberChanged,
   });
 
   final ValueChanged<String>? onPhoneChanged;
@@ -166,11 +180,34 @@ class SignInActions {
   final Future<bool> Function()? onConfirmServer;
   final VoidCallback? onCancelServer;
   final VoidCallback? onUseRecoveryCode;
+  final ValueChanged<SavedAccountModel>? onSavedAccountTap;
+  final ValueChanged<SavedAccountModel>? onSavedAccountForget;
+  final ValueChanged<bool>? onRememberChanged;
 }
 
 /// Which sheet the preview opens with the screen (`signin-legal`,
 /// `signin-country`).
 enum SignInSheet { none, legal, countries }
+
+/// An account this device remembers, shown on the phone step: tap it and
+/// type its password. Both lines arrive ready to show.
+class SavedAccountModel {
+  const SavedAccountModel({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+  });
+
+  /// Opaque to the screen; the app matches the row's tap and x back to the
+  /// account it stands for.
+  final String id;
+
+  /// The first line: the account's name, or its number.
+  final String title;
+
+  /// The second line: the masked number, or the server.
+  final String subtitle;
+}
 
 /// `signin` (`prototype/js/screens/signin.js`; `.si-*` in `css/pages.css`):
 /// one screen, eight steps.
@@ -545,6 +582,12 @@ class _SignInScreenState extends State<SignInScreen> {
             phoneField(
               'New to Orbit? Enter your number and we will set up your account.',
             ),
+            if (m.savedAccounts.isNotEmpty)
+              _SavedAccounts(
+                accounts: m.savedAccounts,
+                onTap: a.onSavedAccountTap,
+                onForget: a.onSavedAccountForget,
+              ),
           ],
           primary: 'Next',
           onPrimary: _tap(a.onPhoneNext),
@@ -608,6 +651,12 @@ class _SignInScreenState extends State<SignInScreen> {
               autofillHints: const [AutofillHints.password],
               onChanged: a.onPasswordChanged,
               onSubmitted: (_) => a.onSignIn?.call(),
+            ),
+            OrbitCheckbox(
+              key: const ValueKey('remember'),
+              label: 'Remember me on this device',
+              on: m.remember,
+              onChanged: a.onRememberChanged,
             ),
             Transform.translate(
               offset: const Offset(0, -4),
@@ -863,6 +912,116 @@ class _Error extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The accounts this device remembers, under the phone field: a caption,
+/// then a row per account, 4px apart.
+class _SavedAccounts extends StatelessWidget {
+  const _SavedAccounts({
+    required this.accounts,
+    required this.onTap,
+    required this.onForget,
+  });
+
+  final List<SavedAccountModel> accounts;
+  final ValueChanged<SavedAccountModel>? onTap;
+  final ValueChanged<SavedAccountModel>? onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OrbitText(
+            'Saved accounts',
+            style: t.font.style(size: OrbitType.caption, color: t.ink3),
+          ),
+          const SizedBox(height: 4),
+          for (final account in accounts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: _SavedAccountRow(
+                account: account,
+                onTap: () => onTap?.call(account),
+                onForget: () => onForget?.call(account),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One saved account: 56px, the name over the masked number, an x on the
+/// right. Tapping the row signs that number in.
+class _SavedAccountRow extends StatelessWidget {
+  const _SavedAccountRow({
+    required this.account,
+    required this.onTap,
+    required this.onForget,
+  });
+
+  final SavedAccountModel account;
+  final VoidCallback onTap;
+  final VoidCallback onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    return OrbitTapArea(
+      child: Semantics(
+        button: true,
+        container: true,
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: BorderRadius.circular(t.rMd),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            splashFactory: NoSplash.splashFactory,
+            hoverColor: t.accentSoft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OrbitText(
+                            account.title,
+                            style: t.font.style(size: OrbitType.body),
+                          ),
+                          OrbitText(
+                            account.subtitle,
+                            style: t.font.style(
+                              size: OrbitType.caption,
+                              color: t.ink3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    OrbitIconButton(
+                      icon: OrbitIcons.x,
+                      tooltip: 'Forget ${account.title}',
+                      onPressed: onForget,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

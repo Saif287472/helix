@@ -62,11 +62,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(signInControllerProvider);
+    final saved = ref.watch(signInSavedAccountsProvider);
     final c = ref.read(signInControllerProvider.notifier);
     return orbit.SignInScreen(
       // A new step is a new screen, so its fields start from the model.
       key: ValueKey(_stepOf(state)),
-      model: signInModel(state),
+      model: signInModel(state, saved),
       actions: orbit.SignInActions(
         onPhoneChanged: c.updateDigits,
         onCountryChanged: c.setCountryCode,
@@ -91,14 +92,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         onConfirmServer: c.confirmServer,
         onCancelServer: c.declineServer,
         onUseRecoveryCode: c.beginPhoneRecovery,
+        onSavedAccountTap: (account) => c.pickSavedAccount(account.id),
+        onSavedAccountForget: (account) => c.forgetSavedAccount(account.id),
+        onRememberChanged: c.setRemember,
       ),
     );
   }
 }
 
-/// The screen's model for [state] (`orbit/contracts/signin.md`).
+/// The screen's model for [state] and the saved accounts in their words
+/// (`orbit/contracts/signin.md`).
 @visibleForTesting
-orbit.SignInModel signInModel(SignInState state) {
+orbit.SignInModel signInModel(SignInState state, List<SavedAccountLine> saved) {
   final host = state.pendingServerHost ?? state.serverHost;
   final name = state.serverName;
   return orbit.SignInModel(
@@ -129,6 +134,15 @@ orbit.SignInModel signInModel(SignInState state) {
     busy: state.isLoading,
     error: state.errorMessage,
     showRecoveryOffer: state.showPhoneRecoveryPrompt,
+    savedAccounts: [
+      for (final line in saved)
+        orbit.SavedAccountModel(
+          id: line.id,
+          title: line.title,
+          subtitle: line.detail,
+        ),
+    ],
+    remember: state.remember,
     legal: _legal,
   );
 }

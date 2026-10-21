@@ -7,6 +7,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/helix_code.dart';
+import 'package:helix_remote/core/platform/saved_accounts.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 import 'package:helix_remote/shared/route_paths.dart';
@@ -165,6 +166,9 @@ final class SignInController extends Notifier<SignInState> {
       state = state.copyWith(newPassword: value, clearError: true);
 
   void setTosAccepted(bool value) => state = state.copyWith(tosAccepted: value);
+
+  /// The password page's "Remember me on this device".
+  void setRemember(bool value) => state = state.copyWith(remember: value);
 
   /// The page's back arrow. Global's phone page has none: there is nothing
   /// before it, and a back button there would promise otherwise.
@@ -430,6 +434,9 @@ final class SignInController extends Notifier<SignInState> {
     if (state.password.isEmpty) return _fail(SignInCopy.emptyPassword);
 
     state = state.copyWith(isLoading: true, clearError: true);
+    // Read before signing in: a successful sign-in resets this flow, and the
+    // box the person unticked goes with it.
+    final remember = state.remember;
     try {
       final runtime = await _currentRuntime();
       // The account may already have a history on another device or in a
@@ -441,6 +448,7 @@ final class SignInController extends Notifier<SignInState> {
         password: state.password,
       );
       await _rememberServer(runtime.serverUrl);
+      if (remember) await _rememberAccount(number, runtime.serverUrl);
       state = state.copyWith(
         completed: true,
         isLoading: false,
@@ -487,6 +495,7 @@ final class SignInController extends Notifier<SignInState> {
     // Read before register(): the moment the device is signed in this flow is
     // reset (`_resetFlow`), and the name typed on this page goes with it.
     final name = skip ? '' : state.displayName.trim();
+    final remember = state.remember;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final runtime = await _currentRuntime();
@@ -512,6 +521,9 @@ final class SignInController extends Notifier<SignInState> {
         }
       }
       await _rememberServer(runtime.serverUrl);
+      if (remember) {
+        await _rememberAccount(number, runtime.serverUrl, name: name);
+      }
       state = state.copyWith(
         completed: true,
         isLoading: false,
@@ -559,6 +571,48 @@ final class SignInController extends Notifier<SignInState> {
 
   Future<void> _rememberServer(Uri serverUrl) =>
       ref.read(serverUrlStoreProvider).save(serverUrl.toString());
+
+  /// Adds the number to the sign-in page's saved accounts, most recent
+  /// first. The list lives on the device across sign-outs; a password is
+  /// never in it.
+  Future<void> _rememberAccount(
+    String number,
+    Uri serverUrl, {
+    String name = '',
+  }) => ref
+      .read(savedAccountsProvider.notifier)
+      .remember(
+        SavedAccountEntry(
+          e164: number,
+          server: serverUrl.toString(),
+          name: name,
+        ),
+      );
+
+  /// A saved account on the phone page: its number goes in, the password
+  /// page opens. The number signed in here once, so it is not re-asked.
+  void pickSavedAccount(String e164) {
+    var code = SignInState.defaultCountryCode;
+    var best = 0;
+    for (final c in signInCountries) {
+      if (e164.startsWith(c.code) && c.code.length > best) {
+        best = c.code.length;
+        code = c.code;
+      }
+    }
+    state = state.copyWith(
+      countryCode: code,
+      digits: e164.substring(best),
+      page: SignInPage.password,
+      password: '',
+      clearError: true,
+    );
+  }
+
+  /// The x on a saved account: the number is forgotten. Nothing on the
+  /// server or in any signed-in data changes.
+  Future<void> forgetSavedAccount(String e164) =>
+      ref.read(savedAccountsProvider.notifier).forget(e164);
 
   /// Puts [message] on the current page and reports false, so every caller
   /// can `return _fail(...)`.
