@@ -208,6 +208,14 @@ void main() {
     Routes.serverInfo: (c) => c.ops.serverInfo(),
     Routes.legal: (c) => c.ops.legal(),
     Routes.crashReport: (c) => c.ops.crashReport(const CrashReport(name: 'x')),
+    Routes.anomalies: (c) => c.ops.anomalies(
+      const AnomalyReport(
+        appVersion: '1',
+        platform: 'test',
+        debug: false,
+        entries: [],
+      ),
+    ),
     Routes.metrics: (c) => c.admin.metrics(),
     Routes.assetLinks: (c) => c.ops.assetLinks(),
     Routes.openLink: (c) => c.ops.openPage(),

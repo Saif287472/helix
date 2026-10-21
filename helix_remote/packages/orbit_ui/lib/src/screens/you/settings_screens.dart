@@ -659,6 +659,7 @@ class AboutModel {
     this.privacyVersion = '',
     this.crashReportsAccepted = true,
     this.sendCrashReports = false,
+    this.problemReports,
   });
 
   /// "Version 2.0.0 (412)".
@@ -669,6 +670,10 @@ class AboutModel {
   final String privacyVersion;
   final bool crashReportsAccepted;
   final bool sendCrashReports;
+
+  /// When set, problem reports are always sent: Diagnostics says this line
+  /// instead of offering the crash-report switch.
+  final String? problemReports;
 }
 
 class AboutActions {
@@ -767,7 +772,22 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
           ],
         ),
-        if (m.crashReportsAccepted)
+        if (m.problemReports != null)
+          OrbitSection(
+            title: 'Diagnostics',
+            footer:
+                'A problem report never contains your messages, keys or full '
+                'phone numbers.',
+            rows: [
+              OrbitListRow(
+                icon: OrbitIcons.bug,
+                iconColor: 7,
+                title: 'Problem reports',
+                sub: m.problemReports!,
+              ),
+            ],
+          )
+        else if (m.crashReportsAccepted)
           OrbitSection(
             title: 'Diagnostics',
             footer:

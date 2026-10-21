@@ -55,6 +55,8 @@ final class ApiResponse {
 /// [CancellationToken]s; and maps error responses to [ApiException].
 ///
 /// It never logs. Tokens and bodies stay out of every exception it throws.
+/// [onFailure] is told about each request the server refused, by route
+/// template, status, error code and request id only.
 final class HelixTransport {
   HelixTransport({
     required this.baseUrl,
@@ -66,6 +68,7 @@ final class HelixTransport {
     Future<void> Function(Duration delay)? sleep,
     Random? random,
     String Function()? newId,
+    this.onFailure,
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null,
        _sleep = sleep ?? Future<void>.delayed,
@@ -74,6 +77,10 @@ final class HelixTransport {
 
   /// The server, e.g. `https://helix.agiletechbd.com`. A path prefix is kept.
   final Uri baseUrl;
+
+  /// Told about every request that ends in an error response (after any
+  /// retries and the token refresh). Never told a body, a header or a token.
+  final void Function(RequestFailure failure)? onFailure;
 
   /// Tokens for device or admin routes; null for a transport that only
   /// calls public routes.
@@ -244,6 +251,21 @@ final class HelixTransport {
         if (failures < retry.maxAttempts && wait <= retry.maxRetryAfter) {
           await _wait(wait, cancel);
           continue;
+        }
+      }
+      final observe = onFailure;
+      if (observe != null) {
+        try {
+          observe(
+            RequestFailure(
+              route: route,
+              status: status,
+              code: error.code.wire,
+              requestId: responseId,
+            ),
+          );
+        } on Object {
+          // An observer never changes what the caller sees.
         }
       }
       throw error;
@@ -448,4 +470,21 @@ final class _Aborted implements Exception {
   const _Aborted(this.reason);
 
   final _Abort reason;
+}
+
+/// A request the server refused, as [HelixTransport.onFailure] sees it: the
+/// route's template (`/v1/groups/{group_id}`, never the real ids), the
+/// status, the error code and the request id the server logged it under.
+final class RequestFailure {
+  const RequestFailure({
+    required this.route,
+    required this.status,
+    required this.code,
+    required this.requestId,
+  });
+
+  final ApiRoute route;
+  final int status;
+  final String code;
+  final String requestId;
 }

@@ -196,6 +196,7 @@ smaller id survives, the other ends with reason `glare`.
 | `GET /v1/server` | — → `ServerInfo` | `features`: allow-listed flags. |
 | `GET /v1/server/legal` | — → `LegalDocuments` | |
 | `POST /v1/telemetry/crash` | `CrashReport` → 204 | Opt-in, and only while the `crash_reporting_upload` flag is on (`forbidden` otherwise). 10 per hour per device. Logged redacted, never stored. |
+| `POST /v1/telemetry/anomalies` | `AnomalyReport` → 204 | The app's anomaly log, in batches of up to 50: crashes, failed actions, failed requests, unexpected states. Every build sends it (no opt-in, no server flag); a debug build sends whole messages and stacks, a release build sanitised ones. Never message content, keys or tokens. Each entry is logged redacted as `client_anomaly` and never stored. 120 per hour per device. |
 | `GET /v1/ops/metrics` | — → Prometheus text | Admin token, or the server's `HELIX_METRICS_TOKEN` (opens this route only). |
 | `GET /.well-known/assetlinks.json` | — → Android asset links | |
 | `GET /open` | — → HTML landing page for `#HLX-…` links | Also served at `/open/`, and nowhere below it. CSP `frame-ancestors 'none'` and `X-Frame-Options: DENY`. |

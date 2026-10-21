@@ -127,6 +127,69 @@ void main() {
       expect(line, contains('chat'));
     });
 
+    test('anomalies need no flag, each is one redacted log line', () async {
+      final alice = await h.registerGlobal(aliceNumber);
+      final report = AnomalyReport(
+        appVersion: '2.0.0',
+        platform: 'android',
+        debug: true,
+        entries: [
+          Anomaly(
+            at: DateTime.utc(2026, 10, 21, 9),
+            kind: 'request',
+            where: 'POST /v1/messages',
+            message: 'call +8801711000001 failed',
+            fields: const {'status': '500', 'Bad Key': 'dropped'},
+          ),
+          Anomaly(
+            at: DateTime.utc(2026, 10, 21, 9, 1),
+            kind: 'crash',
+            where: 'StateError',
+            message: 'Bad state: no element',
+            stack: '#0 main (package:helix_remote/main.dart:12:3)',
+          ),
+        ],
+      ).toJson();
+      final sent = await h.api.call(
+        Routes.anomalies,
+        bearer: alice.bearer,
+        body: report,
+      );
+      expect(sent.status, 204);
+      final lines = h.env.log.lines
+          .where((l) => l.contains('client_anomaly'))
+          .toList();
+      expect(lines, hasLength(2));
+      expect(lines.first, contains('POST /v1/messages'));
+      expect(lines.first, isNot(contains('8801711000001')));
+      expect(lines.first, isNot(contains('Bad Key')));
+      expect(lines.last, contains('no element'));
+      expect(lines.last, contains('main.dart:12:3'));
+
+      // Without a session nothing is accepted.
+      final anonymous = await h.api.call(Routes.anomalies, body: report);
+      expect(anonymous.status, 401);
+    });
+
+    test('a batch over the limit is refused', () async {
+      final alice = await h.registerGlobal(aliceNumber);
+      final big = AnomalyReport(
+        appVersion: '2.0.0',
+        platform: 'android',
+        debug: false,
+        entries: [
+          for (var i = 0; i <= AnomalyReport.maxEntries; i++)
+            Anomaly(at: DateTime.utc(2026), kind: 'state', where: 'x$i'),
+        ],
+      ).toJson();
+      final refused = await h.api.call(
+        Routes.anomalies,
+        bearer: alice.bearer,
+        body: big,
+      );
+      expect(refused.errorCode, 'invalid_field');
+    });
+
     test('metrics need an admin token', () async {
       expect((await h.api.call(Routes.metrics)).status, 401);
       final alice = await h.registerGlobal(aliceNumber);

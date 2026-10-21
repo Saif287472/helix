@@ -17,7 +17,7 @@ import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:helix_remote_server/src/version.dart';
 import 'package:shelf/shelf.dart';
 
-/// Health, server info, legal documents, crash telemetry, metrics, app
+/// Health, server info, legal documents, crash and anomaly telemetry, metrics, app
 /// links, and the operator settings behind them: server name, maintenance
 /// mode, federation switch and feature flags. Schema `ops`.
 final class OpsModule extends ModuleBase implements ProvidesMaintenance {
@@ -26,6 +26,10 @@ final class OpsModule extends ModuleBase implements ProvidesMaintenance {
     _crashes = context.metrics.counter(
       'helix_client_crash_reports_total',
       'Opt-in crash reports received',
+    );
+    _anomalies = context.metrics.counter(
+      'helix_client_anomalies_total',
+      'Anomalies the apps reported',
     );
     _federationDefault = envFlag(
       context.config.env,
@@ -41,6 +45,7 @@ final class OpsModule extends ModuleBase implements ProvidesMaintenance {
   /// The facade other modules receive.
   late final OpsApi api;
   late final Counter _crashes;
+  late final Counter _anomalies;
 
   static const _probe = RateLimitPolicy(
     'ops.probe',
@@ -50,6 +55,11 @@ final class OpsModule extends ModuleBase implements ProvidesMaintenance {
   static final _crashLimit = RateLimitPolicy.per(
     'ops.crash',
     10,
+    const Duration(hours: 1),
+  );
+  static final _anomalyLimit = RateLimitPolicy.per(
+    'ops.anomalies',
+    120,
     const Duration(hours: 1),
   );
 
@@ -92,6 +102,13 @@ CREATE TABLE $s.settings (
         _crash,
         rateLimit: _crashLimit,
         maxBodyBytes: 96 * 1024,
+      )
+      ..add(
+        name,
+        Routes.anomalies,
+        _anomaliesIn,
+        rateLimit: _anomalyLimit,
+        maxBodyBytes: 512 * 1024,
       )
       ..add(name, Routes.metrics, _metrics, extraBearer: _metricsBearer)
       ..add(name, Routes.assetLinks, _assetLinks, rateLimit: _probe)
@@ -255,6 +272,44 @@ CREATE TABLE $s.settings (
                 : e.value,
       },
     });
+    return noContent();
+  }
+
+  /// The apps' anomaly logs: each entry becomes one redacted `client_anomaly`
+  /// warning in the server's log (the console, the log file and the admin
+  /// console's live view); nothing is stored. Every build sends them, with no
+  /// opt-in and no flag (the owner's decision, 2026-10-21).
+  Future<Response> _anomaliesIn(HelixRequest request) async {
+    final report = request.json(AnomalyReport.fromJson);
+    if (report.entries.length > AnomalyReport.maxEntries) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'entries'},
+      );
+    }
+    String cap(String value, int max) =>
+        value.length > max ? '${value.substring(0, max)}…' : value;
+    final key = RegExp(r'^[a-z][a-z0-9_]{0,40}$');
+    for (final e in report.entries) {
+      _anomalies.inc();
+      log.warn('client_anomaly', {
+        'kind': cap(e.kind, 20),
+        'where': cap(e.where, 200),
+        'device_id': request.device.deviceId,
+        'app_version': cap(report.appVersion, 40),
+        'platform': cap(report.platform, 20),
+        'debug': report.debug,
+        'at': e.at.toUtc().toIso8601String(),
+        if (e.message.isNotEmpty)
+          'message': cap(e.message, Anomaly.maxMessageLength),
+        if (e.stack.isNotEmpty) 'stack': cap(e.stack, Anomaly.maxStackLength),
+        if (e.fields.isNotEmpty)
+          'fields': {
+            for (final f in e.fields.entries.take(Anomaly.maxFields))
+              if (key.hasMatch(f.key)) f.key: cap(f.value, 500),
+          },
+      });
+    }
     return noContent();
   }
 

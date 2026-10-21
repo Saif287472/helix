@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/core/engine/crash_reporter.dart';
+import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/calls/call_host.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
@@ -35,16 +35,21 @@ import 'package:orbit_ui/orbit_ui.dart';
 /// 4. [ProviderScope], because every screen below it is a `ConsumerWidget`.
 Future<void> main(List<String> args) async {
   FlutterError.onError = (details) {
-    // The exception's type only: nothing here may name a message, a key, a
-    // token or a full phone number.
+    // The console gets the exception's type only; the anomaly log masks
+    // keys, tokens and phone numbers before anything leaves the device.
     FlutterError.presentError(details);
     debugPrint('[helix] flutter error: ${details.exception.runtimeType}');
-    CrashReporter.report(details.exception);
+    AnomalyLog.crash(details.exception, details.stack);
   };
-
   await runZonedGuarded(
     () async {
-      WidgetsFlutterBinding.ensureInitialized();
+      final binding = WidgetsFlutterBinding.ensureInitialized();
+      // Errors no zone or framework handler sees (platform channels).
+      binding.platformDispatcher.onError = (error, stack) {
+        debugPrint('[helix] platform error: ${error.runtimeType}');
+        AnomalyLog.crash(error, stack);
+        return true;
+      };
 
       registerPushBackgroundHandler();
       await LocalNotifications.init();
@@ -68,7 +73,7 @@ Future<void> main(List<String> args) async {
     },
     (error, stack) {
       debugPrint('[helix] uncaught: ${error.runtimeType}');
-      CrashReporter.report(error);
+      AnomalyLog.crash(error, stack);
     },
   );
 }
@@ -113,11 +118,11 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_restoreServer());
-      // These stay alive for the whole run: crash reports (opt-in), the
+      // These stay alive for the whole run: the anomaly log, the
       // auto-download limits that follow the network, the push token (sent
       // whenever an engine reaches running) and the message notification
       // while the app is in the background.
-      ref.read(crashReporterInstallProvider);
+      ref.read(anomalyLogInstallProvider);
       ref.read(wipedRuntimeResetProvider);
       ref.listenManual(mediaPolicySyncProvider, (_, _) {});
       // Listened rather than read, so they stay active whatever else happens

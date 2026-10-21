@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/engine/backup_policy.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
@@ -146,6 +147,7 @@ final class HelixRuntime {
       sessions: DbSessionTokenStore(db),
       clientName: config.deviceName,
       sockets: pinned ? pinning.socketFactory : defaultSocketFactory,
+      onRequestFailed: AnomalyLog.request,
     );
     // The REST client makes its `HttpClient` when it is constructed, so a
     // pinned runtime builds it inside the pinning scope.

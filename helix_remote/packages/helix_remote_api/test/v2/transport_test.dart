@@ -264,6 +264,29 @@ void main() {
   });
 
   group('errors', () {
+    test('a refused request is told to the observer, without its body', () {
+      server.handler = (_) => apiError(ErrorCode.nameTaken);
+      final seen = <RequestFailure>[];
+      final t = HelixTransport(
+        baseUrl: Uri.parse('https://helix.test/base'),
+        client: server.client,
+        auth: auth,
+        sleep: (d) async => slept.add(d),
+        random: Random(1),
+        onFailure: seen.add,
+      );
+      return expectLater(
+        t.send(Routes.setHelixName, json: {'name': 'request-secret'}),
+        throwsA(isA<ApiException>()),
+      ).then((_) {
+        expect(seen, hasLength(1));
+        expect(seen.single.route, Routes.setHelixName);
+        expect(seen.single.code, 'name_taken');
+        expect(seen.single.status, 409);
+        expect(seen.single.requestId, isNotEmpty);
+      });
+    });
+
     test('a 401 invalid_credentials is a wrong password, not a rejected '
         'token: no refresh and the admin session stays', () async {
       final admin = AdminTokenAuth(

@@ -2,10 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/engine/crash_reporter.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/backup_policy.dart';
@@ -292,24 +290,6 @@ void main() {
         expect(inner.uploads, 1);
       },
     );
-
-    test('crash reports do nothing until installed, and rate-limit', () async {
-      CrashReporter.resetForTest();
-      CrashReporter.report(StateError('x')); // not installed: silent
-      final container = ProviderContainer(
-        overrides: a3bOverrides(settings: FakeLocalSettings()),
-      );
-      addTearDown(() {
-        container.dispose();
-        CrashReporter.resetForTest();
-      });
-      container.read(crashReporterInstallProvider);
-      // Installed but not opted in: the sink returns without a request (the
-      // runtime factory here would throw if it were asked for a server).
-      CrashReporter.report(StateError('x'));
-      CrashReporter.report(StateError('y'));
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    });
 
     test('a failed password sign-in withdraws the restore step', () async {
       final container = newContainer(a3bOverrides());

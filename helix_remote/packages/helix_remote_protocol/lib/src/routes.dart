@@ -639,6 +639,12 @@ abstract final class Routes {
     module: 'ops',
     access: _dev,
   );
+  static const anomalies = ApiRoute(
+    _post,
+    '/v1/telemetry/anomalies',
+    module: 'ops',
+    access: _dev,
+  );
   static const metrics = ApiRoute(
     _get,
     '/v1/ops/metrics',
@@ -904,7 +910,7 @@ abstract final class Routes {
     createUpload, uploadContent, uploadStatus, downloadContent, deleteMedia,
     putHistoryBackup, getHistoryBackup, deleteHistoryBackup, putFullBackup,
     getFullBackup, deleteFullBackup, //
-    live, ready, serverInfo, legal, crashReport, metrics, assetLinks,
+    live, ready, serverInfo, legal, crashReport, anomalies, metrics, assetLinks,
     openLink, //
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,

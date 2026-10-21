@@ -14,6 +14,7 @@ federation use it).
 | `GET /v1/server` | public | `ops.probe` |
 | `GET /v1/server/legal` | public | `ops.probe` |
 | `POST /v1/telemetry/crash` | device | `ops.crash` 10/hour per device, 96 KiB |
+| `POST /v1/telemetry/anomalies` | device | `ops.anomalies` 120/hour per device, 512 KiB |
 | `GET /v1/ops/metrics` | admin, or `HELIX_METRICS_TOKEN` | — |
 | `GET /.well-known/assetlinks.json` | public | `ops.probe` |
 | `GET /open` | public | `ops.probe` |
@@ -52,6 +53,18 @@ except `/v1/health`, `/v1/ops` and `/v1/admin`.
 Only while `crash_reporting_upload` is on (otherwise `forbidden`). A report
 becomes one redacted `client_crash` warning (snake_case keys only, values
 capped at 2,000 characters) and a counter. Nothing is stored.
+
+## Anomaly reports
+
+The apps' anomaly logs, in batches of up to 50 (crashes, failed actions,
+failed requests, unexpected states). No opt-in and no flag: every build
+sends them (the owner's decision, 2026-10-21); a debug build sends whole
+messages and stacks, a release build sanitised ones. Each entry becomes one
+redacted `client_anomaly` warning (kind, where, device, app version,
+platform, time, message, stack, snake_case fields; every value capped) and
+a counter, `helix_client_anomalies_total`. Nothing is stored. Watch them
+with `dart run tool/anomalies.dart` on the server's log file, or in the
+console's output and the admin console's Logs.
 
 ## App links
 

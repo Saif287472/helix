@@ -30,6 +30,12 @@ final class OpsClient {
   Future<void> crashReport(CrashReport report) =>
       _t.empty(Routes.crashReport, json: report.toJson());
 
+  /// The app's anomaly log, a batch at a time (at most
+  /// [AnomalyReport.maxEntries]). Sanitise the entries first in a release
+  /// build.
+  Future<void> anomalies(AnomalyReport report) =>
+      _t.empty(Routes.anomalies, json: report.toJson());
+
   /// The Android asset-links statements (a JSON list).
   Future<List<Object?>> assetLinks() async {
     final response = await _t.send(Routes.assetLinks);

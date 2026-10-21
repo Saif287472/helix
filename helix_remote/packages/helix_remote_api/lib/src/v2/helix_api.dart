@@ -35,6 +35,7 @@ final class HelixApi {
     RetryPolicy retry = const RetryPolicy(),
     Duration timeout = const Duration(seconds: 30),
     Future<Session?> Function(IdentityClient identity)? reauthenticate,
+    void Function(RequestFailure failure)? onRequestFailed,
   }) {
     late final HelixTransport transport;
     final auth = DeviceSessionAuth(
@@ -48,6 +49,7 @@ final class HelixApi {
       clientName: clientName,
       retry: retry,
       timeout: timeout,
+      onFailure: onRequestFailed,
     );
     if (reauthenticate != null) {
       auth.reauthenticate = () => reauthenticate(IdentityClient(transport));

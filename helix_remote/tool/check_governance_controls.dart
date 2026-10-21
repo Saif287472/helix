@@ -163,7 +163,7 @@ const controls = <GovernanceControl>[
     'isShrinkResources = true',
   ),
 
-  // --- Logs and crash reports: no secrets, no content -----------------------
+  // --- Logs and problem reports: no secrets, no content ---------------------
   GovernanceControl(
     'server logs are redacted at the write boundary',
     'server/lib/src/platform/observability/log.dart',
@@ -239,37 +239,41 @@ const controls = <GovernanceControl>[
         'over to helix_remote_db; the at-rest promise depends on them.',
   ),
 
-  // --- MED-4: crash reporting ----------------------------------------------
+  // --- MED-4: problem reports (the anomaly log) ----------------------------
+  // The owner decided on 2026-10-21 that every build sends problem reports,
+  // with no opt-in (PRIVACY_CLAIM_MATRIX). What must hold instead: they are
+  // wired, they are masked on the device, and they go to the app's own
+  // server and nowhere else.
   GovernanceControl(
-    'crash reporter is wired to the zone handlers',
+    'the anomaly log is wired to the zone handlers',
     'app/lib/main.dart',
-    'CrashReporter.report',
+    'AnomalyLog.crash',
     because:
-        'MED-4 — the consent and event types existed for a while with no '
-        'caller, so no crash was ever reported. The wiring is the control, '
-        'not the types.',
+        'MED-4: the consent and event types once existed with no caller, '
+        'so nothing was ever reported. The wiring is the control.',
   ),
   GovernanceControl(
-    'crash reporting stays opt-in',
-    'app/lib/core/engine/crash_reporter.dart',
-    'if (!opted) return;',
-    because:
-        'reporting must require the person\'s opt-in AND the server\'s '
-        'crash_reporting_upload flag. Weakening either half turns a '
-        'privacy-first product into one that phones home by default.',
+    'refused requests reach the anomaly log',
+    'app/lib/core/engine/helix_runtime.dart',
+    'onRequestFailed: AnomalyLog.request',
   ),
   GovernanceControl(
-    'a crash report carries the exception type only',
-    'app/lib/core/engine/crash_reporter.dart',
-    'error.runtimeType.toString()',
+    'problem reports are masked on the device',
+    'app/lib/core/diagnostics/anomaly_log.dart',
+    'static String mask(String text)',
     because:
-        'no message text, stack trace, account or server address leaves '
-        'the device.',
+        'AGENTS.md: never send tokens, keys or full phone numbers. The '
+        'server redacts again, but the device must not rely on it.',
   ),
   GovernanceControl(
-    'the crash sink is self-hosted',
+    'a test proves the masking',
+    'app/test/diagnostics/anomaly_log_test.dart',
+    'are masked in every build',
+  ),
+  GovernanceControl(
+    'the problem-report sink is self-hosted',
     'server/lib/src/modules/ops/module.dart',
-    'Routes.crashReport',
+    'Routes.anomalies',
     because:
         'MED-4 asked for a self-hosted sink specifically. A vendor SDK '
         'in the client would satisfy the letter and not the intent.',

@@ -53,7 +53,7 @@ the client of the route's module, and that no S2S route appears.
 | `CallsClient` | TURN, signals, state, pending offers, metrics |
 | `MediaClient` | create upload, `PUT` chunk, `HEAD` status, ranged download, delete; `upload()` (resumable or one presigned `PUT`) |
 | `BackupClient` | history and full backups (`GET` returns null when there is none) |
-| `OpsClient` | live, ready (503 is an answer), server info, legal, crash report, asset links, `/open` |
+| `OpsClient` | live, ready (503 is an answer), server info, legal, crash report, anomaly reports, asset links, `/open` |
 | `ComplianceClient` | export, delete account |
 | `FederationClient` | `/.well-known/helix-server` (the only public federation route) |
 | `AdminClient` | every admin route, the log stream (WebSocket) and `GET /v1/ops/metrics` (an `ops` route that needs the admin audience) |

@@ -171,6 +171,94 @@ final class CrashReport {
   }
 }
 
+/// `POST /v1/telemetry/anomalies`: what went wrong on a device, in batches
+/// (the app's anomaly log). Every build sends it; a debug build sends whole
+/// messages and stacks, a release build sends them sanitised. Never message
+/// content, keys or tokens. The server logs each one and stores nothing.
+final class AnomalyReport {
+  const AnomalyReport({
+    required this.appVersion,
+    required this.platform,
+    required this.debug,
+    required this.entries,
+  });
+
+  static const maxEntries = 50;
+
+  final String appVersion;
+  final String platform;
+
+  /// Sent by a debug build (full detail).
+  final bool debug;
+  final List<Anomaly> entries;
+
+  JsonMap toJson() => {
+    'app_version': appVersion,
+    'platform': platform,
+    'debug': debug,
+    'entries': [for (final e in entries) e.toJson()],
+  };
+
+  factory AnomalyReport.fromJson(JsonReader json) => AnomalyReport(
+    appVersion: json.string('app_version'),
+    platform: json.string('platform'),
+    debug: json.flag('debug'),
+    entries: json.objects('entries', Anomaly.fromJson),
+  );
+}
+
+/// One anomaly: when, what kind, where in the app, and what it said.
+final class Anomaly {
+  const Anomaly({
+    required this.at,
+    required this.kind,
+    required this.where,
+    this.message = '',
+    this.stack = '',
+    this.fields = const {},
+  });
+
+  static const maxMessageLength = 2000;
+  static const maxStackLength = 8000;
+  static const maxFields = 16;
+
+  final DateTime at;
+
+  /// `crash`, `failure` (an action that failed), `request` (an API call that
+  /// failed) or `state` (something that should not happen).
+  final String kind;
+
+  /// Where: the error's type, the route, or the engine step.
+  final String where;
+  final String message;
+  final String stack;
+  final Map<String, String> fields;
+
+  JsonMap toJson() => {
+    'at': toWireTime(at),
+    'kind': kind,
+    'where': where,
+    if (message.isNotEmpty) 'message': message,
+    if (stack.isNotEmpty) 'stack': stack,
+    if (fields.isNotEmpty) 'fields': fields,
+  };
+
+  factory Anomaly.fromJson(JsonReader json) {
+    final fields = json.optObject('fields');
+    return Anomaly(
+      at: json.time('at'),
+      kind: json.nonEmpty('kind'),
+      where: json.string('where'),
+      message: json.optString('message') ?? '',
+      stack: json.optString('stack') ?? '',
+      fields: {
+        if (fields != null)
+          for (final k in fields.json.keys) k: fields.string(k),
+      },
+    );
+  }
+}
+
 /// `GET /v1/account/export`: everything the server holds about the
 /// account, one section per module (module-defined JSON; no message
 /// content exists server-side beyond undelivered sealed envelopes, which

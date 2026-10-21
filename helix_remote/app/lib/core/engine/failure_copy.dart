@@ -1,3 +1,4 @@
+import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show EngineException, NotSignedInException;
@@ -49,6 +50,7 @@ final class Failure {
 ///
 /// [now] is only used to say how long a lockout lasts.
 Failure describeFailure(Object error, {DateTime? now}) {
+  AnomalyLog.failure(error);
   switch (error) {
     case NetworkException():
       return const Failure(

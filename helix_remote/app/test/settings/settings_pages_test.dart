@@ -733,62 +733,27 @@ void main() {
   });
 
   group('About, legal and advanced', () {
-    youTest('About shows the version, the server and the crash opt-in', (
+    youTest('About shows the version, the server and problem reports', (
       tester,
     ) async {
       useTallWindow(tester);
-      final settings = FakeLocalSettings();
       await pumpPage(
         tester,
         const AboutPage(),
-        overrides: a3bOverrides(
-          settingsGateway: FakeSettingsGateway(),
-          settings: settings,
-        ),
+        overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
         stubs: [RoutePaths.legal, RoutePaths.advanced],
       );
       await settle(tester);
       expect(find.text('Version 2.0.0'), findsOneWidget);
       expect(find.text('Helix Global (helix.example.org)'), findsOneWidget);
       expect(find.text('Open-source licences'), findsOneWidget);
-
-      expect(settings.read(AppSettings.crashReportsOptIn), isFalse);
-      await tester.tap(find.text('Send crash reports'));
-      await settle(tester);
-      expect(settings.read(AppSettings.crashReportsOptIn), isTrue);
+      // Problem reports are always sent, so there is no switch to offer.
+      expect(find.text('Problem reports'), findsOneWidget);
+      expect(find.text('Send crash reports'), findsNothing);
 
       await tester.tap(find.text('Terms of Service'));
       await settle(tester);
       expect(find.text('stub:${RoutePaths.legal}'), findsOneWidget);
-    });
-
-    youTest('a server that does not accept crash reports says so', (
-      tester,
-    ) async {
-      useTallWindow(tester);
-      final g = FakeSettingsGateway();
-      g.details = const ServerDetails(
-        name: 'Office server',
-        host: 'chat.office.example',
-        version: '2.0.0',
-        openRegistration: false,
-        maxAttachmentBytes: 1024,
-        termsVersion: '1',
-        privacyVersion: '1',
-      );
-      await pumpPage(
-        tester,
-        const AboutPage(),
-        overrides: a3bOverrides(settingsGateway: g),
-        stubs: [RoutePaths.legal],
-      );
-      await settle(tester);
-      expect(find.text('Office server (chat.office.example)'), findsOneWidget);
-      expect(
-        find.textContaining('does not accept crash reports'),
-        findsOneWidget,
-      );
-      expect(find.text('Send crash reports'), findsNothing);
     });
 
     youTest('legal documents come from the server with their version', (

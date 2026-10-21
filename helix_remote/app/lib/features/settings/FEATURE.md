@@ -12,7 +12,7 @@ another); every row opens a page registered in `settings_routes.dart`.
 | Notifications | alerts for messages / groups / calls, sound, vibrate, previews, OS permission, muted chats (with unmute) | `AppSettings.notify*`, `NotificationPermissionSource`, `ChatsService.watchChats` |
 | Chats | text size, Enter sends, media auto-download per kind | `AppSettings`, `MediaPolicySync` |
 | Storage and data | database and media size, how space is freed | `StorageUsageProbe` |
-| Help and about | version, server, legal documents (ops API, bundled fallback), licences, crash-report opt-in | `SettingsGateway.serverDetails/legal`, `CrashReporter` |
+| Help and about | version, server, legal documents (ops API, bundled fallback), licences, a line saying problem reports go to the server | `SettingsGateway.serverDetails/legal`, `core/diagnostics/anomaly_log.dart` |
 | Advanced | server facts and allowed feature flags, sync now | `ops.serverInfo`, `Engine.syncOnce` |
 
 ## Rules this feature keeps
@@ -30,8 +30,9 @@ another); every row opens a page registered in `settings_routes.dart`.
 - **Media auto-download** is the person's choice (never / Wi-Fi / any network)
   per kind; `mediaPolicySyncProvider` turns it into the engine's size limits
   whenever the choice or the network changes.
-- **Crash reports** are opt-in, need the server flag `crash_reporting_upload`,
-  and carry only the error's type, the app version and the platform.
+- **Problem reports** (the anomaly log, `core/diagnostics/anomaly_log.dart`)
+  are sent by every build with no switch (the owner's decision, 2026-10-21);
+  About says so. They never carry message content, keys or full numbers.
 
 ## Known gaps
 
