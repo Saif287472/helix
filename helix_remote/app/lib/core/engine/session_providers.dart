@@ -90,6 +90,44 @@ final class SignOutAction {
   }
 }
 
+/// Signs an account out of this device and removes it (the Accounts page).
+/// The account on screen goes through [SignOutAction]; any other is opened
+/// on a runtime of its own for the sign-out, so the one on screen stays.
+final removeAccountProvider = Provider<RemoveAccountAction>(
+  RemoveAccountAction.new,
+);
+
+final class RemoveAccountAction {
+  RemoveAccountAction(this._ref);
+
+  final Ref _ref;
+
+  Future<void> call(String id) async {
+    if (_ref.read(activeAccountProvider)?.id == id) {
+      return _ref.read(signOutProvider)();
+    }
+    final slot = _ref.read(accountsProvider).byId(id);
+    if (slot == null) return;
+    // Not opened, not removed: a database that will not open is wiped from
+    // its own screen (switch to it), never behind an engine that may hold it.
+    final runtime = await _ref
+        .read(runtimeFactoryProvider)
+        .open(account: id, serverUrl: slot.serverUrl);
+    try {
+      await runtime.engine.signOut();
+      await runtime.ensureWiped();
+      // Unlisted while this runtime still holds the lease, so no push wake
+      // can open the account again in between.
+      await _ref.read(accountsProvider.notifier).remove(id);
+    } finally {
+      await runtime.close();
+    }
+    await _ref.read(secureKeyStoreProvider).forget(id);
+    await AppPaths.wipeLocalFiles(id);
+    await AppPaths.deleteAccountFolder(id);
+  }
+}
+
 /// After a revocation that wiped this device, the runtime is spent (its
 /// database file is gone and its key deleted): open a new one, so the
 /// sign-in that follows gets a fresh file and a fresh key.

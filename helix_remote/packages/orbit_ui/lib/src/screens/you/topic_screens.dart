@@ -6,6 +6,7 @@ import 'package:orbit_ui/src/brand/orbit_mark.dart';
 import 'package:orbit_ui/src/components/avatar.dart';
 import 'package:orbit_ui/src/components/button.dart';
 import 'package:orbit_ui/src/components/fields.dart';
+import 'package:orbit_ui/src/components/icon_button.dart';
 import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/page_parts.dart';
@@ -1843,6 +1844,7 @@ class AccountActions {
     this.onActivity,
     this.onExport,
     this.onSignOut,
+    this.onSwitchAccount,
     this.onExportFirst,
     this.onDelete,
     this.onRetry,
@@ -1854,6 +1856,10 @@ class AccountActions {
   /// Shares the export; answers what to say when it did not work.
   final Future<String?> Function()? onExport;
   final VoidCallback? onSignOut;
+
+  /// "Switch account" in the sign-out dialog: this account stays on the
+  /// phone. Null hides the choice.
+  final VoidCallback? onSwitchAccount;
 
   /// "Export first" in the delete dialog: the export only.
   final Future<String?> Function()? onExportFirst;
@@ -1879,6 +1885,9 @@ class AccountScreen extends StatelessWidget {
     final m = model;
     final a = actions;
     final pass = m.hasPassword;
+    final switchHint = a.onSwitchAccount == null
+        ? ''
+        : ' To keep it here and use another account, switch instead.';
     Future<void> say(Future<String?> Function()? run) async {
       final said = run == null ? null : await run();
       if (said != null && context.mounted) {
@@ -1969,19 +1978,24 @@ class AccountScreen extends StatelessWidget {
             OrbitListRow(
               icon: OrbitIcons.signOut,
               title: 'Sign out',
-              sub: 'Removes this phone and deletes its messages',
+              sub: 'Removes this account and its messages from this phone',
               danger: true,
               onTap: () => showOrbitDialog(
                 context,
                 title: 'Sign out?',
                 text:
-                    'This removes Orbit from this phone and deletes its '
-                    'messages, keys and history. Your other devices stay '
-                    'signed in.',
+                    'Signing out removes this account from this phone and '
+                    'deletes its messages, keys and history here. Your other '
+                    'devices stay signed in.$switchHint',
                 actions: [
                   const OrbitDialogAction('Cancel'),
+                  if (a.onSwitchAccount != null)
+                    OrbitDialogAction(
+                      'Switch account',
+                      onPressed: a.onSwitchAccount,
+                    ),
                   OrbitDialogAction(
-                    'Sign out',
+                    'Sign out and remove',
                     kind: OrbitButtonKind.danger,
                     onPressed: a.onSignOut,
                   ),
@@ -2012,6 +2026,135 @@ class AccountScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ================================================================ Accounts
+
+/// One account signed in on this phone.
+class AccountsEntry {
+  const AccountsEntry({
+    required this.id,
+    required this.title,
+    required this.avatar,
+    this.detail = '',
+    this.current = false,
+  });
+
+  final String id;
+
+  /// The name, or the masked number.
+  final String title;
+
+  /// The masked number under a name, or the server.
+  final String detail;
+  final HelixAvatarModel avatar;
+
+  /// The account on screen.
+  final bool current;
+}
+
+class AccountsModel {
+  const AccountsModel({
+    this.accounts = const [],
+    this.busy = false,
+    this.notice,
+  });
+
+  /// The account on screen first, then the others, most recent first.
+  final List<AccountsEntry> accounts;
+
+  /// Switching or removing: nothing else can start.
+  final bool busy;
+
+  /// What the last action said ("The account could not be removed...").
+  final String? notice;
+}
+
+class AccountsActions {
+  const AccountsActions({this.onOpen, this.onAdd, this.onRemove});
+
+  /// Opens another account in place of the one on screen.
+  final ValueChanged<String>? onOpen;
+
+  /// Sign-in for one more account; the others stay.
+  final VoidCallback? onAdd;
+
+  /// After "Remove ...?": signs that account out of this phone.
+  final ValueChanged<String>? onRemove;
+}
+
+/// `accounts`: the accounts signed in on this phone. Tapping one opens it;
+/// the minus removes it (signs it out here, after asking); Add account
+/// signs in one more.
+class AccountsScreen extends StatelessWidget {
+  const AccountsScreen({
+    super.key,
+    required this.model,
+    this.actions = const AccountsActions(),
+  });
+
+  final AccountsModel model;
+  final AccountsActions actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = model;
+    final a = actions;
+    void remove(AccountsEntry e) => showOrbitDialog(
+      context,
+      title: 'Remove ${e.title}?',
+      text:
+          'This signs the account out of this phone and deletes its '
+          'messages, keys and history here. Its other devices stay signed '
+          'in, and you can sign in here again later.',
+      actions: [
+        const OrbitDialogAction('Cancel'),
+        OrbitDialogAction(
+          'Remove',
+          kind: OrbitButtonKind.danger,
+          onPressed: () => a.onRemove?.call(e.id),
+        ),
+      ],
+    );
+
+    return OrbitYouPage(
+      title: 'Accounts',
+      children: [
+        if (m.notice != null)
+          OrbitInlineNotice(kind: OrbitNoticeKind.error, text: m.notice!),
+        OrbitSection(
+          title: 'On this phone',
+          footer:
+              'Each account keeps its own messages and keys. Messages and '
+              'calls reach every account here, and the app lock covers all '
+              'of them.',
+          rows: [
+            for (final e in m.accounts)
+              OrbitListRow(
+                leading: OrbitAvatar(avatar: e.avatar, size: 40),
+                title: e.title,
+                sub: e.detail,
+                value: e.current ? 'In use' : '',
+                trailing: OrbitIconButton(
+                  icon: OrbitIcons.userMinus,
+                  tooltip: 'Remove ${e.title}',
+                  onPressed: m.busy ? null : () => remove(e),
+                ),
+                onTap: e.current || m.busy ? null : () => a.onOpen?.call(e.id),
+              ),
+            OrbitListRow(
+              icon: OrbitIcons.userCirclePlus,
+              iconColor: 2,
+              title: 'Add account',
+              sub: 'Sign in with another number',
+              accent: true,
+              onTap: m.busy ? null : a.onAdd,
             ),
           ],
         ),

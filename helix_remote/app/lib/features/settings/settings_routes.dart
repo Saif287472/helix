@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/settings/presentation/about_page.dart';
 import 'package:helix_remote/features/settings/presentation/account_page.dart';
+import 'package:helix_remote/features/settings/presentation/accounts_page.dart';
 import 'package:helix_remote/features/settings/presentation/advanced_page.dart';
 import 'package:helix_remote/features/settings/presentation/appearance_page.dart';
 import 'package:helix_remote/features/settings/presentation/blocked_page.dart';
@@ -32,6 +33,10 @@ final List<RouteBase> settingsRoutes = [
   GoRoute(
     path: RoutePaths.deleteAccount,
     builder: (context, state) => const DeleteAccountPage(),
+  ),
+  GoRoute(
+    path: RoutePaths.accounts,
+    builder: (context, state) => const AccountsPage(),
   ),
   GoRoute(
     path: RoutePaths.privacy,

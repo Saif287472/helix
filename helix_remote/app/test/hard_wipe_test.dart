@@ -248,6 +248,55 @@ void main() {
     },
   );
 
+  test('removing an account that is not on screen signs it out on a runtime '
+      'of its own and leaves the one on screen', () async {
+    final key = await seedSignedInDevice();
+    const server = 'http://127.0.0.1:9';
+    await AccountSlotStore().save(
+      const AccountSlots(
+        active: 'other',
+        slots: [
+          AccountSlot(
+            id: AppPaths.firstAccount,
+            server: server,
+            signedIn: true,
+          ),
+          AccountSlot(id: 'other', server: server, signedIn: true),
+        ],
+      ),
+    );
+    final opened = <String>[];
+    HelixRuntime? runtime;
+    final container = ProviderContainer(
+      overrides: [
+        runtimeFactoryProvider.overrideWithValue(
+          _Opening((account) async {
+            opened.add(account);
+            return runtime = await open(key);
+          }),
+        ),
+        secureKeyStoreProvider.overrideWithValue(keys),
+        accountSlotStoreProvider.overrideWithValue(AccountSlotStore()),
+      ],
+      retry: (_, _) => null,
+    );
+    addTearDown(container.dispose);
+    await container.read(accountsProvider.notifier).restore();
+
+    await container.read(removeAccountProvider)(AppPaths.firstAccount);
+
+    expect(opened, [AppPaths.firstAccount]);
+    expect(runtime!.wasWiped, isTrue);
+    await expectNothingLeft();
+    final accounts = container.read(accountsProvider);
+    expect(accounts.active, 'other');
+    expect([for (final s in accounts.slots) s.id], ['other']);
+    expect(
+      (await AccountSlotStore().load()).byId(AppPaths.firstAccount),
+      isNull,
+    );
+  });
+
   test('a deletion the server did not accept wipes nothing', () async {
     final key = await seedSignedInDevice();
     final runtime = await open(key);
@@ -393,6 +442,19 @@ final class _Single implements RuntimeFactory {
     required String account,
     required Uri serverUrl,
   }) async => _runtime;
+}
+
+/// Opens whatever [_open] makes for the account asked for.
+final class _Opening implements RuntimeFactory {
+  _Opening(this._open);
+
+  final Future<HelixRuntime> Function(String account) _open;
+
+  @override
+  Future<HelixRuntime> open({
+    required String account,
+    required Uri serverUrl,
+  }) => _open(account);
 }
 
 /// The first open gives [first]; later ones call [again].

@@ -69,6 +69,7 @@ class AccountPage extends ConsumerWidget {
         onActivity: () => context.push(RoutePaths.devicesActivity),
         onExport: export,
         onSignOut: signOut,
+        onSwitchAccount: () => context.push(RoutePaths.accounts),
         onExportFirst: export,
         onDelete: () => context.push(RoutePaths.deleteAccount),
         onRetry: () => ref.invalidate(accountOverviewProvider),

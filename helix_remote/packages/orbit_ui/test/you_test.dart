@@ -241,8 +241,11 @@ void main() {
     expect(changes, [('calls', false)]);
   });
 
-  testWidgets('account: sign out asks first', (tester) async {
+  testWidgets('account: sign out asks first, and offers switching', (
+    tester,
+  ) async {
     var out = 0;
+    var switched = 0;
     await show(
       tester,
       AccountScreen(
@@ -251,7 +254,10 @@ void main() {
           avatar: HelixAvatarModel(name: 'Hasan'),
           hasPassword: false,
         ),
-        actions: AccountActions(onSignOut: () => out++),
+        actions: AccountActions(
+          onSignOut: () => out++,
+          onSwitchAccount: () => switched++,
+        ),
       ),
     );
     expect(find.text('Set a password'), findsOneWidget);
@@ -259,8 +265,112 @@ void main() {
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
     expect(out, 0);
-    await tester.tap(find.text('Sign out').last);
+    await tester.tap(find.text('Switch account'));
     await tester.pumpAndSettle();
-    expect(out, 1);
+    expect((out, switched), (0, 1));
+    await tester.tap(find.text('Sign out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign out and remove'));
+    await tester.pumpAndSettle();
+    expect((out, switched), (1, 1));
+  });
+
+  testWidgets('account: no switch choice without one', (tester) async {
+    await show(
+      tester,
+      const AccountScreen(
+        model: AccountModel(
+          name: 'Hasan',
+          avatar: HelixAvatarModel(name: 'Hasan'),
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('Sign out'), 200);
+    await tester.tap(find.text('Sign out'));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch account'), findsNothing);
+    expect(find.text('Sign out and remove'), findsOneWidget);
+  });
+
+  testWidgets('accounts: open another, remove after asking, add one', (
+    tester,
+  ) async {
+    final did = <String>[];
+    await show(
+      tester,
+      AccountsScreen(
+        model: const AccountsModel(
+          accounts: [
+            AccountsEntry(
+              id: 'a',
+              title: 'Hasan',
+              detail: '+88017*****01',
+              current: true,
+              avatar: HelixAvatarModel(name: 'Hasan'),
+            ),
+            AccountsEntry(
+              id: 'b',
+              title: 'Work',
+              detail: 'helix.example',
+              avatar: HelixAvatarModel(name: 'Work'),
+            ),
+          ],
+        ),
+        actions: AccountsActions(
+          onOpen: (id) => did.add('open $id'),
+          onAdd: () => did.add('add'),
+          onRemove: (id) => did.add('remove $id'),
+        ),
+      ),
+    );
+    expect(find.text('In use'), findsOneWidget);
+    await tester.tap(find.text('Hasan'));
+    await tester.tap(find.text('Work'));
+    await tester.tap(find.text('Add account'));
+    await tester.pump();
+    expect(did, ['open b', 'add']);
+
+    await tester.tap(find.byTooltip('Remove Work'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Work?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Remove Work'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+    expect(did, ['open b', 'add', 'remove b']);
+  });
+
+  testWidgets('accounts: nothing starts while one is busy', (tester) async {
+    final did = <String>[];
+    await show(
+      tester,
+      AccountsScreen(
+        model: const AccountsModel(
+          busy: true,
+          notice: 'Work could not be removed.',
+          accounts: [
+            AccountsEntry(
+              id: 'b',
+              title: 'Work',
+              avatar: HelixAvatarModel(name: 'Work'),
+            ),
+          ],
+        ),
+        actions: AccountsActions(
+          onOpen: (id) => did.add('open $id'),
+          onAdd: () => did.add('add'),
+          onRemove: (id) => did.add('remove $id'),
+        ),
+      ),
+    );
+    expect(find.text('Work could not be removed.'), findsOneWidget);
+    await tester.tap(find.text('Work'));
+    await tester.tap(find.text('Add account'));
+    await tester.tap(find.byTooltip('Remove Work'));
+    await tester.pumpAndSettle();
+    expect(did, isEmpty);
+    expect(find.text('Remove Work?'), findsNothing);
   });
 }

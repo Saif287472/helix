@@ -13,6 +13,7 @@ import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/notification_accounts.dart';
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/features/settings/application/accounts_providers.dart';
 
 /// The accounts on a device: the list in the keystore, and one folder and one
 /// key per account.
@@ -348,6 +349,34 @@ void main() {
       expect(slots.notificationLabel(second), 'Work');
       await c.read(accountsProvider.notifier).removeCurrent();
       expect(c.read(accountsProvider).notificationLabel(first), isNull);
+    });
+
+    test('the Accounts page lists the account on screen first', () async {
+      final c = container();
+      final (first, second) = await two(c);
+      await c.read(accountsProvider.notifier).describe(first, name: 'Home');
+      final lines = c.read(accountLinesProvider);
+      expect(
+        [for (final l in lines) (l.id, l.current)],
+        [(second, true), (first, false)],
+      );
+      expect(lines.last.title, 'Home');
+      expect(lines.last.detail, isNot(contains('1711000001')));
+      expect(lines.first.detail, 'helix.example');
+    });
+
+    test('removing an account not on screen keeps the one on screen', () async {
+      final c = container();
+      final (first, second) = await two(c);
+      final accounts = c.read(accountsProvider.notifier);
+      await accounts.remove(second);
+      expect(c.read(accountsProvider).byId(second), isNotNull);
+      await accounts.remove(first);
+      expect(c.read(activeAccountProvider)?.id, second);
+      expect(c.read(accountsProvider).byId(first), isNull);
+      final next = container();
+      await next.read(accountsProvider.notifier).restore();
+      expect(next.read(accountsProvider).signedIn, hasLength(1));
     });
 
     test('removing the account on screen opens the other one', () async {

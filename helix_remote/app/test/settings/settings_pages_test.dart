@@ -153,11 +153,21 @@ void main() {
           RoutePaths.profile,
           RoutePaths.devicesActivity,
           RoutePaths.deleteAccount,
+          RoutePaths.accounts,
         ],
       );
       await settle(tester);
       return g;
     }
+
+    youTest('switching instead of signing out opens Accounts', (tester) async {
+      await open(tester);
+      await tester.tap(find.text('Sign out'));
+      await settle(tester);
+      await tester.tap(find.text('Switch account'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.accounts}'), findsOneWidget);
+    });
 
     youTest('shows the phone number masked and the ~name', (tester) async {
       await open(tester);

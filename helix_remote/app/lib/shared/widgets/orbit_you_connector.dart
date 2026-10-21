@@ -35,6 +35,7 @@ class OrbitYouConnector extends ConsumerWidget {
     orbit.YouTopic.devices => RoutePaths.devices,
     orbit.YouTopic.backup => RoutePaths.backup,
     orbit.YouTopic.account => RoutePaths.account,
+    orbit.YouTopic.accounts => RoutePaths.accounts,
     orbit.YouTopic.storage => RoutePaths.storage,
     orbit.YouTopic.about => RoutePaths.about,
     orbit.YouTopic.advanced => RoutePaths.advanced,

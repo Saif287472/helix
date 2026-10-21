@@ -37,6 +37,7 @@ enum YouTopic {
   devices,
   backup,
   account,
+  accounts,
   storage,
   about,
   advanced,
@@ -681,6 +682,13 @@ class _YouScreenState extends State<YouScreen> {
       7,
       'Account',
       'Number, password, sign out, delete',
+    ),
+    (
+      YouTopic.accounts,
+      OrbitIcons.usersThree,
+      2,
+      'Accounts',
+      'Switch, add or remove accounts on this phone',
     ),
     (
       YouTopic.storage,

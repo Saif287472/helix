@@ -303,6 +303,14 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
     return other?.id;
   }
 
+  /// Account [id], one not on screen, was signed out and its data wiped: it
+  /// is no longer listed.
+  Future<void> remove(String id) async {
+    if (id == state.active || state.byId(id) == null) return;
+    state = state.without(id);
+    await ref.read(accountSlotStoreProvider).save(state);
+  }
+
   /// Account [id] is no longer signed in here (the server revoked this
   /// device, or its session is gone): it leaves the list. If it is the one
   /// on screen it stays there for sign-in, which reuses its folder.
