@@ -286,7 +286,8 @@ never at the same time as the Flutter tests.
 unless their content changed.
 
 **Pixel check (Windows only).** Run
-`orbit/flutter/tools/compare/partb/compare.sh <keys>`. Every key a batch
+`orbit/flutter/tools/compare/partb/compare.sh <keys>` for the keys a batch
+touches, and `partb/score_all.py` for the whole device in one pass. Every key a batch
 touches must keep its Review 4 score (`partb/review4_scores.txt`) unless
 the change is deliberate and logged in DEVIATIONS. The prototype shots are
 not committed; make them with `tools/compare/shoot_html.py` (see the
