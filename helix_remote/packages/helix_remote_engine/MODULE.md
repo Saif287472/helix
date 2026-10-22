@@ -44,7 +44,7 @@ and `runMaintenance()`.
 | `devices` | device list (watch), rename, revoke, revoke others, security events, approve another device's link (`approveLink`) |
 | `chats` | chat list, messages, search (watch queries); send text/reply/mentions and the blob-free content types; react, edit, delete, vote, RSVP; mark read (read receipts), view-once, disappearing timer, pin/mute/archive/draft, retry a failed send; the same for group chats (`group:<id>`) |
 | `groups` | create, rename, description, picture, settings, add/remove members, roles, leave, ban/unban, delete, invite links (create, preview, join, revoke), join requests, refresh; see "Groups (Phase C4-G)" |
-| `people` | phone-book discovery by salted hash (`PhoneBook` is injected), lookup by number or `~name`, profiles (encrypted), nickname (synced to own devices and written to the phone book), block/unblock, report (`report`), the profile's about line (`aboutOf`/`watchAbout`), safety number and verified flag, display-name order helper `PersonNaming` (a rename the phone accepted also updates the stored phone-book name) |
+| `people` | phone-book discovery by salted hash (`PhoneBook` is injected), lookup by number or `~name`, profiles (encrypted: name, about line and picture - see "Profiles and the profile photo"), nickname (synced to own devices and written to the phone book), block/unblock, report (`report`), the profile's about line (`aboutOf`/`watchAbout`), safety number and verified flag, display-name order helper `PersonNaming` (a rename the phone accepted also updates the stored phone-book name) |
 | `settings` | typed local settings (`EngineSettings`, any `Setting<T>`), server-side privacy, the `~Helix name` |
 | `presence` | typing indicators in both directions (ephemeral) |
 | `push` | push-token registration |
@@ -248,6 +248,40 @@ receiver skips).
 - Nothing in the engine logs. `maskPhone` and `shortId` are for hosts that
   print.
 
+## Profiles and the profile photo (Part B E1, 2026-10-22)
+
+A profile is one encrypted blob on the server (`EncryptedProfile`,
+CRYPTO_V2.md §9) whose plaintext is `ProfileContent`: the display name, the
+about line and a `MediaPointer` for the picture. It is sealed with the
+account's profile key, and that key travels inside every message the account
+sends — so a picture is readable by exactly the people this account has
+messaged, and by nobody else: the server holds a random media id, a size and
+ciphertext it cannot read.
+
+- **Publishing** (`setOwnProfile(photoBytes:)`): the picture is encrypted with
+  a fresh attachment key and uploaded as a `persistent` object (the server's
+  own limits are 5 MiB an object and 50 MiB an account; this device refuses
+  more than `PeopleService.maxPhotoBytes`), and its pointer goes into the
+  profile. The pointer is remembered in the `people.photo:<account>` setting, so
+  a later name-only save republishes the same picture instead of quietly
+  dropping it, and an install that has never published reads the pointer back
+  off the server first. `clearPhoto: true` publishes no pointer and deletes the
+  object it used (best effort).
+- **Reading** (`refreshProfile`): the pointer is fetched bounded by the size the
+  pointer declares, checked against its digest and its length, then stored in
+  `people.avatar_blob` — the one column every avatar in the app draws. A picture
+  that cannot be fetched or does not check out is not stored, never fails the
+  profile read, and stays remembered for the next refresh (which then needs no
+  newer profile version). A profile with no picture clears the stored blob.
+- **When it is read:** whenever the host asks (the app does it on a person's
+  details page) and by the engine itself when a message arrives from a person
+  whose profile this device has never read (`InboundHooks.onPeerProfile` and
+  `profileNeedsRead`: at most one request per person per day while that is so).
+  A picture someone changes later arrives with the next read of their profile.
+- An account's *own* picture is not in `people` (that table is other people), so
+  a host shows the one it holds itself; the engine keeps the published pointer,
+  which is what a peer reads.
+
 ## Testing
 
 - `test/support/fake_server.dart` is an in-memory Helix server behind an
@@ -255,7 +289,9 @@ receiver skips).
   discovery and profiles) with the real server's device-list rule, per-device
   mailboxes and fault injection (`failNext`, `dropNext`, `loseResponseNext`);
   `peers.dart` builds engines on in-memory encrypted databases with a
-  ticking test clock. These cover the pipelines without Postgres.
+  ticking test clock, and routes media to `test/support/fake_media.dart` when
+  a test is given `Peers(media: ...)`. These cover the pipelines without
+  Postgres.
 - End-to-end tests against the real in-process server are in
   `server/test/client/engine/` (the engine may not depend on the server): two
   engines over live sockets, a linked second device, offline catch-up,

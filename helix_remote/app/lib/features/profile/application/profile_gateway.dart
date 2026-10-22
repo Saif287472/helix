@@ -51,9 +51,20 @@ final class ProfileData {
 abstract interface class ProfileGateway {
   Stream<ProfileData> watch();
 
-  /// Publishes the name and about line, encrypted with the account's profile
-  /// key (created on first use). The server never sees either in the clear.
-  Future<void> saveProfile({required String name, required String about});
+  /// Publishes the name, the about line and the picture, encrypted with the
+  /// account's profile key (created on first use). They are one encrypted
+  /// profile, so they go out together: the server never sees any of them in
+  /// the clear.
+  ///
+  /// [photoBytes] is a picture to share with the people this account messages:
+  /// the engine encrypts it, so it is never sent in the clear. Omit it to keep
+  /// the picture already shared; [clearPhoto] takes the shared picture away.
+  Future<void> saveProfile({
+    required String name,
+    required String about,
+    List<int>? photoBytes,
+    bool clearPhoto = false,
+  });
 
   /// Claims `~name` (already normalised). Throws `ApiException(name_taken)`
   /// when it is taken or could pass for Helix staff: the server answers both
@@ -96,11 +107,15 @@ final class EngineProfileGateway implements ProfileGateway {
   Future<void> saveProfile({
     required String name,
     required String about,
+    List<int>? photoBytes,
+    bool clearPhoto = false,
   }) async {
     final engine = (await _ref.read(runtimeProvider.future)).engine;
     await engine.people.setOwnProfile(
       name: name,
       about: about.isEmpty ? null : about,
+      photoBytes: photoBytes,
+      clearPhoto: clearPhoto,
     );
     await engine.settings.set(AppSettings.profileAbout, about);
   }

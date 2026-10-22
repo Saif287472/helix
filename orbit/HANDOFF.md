@@ -119,11 +119,11 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: the remaining backend items (E1, E4
+Deferred until the owner asks: the remaining backend items (E4
 to E6), the pixel checks, batch 10 (the wide Windows layout), and Part B
 steps 3 to 5 (the rename, deleting `helix_remote_ui`, the full verify).
-The lists below keep their detail. (S1 is built — see "Deferred work, in
-order", item 4.)
+The lists below keep their detail. (S1 and E1 are built — see "Deferred
+work, in order", items 4 and 5.)
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -158,7 +158,15 @@ order", item 4.)
    `presentation/`, which `app/test/architecture_test.dart` forbids. Freeing
    a chat's files is `StorageFreeActions` in `application/` now, and the rule
    is green again.
-5. E1, then E4 to E6.
+5. E1 - **done** (2026-10-22): the profile photo publishes. The engine
+   encrypts the picked picture into a `persistent` media object, puts its
+   pointer inside the sealed profile, and at a peer stores it in
+   `people.avatarBlob` - which is what the chat list and contact info already
+   drew. It reads a peer's profile once, when a message first carries that
+   person's profile key, and retries at most one profile and one picture per
+   person per day. Choosing or removing a photo in Edit profile now publishes
+   it. **No server change, no migration, no new `.env` line.** Deviations are
+   in `DEVIATIONS.md` ("Part B E1"). E4 to E6 are still open.
 6. The pixel checks.
 7. Batch 10 (the wide Windows layout).
 8. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
@@ -204,7 +212,8 @@ To do:
    skill):
    - S1: the share link `/u/<~name>`, app links and scan-to-chat - **done**
      (2026-10-22).
-   - E1: share the profile photo with people you message.
+   - E1: share the profile photo with people you message - **done**
+     (2026-10-22).
    - E2: storage size by kind and by chat - **done** (2026-10-22).
    - E3: free one chat's media and keep its messages - **done**
      (2026-10-22).

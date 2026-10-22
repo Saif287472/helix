@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as hashes;
 import 'package:helix_remote_api/v2.dart';
@@ -189,9 +190,23 @@ final class PeopleService {
 
   // ------------------------------------------------------------- profiles
 
+  /// The largest profile photo this device publishes or keeps. A 256 px
+  /// square PNG is well under it; the server's own `persistent` limit is
+  /// 5 MiB, so a bigger pointer is refused rather than downloaded.
+  static const maxPhotoBytes = 512 * 1024;
+
+  /// How often a profile that is not there yet is looked for again: one
+  /// request per person per day, not one per message.
+  static const _profileRetry = Duration(days: 1);
+
   /// Reads and decrypts [account]'s profile when this device has its
   /// profile key. Returns the new name, or null when there is nothing to
   /// show yet (no key, no profile, or no newer version).
+  ///
+  /// The photo the profile points at is fetched with it: its bytes go to the
+  /// people row, which is what every avatar in the app draws. A picture that
+  /// cannot be had never fails the read - the pointer is kept and tried again
+  /// on the next refresh.
   Future<String?> refreshProfile(String account) async {
     final person = await _db.peopleDao.byAccount(account);
     final key = person?.profileKey;
@@ -200,11 +215,23 @@ final class PeopleService {
     try {
       profile = await _ctx.api.people.profile(account);
     } on ApiException catch (e) {
-      if (e.code == ErrorCode.notFound) return null;
+      if (e.code == ErrorCode.notFound) {
+        await _db.settingsDao.set(
+          _lookedSetting(account),
+          _ctx.now().millisecondsSinceEpoch,
+          now: _ctx.now(),
+        );
+        return null;
+      }
       rethrow;
     }
     if (person.profileVersion != null &&
         profile.version <= person.profileVersion!) {
+      if (person.avatarBlob == null) {
+        // The name is known; only a photo whose fetch failed is tried again.
+        final stored = await _db.settingsDao.get(_photoSetting(account));
+        await _keepPhoto(account, _storedPhoto(stored));
+      }
       return person.profileName;
     }
     try {
@@ -221,11 +248,21 @@ final class PeopleService {
         content.about,
         now: _ctx.now(),
       );
+      final photo = _photoOf(content.avatar);
+      await _db.settingsDao.set(
+        _photoSetting(account),
+        photo == null ? null : jsonEncode(photo.toJson()),
+        now: _ctx.now(),
+      );
+      final bytes = photo == null ? null : await _downloadPhoto(photo);
       await _db.peopleDao.upsertPerson(
         PeopleCompanion.insert(
           accountId: account,
           profileName: Value(content.name),
           profileVersion: Value(profile.version),
+          // A picture that could not be fetched this time keeps the one this
+          // device has; a profile with no picture clears it.
+          avatarBlob: _avatarColumn(bytes, hadPhoto: photo != null),
           updatedAt: _ctx.now(),
         ),
       );
@@ -234,6 +271,87 @@ final class PeopleService {
       return null; // A stale key: the owner rotated it; a newer message
       // brings the new one.
     } on FormatException {
+      return null;
+    }
+  }
+
+  /// [account] sent a profile-key update, or this device has never read their
+  /// profile and a message just brought their key: the profile (name, about
+  /// and photo) is worth a read now. At most one request per person per day
+  /// until it lands.
+  Future<bool> profileNeedsRead(String account) async {
+    final person = await _db.peopleDao.byAccount(account);
+    if (person == null || person.profileKey == null) return false;
+    if (person.profileVersion != null) return false;
+    final looked = await _db.settingsDao.get(_lookedSetting(account));
+    if (looked == null) return true;
+    return _ctx.now().difference(
+          DateTime.fromMillisecondsSinceEpoch(looked, isUtc: true),
+        ) >
+        _profileRetry;
+  }
+
+  /// Writes the photo of [pointer] (fetched, checked and decrypted) into the
+  /// people row, or does nothing when it cannot be had.
+  Future<void> _keepPhoto(String account, MediaPointer? pointer) async {
+    if (pointer == null) return;
+    final bytes = await _downloadPhoto(pointer);
+    if (bytes == null) return;
+    await _db.peopleDao.upsertPerson(
+      PeopleCompanion.insert(
+        accountId: account,
+        avatarBlob: Value(bytes),
+        updatedAt: _ctx.now(),
+      ),
+    );
+  }
+
+  static Value<Uint8List?> _avatarColumn(
+    Uint8List? bytes, {
+    required bool hadPhoto,
+  }) {
+    if (!hadPhoto) return const Value(null);
+    return bytes == null ? const Value.absent() : Value(bytes);
+  }
+
+  /// The photo the server holds for [pointer], or null when it cannot be
+  /// fetched, is bigger than the pointer says, or does not hash to its
+  /// digest. Never throws: a profile read is not failed by a picture.
+  Future<Uint8List?> _downloadPhoto(MediaPointer pointer) async {
+    if (pointer.size <= 0 || pointer.size > maxPhotoBytes) return null;
+    try {
+      final download = await _ctx.api.media.download(
+        pointer.id,
+        maxBytes: AttachmentCrypto.ciphertextLength(pointer.size),
+      );
+      final plain = await AttachmentCrypto.decryptBytes(
+        download.bytes,
+        pointer.key,
+        digest: pointer.digest,
+      );
+      return plain.length == pointer.size ? plain : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// The pointer a profile carries, or null when there is none or it is not a
+  /// pointer this version understands (a newer client must not fail the read).
+  static MediaPointer? _photoOf(JsonMap? json) {
+    if (json == null) return null;
+    try {
+      return MediaPointer.fromJson(JsonReader(json));
+    } on Object {
+      return null;
+    }
+  }
+
+  static MediaPointer? _storedPhoto(Object? stored) {
+    if (stored is! String || stored.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(stored);
+      return decoded is JsonMap ? _photoOf(decoded) : null;
+    } on Object {
       return null;
     }
   }
@@ -249,7 +367,17 @@ final class PeopleService {
   static Setting<String?> _aboutSetting(String account) =>
       Setting<String?>('people.about:$account', null);
 
-  /// Publishes this account's name and about line, encrypted with the
+  /// The profile's photo pointer, kept so a failed fetch can be retried
+  /// without reading the profile again (and, for this account, so a later
+  /// name-only save republishes the same picture).
+  static Setting<String?> _photoSetting(String account) =>
+      Setting<String?>('people.photo:$account', null);
+
+  /// When a profile that was not there was last looked for (epoch ms).
+  static Setting<int?> _lookedSetting(String account) =>
+      Setting<int?>('people.looked:$account', null);
+
+  /// Publishes this account's name, about line and photo, encrypted with the
   /// profile key (created on first use).
   ///
   /// The server keeps the highest version. A device whose count started
@@ -257,15 +385,37 @@ final class PeopleService {
   /// again on its number) is behind a profile it cannot read: the server
   /// says `version_conflict`, and the profile is published again just above
   /// the server's version, so what the person typed is what is saved.
-  Future<void> setOwnProfile({required String name, String? about}) async {
+  ///
+  /// [photoBytes] is a picture this device publishes: it is encrypted with a
+  /// fresh key, stored as a `persistent` media object and carried in the
+  /// profile as a pointer, so only someone who can read the profile (a person
+  /// this account messaged) can fetch it. Omit it to keep the picture already
+  /// published; [clearPhoto] takes it away. Either way the object the profile
+  /// used before is deleted.
+  Future<void> setOwnProfile({
+    required String name,
+    String? about,
+    List<int>? photoBytes,
+    bool clearPhoto = false,
+  }) async {
     final self = _ctx.identity;
     final row = (await _db.accountDao.current())!;
     final key = row.profileKey ?? newSymmetricKey(_ctx.random);
+    final previous = await _ownPhoto(self.accountId, key);
+    final photo = photoBytes == null
+        ? (clearPhoto ? null : previous)
+        : await _uploadPhoto(photoBytes);
     Future<void> publish(int version) async {
       final blob = await SealedBlobCipher.profile.seal(
         secret: key,
         plaintext: utf8.encode(
-          jsonEncode(ProfileContent(name: name, about: about).toJson()),
+          jsonEncode(
+            ProfileContent(
+              name: name,
+              about: about,
+              avatar: photo?.toJson(),
+            ).toJson(),
+          ),
         ),
         aad: SealedBlobCipher.profileAad(self.accountId, version),
         random: _ctx.random,
@@ -283,6 +433,12 @@ final class PeopleService {
       version = (await _ctx.api.people.profile(self.accountId)).version + 1;
       await publish(version);
     }
+    await _db.settingsDao.set(
+      _photoSetting(self.accountId),
+      photo == null ? null : jsonEncode(photo.toJson()),
+      now: _ctx.now(),
+    );
+    if ((previous?.id ?? '') != (photo?.id ?? '')) await _dropPhoto(previous);
     await _db.accountDao.save(
       SelfAccountCompanion.insert(
         accountId: row.accountId,
@@ -299,6 +455,73 @@ final class PeopleService {
       await _ctx.api.people.setOwnName(name);
     } on Object {
       // Best effort: the profile itself is saved.
+    }
+  }
+
+  /// The photo this account's profile carries now: the pointer this device
+  /// published (kept so a name-only save does not quietly drop the picture),
+  /// or - on an install that has never published from it - the one already on
+  /// the server.
+  Future<MediaPointer?> _ownPhoto(String account, List<int>? profileKey) async {
+    final remembered = _storedPhoto(
+      await _db.settingsDao.get(_photoSetting(account)),
+    );
+    if (remembered != null) return remembered;
+    final key = profileKey;
+    if (key == null) return null;
+    try {
+      final profile = await _ctx.api.people.profile(account);
+      final plain = await SealedBlobCipher.profile.open(
+        secret: key,
+        blob: profile.ciphertext,
+        aad: SealedBlobCipher.profileAad(account, profile.version),
+      );
+      return _photoOf(
+        ProfileContent.fromJson(JsonReader.decode(utf8.decode(plain))).avatar,
+      );
+    } on Object {
+      return null; // Offline, or a profile this key cannot open.
+    }
+  }
+
+  /// Encrypts a profile photo with a fresh key and stores it as this account's
+  /// `persistent` object. [maxPhotoBytes] is checked here as well as by the
+  /// app: a pointer this device publishes must be one it would download.
+  Future<MediaPointer> _uploadPhoto(List<int> bytes) async {
+    if (bytes.isEmpty || bytes.length > maxPhotoBytes) {
+      throw ArgumentError.value(bytes.length, 'bytes', 'profile photo size');
+    }
+    final key = AttachmentCrypto.newKey(_ctx.random);
+    final sealed = await AttachmentCrypto.encryptBytes(
+      bytes,
+      key,
+      random: _ctx.random,
+    );
+    final target = await _ctx.api.media.createUpload(
+      CreateUploadRequest(
+        size: sealed.ciphertext.length,
+        kind: MediaKind.persistent,
+      ),
+    );
+    await _ctx.api.media.upload(target, sealed.ciphertext);
+    return MediaPointer(
+      id: target.mediaId,
+      key: key,
+      digest: sealed.digest,
+      size: bytes.length,
+      mime: 'image/png',
+    );
+  }
+
+  /// Withdraws a photo the account no longer publishes. Best effort: an object
+  /// left behind goes with the account, and the `persistent` quota of 50 MiB
+  /// holds many changes.
+  Future<void> _dropPhoto(MediaPointer? previous) async {
+    if (previous == null) return;
+    try {
+      await _ctx.api.media.delete(previous.id);
+    } on Object {
+      // The pointer is out of the profile, so nobody can read it again.
     }
   }
 

@@ -641,6 +641,16 @@ final class _Hooks implements InboundHooks {
   Future<void> onThisDeviceRevoked() => _engine._handleRevoked();
 
   @override
+  Future<void> onPeerProfile(String account) async {
+    // A profile is one small request; a person's is read when this device has
+    // their key but has never had their name (and again a day later while
+    // that is so), not on every message.
+    if (await _engine.people.profileNeedsRead(account)) {
+      await _engine.people.refreshProfile(account);
+    }
+  }
+
+  @override
   Future<void> onCallSignal(Envelope envelope) =>
       _engine._callSignaling.onEnvelope(envelope);
 

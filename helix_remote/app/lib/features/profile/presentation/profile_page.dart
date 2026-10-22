@@ -9,8 +9,9 @@ import 'package:orbit_ui/orbit_ui.dart' as orbit;
 /// [orbit.ProfileEditScreen].
 ///
 /// One Save sends the name and about line (one encrypted profile), then the
-/// `~name` when it changed; each field keeps its own refusal. "Who sees what"
-/// follows ADR-030: the operator sees the name and the number.
+/// `~name` when it changed; each field keeps its own refusal. Choosing or
+/// removing a photo publishes it too, so people you message see it. "Who sees
+/// what" follows ADR-030: the operator sees the name and the number.
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -64,7 +65,8 @@ class ProfilePage extends ConsumerWidget {
         },
         onRemovePhoto: () async {
           await editor.removeAvatar();
-          return ref.read(profileEditProvider).notice;
+          final state = ref.read(profileEditProvider);
+          return state.error ?? state.notice;
         },
         onRemoveHelixName: () async {
           await editor.clearHelixName();

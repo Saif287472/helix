@@ -183,15 +183,15 @@ final class ProfileEditor extends Notifier<ProfileEditState> {
     }
   }
 
-  /// Lets the person choose a picture, crops it to a square and keeps it on
-  /// this phone.
+  /// Lets the person choose a picture, crops it to a square, keeps it on this
+  /// phone and shares it with the people this account messages.
   Future<void> chooseAvatar() async {
     state = const ProfileEditState(busy: true);
     try {
       final png = await ref.read(profileImageSourceProvider).pickSquare();
       if (png != null) {
         await ref.read(profileAvatarProvider.notifier).set(png);
-        state = const ProfileEditState(notice: 'Photo updated.');
+        await _publishPhoto(png);
       } else {
         state = const ProfileEditState();
       }
@@ -208,7 +208,49 @@ final class ProfileEditor extends Notifier<ProfileEditState> {
 
   Future<void> removeAvatar() async {
     await ref.read(profileAvatarProvider.notifier).remove();
-    state = const ProfileEditState(notice: 'Photo removed.');
+    await _publishPhotoRemoved();
+  }
+
+  /// Shares the picture kept on this phone. The profile is one encrypted
+  /// object, so the name and about line already saved go with it.
+  ///
+  /// A failure leaves the picture on this phone and says so: the person can
+  /// try again.
+  Future<void> _publishPhoto(List<int> png) async {
+    try {
+      final profile = await ref.read(profileProvider.future);
+      await _gateway.saveProfile(
+        name: profile.name,
+        about: profile.about,
+        photoBytes: png,
+      );
+      state = const ProfileEditState(notice: 'Photo updated.');
+    } on Object {
+      state = const ProfileEditState(
+        error:
+            'Your photo is on this phone, but it could not be shared. '
+            'Try again when you have network.',
+      );
+    }
+  }
+
+  /// Takes the shared picture away as well as the one on this phone.
+  Future<void> _publishPhotoRemoved() async {
+    try {
+      final profile = await ref.read(profileProvider.future);
+      await _gateway.saveProfile(
+        name: profile.name,
+        about: profile.about,
+        clearPhoto: true,
+      );
+      state = const ProfileEditState(notice: 'Photo removed.');
+    } on Object {
+      state = const ProfileEditState(
+        error:
+            'The photo is gone from this phone, but the shared one could '
+            'not be removed. Try again when you have network.',
+      );
+    }
   }
 
   String _failure(Object error) =>

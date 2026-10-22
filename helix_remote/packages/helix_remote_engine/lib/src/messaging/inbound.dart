@@ -28,6 +28,12 @@ abstract interface class InboundHooks {
   /// A contact started or stopped typing.
   void onTyping(String conversationId, String account, {required bool typing});
 
+  /// A message came from [account], whose own key just arrived: read their
+  /// encrypted profile (name, about line and photo) if this device has not.
+  /// Deciding whether it is worth a request is the engine's, not this
+  /// pipeline's.
+  Future<void> onPeerProfile(String account);
+
   /// A `call_signal` envelope (sealed signal, or the server's "answered on
   /// another of your devices" notice). Ephemeral: never stored or acked.
   Future<void> onCallSignal(Envelope envelope);
@@ -296,6 +302,12 @@ final class InboundProcessor {
     });
     final notice = applied.notice;
     if (notice != null) _ctx.emit(IncomingMessageEvent(notice));
+    if (sender.account != identity.accountId && !applied.wasIgnored) {
+      // Their key came with this message: read their profile now, so a chat
+      // shows who wrote rather than an id (the engine decides whether it is
+      // worth a request).
+      await _bestEffort(() => _hooks.onPeerProfile(sender.account));
+    }
     return InboundResult(
       applied.wasIgnored ? EnvelopeOutcome.ignored : EnvelopeOutcome.applied,
       notice: notice,

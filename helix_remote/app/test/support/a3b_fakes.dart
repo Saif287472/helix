@@ -559,8 +559,14 @@ class FakeProfileGateway implements ProfileGateway {
   Future<void> saveProfile({
     required String name,
     required String about,
+    List<int>? photoBytes,
+    bool clearPhoto = false,
   }) async {
-    calls.add('save:$name:$about');
+    calls.add(
+      'save:$name:$about'
+      '${photoBytes != null ? ':photo' : ''}'
+      '${clearPhoto ? ':clear-photo' : ''}',
+    );
     if (saveFails != null) throw saveFails!;
     final p = profile.value;
     profile.set(

@@ -169,9 +169,9 @@ void main() {
   });
 
   group('photo', () {
-    profileTest('choosing a photo keeps it on this phone', (tester) async {
+    profileTest('choosing a photo keeps it here and shares it', (tester) async {
       final avatars = FakeAvatarStore();
-      await open(
+      final profile = await open(
         tester,
         images: FakeProfileImageSource(picked: _png),
         avatars: avatars,
@@ -179,12 +179,18 @@ void main() {
       await tester.tap(find.text('Choose a photo'));
       await settle(tester);
       expect(avatars.saved, _png);
+      expect(
+        profile.calls,
+        contains('save:Anna Khan:Busy:photo'),
+        reason: 'the picked picture is published, not only kept on the phone',
+      );
       expect(find.text('Photo updated.'), findsOneWidget);
       expect(find.text('Change photo'), findsOneWidget);
 
       await tester.tap(find.text('Remove'));
       await settle(tester);
       expect(avatars.saved, isNull);
+      expect(profile.calls, contains('save:Anna Khan:Busy:clear-photo'));
     });
 
     profileTest('backing out of the picker changes nothing', (tester) async {

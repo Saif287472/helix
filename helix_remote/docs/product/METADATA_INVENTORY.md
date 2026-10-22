@@ -32,7 +32,7 @@ timers are inside the encrypted content, so they are not server data at all.
 | Blocks and contacts (`people.blocks`, `people.contacts`) | account ids; for the `contacts` audience, the account ids of the uploaded phone-book matches (replace-all, at most 5,000) | Blocked senders and callers reach nobody and are told so (`block_change`, `blocked_by`, a refused offer), so a blocked person learns that, and when, they were blocked; presence by audience. There are no contact requests | Until removal or account deletion |
 | Discovery budget (`people.discovery_budget`) | account id, day, lookups used | The 5,000-per-day budget on phone-hash matching (the online oracle remains an accepted risk, threat T-5) | Daily counter |
 | Reports (`people.reports`) | reporter, reported account, category, an optional note the reporter types, status. No message content is attached | Abuse handling with the minimum evidence | Survives account deletion as the moderation record while open; deleted 180 days after it is resolved or dismissed |
-| Media objects (`media.objects`; bytes in object storage) | random object id (never a content hash), owner account, kind, size, upload offset, expiry | Encrypted attachments, avatars and backup media. The server cannot link an object to a message | Attachments 30 days, backup media 90 days (refreshed by each full backup), avatars and group pictures until deleted. Quotas per account |
+| Media objects (`media.objects`; bytes in object storage) | random object id (never a content hash), owner account, kind, size, upload offset, expiry | Encrypted attachments, avatars and backup media. The server cannot link an object to a message. A profile photo (Part B E1) is one `persistent` object of the account: the id, key and digest that reach it live inside that person's encrypted profile blob, so who can read a picture is decided by who holds the profile key, not by the media row. | Attachments 30 days, backup media 90 days (refreshed by each full backup), avatars and group pictures until deleted (a replaced or removed photo is deleted by its owner's device). Quotas per account |
 | Backups (`backup.history_backups`, `backup.full_backups`) | the encrypted history backup (at most 16 MiB) keyed by the AIK; the encrypted full-backup envelope (an opaque JSON, refused if it carries a recovery phrase, passphrase or backup key at any depth), versions | Client-owned encrypted restore | Replaced by a higher version; history backup deleted when the AIK changes; both removed with the account |
 | Groups (`groups.groups`, `members`, `bans`, `invite_links`, `join_requests`) | group id, member account ids and roles, epoch, ban list, hashed invite links with encrypted previews (and, since 2026-10-20, the admin who made each), join requests, and the **encrypted** state blob (name, picture, description, settings under the group master key) | Roster authority and sender-key fan-out. The server sees who is in a group, not what it is called | Until the group is deleted or the member leaves or is removed |
 | Calls (`calls.pending_calls`, `calls.call_metrics`) | call id, callee device, caller account and device, the sealed offer for an offline callee (up to 120 s); anonymous call-quality numbers | Ring offline devices, tune TURN. SDP, ICE candidates, caller names and audio/video are sealed pairwise and invisible to the server | Pending calls 120 s; metrics 90 days |
@@ -69,6 +69,13 @@ timers are inside the encrypted content, so they are not server data at all.
   name exists is answered only by the authenticated
   `GET /v1/people/by-name/{name}`, which honours "Find me by ~name" and
   blocking and is rate-limited.
+- A profile is read (`GET /v1/people/{account}/profile`) by a device that holds
+  that person's profile key, which only a message from them can give it. The
+  engine asks once when a stranger's key first arrives and at most once a day
+  per person while it still has nothing to show, so the server learns who reads
+  whose profile (its one-day distinct-people budget, above) and nothing about
+  what was in it. A profile photo adds one media `GET` of that person's own
+  `persistent` object per read.
 - Client-side, device-local only: the phone-book names and numbers used to show
   people, and the whole message history, in the SQLCipher database. Renaming
   someone in Helix also writes the name to the phone's contacts, with the

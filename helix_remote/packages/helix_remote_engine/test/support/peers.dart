@@ -9,6 +9,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
+import 'fake_media.dart';
 import 'fake_server.dart';
 
 /// Deterministic randomness for tests (HMAC-SHA256 counter blocks).
@@ -109,13 +110,16 @@ final class Peer {
   }
 }
 
-/// Creates and registers engines against a shared [FakeServer].
+/// Creates and registers engines against a shared [FakeServer], and a
+/// [FakeMedia] when the test needs media objects (an engine that publishes or
+/// reads a profile photo).
 final class Peers {
-  Peers({TestClock? clock}) : clock = clock ?? TestClock() {
+  Peers({TestClock? clock, this.media}) : clock = clock ?? TestClock() {
     server = FakeServer(clock: this.clock.call);
   }
 
   late final FakeServer server;
+  final FakeMedia? media;
   final TestClock clock;
   final List<Peer> _all = [];
   int _seed = 0;
@@ -133,10 +137,11 @@ final class Peers {
     // finding C-01): the peer must not close it on dispose.
     final shared = db != null;
     db ??= HelixDb.inMemory(key: DatabaseKey.generate());
+    final media = this.media;
     final api = HelixApi(
       baseUrl: FakeServer.baseUri,
       sessions: DbSessionTokenStore(db),
-      httpClient: server.client,
+      httpClient: media == null ? server.client : media.wrap(server.client),
       retry: RetryPolicy.none,
     );
     final engine = Engine(

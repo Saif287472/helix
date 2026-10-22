@@ -933,3 +933,49 @@ score exactly as at Review 4 after the changes below.
   filter; Windows already handles `helix://`. The route adds no migration and
   no `.env` line, but it needs the server rebuilt and restarted to answer.
   - **Owner:** pending review.
+
+## Part B E1 (the profile photo, 2026-10-22)
+
+- **Choosing a photo publishes it; Save is not needed first.** The prototype's
+  editor has one Save for name, about and `~name`, and a separate photo row
+  with no stated behaviour. The profile is one sealed object, so the picture
+  cannot travel alone: picking one sends the profile with the saved name and
+  about line plus the new pointer. Unsaved edits in the fields are not sent by
+  it (and Save still does not carry a photo chosen after a failed publish —
+  press the photo row again).
+  - **Owner:** pending review.
+- **A failed share leaves the picture on this phone and says so.** The local
+  avatar is stored first, then the publish; on any error the row toasts "Your
+  photo is on this phone, but it could not be shared." Removing a photo is the
+  same shape: the local one always goes, the shared one goes only when the
+  un-publish succeeds.
+  - **Owner:** pending review.
+- **A person's photo arrives through the chat, not a directory.** The engine
+  reads a profile only when a message first carries that person's profile key,
+  and at most one profile read and one picture download per person per day
+  (the `people.looked:<account>` setting). So a person you have never
+  messaged has no picture on this device, and a change shows up at the peer on
+  the next message rather than at once. That is deliberate: polling every
+  person's profile would be a metadata stream.
+  - **Owner:** pending review.
+- **A picture that cannot be checked keeps the old one.** If the download
+  fails, is corrupted or does not match the pointer's digest and length, the
+  stored `avatarBlob` stays as it was and the retry happens on the next read;
+  only a profile that genuinely has no picture clears it.
+  - **Owner:** pending review.
+- **One engine cap, 512 KiB.** `PeopleService.maxPhotoBytes` rejects anything
+  bigger before uploading. The app's picker always yields a 256 px PNG (far
+  under it), so the cap is there for the CLI and any later caller, and it is
+  well under the server's 5 MiB per persistent object.
+  - **Owner:** pending review.
+- **Removing the shared photo deletes its object best-effort.** The old
+  `MediaPointer` is dropped with `DELETE /v1/media/{id}` after the new profile
+  is published; if that call fails the object stays until the server's
+  retention removes it, and nobody can read it anyway (the profile that
+  pointed at it is gone).
+  - **Owner:** pending review.
+- **No server change.** The photo is an ordinary encrypted `persistent` media
+  object and its pointer sits inside the already-sealed profile
+  (`ProfileContent.avatar`, documented in `CRYPTO_V2.md` §9). No new route, no
+  protocol field, no migration, no `.env` line, so nothing to deploy.
+  - **Owner:** pending review.

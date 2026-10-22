@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -5,6 +7,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
+import 'support/fake_media.dart';
 import 'support/peers.dart';
 
 /// People, profiles, naming, blocks, trust and settings.
@@ -260,6 +263,164 @@ void main() {
         expect(await bob.engine.people.aboutOf(alice.account), isNull);
       },
     );
+
+    /// A profile photo is a `persistent` media object whose pointer travels
+    /// inside the encrypted profile: the server sees an id, a size and bytes
+    /// it cannot read, and only someone holding the profile key can fetch it.
+    group('with a photo', () {
+      late Peers withMedia;
+
+      setUp(() => withMedia = Peers(media: FakeMedia()));
+      tearDown(() => withMedia.dispose());
+
+      final png = Uint8List.fromList(List.generate(8 * 1024, (i) => i % 251));
+
+      /// Alice, who published a photo, and Bob, who now holds her profile key
+      /// because she wrote to him - with nothing asked of the app.
+      Future<(Peer, Peer)> messaged() async {
+        final alice = await withMedia.register(
+          'alice',
+          phone: '+8801711000001',
+        );
+        final bob = await withMedia.register('bob', phone: '+8801711000002');
+        await alice.engine.people.setOwnProfile(
+          name: 'Alice A.',
+          about: 'hi',
+          photoBytes: png,
+        );
+        final chat = await alice.engine.chats.openDirect(bob.account);
+        await alice.engine.chats.sendText(chat.id, 'here is my profile key');
+        await alice.engine.drainOutbox();
+        await bob.sync();
+        return (alice, bob);
+      }
+
+      test('the photo is uploaded encrypted, not in the clear', () async {
+        final alice = await withMedia.register('alice');
+        await alice.engine.people.setOwnProfile(
+          name: 'Alice A.',
+          photoBytes: png,
+        );
+        final media = withMedia.media!;
+        expect(media.objects, hasLength(1));
+        final stored = media.objects.values.single;
+        expect(stored.kind, 'persistent');
+        expect(stored.complete, isTrue);
+        // Ciphertext: bigger than the picture (a sealed chunk), and not it.
+        expect(stored.bytes.length, greaterThan(png.length));
+        expect(stored.bytes, isNot(equals(png)));
+        final blob = withMedia.server.profiles[alice.account]!.ciphertext;
+        expect(String.fromCharCodes(blob), isNot(contains('Alice')));
+      });
+
+      test(
+        'a person this account messaged gets it without being asked',
+        () async {
+          final (alice, bob) = await messaged();
+          final row = (await bob.engine.people.person(alice.account))!;
+          expect(row.profileName, 'Alice A.');
+          expect(row.avatarBlob, equals(png));
+          expect(await bob.engine.people.aboutOf(alice.account), 'hi');
+        },
+      );
+
+      test('saving a name keeps the photo and uploads nothing new', () async {
+        final (alice, bob) = await messaged();
+        final media = withMedia.media!;
+        final before = media.objects.length;
+        await alice.engine.people.setOwnProfile(name: 'Alice B.');
+        expect(media.objects.length, before);
+        expect(
+          await bob.engine.people.refreshProfile(alice.account),
+          'Alice B.',
+        );
+        final row = (await bob.engine.people.person(alice.account))!;
+        expect(row.avatarBlob, equals(png));
+      });
+
+      test(
+        'removing it deletes the object and clears it at the peer',
+        () async {
+          final (alice, bob) = await messaged();
+          await alice.engine.people.setOwnProfile(
+            name: 'Alice A.',
+            clearPhoto: true,
+          );
+          expect(withMedia.media!.objects, isEmpty);
+          expect(
+            await bob.engine.people.refreshProfile(alice.account),
+            'Alice A.',
+          );
+          final row = (await bob.engine.people.person(alice.account))!;
+          expect(row.avatarBlob, isNull);
+        },
+      );
+
+      test('a photo that does not check out is not stored', () async {
+        final (alice, bob) = await messaged();
+        final keep = (await bob.engine.people.person(
+          alice.account,
+        ))!.avatarBlob;
+        withMedia.media!.corruptDownloads = true;
+        await alice.engine.people.setOwnProfile(
+          name: 'Alice A.',
+          photoBytes: png,
+        );
+        expect(
+          await bob.engine.people.refreshProfile(alice.account),
+          'Alice A.',
+        );
+        final row = (await bob.engine.people.person(alice.account))!;
+        expect(row.avatarBlob, equals(keep));
+      });
+
+      test(
+        'a photo whose fetch died is tried again on the next read',
+        () async {
+          final alice = await withMedia.register(
+            'alice',
+            phone: '+8801711000001',
+          );
+          await alice.engine.people.setOwnProfile(
+            name: 'Alice A.',
+            photoBytes: png,
+          );
+          final carol = await withMedia.register(
+            'carol',
+            phone: '+8801711000003',
+          );
+          final chat = await alice.engine.chats.openDirect(carol.account);
+          await alice.engine.chats.sendText(chat.id, 'hello');
+          await alice.engine.drainOutbox();
+          // Carol reads Alice's profile, and the one request that carries the
+          // picture is the one that dies.
+          withMedia.media!.offlineNext = 1;
+          await carol.sync();
+          final missed = (await carol.engine.people.person(alice.account))!;
+          expect(missed.profileName, 'Alice A.');
+          expect(missed.avatarBlob, isNull);
+          // Nothing newer to read, but the remembered pointer is fetched now.
+          expect(
+            await carol.engine.people.refreshProfile(alice.account),
+            'Alice A.',
+          );
+          final kept = (await carol.engine.people.person(alice.account))!;
+          expect(kept.avatarBlob, equals(png));
+        },
+      );
+
+      test('a picture too big to be a photo is refused', () async {
+        final alice = await withMedia.register('alice');
+        expect(
+          () => alice.engine.people.setOwnProfile(
+            name: 'Alice A.',
+            photoBytes: Uint8List(PeopleService.maxPhotoBytes + 1),
+          ),
+          throwsArgumentError,
+        );
+        expect(withMedia.media!.objects, isEmpty);
+      });
+    });
 
     test('a report names the account and category and nothing else', () async {
       final alice = await peers.register('alice', phone: '+8801711000001');
