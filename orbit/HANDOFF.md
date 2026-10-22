@@ -119,11 +119,11 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: batch 10 (the wide Windows layout) and Part B
-steps 3 to 5 (the rename, deleting `helix_remote_ui`, the full verify).
-The lists below keep their detail. (The pixel checks, S1, E1, E4, E5 and E6
-are built — see "Deferred work, in order", items 4 to 9. S1 and E6 both change
-the server, so neither is live until production runs this branch.)
+Deferred until the owner asks: Part B steps 3 to 5 (the rename, deleting
+`helix_remote_ui`, the full verify).
+The lists below keep their detail. (The pixel checks, S1, E1, E4, E5, E6 and
+batch 10 are built — see "Deferred work, in order", items 4 to 10. S1 and E6
+both change the server, so neither is live until production runs this branch.)
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -207,7 +207,18 @@ the server, so neither is live until production runs this branch.)
    every scrolled page before its late re-scroll, which had moved the four
    chat keys and `group-pending-member` by ~14 px; its default is now 0.5 s.
    Nothing here needs a new APK: the pill fix is one line of orbit_ui.
-10. Batch 10 (the wide Windows layout).
+10. Batch 10 (the wide Windows layout) - **checked** (2026-10-22): the layout
+    itself is in `ccf534c`. Both sides re-shot at `window-l` (27 keys) and
+    `window-m` (15) and scored with `partb/score_all.py`; every one of the 42
+    is at or better than its batch 10 number, so nothing in the wide layout
+    moved while Part B and E1-E6 were going in. `partb/window_scores.txt` is
+    the reference now, so the next wide change has a number to keep. The only
+    three keys that differ from batch 10 did so on the prototype side, under
+    the owner's uncommitted `orbit/prototype/css/tokens.css` (chat-actions
+    0.87 -> 0.81, chat-attach 4.63 -> 4.02, message-info 4.59 -> 5.07); with
+    that file pinned at `ccf534c` the same Flutter shots score 0.81, 4.63 and
+    4.54. Nothing to fix, and no new APK: this batch is preview-side only.
+    The `orbit_ui` window tests pass (5).
 11. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
     full verify).
 
@@ -262,9 +273,10 @@ To do:
    updating.
 
 After batch 8 comes batch 9: settings pages, devices and backup
-(`contracts/devices_backup.md`, with E4, E5 and E6). Then batch 10, the
-wide Windows layout (`contracts/frame.md`). Then Part B steps 3 to 5: the
-Orbit rename, deleting `helix_remote_ui`, and the full verify.
+(`contracts/devices_backup.md`, with E4, E5 and E6). Batch 10, the wide
+Windows layout (`contracts/frame.md`), is built and its pixel check is done.
+What is left is Part B steps 3 to 5: the Orbit rename, deleting
+`helix_remote_ui`, and the full verify.
 
 ## How every batch is checked
 
@@ -289,7 +301,11 @@ unless their content changed.
 `orbit/flutter/tools/compare/partb/compare.sh <keys>` for the keys a batch
 touches, and `partb/score_all.py` for the whole device in one pass. Every key a batch
 touches must keep its Review 4 score (`partb/review4_scores.txt`) unless
-the change is deliberate and logged in DEVIATIONS. The prototype shots are
+the change is deliberate and logged in DEVIATIONS. A wide-window batch is the
+same tool with the window reference and the device's own keys:
+`score_all.py --dev window-l --keys auto --ref window_scores.txt` (and
+`--dev window-m`; `--keys auto` takes the 27 and 15 keys shot on both sides,
+which are not the phone's 241). The prototype shots are
 not committed; make them with `tools/compare/shoot_html.py` (see the
 compare README). Shoot with the default settle (0.5 s since 2026-10-22): a
 page that scrolls itself moves again once the fonts land, and a short settle

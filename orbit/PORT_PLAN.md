@@ -467,8 +467,9 @@ pending your review:
   list, detail, info and full panes and the "Pick a chat" placeholder,
   `OrbitPaneScope` for the frame's touches, window sheets and dialogs,
   the composer's anchored sheet, the media viewer's Previous and Next,
-  readable widths, the open chat marked). 34 shots at 960 and 1280px,
-  0.3% to 7.3%.
+  readable widths, the open chat marked). 42 shots at 960 and 1280px,
+  0.3% to 6.2%; re-shot and re-scored 2026-10-22, every key at its batch 10
+  number (`partb/window_scores.txt`).
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

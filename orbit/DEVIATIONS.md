@@ -346,11 +346,16 @@ The port follows the prototype, so these changed the prototype itself:
 
 ## Phase 4 batch 10 (the wide Windows layout)
 
-- **Compared on a representative set, not every key.** 15 keys at 960px
-  and 19 at 1280px, covering every placement (list, detail, info beside or
+- **Compared on a representative set, not every key.** 27 keys at 1280px
+  and 15 at 960px, covering every placement (list, detail, info beside or
   over, full and boxed), overlays and the composer's anchored sheet: 0.3%
-  to 7.3%. The other keys use the same frame; Review 4 is where to look
-  at them.
+  to 6.2%. The other keys use the same frame; Review 4 is where to look
+  at them. Re-shot and re-scored 2026-10-22 (`partb/window_scores.txt`):
+  every one of the 42 is at or better than its batch 10 number, so the
+  layout has not moved since. Three keys' *prototype* side moved, under
+  the owner's uncommitted `css/tokens.css`; with that file pinned back at
+  the batch 10 tree the same Flutter shots are unchanged (chat-attach) or
+  0.05-0.06 better (chat-actions, message-info).
   - **Owner:** pending (batch 10).
 - **The preview composes a window from `screens.json`**: each key's base
   screens are pushed through the prototype's own `route` rules, and a base
