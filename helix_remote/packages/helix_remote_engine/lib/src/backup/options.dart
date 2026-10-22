@@ -20,6 +20,12 @@ abstract interface class BackupRemote {
 
   /// Null when there is none.
   Future<FullBackup?> full();
+
+  /// When the account's recovery backup was made, from the server's own row:
+  /// the same answer on every device, and no envelope comes back. Null when
+  /// the server says there is none — a server that does not know the route
+  /// fails with `ApiException` (`not_found`), which is not the same answer.
+  Future<DateTime?> fullMeta();
   Future<void> putFull(FullBackup backup);
   Future<void> deleteFull();
 }
@@ -59,6 +65,9 @@ final class ApiBackupRemote implements BackupRemote {
 
   @override
   Future<FullBackup?> full() => _client.full();
+
+  @override
+  Future<DateTime?> fullMeta() => _client.fullMeta();
 
   @override
   Future<void> putFull(FullBackup backup) => _client.putFull(backup);

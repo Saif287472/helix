@@ -297,4 +297,25 @@ void main() {
     expect(world.remote.fullStored, isNull);
     expect((await alice.backup.status()).fullVersion, isNull);
   });
+
+  test('the server says whether the account has a recovery backup', () async {
+    expect(await alice.backup.serverRecoveryBackupDate(), isNull);
+
+    await alice.backup.createFullBackup(recoverySecret: secret);
+    expect(
+      await alice.backup.serverRecoveryBackupDate(),
+      world.remote.fullAt,
+      reason: 'the server\'s row time, not this device\'s memory',
+    );
+
+    await alice.backup.deleteFullBackup();
+    expect(await alice.backup.serverRecoveryBackupDate(), isNull);
+
+    // Could not ask is not the same answer as none.
+    world.remote.offline = 1;
+    expect(
+      (await failureOf(alice.backup.serverRecoveryBackupDate())).failure,
+      BackupFailure.offline,
+    );
+  });
 }

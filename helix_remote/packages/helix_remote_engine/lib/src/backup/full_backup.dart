@@ -317,6 +317,18 @@ final class FullBackupJob {
 
   // ------------------------------------------------------------- delete
 
+  /// When the account's recovery backup was made, as the server's row says -
+  /// so a device that never made one still knows. Null when there is none.
+  Future<DateTime?> serverDate() async {
+    try {
+      return await _remote.fullMeta();
+    } on Object catch (error) {
+      final failure = BackupException.translate(error);
+      if (failure is BackupException) throw failure;
+      rethrow;
+    }
+  }
+
   Future<void> deleteRemote() async {
     try {
       await _remote.deleteFull();

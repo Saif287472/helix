@@ -285,6 +285,10 @@ void main() {
         expect(inner.uploads, 0);
         await remote.history();
         expect(inner.downloads, 1);
+        // Asking the server about the recovery backup is a read, so mobile
+        // data does not stop it.
+        await remote.fullMeta();
+        expect(inner.downloads, 2);
         allowed = true;
         await remote.putHistory(_history);
         expect(inner.uploads, 1);
@@ -354,6 +358,12 @@ class _CountingRemote implements BackupRemote {
 
   @override
   Future<FullBackup?> full() async => null;
+
+  @override
+  Future<DateTime?> fullMeta() async {
+    downloads++;
+    return null;
+  }
 
   @override
   Future<void> putFull(FullBackup backup) async {}

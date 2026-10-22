@@ -64,6 +64,16 @@ final class FakeBackupRemote implements BackupRemote {
     return fullStored;
   }
 
+  /// The date the fake's row carries, as the server stamps `updated_at` on
+  /// whatever it stores.
+  DateTime fullAt = DateTime.utc(2026, 3, 4);
+
+  @override
+  Future<DateTime?> fullMeta() async {
+    _check();
+    return fullStored == null ? null : fullAt;
+  }
+
   @override
   Future<void> putFull(FullBackup backup) async {
     _check();

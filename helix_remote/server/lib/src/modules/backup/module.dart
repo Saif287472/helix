@@ -118,7 +118,8 @@ CREATE TABLE $s.full_backups (
       )
       ..add(name, Routes.putFullBackup, _putFull, maxBodyBytes: fullBody)
       ..add(name, Routes.getFullBackup, _getFull, allowSuspended: true)
-      ..add(name, Routes.deleteFullBackup, _deleteFull, allowSuspended: true);
+      ..add(name, Routes.deleteFullBackup, _deleteFull, allowSuspended: true)
+      ..add(name, Routes.getFullBackupMeta, _getFullMeta, allowSuspended: true);
   }
 
   Future<Response> _putHistory(HelixRequest q) async {
@@ -236,6 +237,23 @@ CREATE TABLE $s.full_backups (
         envelope: r.json('envelope'),
         mediaIds: r.strings('media_ids'),
         updatedAt: r.time('updated_at'),
+      ).toJson(),
+    );
+  }
+
+  /// Whether the account has a recovery backup, and when it was made - the
+  /// row's own time, so a device can answer that without the envelope.
+  /// "None" is a 200 with `exists: false`: a 404 here would look exactly like
+  /// a server that does not know the route.
+  Future<Response> _getFullMeta(HelixRequest q) async {
+    final r = await context.db.queryOne(
+      'SELECT updated_at FROM $schema.full_backups WHERE account_id = @a:uuid',
+      {'a': q.device.accountId},
+    );
+    return jsonResponse(
+      FullBackupMeta(
+        exists: r != null,
+        updatedAt: r?.time('updated_at'),
       ).toJson(),
     );
   }

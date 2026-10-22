@@ -186,6 +186,7 @@ smaller id survives, the other ends with reason `glare`.
 | `PUT /v1/backups/full` | `FullBackup` → 204 | Refuses envelopes containing `backup_key`, `passphrase`, `recovery_phrase`. ≤ 64 MiB envelope, at most 32 levels deep and 100,000 JSON values (`bad_request`). `quota_exceeded` (`reason: server_storage`) while the server is over its storage budget. |
 | `GET /v1/backups/full` | — → `FullBackup` | |
 | `DELETE /v1/backups/full` | — → 204 | |
+| `GET /v1/backups/full/meta` | — → `FullBackupMeta` | Only the row's `updated_at`: whether the account has a recovery backup and when it was made, so any device can answer that without downloading up to 64 MiB of envelope. "None" is 200 with `exists: false`, not 404 — a server that lacks this route answers 404, and a client must not read that as "no backup". |
 
 ## ops
 

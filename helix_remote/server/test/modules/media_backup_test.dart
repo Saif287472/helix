@@ -341,5 +341,72 @@ void main() {
         expect(read.envelope['kdf'], 'argon2id');
       },
     );
+
+    test(
+      "the recovery backup's date is readable without its envelope",
+      () async {
+        final none = await h.api.call(
+          Routes.getFullBackupMeta,
+          bearer: alice.bearer,
+        );
+        expect(none.status, 200);
+        expect(
+          FullBackupMeta.fromJson(none.json).exists,
+          isFalse,
+          reason:
+              'a 404 would look like a server that does not know this route',
+        );
+
+        await h.api.call(
+          Routes.putFullBackup,
+          bearer: alice.bearer,
+          body: FullBackup(
+            backupId: Uuid.v7(),
+            version: 1,
+            envelope: const {'ciphertext': 'x'},
+          ).toJson(),
+        );
+        final meta = FullBackupMeta.fromJson(
+          (await h.api.call(
+            Routes.getFullBackupMeta,
+            bearer: alice.bearer,
+          )).json,
+        );
+        expect(meta.exists, isTrue);
+        expect(
+          meta.updatedAt!.isAfter(
+            DateTime.now().subtract(const Duration(minutes: 5)),
+          ),
+          isTrue,
+        );
+        expect(
+          FullBackupMeta.fromJson(JsonReader.of(meta.toJson())).updatedAt,
+          meta.updatedAt,
+        );
+
+        // The point of the route: a device that made nothing knows the answer.
+        final other = await secondDevice(h, alice, aliceNumber);
+        expect(
+          FullBackupMeta.fromJson(
+            (await h.api.call(
+              Routes.getFullBackupMeta,
+              bearer: other.bearer,
+            )).json,
+          ).updatedAt,
+          meta.updatedAt,
+        );
+
+        await h.api.call(Routes.deleteFullBackup, bearer: alice.bearer);
+        expect(
+          FullBackupMeta.fromJson(
+            (await h.api.call(
+              Routes.getFullBackupMeta,
+              bearer: other.bearer,
+            )).json,
+          ).exists,
+          isFalse,
+        );
+      },
+    );
   });
 }

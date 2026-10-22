@@ -30,10 +30,10 @@ class RecoveryBackupPage extends ConsumerWidget {
       model: recoveryModel(
         state,
         initialTab: initialTab,
-        made: backup != null && backup.recoveryBackup != 'Not made',
-        madeLabel: backup != null && backup.recoveryBackup != 'Not made'
-            ? 'Made ${backup.recoveryBackup.toLowerCase()}'
-            : 'Made today',
+        made: backup?.recoveryMade ?? false,
+        madeLabel: backup == null || !backup.recoveryMade
+            ? 'Made today'
+            : 'Made ${backup.recoveryBackup.toLowerCase()}',
       ),
       actions: RecoveryActions(
         onCopy: controller.copy,

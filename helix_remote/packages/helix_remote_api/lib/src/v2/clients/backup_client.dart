@@ -42,6 +42,18 @@ final class BackupClient {
 
   Future<void> deleteFull() => _t.empty(Routes.deleteFullBackup);
 
+  /// When the account's recovery backup was made, from the server's own row -
+  /// the same answer on every device, and no envelope comes back. Null when
+  /// the account has none.
+  ///
+  /// A server that does not know this route fails with `ApiException`
+  /// (`not_found`), which is *not* "no recovery backup": the caller keeps its
+  /// own answer for that case.
+  Future<DateTime?> fullMeta() async => (await _t.call(
+    Routes.getFullBackupMeta,
+    FullBackupMeta.fromJson,
+  )).updatedAt;
+
   static Future<T?> _orNull<T>(Future<T> request) async {
     try {
       return await request;

@@ -608,6 +608,15 @@ abstract final class Routes {
     access: _dev,
   );
 
+  /// When the account's recovery backup was made, and nothing else: every
+  /// device can ask this without downloading the envelope.
+  static const getFullBackupMeta = ApiRoute(
+    _get,
+    '/v1/backups/full/meta',
+    module: 'backup',
+    access: _dev,
+  );
+
   // --------------------------------------------------------------------- ops
   static const live = ApiRoute(
     _get,
@@ -921,7 +930,7 @@ abstract final class Routes {
     callMetrics, //
     createUpload, uploadContent, uploadStatus, downloadContent, deleteMedia,
     putHistoryBackup, getHistoryBackup, deleteHistoryBackup, putFullBackup,
-    getFullBackup, deleteFullBackup, //
+    getFullBackup, deleteFullBackup, getFullBackupMeta, //
     live, ready, serverInfo, legal, crashReport, anomalies, metrics, assetLinks,
     openLink, shareLink, //
     exportData, deleteAccount, //

@@ -16,6 +16,25 @@ final backupSummaryProvider = StreamProvider<BackupSummary>(
   (ref) => ref.watch(backupGatewayProvider).watchSummary(),
 );
 
+/// The recovery backup as the account's server sees it, so every device of the
+/// account says the same thing - and a backup deleted from another device stops
+/// being claimed here. While the answer is not in, or it cannot be asked
+/// (offline, or a server too old for the route), this device's own record is
+/// what shows: the two are not the same answer.
+final recoveryBackupDateProvider = FutureProvider.autoDispose<DateTime?>((
+  ref,
+) async {
+  try {
+    return await ref.watch(backupGatewayProvider).recoveryBackupOnServer();
+  } on BackupProblemException {
+    return (await ref.watch(backupSummaryProvider.future)).lastRecoveryBackupAt;
+  }
+});
+
+/// "Not made", or how long ago [at] was.
+String recoveryBackupLabel(DateTime? at, DateTime now) =>
+    at == null ? 'Not made' : formatAgo(at, now);
+
 /// What the Backup page draws: the summary as sentences.
 final class BackupPageView {
   const BackupPageView({
@@ -23,6 +42,7 @@ final class BackupPageView {
     required this.lastBackup,
     required this.lastBackupDetail,
     required this.recoveryBackup,
+    required this.recoveryMade,
     this.problem,
   });
 
@@ -35,14 +55,23 @@ final class BackupPageView {
   final String? lastBackupDetail;
   final String recoveryBackup;
 
+  /// Whether the account has a recovery backup, on the server's answer.
+  final bool recoveryMade;
+
   /// Why the last attempt failed, as a sentence; cleared by the next success.
   final String? problem;
 }
 
 final backupPageViewProvider = Provider<AsyncValue<BackupPageView>>((ref) {
   final now = ref.watch(clockProvider)();
+  final serverRecovery = ref.watch(recoveryBackupDateProvider);
   return ref.watch(backupSummaryProvider).whenData((s) {
     final problem = s.lastProblem;
+    // The server's answer beats this device's record; until it is in, the
+    // record is what a person sees.
+    final recoveryAt = serverRecovery.hasValue
+        ? serverRecovery.requireValue
+        : s.lastRecoveryBackupAt;
     return BackupPageView(
       autoBackup: s.autoBackup,
       lastBackup: formatAgo(s.lastBackupAt, now),
@@ -50,9 +79,8 @@ final backupPageViewProvider = Provider<AsyncValue<BackupPageView>>((ref) {
           ? null
           : '${_count(s.messages)} messages, ${formatBytes(s.bytes)}'
                 '${s.truncated ? '. The oldest messages did not fit.' : ''}',
-      recoveryBackup: s.lastRecoveryBackupAt == null
-          ? 'Not made'
-          : formatAgo(s.lastRecoveryBackupAt, now),
+      recoveryBackup: recoveryBackupLabel(recoveryAt, now),
+      recoveryMade: recoveryAt != null,
       problem: problem == null ? null : backupProblemText(problem),
     );
   });

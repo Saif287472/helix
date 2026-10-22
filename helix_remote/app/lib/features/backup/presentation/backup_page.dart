@@ -59,7 +59,7 @@ class BackupPage extends ConsumerWidget {
         daily: view.autoBackup,
         mobileData: ref.watch(backupOverMobileProvider).value ?? false,
         transfersWaiting: offers.length,
-        recoveryMade: summary?.lastRecoveryBackupAt != null,
+        recoveryMade: view.recoveryMade,
         recoveryLabel: view.recoveryBackup,
       ),
       actions: orbit.BackupActions(

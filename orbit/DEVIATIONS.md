@@ -1041,3 +1041,44 @@ score exactly as at Review 4 after the changes below.
   The Backup page shows only the sentence (the short title is the restore
   step's card); `backup_pages_test.dart` pins both.
   - **Owner:** pending review.
+
+## Part B E6 (every device knows the account's recovery backup, 2026-10-22)
+
+- **A new route, and it changes the server.** `GET /v1/backups/full/meta`
+  (protocol `Routes.getFullBackupMeta`, backup module, authenticated device
+  route, `allowSuspended: true` like `GET /v1/backups/full`) answers with
+  `FullBackupMeta`: `exists` and the row's own `updated_at`. Nothing else — no
+  envelope, no media, no new table or column (`backup.full_backups` already
+  keeps `updated_at`), so no migration and no new `.env` line. It only answers
+  once production runs this branch: the owner has to rebuild and switch to it
+  (never done by an agent). Until then the app's fallback below is what a
+  person sees.
+  - **Owner:** pending review.
+- **"None" is a 200 with `exists: false`, never a 404.** That is the whole
+  safety of the design: a server that does not know this route answers 404, and
+  a client that read 404 as "this account has no recovery backup" would tell a
+  person that a backup made on their other device is gone. So
+  `BackupClient.fullMeta()` deliberately does not use `_orNull`, the engine
+  surfaces the failure as a `BackupException` (`noBackup` from a 404, `offline`,
+  `notAllowed`), and `BackupService.serverRecoveryBackupDate()` documents that
+  "could not ask" is not "there is none". The app's `recoveryBackupDateProvider`
+  catches `BackupProblemException` and falls back to this device's own record.
+  - **Owner:** pending review.
+- **The server's answer wins, the local record is the fallback.** Both the
+  Backup row (`recoveryMade` and `recoveryBackup` on `BackupPageView`) and the
+  checkup read `recoveryBackupDateProvider`; a recovery backup made on another
+  device shows here, and one deleted elsewhere stops being claimed. While the
+  answer is not in, the checkup row says "Checking…" and does not flag, so the
+  first frame cannot show a wrong "No recovery backup yet".
+  - **Owner:** pending review.
+- **The read is a lookup, not a download.** `fullMeta()` gets a ~40-byte JSON
+  body; the only way to ask before this was `GET /v1/backups/full`, which pulls
+  up to 64 MiB of envelope. The api route-parity test keeps one client method
+  per catalog route, and `docs_test.dart` pins the route's row in `REST_V2.md`.
+  - **Owner:** pending review.
+- **`exists` stays on the wire and does not reach the app.** `fullMeta()`
+  returns just the date (null = the server says none): "no row" and "a row with
+  no date" are the same answer to a person, so a second field would only be
+  something to keep in step. `FullBackupMeta` still carries it so the server's
+  two states stay distinguishable for a later reader.
+  - **Owner:** pending review.

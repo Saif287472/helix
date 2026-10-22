@@ -11,6 +11,13 @@ Account deletion removes both. While the server is over its storage budget
 (`HELIX_STORAGE_BUDGET_BYTES`), both `PUT`s answer `quota_exceeded`
 (`reason: server_storage`); the stored backup stays as it was.
 
+`GET /v1/backups/full/meta` answers only `full_backups.updated_at` - whether
+the account has a recovery backup and when it was made - so any device can
+show that without a `GET /v1/backups/full` download. "None" is a 200 with
+`exists: false`, never a 404, so a client can tell it apart from a server that
+does not know the route. It reads only this module's table, for the caller's
+own account.
+
 Body limits: history 16 MiB of data; a full backup up to
 `FullBackup.maxEnvelopeBytes` (64 MiB, fixed by the protocol package), and
 before decoding at most 32 levels deep and 100,000 JSON values

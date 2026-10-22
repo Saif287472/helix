@@ -78,3 +78,29 @@ final class FullBackup {
     updatedAt: json.optTime('updated_at'),
   );
 }
+
+/// `GET /v1/backups/full/meta`: the one question any device of the account may
+/// ask about its recovery backup without reading it - is there one, and when
+/// was it made. The server's own row time; nothing here opens the envelope.
+///
+/// "There is none" is a 200 with [exists] false, not a 404: a server that
+/// does not know this route answers 404, and a client must be able to tell
+/// "the account has no recovery backup" from "this server cannot be asked".
+final class FullBackupMeta {
+  const FullBackupMeta({required this.exists, this.updatedAt});
+
+  final bool exists;
+
+  /// When it was made, as the server's row says. Absent when [exists] is false.
+  final DateTime? updatedAt;
+
+  JsonMap toJson() => compact({
+    'exists': exists,
+    'updated_at': updatedAt == null ? null : toWireTime(updatedAt!),
+  });
+
+  factory FullBackupMeta.fromJson(JsonReader json) => FullBackupMeta(
+    exists: json.flag('exists'),
+    updatedAt: json.optTime('updated_at'),
+  );
+}

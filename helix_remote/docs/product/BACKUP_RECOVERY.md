@@ -64,6 +64,10 @@ for every active device of every member, including the sender's own other device
 - Server: `PUT` / `GET /v1/backups/full`. The envelope is refused if any key at any depth is
   `backup_key`, `passphrase` or `recovery_phrase`; its backup-kind media get a 90-day retention that
   each full backup refreshes.
+- `GET /v1/backups/full/meta` answers whether the account has one and when its row was written, and
+  nothing else, so any device can show that without pulling the envelope. A missing backup is a 200
+  with `exists: false`, never a 404: a server that does not know the route also answers 404, and the
+  two must not look the same to a client.
 - Session and prekey private state is never backed up. After a restore, peers' first messages fail to
   decrypt and trigger the session reset (CRYPTO_V2.md section 13a); the sender re-sends messages under
   24 hours old.

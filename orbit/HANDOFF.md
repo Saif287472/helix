@@ -119,11 +119,12 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: E6 (which needs a decision - see item 7), the
-pixel checks, batch 10 (the wide Windows layout), and Part B steps 3 to 5
-(the rename, deleting `helix_remote_ui`, the full verify).
-The lists below keep their detail. (S1, E1, E4 and E5 are built — see
-"Deferred work, in order", items 4 to 7.)
+Deferred until the owner asks: the pixel checks, batch 10 (the wide Windows
+layout), and Part B steps 3 to 5 (the rename, deleting `helix_remote_ui`, the
+full verify).
+The lists below keep their detail. (S1, E1, E4, E5 and E6 are built — see
+"Deferred work, in order", items 4 to 8. S1 and E6 both change the server, so
+neither is live until production runs this branch.)
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -180,14 +181,20 @@ The lists below keep their detail. (S1, E1, E4 and E5 are built — see
    Wi-Fi" and which switch to turn; `notAllowed` means only a refused
    account. No server change, no migration - the value is stored by name and
    decodes tolerantly both ways. Deviations in `DEVIATIONS.md` ("Part B E5").
-   **E6 is blocked on a decision**: the only server answer for "does a
-   recovery backup exist, and when" is `GET /v1/backups/full`, which returns
-   the whole envelope (up to 64 MiB), so reading it for a checkup row is a
-   download, not a lookup. It needs either a metadata-only route (a server
-   change, and a rebuild of production) or the owner's own call on the copy.
-8. The pixel checks.
-9. Batch 10 (the wide Windows layout).
-10. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
+8. E6 - **done** (2026-10-22): every device knows the account's recovery
+   backup. The owner chose the metadata-only route: `GET /v1/backups/full/meta`
+   answers `exists` plus the row's `updated_at`, and "none" is a 200 with
+   `exists: false` so a server that lacks the route (which answers 404) can
+   never be read as "your backup is gone". The Backup row and the checkup ask
+   it, and fall back to this device's own record when it cannot be asked.
+   **This changes the server**: no migration and no new `.env` line, but the
+   route only answers once production runs this branch, so the owner has to
+   rebuild and switch to it (never done by an agent); the app works against an
+   older server with its local record. Deviations in `DEVIATIONS.md`
+   ("Part B E6").
+9. The pixel checks.
+10. Batch 10 (the wide Windows layout).
+11. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
     full verify).
 
 ## Batch 8, what is left

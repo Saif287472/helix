@@ -32,6 +32,12 @@ in `presentation/` (`BackupScreen`, `RestoreScreen`, `TransferScreen` and
   as its own `waitingForWifi` failure so the page can name the switch;
   the engine records it and retries after its normal interval. Restores and
   the manual recovery backup are never blocked.
+- **The recovery backup's date is the server's answer**
+  (`recoveryBackupDateProvider`): every device of the account says the same
+  thing, and one deleted from another device stops being claimed here. When it
+  cannot be asked - offline, or a server too old for
+  `GET /v1/backups/full/meta` - this device keeps its own record, and the
+  checkup row says "Checking…" instead of guessing from a missing answer.
 - **Schedule and media** are the engine's: once a day, text history with
   references to media (not the files). The page says so instead of offering a
   choice.

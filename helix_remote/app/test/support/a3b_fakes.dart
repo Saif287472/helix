@@ -235,6 +235,12 @@ class FakeBackupGateway implements BackupGateway {
   BackupProblem? recoveryRestoreFails;
   BackupProblem? sendFails;
   BackupProblem? acceptFails;
+
+  /// What the account's server says about its recovery backup: a date, null
+  /// for "the account has none", or [recoveryOnServerFails] for "we could not
+  /// ask".
+  DateTime? recoveryOnServer;
+  BackupProblem? recoveryOnServerFails;
   Completer<void>? holdBackUp;
   Completer<void>? holdRestore;
   var restoreOutcome = const RestoreOutcome(added: 120, existing: 4);
@@ -325,6 +331,14 @@ class FakeBackupGateway implements BackupGateway {
   @override
   Future<void> deleteRecoveryBackup() async =>
       calls.add('deleteRecoveryBackup');
+
+  @override
+  Future<DateTime?> recoveryBackupOnServer() async {
+    calls.add('recoveryBackupOnServer');
+    final failure = recoveryOnServerFails;
+    if (failure != null) throw BackupProblemException(failure);
+    return recoveryOnServer;
+  }
 
   @override
   Future<String> sendHistory() async {

@@ -47,6 +47,13 @@ abstract interface class BackupGateway {
 
   Future<void> deleteRecoveryBackup();
 
+  /// When the account's recovery backup was made, as the account's server
+  /// says - the same answer on every device, unlike the summary's local
+  /// record. Null when the server says the account has none;
+  /// [BackupProblemException] when it could not be asked (offline, or a server
+  /// too old for the route), which is not the same answer.
+  Future<DateTime?> recoveryBackupOnServer();
+
   /// Sends this device's history to the account's other devices; returns the
   /// transfer id.
   Future<String> sendHistory();
@@ -236,6 +243,10 @@ final class EngineBackupGateway implements BackupGateway {
   @override
   Future<void> deleteRecoveryBackup() =>
       _guard(() async => (await _backup).deleteFullBackup());
+
+  @override
+  Future<DateTime?> recoveryBackupOnServer() =>
+      _guard(() async => (await _backup).serverRecoveryBackupDate());
 
   @override
   Future<String> sendHistory() =>

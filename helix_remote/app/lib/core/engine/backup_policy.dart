@@ -37,6 +37,9 @@ final class PolicyBackupRemote implements BackupRemote {
   Future<FullBackup?> full() => _inner.full();
 
   @override
+  Future<DateTime?> fullMeta() => _inner.fullMeta();
+
+  @override
   Future<void> putFull(FullBackup backup) => _inner.putFull(backup);
 
   @override

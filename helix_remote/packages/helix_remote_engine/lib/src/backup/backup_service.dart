@@ -228,6 +228,13 @@ final class BackupService {
 
   Future<void> deleteFullBackup() => _full.deleteRemote();
 
+  /// When the account's recovery backup was made, as the account's server
+  /// says: the same answer on every device, unlike [status]'s local record.
+  /// Null when the server says the account has none. Throws [BackupException]
+  /// (`offline`, `noBackup` from a server too old for this route, `notAllowed`,
+  /// ...) when it could not be asked - which a caller must not read as "none".
+  Future<DateTime?> serverRecoveryBackupDate() => _full.serverDate();
+
   // ------------------------------------------------ device-to-device
 
   /// Sends this device's history to [devices] (default: all other devices of

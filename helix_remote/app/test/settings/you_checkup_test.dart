@@ -50,7 +50,8 @@ void main() {
             lastBackupAt: DateTime(2026, 10, 3, 5),
             lastRecoveryBackupAt: DateTime(2026, 9, 20),
           ),
-        );
+        )
+        ..recoveryOnServer = DateTime(2026, 9, 20);
       final (list, attention) = await checks(backup: backup);
       expect([for (final c in list) c.key], YouCheckKey.values);
       expect(list.every((c) => c.ok), isTrue);
@@ -59,6 +60,38 @@ void main() {
       expect(list[2].text, 'Set. You can sign in on a new phone');
       expect(list[4].text, startsWith('On. Locks'));
       expect(attention, isFalse);
+    });
+
+    test('a recovery backup made on another device is known here', () async {
+      final backup = FakeBackupGateway()
+        ..summary.set(
+          BackupSummary(
+            lastBackupAt: DateTime(2026, 10, 3, 5),
+            lastRecoveryBackupAt: DateTime(2026, 9, 20),
+          ),
+        )
+        ..recoveryOnServer = DateTime(2026, 10, 1);
+      final (list, _) = await checks(backup: backup);
+      expect(list[3].ok, isTrue);
+      expect(
+        list[3].text,
+        'Made 2 days ago',
+        reason: 'the server answers for the account, not this phone',
+      );
+    });
+
+    test('a recovery backup deleted elsewhere stops being claimed', () async {
+      final backup = FakeBackupGateway()
+        ..summary.set(
+          BackupSummary(
+            lastBackupAt: DateTime(2026, 10, 3, 5),
+            lastRecoveryBackupAt: DateTime(2026, 9, 20),
+          ),
+        );
+      final (list, attention) = await checks(backup: backup);
+      expect(list[3].ok, isFalse);
+      expect(list[3].text, 'No recovery backup yet');
+      expect(attention, isTrue);
     });
 
     test('each rule flags what Review 1 set', () async {

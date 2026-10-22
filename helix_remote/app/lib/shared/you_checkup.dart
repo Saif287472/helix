@@ -47,7 +47,13 @@ final youChecksProvider = Provider.autoDispose<List<YouCheck>>((ref) {
   final lock = ref.watch(appLockViewProvider).value;
 
   final lastBackup = backup?.lastBackupAt;
-  final recovery = backup?.lastRecoveryBackupAt;
+  // The account's server answers for the recovery backup, so a device that
+  // never made one still says whether the account has one. Until it answers,
+  // nothing is flagged on a guess.
+  final serverRecovery = ref.watch(recoveryBackupDateProvider);
+  final recovery = serverRecovery.hasValue
+      ? serverRecovery.requireValue
+      : backup?.lastRecoveryBackupAt;
   return [
     if (backup == null)
       const YouCheck(YouCheckKey.backup, ok: true, text: 'Checking…')
@@ -103,7 +109,7 @@ final youChecksProvider = Provider.autoDispose<List<YouCheck>>((ref) {
       ),
       _ => const YouCheck(YouCheckKey.password, ok: true, text: 'Checking…'),
     },
-    if (backup == null)
+    if (backup == null || (!serverRecovery.hasValue && recovery == null))
       const YouCheck(YouCheckKey.recovery, ok: true, text: 'Checking…')
     else if (recovery == null)
       const YouCheck(

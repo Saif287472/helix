@@ -202,6 +202,7 @@ void main() {
     ),
     Routes.getFullBackup: (c) => c.backup.full(),
     Routes.deleteFullBackup: (c) => c.backup.deleteFull(),
+    Routes.getFullBackupMeta: (c) => c.backup.fullMeta(),
     // ops
     Routes.live: (c) => c.ops.live(),
     Routes.ready: (c) => c.ops.ready(),

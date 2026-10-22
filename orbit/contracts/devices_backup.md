@@ -439,7 +439,7 @@ Review 1 approved every recommendation in `../GAPS.md`. For this contract:
 - Making a new recovery backup warns that the old secret stops working.
 - “Delete my recovery backup” is in the danger zone.
 - History transfer: “Sent encrypted. Your other device chooses whether to add it.” (W4).
-- Built in the engine: a backup total (E4), a “waiting for Wi-Fi” failure (E5), and every device knowing about the recovery backup (E6).
+- Built: a backup total in the engine (E4), a “waiting for Wi-Fi” failure (E5), and every device knowing about the recovery backup (E6 — the engine reads a new `GET /v1/backups/full/meta`, so it needs the server rebuilt).
 - Not built: a total while sending prepares (E7, a plain moving bar instead); Dismiss uses a local hidden list (E8).
 
 **How the “keep” rows are drawn.** Every row above marked keep (today’s

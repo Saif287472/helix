@@ -56,6 +56,58 @@ void main() {
       expect(find.text('1,204 messages, 2.3 MB'), findsOneWidget);
     });
 
+    backupTest('the recovery row answers for the account, not this phone', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        FakeBackupGateway()..recoveryOnServer = DateTime(2026, 10, 1),
+      );
+      expect(find.text('Recovery backup made'), findsOneWidget);
+      expect(
+        find.text('2 DAYS AGO'),
+        findsOneWidget,
+        reason: 'this device never made one, and still knows',
+      );
+    });
+
+    backupTest('a recovery backup deleted elsewhere is not claimed here', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        FakeBackupGateway()
+          ..summary.set(
+            BackupSummary(
+              lastBackupAt: DateTime(2026, 10, 3, 9),
+              lastRecoveryBackupAt: DateTime(2026, 9, 20),
+            ),
+          ),
+      );
+      expect(find.text('No recovery backup yet'), findsOneWidget);
+    });
+
+    backupTest('with no answer from the server this phone keeps its own', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        FakeBackupGateway()
+          ..summary.set(
+            BackupSummary(
+              lastBackupAt: DateTime(2026, 10, 3, 9),
+              lastRecoveryBackupAt: DateTime(2026, 9, 20),
+            ),
+          )
+          ..recoveryOnServerFails = BackupProblem.offline,
+      );
+      expect(
+        find.text('13 DAYS AGO'),
+        findsOneWidget,
+        reason: '"could not ask" is not "there is none"',
+      );
+    });
+
     backupTest('the automatic switch and the mobile-data switch write', (
       tester,
     ) async {
