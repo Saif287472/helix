@@ -168,7 +168,7 @@ class HelixRemoteAppHarness extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Helix Remote',
+    title: 'Orbit',
     // The app's theme (`main.dart`): Orbit, with no separate high-contrast
     // theme, so the chosen theme always shows.
     theme: orbitTestTheme(),

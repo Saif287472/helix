@@ -219,8 +219,20 @@ both change the server, so neither is live until production runs this branch.)
     that file pinned at `ccf534c` the same Flutter shots score 0.81, 4.63 and
     4.54. Nothing to fix, and no new APK: this batch is preview-side only.
     The `orbit_ui` window tests pass (5).
-11. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
-    full verify).
+11. Part B steps 3 to 5. **Step 3, the Orbit name — done** (2026-10-23): the
+    Android label, the Windows window title, `MaterialApp.title`,
+    `AppInfo.name` (and its rule test), the startup page's title and the call
+    channel's description all say Orbit, and the launcher icon is
+    `orbit/prototype/assets/orbit-mark.svg` rasterized to `assets/logo.png`
+    (1024 px, headless Chrome) through `flutter_launcher_icons` — so the five
+    Android `ic_launcher.png` and `windows/runner/resources/app_icon.ico`
+    changed with it. Left alone on purpose: the Windows URI-handler key still
+    reads "Helix Remote Protocol" (the protocol is Helix's, not the app's), and
+    so does `applicationId` / the Kotlin package, or an install would not
+    upgrade. Step 3's theme bullets were already met by batch 8: the chosen
+    theme is a device setting that drives `MaterialApp`, and there is no
+    high-contrast theme to remove. **Step 4** (deleting `helix_remote_ui`) and
+    **step 5** (the full verify) follow.
 
 ## Batch 8, what is left
 

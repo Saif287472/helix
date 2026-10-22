@@ -109,7 +109,7 @@ class CallForegroundService : Service() {
                 "Active Calls",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Ongoing Helix Remote call controls"
+                description = "Ongoing Orbit call controls"
             }
         )
     }

@@ -189,7 +189,7 @@ void main() {
         multiLine: true,
       ).firstMatch(pubspec)!.group(1);
       expect(kAppVersion, version);
-      expect(const AppInfo().name, 'Helix Remote');
+      expect(const AppInfo().name, 'Orbit');
     });
 
     test('failures become sentences with no exception text', () {

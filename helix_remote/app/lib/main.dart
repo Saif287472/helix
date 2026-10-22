@@ -162,7 +162,7 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     // The lock lives above the navigator, so it reads the account's setting
     // through a provider rather than being handed the runtime.
     return MaterialApp.router(
-      title: 'Helix Remote',
+      title: 'Orbit',
       debugShowCheckedModeBanner: false,
       // The theme chosen on Appearance, light or dark; there is no separate
       // high-contrast theme, so the chosen one always shows.

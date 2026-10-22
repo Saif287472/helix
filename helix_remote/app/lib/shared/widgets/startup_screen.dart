@@ -51,7 +51,7 @@ class StartupErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Helix Remote')),
+      appBar: AppBar(title: const Text('Orbit')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(HelixSpace.lg),

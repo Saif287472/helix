@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// platform and in every test; `test/settings/app_info_test.dart` keeps it
 /// equal to the `version:` line of `pubspec.yaml`.
 final class AppInfo {
-  const AppInfo({this.version = kAppVersion, this.name = 'Helix Remote'});
+  const AppInfo({this.version = kAppVersion, this.name = 'Orbit'});
 
   final String version;
   final String name;

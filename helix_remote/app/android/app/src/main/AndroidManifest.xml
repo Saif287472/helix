@@ -32,7 +32,7 @@
         either side of that split reads a different attribute.
     -->
     <application
-        android:label="Helix Remote"
+        android:label="Orbit"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
