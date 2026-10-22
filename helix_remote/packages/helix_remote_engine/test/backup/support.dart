@@ -313,6 +313,60 @@ Future<List<MessageRow>> addHistory(
   return rows;
 }
 
+/// A history that holds both what a backup writes and what it leaves out:
+/// [normal] ordinary messages, then an unsent, a failed, an undecryptable, an
+/// opened view-once and an expired one, and `a6` (a normal message that stays).
+/// Only `normal + 1` of these rows belong in a backup.
+Future<void> addMixedHistory(
+  BackupPeer peer,
+  String chatPeer, {
+  int normal = 4,
+}) async {
+  await addHistory(peer, chatPeer, normal);
+  final chat = directConversationId(chatPeer);
+  Future<void> add(
+    String id,
+    MessageStatus status, {
+    String kind = 'text',
+    ViewOnceState? viewOnce,
+    DateTime? expiresAt,
+    bool outgoing = true,
+  }) => peer.db.messagesDao
+      .insertMessage(
+        MessagesCompanion.insert(
+          messageId: id,
+          conversationId: chat,
+          sender: outgoing ? peer.account : chatPeer,
+          outgoing: outgoing,
+          sortKey: SortKey.of(DateTime.utc(2026, 4, 1), id),
+          sentAt: DateTime.utc(2026, 4, 1),
+          receivedAt: DateTime.utc(2026, 4, 1),
+          kind: kind,
+          status: status,
+          body: Value('x $id'),
+          viewOnceState: Value(viewOnce),
+          expiresAt: Value(expiresAt),
+        ),
+      )
+      .then((_) {});
+  await add('a1', MessageStatus.pending);
+  await add('a2', MessageStatus.failed);
+  await add(
+    'a3',
+    MessageStatus.received,
+    kind: 'undecryptable',
+    outgoing: false,
+  );
+  await add(
+    'a4',
+    MessageStatus.received,
+    viewOnce: ViewOnceState.opened,
+    outgoing: false,
+  );
+  await add('a5', MessageStatus.sent, expiresAt: DateTime.utc(2020, 1, 1));
+  await add('a6', MessageStatus.sent);
+}
+
 /// What two devices must agree on after a restore: every message's identity,
 /// text and state, and the chat list's summary columns.
 Future<List<String>> historyDigest(BackupPeer peer) async {

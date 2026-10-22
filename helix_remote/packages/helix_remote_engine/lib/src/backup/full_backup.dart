@@ -90,7 +90,8 @@ final class FullBackupJob {
       throw ArgumentError.value(platformKey.length, 'platformKey.length');
     }
     final identity = _ctx.identity;
-    _onBackup(const BackupProgress(BackupPhase.preparing, full: true));
+    final total = await _exporter.countToExport();
+    _onBackup(BackupProgress(BackupPhase.preparing, total: total, full: true));
     try {
       final account = await _ctx.db.accountDao.current();
       final stats = ExportStats();
@@ -110,6 +111,7 @@ final class FullBackupJob {
           BackupProgress(
             BackupPhase.preparing,
             messages: stats.messages,
+            total: total,
             bytes: stats.bytes,
             full: true,
           ),
@@ -138,6 +140,7 @@ final class FullBackupJob {
           BackupProgress(
             BackupPhase.uploading,
             messages: stats.messages,
+            total: total,
             bytes: size,
             version: version,
             full: true,
@@ -163,6 +166,7 @@ final class FullBackupJob {
           BackupProgress(
             BackupPhase.done,
             messages: stats.messages,
+            total: total,
             bytes: size,
             version: version,
             full: true,

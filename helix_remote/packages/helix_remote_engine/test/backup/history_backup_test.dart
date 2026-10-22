@@ -135,50 +135,7 @@ void main() {
     });
 
     test('what must not come back stays out', () async {
-      await addHistory(alice, bobId, 4);
-      final chat = directConversationId(bobId);
-      Future<void> add(
-        String id,
-        MessageStatus status, {
-        String kind = 'text',
-        ViewOnceState? viewOnce,
-        DateTime? expiresAt,
-        bool outgoing = true,
-      }) => alice.db.messagesDao
-          .insertMessage(
-            MessagesCompanion.insert(
-              messageId: id,
-              conversationId: chat,
-              sender: outgoing ? alice.account : bobId,
-              outgoing: outgoing,
-              sortKey: SortKey.of(DateTime.utc(2026, 4, 1), id),
-              sentAt: DateTime.utc(2026, 4, 1),
-              receivedAt: DateTime.utc(2026, 4, 1),
-              kind: kind,
-              status: status,
-              body: Value('x $id'),
-              viewOnceState: Value(viewOnce),
-              expiresAt: Value(expiresAt),
-            ),
-          )
-          .then((_) {});
-      await add('a1', MessageStatus.pending);
-      await add('a2', MessageStatus.failed);
-      await add(
-        'a3',
-        MessageStatus.received,
-        kind: 'undecryptable',
-        outgoing: false,
-      );
-      await add(
-        'a4',
-        MessageStatus.received,
-        viewOnce: ViewOnceState.opened,
-        outgoing: false,
-      );
-      await add('a5', MessageStatus.sent, expiresAt: DateTime.utc(2020, 1, 1));
-      await add('a6', MessageStatus.sent);
-
+      await addMixedHistory(alice, bobId);
       await alice.backup.backUpNow();
       final ids = [
         for (final r in await openStored(alice))
@@ -189,6 +146,24 @@ void main() {
       for (final gone in ['a1', 'a2', 'a3', 'a4', 'a5']) {
         expect(ids, isNot(contains(gone)));
       }
+    });
+
+    test('the total a run reports is what it writes, not every row', () async {
+      // The count a running backup shows its percentage against is the same
+      // set of rows the export writes: the database filter and the Dart one
+      // have to agree.
+      await addMixedHistory(alice, bobId);
+      expect(await HistoryStore(alice.db).messageCount(), 10);
+      final events = <BackupProgress>[];
+      final sub = alice.backup.backupProgress.listen(events.add);
+      final result = await alice.backup.backUpNow();
+      await Future<void>.delayed(Duration.zero);
+      await sub.cancel();
+      expect(result.messages, 5);
+      expect(events, isNotEmpty);
+      expect(events.map((e) => e.total).toSet(), {5});
+      expect(events.first.total, 5, reason: 'the first event knows the total');
+      expect(events.last.phase, BackupPhase.done);
     });
 
     test('with nothing to back up, nothing is uploaded', () async {
@@ -699,6 +674,26 @@ void main() {
         );
       },
     );
+
+    test('a trimmed run still reports the total this phone holds', () async {
+      final small = BackupWorld(
+        pageSize: 50,
+        frameBytes: 4000,
+        maxHistoryBytes: 30 * 1024,
+        compress: false,
+      );
+      addTearDown(small.dispose);
+      final source = await small.register('trim', phone: '+8801711000011');
+      await addHistory(source, bobId, 1000, prefix: 'padding padding padding');
+      final events = <BackupProgress>[];
+      final sub = source.backup.backupProgress.listen(events.add);
+      final result = await source.backup.backUpNow();
+      await Future<void>.delayed(Duration.zero);
+      await sub.cancel();
+      expect(result.truncated, isTrue);
+      expect(events.map((e) => e.total).toSet(), {1000});
+      expect(events.last.messages, result.messages);
+    });
 
     test('a server limit lower than expected halves the budget until it '
         'fits', () async {

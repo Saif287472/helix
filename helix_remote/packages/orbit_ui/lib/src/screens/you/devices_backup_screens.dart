@@ -705,7 +705,7 @@ enum BackupState { ok, running, failed, never }
 class BackupModel {
   const BackupModel({
     this.state = BackupState.ok,
-    this.progress = 0,
+    this.progress,
     this.lastLabel = '5 hours ago',
     this.detail = '',
     this.failedReason = '',
@@ -718,8 +718,9 @@ class BackupModel {
 
   final BackupState state;
 
-  /// 0 to 1 while running.
-  final double progress;
+  /// 0 to 1 while running, or null when the total is not known yet: the ring
+  /// then shows no percentage rather than a wrong one.
+  final double? progress;
 
   /// "5 hours ago" / "just now".
   final String lastLabel;

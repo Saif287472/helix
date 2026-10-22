@@ -737,7 +737,12 @@ reasoning and the open items):
   `BackupService.generateRecoverySecret()`. History transfers are off by
   default (`BackupOptions.autoTransferToNewDevices`, `autoAcceptTransfers`):
   the user starts (`sendHistory`) or accepts (`acceptOffer`) them. Gzip
-  frames stop inflating at the frame limit.
+  frames stop inflating at the frame limit. Every event of a history or full
+  backup run carries `BackupProgress.total` — the messages a backup writes,
+  counted before it starts (`SnapshotExporter.countToExport` hands
+  `HistoryStore.backupableCount` the same filter as `included`, so the
+  percentage the UI draws is against what the archive really holds), 0 until
+  the count is made (Part B E4).
 - Downloads pass the pointer's size bound to the API (`maxBytes`), and the
   new `ResponseTooLargeException` / `RangeNotHonoredException` end a transfer
   as a size mismatch.

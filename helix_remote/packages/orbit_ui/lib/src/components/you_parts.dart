@@ -374,14 +374,17 @@ class OrbitStatusRing extends StatelessWidget {
   const OrbitStatusRing({
     super.key,
     required this.state,
-    this.progress = 0,
+    this.progress,
     this.icon,
     this.label,
     this.size = 56,
   });
 
   final OrbitRingState state;
-  final double progress;
+
+  /// 0 to 1 for [OrbitRingState.run], or null when it is not known: the ring
+  /// then shows an empty track with no number.
+  final double? progress;
   final OrbitGlyph? icon;
   final String? label;
   final double size;
@@ -391,15 +394,24 @@ class OrbitStatusRing extends StatelessWidget {
     final t = OrbitTokens.of(context);
     final iconSize = size == 64 ? 28.0 : 24.0;
     if (state == OrbitRingState.run) {
+      final fraction = progress;
+      final text =
+          label ?? (fraction == null ? null : '${(fraction * 100).round()}%');
       return SizedBox.square(
         dimension: size,
         child: CustomPaint(
-          painter: _Sweep(progress, t.accent, t.line, t.surface),
+          painter: _Sweep(fraction ?? 0, t.accent, t.line, t.surface),
           child: Center(
-            child: Text(
-              label ?? '${(progress * 100).round()}%',
-              style: t.mono.style(size: 13, weight: 600, color: t.accentInk),
-            ),
+            child: text == null
+                ? const SizedBox.shrink()
+                : Text(
+                    text,
+                    style: t.mono.style(
+                      size: 13,
+                      weight: 600,
+                      color: t.accentInk,
+                    ),
+                  ),
           ),
         ),
       );

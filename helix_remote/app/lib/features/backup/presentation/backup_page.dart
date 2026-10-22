@@ -51,6 +51,7 @@ class BackupPage extends ConsumerWidget {
             ? orbit.BackupState.never
             : orbit.BackupState.ok,
         lastLabel: view.lastBackup,
+        progress: run.running ? run.fraction : null,
         detail: run.running
             ? (run.messages > 0 ? '${run.messages} messages' : '')
             : view.lastBackupDetail ?? '',

@@ -979,3 +979,31 @@ score exactly as at Review 4 after the changes below.
   (`ProfileContent.avatar`, documented in `CRYPTO_V2.md` §9). No new route, no
   protocol field, no migration, no `.env` line, so nothing to deploy.
   - **Owner:** pending review.
+
+## Part B E4 (the backup ring's percentage, 2026-10-22)
+
+- **The total is what the backup writes, not what the phone holds.** The count
+  comes from the database (`HistoryStore.backupableCount`) using the same
+  filter the exporter applies in Dart, so unsent, view-once, undecryptable and
+  expired messages are not in the denominator. `history_backup_test.dart`
+  ("the total a run reports is what it writes, not every row") runs both over
+  one mixed history and fails if the two rules drift apart.
+  - **Owner:** pending review.
+- **A trimmed run does not reach 100%.** When the history is over the server's
+  size limit the oldest messages drop out, so the ring ends at the part that
+  fitted and then becomes "Backed up". The count stays the honest one.
+  - **Owner:** pending review.
+- **No number before the count is in.** `BackupModel.progress` became
+  `double?` (the contract calls it `runFraction`; the field kept the screen's
+  existing name) and `OrbitStatusRing` draws an empty track instead of "0%"
+  when it is null — the first progress event of a run already carries the
+  total, so this is only the moment between the tap and that event.
+  - **Owner:** pending review.
+- **The page still follows only its own run.** An automatic backup started in
+  the background shows no ring; that is the separate gap row in
+  `contracts/devices_backup.md` ("listen to `backupProgress` for any run"),
+  not part of E4.
+  - **Owner:** pending review.
+- **No server change.** One count query, one field on `BackupProgress`, and
+  the ring's own drawing. No migration, no `.env` line, nothing to deploy.
+  - **Owner:** pending review.

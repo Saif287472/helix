@@ -7,8 +7,9 @@ in `presentation/` (`BackupScreen`, `RestoreScreen`, `TransferScreen` and
 2026-10-22).
 
 - `/backup` Settings > Backup: automatic backup switch, "use mobile data",
-  last backup, Back up now (progress, errors), links to the pages below,
-  delete the server backup.
+  last backup, Back up now (the ring counts messages written against the
+  history this phone holds; no number until the engine has counted), links to
+  the pages below, delete the server backup.
 - `/backup/restore` and `/restore` (the step after signing in on a new device,
   with Skip). Adds what is missing, never replaces; safe to run twice. Errors:
   no backup, wrong key, damaged, newer format, rolled back, offline. "I have a

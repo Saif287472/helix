@@ -142,7 +142,7 @@ void main() {
 
   testWidgets('the sheet draws the code the app encoded, and its buttons '
       'answer', (tester) async {
-    final qr = HelixQrMatrix(2, [true, false, false, true]);
+    final qr = HelixQrMatrix(2, const [true, false, false, true]);
     var copied = 0;
     var shared = 0;
     var scanned = 0;

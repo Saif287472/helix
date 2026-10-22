@@ -81,12 +81,14 @@ final class HistoryBackupJob {
     if (await HistoryStore(_db).messageCount() == 0) {
       return const BackupResult.skipped();
     }
+    final total = await _exporter.countToExport();
     await _save((await state()).copyWith(attemptAt: _ctx.now()));
-    _onBackup(const BackupProgress(BackupPhase.preparing));
+    _onBackup(BackupProgress(BackupPhase.preparing, total: total));
     try {
       final result = await _upload(
         identity.accountId,
         identity.accountKey.seed,
+        total,
       );
       final saved = (await state()).copyWith(
         version: result.version,
@@ -101,6 +103,7 @@ final class HistoryBackupJob {
         BackupProgress(
           BackupPhase.done,
           messages: result.messages,
+          total: total,
           bytes: result.bytes,
           version: result.version,
         ),
@@ -118,7 +121,11 @@ final class HistoryBackupJob {
     }
   }
 
-  Future<BackupResult> _upload(String accountId, Uint8List seed) async {
+  Future<BackupResult> _upload(
+    String accountId,
+    Uint8List seed,
+    int total,
+  ) async {
     var budget = _options.maxHistoryBytes - sealOverhead;
     var current = await state();
     for (var attempt = 0; attempt < 8; attempt++) {
@@ -135,6 +142,7 @@ final class HistoryBackupJob {
           BackupProgress(
             BackupPhase.preparing,
             messages: stats.messages,
+            total: total,
             bytes: stats.bytes,
           ),
         );
@@ -150,6 +158,7 @@ final class HistoryBackupJob {
         BackupProgress(
           BackupPhase.uploading,
           messages: stats.messages,
+          total: total,
           bytes: data.length,
           version: version,
         ),

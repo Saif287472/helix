@@ -117,10 +117,21 @@ enum RunPhase { preparing, uploading, done, failed }
 
 @immutable
 final class BackupRunProgress {
-  const BackupRunProgress(this.phase, {this.messages = 0, this.problem});
+  const BackupRunProgress(
+    this.phase, {
+    this.messages = 0,
+    this.total = 0,
+    this.problem,
+  });
 
   final RunPhase phase;
   final int messages;
+
+  /// The messages this phone held when the run started, or 0 while the engine
+  /// has not counted them. [messages] can end below it: unsent, view-once and
+  /// expired messages are not backed up, and the oldest drop out when the
+  /// history does not fit.
+  final int total;
   final BackupProblem? problem;
 }
 

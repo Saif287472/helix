@@ -191,6 +191,28 @@ void main() {
     expect(ran, 1);
   });
 
+  testWidgets('backup: running shows the percentage of the history', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      const BackupScreen(
+        model: BackupModel(state: BackupState.running, progress: 0.62),
+      ),
+    );
+    expect(find.text('Backing up…'), findsOneWidget);
+    expect(find.text('62%'), findsOneWidget);
+  });
+
+  testWidgets('backup: running with no total shows no number', (tester) async {
+    await show(
+      tester,
+      const BackupScreen(model: BackupModel(state: BackupState.running)),
+    );
+    expect(find.text('Backing up…'), findsOneWidget);
+    expect(find.textContaining('%'), findsNothing);
+  });
+
   testWidgets('transfer: a waiting history can be accepted', (tester) async {
     (String, String)? acted;
     await show(

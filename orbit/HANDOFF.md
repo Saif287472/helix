@@ -119,11 +119,12 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: the remaining backend items (E4
-to E6), the pixel checks, batch 10 (the wide Windows layout), and Part B
+Deferred until the owner asks: the remaining backend items (E5, and E6
+which needs a decision - see item 7), the pixel checks, batch 10 (the wide
+Windows layout), and Part B
 steps 3 to 5 (the rename, deleting `helix_remote_ui`, the full verify).
-The lists below keep their detail. (S1 and E1 are built — see "Deferred
-work, in order", items 4 and 5.)
+The lists below keep their detail. (S1, E1 and E4 are built — see "Deferred
+work, in order", items 4 to 6.)
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -166,11 +167,25 @@ work, in order", items 4 and 5.)
    person's profile key, and retries at most one profile and one picture per
    person per day. Choosing or removing a photo in Edit profile now publishes
    it. **No server change, no migration, no new `.env` line.** Deviations are
-   in `DEVIATIONS.md` ("Part B E1"). E4 to E6 are still open.
-6. The pixel checks.
-7. Batch 10 (the wide Windows layout).
-8. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
-   full verify).
+   in `DEVIATIONS.md` ("Part B E1"). E4 is done too (below); E5 is the last
+   engine-only item.
+6. E4 - **done** (2026-10-22): the Backup page's running ring shows a real
+   percentage. The engine counts the messages a backup will write before it
+   starts (`SnapshotExporter.countToExport` → `HistoryStore.backupableCount`,
+   given the exporter's own filter) and carries it on every
+   `BackupProgress`; a test runs both filters over one mixed history so they
+   cannot drift. `BackupModel.progress` is nullable now, so an uncounted run
+   shows an empty ring rather than "0%". No server change.
+7. E5 - to do (engine value + the app's Wi-Fi policy). **E6 is blocked on a
+   decision**: the only server answer for "does a recovery backup exist, and
+   when" is `GET /v1/backups/full`, which returns the whole envelope (up to
+   64 MiB), so reading it for a checkup row is a download, not a lookup. It
+   needs either a metadata-only route (a server change, and a rebuild of
+   production) or the owner's own call on the copy.
+8. The pixel checks.
+9. Batch 10 (the wide Windows layout).
+10. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
+    full verify).
 
 ## Batch 8, what is left
 

@@ -87,6 +87,15 @@ final class SnapshotExporter {
     return expires == null || expires.isAfter(now);
   }
 
+  /// How many messages [export] writes, counted before it starts so a run can
+  /// report a total. It hands the database the same rule as [included], so the
+  /// two cannot drift apart silently (a test pins them together).
+  Future<int> countToExport() => HistoryStore(_db).backupableCount(
+    now: _ctx.now(),
+    excludedKinds: const [MessageKinds.undecryptable],
+    excludedStatuses: const [MessageStatus.pending, MessageStatus.failed],
+  );
+
   /// Yields the archive's frames. With [maxBytes] the stream stops before the
   /// frame that would pass it ([stats] `truncated`); the header, people,
   /// conversations and settings must fit or this throws `tooLarge`.

@@ -95,6 +95,7 @@ class BackupRunState {
   const BackupRunState({
     this.running = false,
     this.messages = 0,
+    this.total = 0,
     this.error,
     this.finished = false,
     this.skipped = false,
@@ -104,6 +105,10 @@ class BackupRunState {
 
   /// Messages read so far, while running.
   final int messages;
+
+  /// The messages this phone held when the run started, or 0 before the engine
+  /// counted them. [fraction] is null until it is known.
+  final int total;
   final String? error;
 
   /// A run completed since the page opened.
@@ -111,6 +116,11 @@ class BackupRunState {
 
   /// The last run found no history to back up.
   final bool skipped;
+
+  /// How far the run has got, for the ring's percentage. Null when the total
+  /// is not known yet, so the ring shows no number rather than a wrong one.
+  double? get fraction =>
+      total <= 0 ? null : (messages / total).clamp(0.0, 1.0).toDouble();
 }
 
 final backupRunProvider = NotifierProvider<BackupRunController, BackupRunState>(
@@ -128,7 +138,11 @@ final class BackupRunController extends Notifier<BackupRunState> {
     final progress = gateway.backupProgress.listen((p) {
       if (state.running &&
           (p.phase == RunPhase.preparing || p.phase == RunPhase.uploading)) {
-        state = BackupRunState(running: true, messages: p.messages);
+        state = BackupRunState(
+          running: true,
+          messages: p.messages,
+          total: p.total,
+        );
       }
     }, onError: (_) {});
     try {

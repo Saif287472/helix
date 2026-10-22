@@ -80,12 +80,28 @@ void main() {
       await tester.tap(find.text('Back up now'));
       await settle(tester);
       expect(find.text('Backing up…'), findsOneWidget);
+      expect(
+        find.text('0%'),
+        findsNothing,
+        reason: 'no percentage until the engine has counted the history',
+      );
 
       backup.backupEvents.add(
-        const BackupRunProgress(RunPhase.preparing, messages: 400),
+        const BackupRunProgress(RunPhase.preparing, messages: 400, total: 1000),
       );
       await settle(tester);
       expect(find.text('400 messages'), findsOneWidget);
+      expect(find.text('40%'), findsOneWidget);
+
+      backup.backupEvents.add(
+        const BackupRunProgress(
+          RunPhase.uploading,
+          messages: 1000,
+          total: 1000,
+        ),
+      );
+      await settle(tester);
+      expect(find.text('100%'), findsOneWidget);
 
       backup.holdBackUp!.complete();
       await settle(tester);

@@ -13,6 +13,7 @@ final class BackupProgress {
   const BackupProgress(
     this.phase, {
     this.messages = 0,
+    this.total = 0,
     this.bytes = 0,
     this.version,
     this.failure,
@@ -25,6 +26,12 @@ final class BackupProgress {
 
   /// Messages written so far (final once [phase] is `uploading` or later).
   final int messages;
+
+  /// The messages this device held when the run started, so the UI can show a
+  /// percentage. Zero when the run never counted them. The written [messages]
+  /// can end below it: the oldest messages are trimmed to fit the size limit,
+  /// and unsent, view-once, undecryptable or expired ones never go in.
+  final int total;
   final int bytes;
   final int? version;
   final BackupFailure? failure;

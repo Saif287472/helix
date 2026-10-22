@@ -35,6 +35,36 @@ final class HistoryStore {
     return row.read<int>('n');
   }
 
+  /// How many messages a backup would write now: the rows the caller's export
+  /// filter keeps. The kinds and statuses to leave out come from the caller
+  /// (the engine owns that list), so this is the same rule counted in the
+  /// database rather than a second copy of it.
+  Future<int> backupableCount({
+    required DateTime now,
+    required List<String> excludedKinds,
+    required List<MessageStatus> excludedStatuses,
+  }) async {
+    final row = await _db
+        .customSelect(
+          '''SELECT count(*) AS n FROM messages
+             WHERE view_once_state IS NULL
+               AND kind NOT IN (${_marks(excludedKinds.length)})
+               AND status NOT IN (${_marks(excludedStatuses.length)})
+               AND (expires_at IS NULL OR expires_at > ?)''',
+          variables: [
+            for (final kind in excludedKinds) Variable<String>(kind),
+            for (final status in excludedStatuses)
+              Variable<String>(status.name),
+            Variable<int>(now.millisecondsSinceEpoch),
+          ],
+          readsFrom: {_db.messages},
+        )
+        .getSingle();
+    return row.read<int>('n');
+  }
+
+  static String _marks(int count) => List.filled(count, '?').join(', ');
+
   /// Up to [limit] messages with a local row id below [beforeRowid] (the
   /// newest rows when null), newest first. Page by passing the last row's id.
   Future<List<MessageRow>> messagesBefore({

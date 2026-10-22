@@ -106,6 +106,7 @@ final class EngineBackupGateway implements BackupGateway {
               engine.BackupPhase.failed => RunPhase.failed,
             },
             messages: p.messages,
+            total: p.total,
             problem: _maybe(p.failure),
           ),
         );
