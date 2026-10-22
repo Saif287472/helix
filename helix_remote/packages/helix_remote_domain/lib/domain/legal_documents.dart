@@ -5,7 +5,7 @@
 /// server records the version accepted during registration.
 abstract final class HelixLegalDocuments {
   static const termsVersion = '2026-09-25';
-  static const privacyVersion = '2026-09-25';
+  static const privacyVersion = '2026-10-23';
   static const effectiveDate = 'September 25, 2026';
   static const termsTitle = 'Helix Global Terms of Service';
   static const privacyTitle = 'Helix Global Privacy Policy';
@@ -73,21 +73,25 @@ If a provision is unenforceable, the remaining provisions remain in effect. A wa
 Helix Global Privacy Policy
 
 Effective date: September 25, 2026
-Version: 2026-09-25
+Version: 2026-10-23
 
 1. Who this policy covers
 This Privacy Policy explains how Helix Global handles information when you use the Helix Remote app and the hosted Helix Global service. It does not govern a self-hosted Helix server operated by another person; that operator controls that deployment's information.
 
 2. Information we process
 Depending on the features you use, Helix Global may process:
-- account information: a client-generated account identifier, a salted one-way phone-number hash, display name, profile details, account status, and cryptographic public keys;
+- account information: a client-generated account identifier, a salted one-way phone-number hash, display name, profile details, account status, cryptographic public keys, and the phone number you signed up with once your app reports it back to us (kept sealed, as described below);
 - authentication information: phone verification challenges, hashed verification codes, invite and recovery-code hashes, device records, session and refresh-token records, account-recovery events, and limited audit events;
 - service content: encrypted messages, calls, group data, attachments, and the metadata needed to route, synchronize, back up, and delete that content;
 - network and security information: IP address, request time, device and browser information, rate-limit counters, error records, and server or application logs;
 - push information: a device push token and the information needed to deliver a notification or call alert; and
 - optional diagnostics: crash or performance information only when you opt in to telemetry or another specifically enabled diagnostic feature.
 
-The raw phone number is used transiently to request an SMS verification message and, when configured, is sent to the SMS provider. Helix Global's registration database identifies accounts by a salted phone-number hash rather than storing the full number as the account lookup key. The app may store your normalized phone number locally in secure device storage so it can restore your session.
+Your phone number verifies the account, and the account is looked up by a salted hash of it rather than by the number itself. The number reaches us when we send you an SMS code and, when configured, goes to the SMS provider for delivery. It also reaches us once more when your app confirms the number it signed in with, and we keep that report - sealed with AES-256-GCM under a key stored outside the database, so a copy of the database or a backup does not give numbers up.
+
+We keep it for one reason: abuse is reported and acted on by the number it came from. A report to Helix Global names an account, and the number is what lets the operator tell which account it was, take action (suspend the account, ban the number) and answer the person who reported it. Your number is shown to that operator in the admin console and to no one else: it is not in your profile, it is never given to another user, and it is never in our logs. A server that does not hold the sealing key keeps no number at all, and its console shows only the last four digits.
+
+The app may store your normalized phone number locally in secure device storage so it can restore your session.
 
 3. How we use information
 We use information to provide and secure the service, verify phone ownership, authenticate and recover accounts, route and synchronize encrypted data, enforce quotas and rate limits, prevent abuse, investigate incidents, comply with law, respond to support requests, and improve reliability when diagnostic consent is enabled.

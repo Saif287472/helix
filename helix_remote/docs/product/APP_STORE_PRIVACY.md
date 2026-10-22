@@ -9,9 +9,13 @@ must be reviewed against the exact release build and store form wording.
 
 - Account ID and keyed hash of the phone number (`phone_hash`), the last four
   digits, and a `~Helix name`; there is no username field.
-  The raw phone number is sent to the server only when requesting an SMS code;
-  the server hashes it, passes it to the SMS gateway (BulkSMSBD) for delivery,
-  and does not store it from that request.
+  The raw phone number is sent to the server when requesting an SMS code (it is
+  hashed there and passed to the SMS gateway, BulkSMSBD, for delivery) and once
+  more when the app reports the number it signed in with. That report is stored
+  sealed (AES-256-GCM under a key kept outside the database) so the server
+  operator can identify the account an abuse report concerns and act on it; the
+  operator's console shows it, and no other user does. Without that key no
+  number is kept at all.
 - Password-derived verifier and password-wrapped identity key: Argon2id
   salt/parameters, an HMAC verifier of a key derived from the password, and the
   account identity private key encrypted under another password-derived key

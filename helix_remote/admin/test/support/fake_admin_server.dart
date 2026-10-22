@@ -544,7 +544,9 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
   static AdminAccount account(
     String id, {
     String? name,
+    String? displayName,
     String? last4,
+    String? phone,
     AccountStatus status = AccountStatus.active,
     int devices = 1,
   }) => AdminAccount(
@@ -553,7 +555,9 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
     createdAt: DateTime.utc(2026, 9, 1, 10),
     activeDevices: devices,
     helixName: name,
+    displayName: displayName,
     phoneLast4: last4,
+    phoneNumber: phone,
     lastSeenOn: DateTime.utc(2026, 10, 1),
   );
 

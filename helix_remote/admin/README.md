@@ -80,8 +80,14 @@ report a failed call, the clock) and never touches widgets.
   field until it is sent.
 - Invite and recovery codes are returned to the screen that shows them once;
   no controller keeps them and no list carries them.
-- Phone numbers: the server sends the last four digits; nothing more is
-  shown, stored or logged.
+- Phone numbers: an account's own app reports its number once after signing in,
+  and the server keeps it sealed (`HELIX_PHONE_KEY`, ADR-030) so the operator
+  can tell an abuse report came from whom and act on it. `accountPhone()` in
+  `lib/src/features/common/format.dart` is the only place that reads it, the
+  accounts list and account detail are the only screens that show it, and it is
+  never copied, stored or logged. Without the key the server sends only the last
+  four digits (`test/accounts_test.dart` covers both answers, and a
+  `rules_test.dart` rule keeps the number in that one file).
 - Imports: only `helix_remote_protocol`, `helix_remote_api` (`v2.dart`) and
   `helix_remote_ui`; no v1 package, no state-management package.
 

@@ -83,7 +83,7 @@ design.
 | # | What | Recommendation |
 |---|---|---|
 | W1 | "Who sees what" on the profile editor. Since ADR-030 the operator sees your name and your full number. | New wording: **Name**: people you message, and Orbit's operator. **Phone number**: hidden from people; Orbit's operator can see it. **About and photo**: encrypted, only people you message. **~name**: anyone who looks it up. |
-| W2 | The bundled privacy policy (2026-09-25) predates ADR-030. | Update the legal text. This is your document, outside the design; flagged so it is not forgotten. |
+| W2 | **Done (2026-10-23).** The bundled privacy policy (2026-09-25) predated ADR-030. | Written up: the policy now says the app reports its own number once after signing in, that the server keeps it sealed under a key held outside the database, and why - abuse is reported and acted on by the number it came from, and only the operator's console ever sees it. Version `2026-10-23` in all three copies (`docs/legal/privacy_policy.md`, `packages/helix_remote_protocol/lib/src/legal.dart`, `packages/helix_remote_domain/lib/domain/legal_documents.dart`); the terms version is unchanged, so registration is unaffected. |
 | W3 | "Orbit keeps 30 days of activity" | "Your account's sign-ins, devices and key changes" (S5) |
 | W4 | History transfer: "They accept it first" / "nothing is sent until they accept". The history is uploaded before the other device accepts. | "Sent encrypted. Your other device chooses whether to add it." |
 | W5 | The approve step asks you to compare the key code, but the new device only shows it after approval. | Approve compares the check number only; the key code is compared on the new device's "Is this your account?". |

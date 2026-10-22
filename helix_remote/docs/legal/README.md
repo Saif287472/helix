@@ -7,7 +7,9 @@ Privacy Policy shipped for the Helix Global deployment.
 - [Privacy Policy](privacy_policy.md)
 - Runtime copy: `packages/helix_remote_domain/lib/domain/legal_documents.dart`
 
-The current version is `2026-09-25` (effective September 25, 2026). The Flutter
+The Terms are at version `2026-09-25` (effective September 25, 2026); the
+Privacy Policy was revised to `2026-10-23` for ADR-030, the number an account
+reports and why the operator sees it. The Flutter
 client shows the runtime copy; the server keeps its own copy in
 `packages/helix_remote_protocol/lib/src/legal.dart` and serves it at
 `GET /v1/server/legal`, and registration must name the current terms version.

@@ -75,7 +75,7 @@ helix_remote/                pub workspace (run commands from here)
     lib/features/<feature>/  application/ (Riverpod) + presentation/ (widgets);
                              sign_in, home, chats, conversation, people, calls,
                              groups, settings, devices, backup, profile
-    lib/shared/widgets/      cross-feature widgets on helix_remote_ui
+    lib/shared/widgets/      cross-feature widgets on orbit_ui
     test/                    widget + unit tests; test/support/ shared fakes
   admin/                     Flutter operator console on the admin API
   packages/helix_remote_protocol  wire DTOs, route catalog, frames, content types
@@ -87,8 +87,8 @@ helix_remote/                pub workspace (run commands from here)
                                   outbound pipelines, groups, calls, transfers)
   packages/helix_remote_cli       headless client on the engine (helix_v2)
   packages/helix_remote_calls     WebRTC wrapper (Flutter)
-  packages/helix_remote_ui        design tokens + components (the old look; it
-                                  re-exports the view models from orbit_ui)
+  packages/helix_remote_ui        the old look, kept for the operator console
+                                  (tokens, `HelixThemes.console()`, two widgets)
   packages/orbit_ui               the Orbit design system and every Orbit screen
                                   (orbit/PORT_PLAN.md; models in, actions out)
   packages/helix_remote_domain    shared value types (legal documents only today)
@@ -252,10 +252,6 @@ engine 299, api 194, admin 191, ui 183 with 1 golden test skipped off Linux, db
 `dart analyze server tool` clean; the governance check passes).
 
 Since 8c8a066 (ADR-030, 2026-10-17), confirmed 2026-10-20:
-- admin `test/rules_test.dart` "only the last four phone digits are ever
-  handled" fails: ADR-030 lets the console show the full reported number
-  (`accountPhone` in `admin/lib/src/features/common/format.dart`), and the
-  rule was not updated. Changing the rule is the user's call.
 - Fixed on the `orbit-ui` branch (2026-10-20), still failing on `main` until
   it merges: the api route-parity table lacked `setPhoneNumber` and
   `setOwnName`, and engine `calls_test.dart` "a caller the callee blocked is

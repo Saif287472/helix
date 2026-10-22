@@ -59,16 +59,28 @@ void main() {
       expect(find.textContaining('No phone number'), findsOneWidget);
     });
 
-    testWidgets('never shows anything that looks like a full phone number', (
+    testWidgets('shows the whole number once the account reported it', (
       tester,
     ) async {
+      // ADR-030, re-confirmed by the owner on 2026-10-23: abuse is reported
+      // and acted on by the number an account used, so a moderator has to see
+      // it. Until an account's app reports its number (and the server keeps
+      // numbers under `HELIX_PHONE_KEY`), the last four are all there is.
+      h.server.accounts = [
+        FakeAdminServer.account(
+          'acct-1',
+          name: 'alice',
+          displayName: 'Alice R.',
+          last4: '1234',
+          phone: '+8801711000001',
+        ),
+        FakeAdminServer.account('acct-2', name: 'bob', last4: '5678'),
+      ];
       await openAccounts(tester);
 
-      final texts = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((t) => t.data ?? '')
-          .join('\n');
-      expect(RegExp(r'\d{7,}').hasMatch(texts), isFalse);
+      expect(find.text('Alice R.'), findsOneWidget);
+      expect(find.text('+8801711000001'), findsOneWidget);
+      expect(find.text('•••• 5678'), findsOneWidget);
     });
 
     testWidgets('searching asks the server by name or last four digits', (

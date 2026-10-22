@@ -18,9 +18,20 @@ jurisdiction-specific legal review before public launch.
   (`phone_hash`, under the server's secret pepper), the last four digits of the
   number, a pepper-keyed discovery index (absent if you turn phone discovery
   off), your `~Helix name`, account status, and public identity key.
-  The raw phone number is sent to the server only when requesting an SMS code;
-  the server hashes it, passes it to the SMS gateway (BulkSMSBD) for delivery,
-  and does not store it from that request.
+  The raw phone number reaches the server when it sends an SMS code (it hashes
+  the number and passes it to the SMS gateway, BulkSMSBD, for delivery) and,
+  since ADR-030, once more when your app reports the number it signed in with
+  (`PUT /v1/account/phone-number`, checked against the verified `phone_hash`).
+  The server keeps that report **sealed** - AES-256-GCM under `HELIX_PHONE_KEY`
+  with the account id as associated data (`identity` migration 3) - so a
+  database dump or a backup alone does not give numbers up, and the account's
+  number is decryptable only by the operator who holds that key. The reason is
+  moderation: a report of abuse names an account, and the number is what lets
+  the operator tell who it came from, act on it (suspend the account, ban the
+  number) and answer the person who reported it. It is shown in the operator's
+  admin console and nowhere else: never in a profile, never to another user,
+  never in a server log. Without `HELIX_PHONE_KEY` nothing is kept and the
+  console falls back to the last four digits.
 - Password data (`passwords`): Argon2id parameters and salt, an HMAC verifier of
   an auth key derived from your password, your account identity private key
   encrypted with a separate key derived from your password (the server cannot
@@ -58,6 +69,9 @@ jurisdiction-specific legal review before public launch.
 
 - No mandatory address-book upload.
 - No sale of personal data.
+- No plaintext phone number anywhere on the server: the number an account
+  reports is stored only as ciphertext under `HELIX_PHONE_KEY`, there is no
+  number column to read, and no log line contains one (the redacting logger).
 - No behavioral advertising or cross-context tracking.
 - No plaintext push notification payloads (a wake-up carries only its kind).
 - No plaintext message content in server message-send, push, report, or backup

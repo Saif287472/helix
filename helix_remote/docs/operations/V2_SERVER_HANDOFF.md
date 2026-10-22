@@ -524,8 +524,10 @@ log note below).
   and Settings (server name, admin password, purge dead jobs, sign out).
 - **Shown once:** invite and recovery codes appear in a dialog when created
   and are not stored or listed again. The server keeps only hashes.
-- **Phone numbers:** the server sends only the last four digits; the console
-  shows nothing more.
+- **Phone numbers:** the console shows an account's full number once that
+  account's app has reported it and `HELIX_PHONE_KEY` is set (ADR-030) - the
+  number is what a report of abuse is acted on - and only the last four digits
+  until then, or whenever the key is not configured. Nothing is logged.
 - **The live log on the web:** a browser cannot set the `Authorization`
   header on a WebSocket, so the web build polls `GET /v1/admin/logs`
   every 3 seconds instead of following the stream.

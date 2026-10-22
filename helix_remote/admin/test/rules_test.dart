@@ -256,21 +256,42 @@ void main() {
       }
     });
 
-    test('only the last four phone digits are ever handled', () {
-      final offenders = <String>[];
+    test('the whole number is read in one file, and its hash never', () {
+      // ADR-030 (2026-10-14), which the owner re-confirmed on 2026-10-23: the
+      // console shows an account's full phone number, because abuse is
+      // reported and acted on by the number it came from - four digits and a
+      // hash cannot identify anyone. The server keeps it sealed; only this
+      // console reads it back. So the number has exactly one way into the
+      // screens (`format.dart`, the accountPhone() call below), and nothing
+      // else may touch it: no copy, no log line, no second widget that could
+      // start printing it.
+      const formatFile = 'lib/src/features/common/format.dart';
+      final readers = <String>[];
       lib.forEach((path, source) {
+        if (path == formatFile) return;
         final code = _code(source);
         for (final needle in const [
           'phoneNumber',
           'phone_number',
           'PhoneNumber',
-          'phoneHash',
-          'phone_hash',
         ]) {
-          if (code.contains(needle)) offenders.add('$path: $needle');
+          if (code.contains(needle)) readers.add('$path: $needle');
         }
       });
-      expect(offenders, isEmpty);
+      expect(readers, isEmpty, reason: 'only format.dart may read a number');
+      final code = _code(lib[formatFile]!);
+      expect(code, contains('account.phoneNumber'));
+      // And it falls back to the last four when the server holds no number.
+      expect(code, contains('maskedPhone(account.phoneLast4)'));
+      // A hash is the server's own business: no screen needs to compare or
+      // re-derive one, and pasting it anywhere would treat it like an id.
+      final hashes = <String>[];
+      lib.forEach((path, source) {
+        for (final needle in const ['phoneHash', 'phone_hash']) {
+          if (_code(source).contains(needle)) hashes.add('$path: $needle');
+        }
+      });
+      expect(hashes, isEmpty);
     });
 
     test('the password is never put in a string, a field or a message', () {
