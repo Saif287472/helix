@@ -142,9 +142,11 @@ Two things the background isolate cannot do, done by the app since 2026-10-09
 
 - **The token.** `PushRegistration` (`core/push/push_registration.dart`) sends
   the FCM token every time the engine reaches running: a signed-in launch,
-  sign-up, sign-in, linking, a new server. A rotated token goes to whichever
-  engine is running when it arrives. `PushTokenSource` initialises Firebase in
-  the UI isolate: without that, `FirebaseMessaging.instance` threw and the
+  sign-up, sign-in, linking, a new server. The current token and every rotated
+  token go to every account signed in on the device; inactive accounts are
+  opened in turn by the same serialized pass as foreground push wakes.
+  `PushTokenSource` initialises Firebase in the UI isolate: without that,
+  `FirebaseMessaging.instance` threw and the
   one launch-time attempt that existed before never registered anything. A build
   without `google-services.json` has no push and says so quietly.
 - **Notifications from the running app.** The app keeps its engine and socket

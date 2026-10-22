@@ -16,15 +16,23 @@ typedef PushRegistrar = Future<void> Function(String token);
 /// 2026-10-09 the app tried once, at launch, which on a fresh install was
 /// before sign-up: nothing woke the phone until the next cold start. Now the
 /// token goes up every time an engine reaches running (a signed-in launch,
-/// sign-up, sign-in, linking, a new server), and every rotated token goes to
-/// whichever engine is running when it arrives, never to a closed one.
+/// sign-up, sign-in, linking, a new server), and the current and rotated token
+/// go to every account signed in on this device.
 final class PushRegistration {
-  PushRegistration(this._tokens, {required this.current, this.onWake});
+  PushRegistration(
+    this._tokens, {
+    required this.current,
+    this.onToken,
+    this.onWake,
+  });
 
   final PushTokens _tokens;
 
   /// The running engine's registrar, or null when none is running.
   final PushRegistrar? Function() current;
+
+  /// Sends the token to the accounts not on screen.
+  final Future<void> Function(String token)? onToken;
 
   /// A wake-up arrived while the app is in front. One token serves every
   /// account here, and the one on screen reads its own messages over its
@@ -34,7 +42,7 @@ final class PushRegistration {
   StreamSubscription<String>? _refreshes;
   StreamSubscription<void>? _wakeUps;
 
-  /// An engine has just reached running: send it the current token.
+  /// An engine has just reached running: send every account the current token.
   Future<void> engineRunning() async {
     if (!await _tokens.prepare()) return;
     _refreshes ??= _tokens.refreshes.listen((token) => unawaited(_send(token)));
@@ -46,13 +54,15 @@ final class PushRegistration {
 
   Future<void> _send(String token) async {
     final register = current();
-    if (register == null) return;
-    try {
-      await register(token);
-    } on Object {
-      // Offline, or the session just ended: the next start or rotation sends
-      // it again.
+    if (register != null) {
+      try {
+        await register(token);
+      } on Object {
+        // Offline, or the session just ended: the next start or rotation sends
+        // it again.
+      }
     }
+    await onToken?.call(token);
   }
 
   Future<void> dispose() async {
@@ -69,11 +79,13 @@ final class PushRegistration {
 final class ForegroundWakes {
   ForegroundWakes(this._wake);
 
-  final Future<void> Function() _wake;
+  final Future<void> Function(String? pushToken) _wake;
   Future<void>? _running;
   bool _again = false;
+  String? _pushToken;
 
-  Future<void> wake() {
+  Future<void> wake({String? pushToken}) {
+    if (pushToken != null) _pushToken = pushToken;
     final running = _running;
     if (running != null) {
       _again = true;
@@ -86,8 +98,10 @@ final class ForegroundWakes {
     try {
       do {
         _again = false;
+        final pushToken = _pushToken;
+        _pushToken = null;
         try {
-          await _wake();
+          await _wake(pushToken);
         } on Object {
           // A failed pass is caught up by the next wake-up or by opening
           // the account.
@@ -99,12 +113,17 @@ final class ForegroundWakes {
   }
 }
 
-/// Reads the mailboxes of the accounts not on screen, for a wake-up that
-/// arrived while the app is in front. Overridden in tests.
-final otherAccountsWakeProvider = Provider<Future<void> Function()>(
-  (ref) =>
-      () => wakeSignedInAccounts(except: ref.read(activeAccountProvider)?.id),
-);
+/// Reads the mailboxes of the accounts not on screen and, when supplied,
+/// registers a push token for them. Overridden in tests.
+final otherAccountsPassProvider =
+    Provider<Future<void> Function({String? pushToken})>(
+      (ref) =>
+          ({String? pushToken}) => wakeSignedInAccounts(
+            except: ref.read(activeAccountProvider)?.id,
+            pushToken: pushToken,
+            syncMailbox: pushToken == null,
+          ),
+    );
 
 final pushTokensProvider = Provider<PushTokens>((ref) => PushTokenSource());
 
@@ -120,10 +139,12 @@ final currentPushRegistrarProvider = Provider<PushRegistrar? Function()>(
 /// Registers the push token whenever the engine reaches running. Read once,
 /// by the app root, and kept for the whole run.
 final pushRegistrationProvider = Provider<PushRegistration>((ref) {
-  final wakes = ForegroundWakes(ref.watch(otherAccountsWakeProvider));
+  final pass = ref.watch(otherAccountsPassProvider);
+  final wakes = ForegroundWakes((pushToken) => pass(pushToken: pushToken));
   final registration = PushRegistration(
     ref.watch(pushTokensProvider),
     current: ref.watch(currentPushRegistrarProvider),
+    onToken: (token) => wakes.wake(pushToken: token),
     onWake: () => unawaited(wakes.wake()),
   );
   ref.onDispose(registration.dispose);

@@ -163,6 +163,4 @@ metadata). The cryptography has **not been externally reviewed**
   wake-up carries no account; the app reads every account's mailbox for it.
 - **Residual risk**: Every account here registers the same push token, so a server that holds two of
   them can tell they share a phone (a person who needs two unlinkable accounts should keep them on
-  different phones or servers). The numbers in the account list are as readable as the keystore. A
-  rotated push token reaches only the account on screen; the others get it when next opened, and
-  until then a wake-up for them does not come.
+  different phones or servers). The numbers in the account list are as readable as the keystore.

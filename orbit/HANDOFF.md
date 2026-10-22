@@ -109,11 +109,12 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   "Switch account" in the sign-out dialog.
 - fc62339: the app lock is now the device's (`DeviceLock`), one for every
   account; an old per-account lock is moved over once.
-- (next commit): item 6's docs. THREAT_MODEL T-11, `app/MODULE.md`,
+- 69b346f: item 6's docs. THREAT_MODEL T-11, `app/MODULE.md`,
   `contracts/you.md`. No ADR: one foreground runtime still runs at a time.
-No server change or migration. A new APK is needed to try it. Known gap: a
-rotated FCM token reaches only the account on screen; the others get it
-when they are next opened.
+- Final push batch: the current and every rotated FCM token go to all accounts
+  signed in here. Inactive accounts are opened in turn by the same serialized
+  pass as foreground push wakes, so the two cannot race one database.
+No server change or migration. A new APK is needed to try it.
 
 Deferred until the owner asks: every backend item (S1, E1 to E6), the
 pixel checks, DEVIATIONS and FEATURE.md updates, batch 10 (the wide

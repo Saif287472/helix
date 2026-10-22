@@ -46,13 +46,18 @@ void main() {
     );
 
     test(
-      'a rotated token goes to the engine running then, never an old one',
+      'current and rotated tokens reach every account, never an old engine',
       () async {
         final tokens = _FakeTokens(token: 'token-1');
         final first = <String>[];
         final second = <String>[];
+        final others = <String>[];
         PushRegistrar running = (token) async => first.add(token);
-        final registration = PushRegistration(tokens, current: () => running);
+        final registration = PushRegistration(
+          tokens,
+          current: () => running,
+          onToken: (token) async => others.add(token),
+        );
         await registration.engineRunning();
         // A new server: a new runtime and engine.
         running = (token) async => second.add(token);
@@ -60,6 +65,7 @@ void main() {
         await pumpEventQueue();
         expect(first, ['token-1']);
         expect(second, ['token-2']);
+        expect(others, ['token-1', 'token-2']);
         await registration.engineRunning();
         expect(tokens.listeners, 1, reason: 'one refresh listener for the run');
         await registration.dispose();
@@ -116,6 +122,9 @@ void main() {
             currentPushRegistrarProvider.overrideWithValue(
               () =>
                   (token) async => sent.add(token),
+            ),
+            otherAccountsPassProvider.overrideWithValue(
+              ({String? pushToken}) async {},
             ),
           ],
         );
@@ -301,7 +310,7 @@ void main() {
       var running = 0;
       var most = 0;
       final gate = Completer<void>();
-      final wakes = ForegroundWakes(() async {
+      final wakes = ForegroundWakes((_) async {
         passes++;
         running++;
         most = running > most ? running : most;
@@ -319,9 +328,27 @@ void main() {
       expect(passes, 3);
     });
 
+    test(
+      'a token waits for the running pass and the latest one wins',
+      () async {
+        final seen = <String?>[];
+        final gate = Completer<void>();
+        final wakes = ForegroundWakes((token) async {
+          seen.add(token);
+          if (seen.length == 1) await gate.future;
+        });
+        final first = wakes.wake();
+        unawaited(wakes.wake(pushToken: 'token-1'));
+        unawaited(wakes.wake(pushToken: 'token-2'));
+        gate.complete();
+        await first;
+        expect(seen, [null, 'token-2']);
+      },
+    );
+
     test('a failed pass does not stop the next', () async {
       var passes = 0;
-      final wakes = ForegroundWakes(() async {
+      final wakes = ForegroundWakes((_) async {
         passes++;
         throw StateError('offline');
       });

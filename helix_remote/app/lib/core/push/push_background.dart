@@ -48,11 +48,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-/// Reads the mailbox of every account signed in on this device, except
-/// [except] (the one the running app has open), raising notifications for
-/// what arrived. Shared by the background handler and, for the accounts not
-/// on screen, the running app (`ForegroundWakes`).
-Future<void> wakeSignedInAccounts({String? except}) async {
+/// Opens every account signed in on this device except [except]. A wake-up
+/// reads its mailbox and raises notifications; [pushToken], when present, is
+/// registered first. The running app uses [syncMailbox] false for a token-only
+/// pass.
+Future<void> wakeSignedInAccounts({
+  String? except,
+  String? pushToken,
+  bool syncMailbox = true,
+}) async {
   final accounts = await AccountSlotStore().load();
   final keys = SecureKeyStore();
   // Signed out everywhere: nothing to wake for.
@@ -66,6 +70,8 @@ Future<void> wakeSignedInAccounts({String? except}) async {
         uri,
         keys,
         label: accounts.notificationLabel(account.id),
+        pushToken: pushToken,
+        syncMailbox: syncMailbox,
       );
     } on EngineAlreadyRunning {
       // The running app owns this account's database and fetches the
@@ -83,6 +89,8 @@ Future<void> _wakeAccount(
   Uri uri,
   SecureKeyStore keys, {
   String? label,
+  String? pushToken,
+  required bool syncMailbox,
 }) async {
   final file = await AppPaths.databaseFile(account);
   final key = await keys.keyFor(account, file);
@@ -102,6 +110,14 @@ Future<void> _wakeAccount(
     keys: keys,
   );
   try {
+    if (pushToken != null) {
+      try {
+        await runtime.engine.push.register(pushToken);
+      } on Object catch (error) {
+        debugPrint('[push] token update failed: ${error.runtimeType}');
+      }
+    }
+    if (!syncMailbox) return;
     final summary = await runtime.engine.syncOnce();
     // Alerts are settings (Settings > Notifications), applied the same way
     // as by the running app (MessageAlerts), per account.
