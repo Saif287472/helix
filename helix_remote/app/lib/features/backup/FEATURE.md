@@ -1,20 +1,25 @@
 # backup
 
 History backup, restore and device-to-device transfer (Phase A3b), on the
-engine's `BackupService`.
+engine's `BackupService`. The pages draw the Orbit screens through connectors
+in `presentation/` (`BackupScreen`, `RestoreScreen`, `TransferScreen` and
+`RecoveryScreen`; the last old pages moved in the deferred batch of
+2026-10-22).
 
 - `/backup` Settings > Backup: automatic backup switch, "use mobile data",
   last backup, Back up now (progress, errors), links to the pages below,
   delete the server backup.
 - `/backup/restore` and `/restore` (the step after signing in on a new device,
   with Skip). Adds what is missing, never replaces; safe to run twice. Errors:
-  no backup, wrong key, damaged, newer format, rolled back, offline.
+  no backup, wrong key, damaged, newer format, rolled back, offline. "I have a
+  recovery secret" opens `/backup/recovery?tab=restore`.
 - `/backup/transfer` both sides of a device transfer: send (progress, cancel),
   and offers from other devices (accept, decline, pause, resume).
 - `/backup/recovery` a second backup sealed under a secret only the person
   holds. The secret is generated in the app (24 characters, no lookalikes) or
   typed, shown once, never stored, sent, copied or logged, and never
-  recoverable by Helix.
+  recoverable by Helix. Its Create and Restore tabs share one screen; the
+  danger zone deletes the server copy.
 
 ## Decisions
 

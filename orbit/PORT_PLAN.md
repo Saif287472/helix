@@ -623,9 +623,16 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   preview sample, "Export first") are in `DEVIATIONS.md`.
 - [x] Step 2, batch 9 (pending your review): Password, Delete account,
   Blocked, About, Legal and Advanced, plus the device list, security
-  activity and Backup draw the Orbit screens. Approve a new device, transfer,
-  recovery, link this device and restore history stay on the old pages until
-  their trust checks and mappings move (`DEVIATIONS.md`).
+  activity and Backup draw the Orbit screens. The remaining device pages
+  followed in the entry below.
+- [x] The last old pages (pending your review): Approve a new device, both
+  sides of a device transfer, Recovery backup (create and restore) and
+  Restore history draw the Orbit screens through their connectors. The
+  account key code is on the approval review, approval still asks for the
+  phone's unlock, and Restore history opens Recovery on its Restore tab.
+  The old pages and `transfer_tile.dart` are gone. Deviations are in
+  `DEVIATIONS.md` ("The last old pages"); the affected app and orbit_ui
+  tests pass.
 - [x] Saved accounts (pending your review): the account list, a database,
   key and folder per account, switching, "Sign out and remove", the Accounts
   page, notifications and calls for every account, one device-wide app lock,

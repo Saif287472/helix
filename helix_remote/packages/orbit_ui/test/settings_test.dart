@@ -201,7 +201,9 @@ void main() {
             TransferItem(
               id: 'in',
               title: 'History from Office PC',
-              state: TransferState.ready,
+              status:
+                  'Ready to receive. Nothing is downloaded until you accept.',
+              buttons: ['Accept', 'Decline'],
             ),
           ],
         ),
@@ -215,11 +217,20 @@ void main() {
 
   testWidgets('recovery: Create waits for "I saved it"', (tester) async {
     var created = 0;
+    var saved = false;
     await show(
       tester,
-      RecoveryScreen(
-        model: const RecoveryModel(secret: 'K7QM-X2PD-9WTR-4HNB-F6CZ-JY3V'),
-        actions: RecoveryActions(onCreate: () => created++),
+      StatefulBuilder(
+        builder: (context, setState) => RecoveryScreen(
+          model: RecoveryModel(
+            secret: 'K7QM-X2PD-9WTR-4HNB-F6CZ-JY3V',
+            saved: saved,
+          ),
+          actions: RecoveryActions(
+            onSaved: (v) => setState(() => saved = v),
+            onCreate: () => created++,
+          ),
+        ),
       ),
     );
     final create = find.text('Create recovery backup');

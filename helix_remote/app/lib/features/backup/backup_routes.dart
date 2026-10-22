@@ -4,6 +4,7 @@ import 'package:helix_remote/features/backup/presentation/recovery_backup_page.d
 import 'package:helix_remote/features/backup/presentation/restore_history_page.dart';
 import 'package:helix_remote/features/backup/presentation/transfer_page.dart';
 import 'package:helix_remote/shared/route_paths.dart';
+import 'package:orbit_ui/orbit_ui.dart' show RecoveryTab;
 
 /// The backup pages. The router adds these with one line; the paths are in
 /// `RoutePaths` so Settings and sign-in can link to them without importing
@@ -23,7 +24,11 @@ final List<RouteBase> backupRoutes = [
   ),
   GoRoute(
     path: RoutePaths.backupRecovery,
-    builder: (context, state) => const RecoveryBackupPage(),
+    builder: (context, state) => RecoveryBackupPage(
+      initialTab: state.uri.queryParameters['tab'] == 'restore'
+          ? RecoveryTab.restore
+          : RecoveryTab.create,
+    ),
   ),
   // The last step of signing in on a new device. The router sends people here
   // while `postSignInProvider` says so.

@@ -44,13 +44,16 @@ were the wrong way round in the first draft (fixed before commit); the
 delete page can now ask for the number before texting a code (orbit_ui,
 behaviour only: `onSendCode` takes the phone).
 
-Still on the old pages, on purpose:
-- Approve a new device: the Orbit screen has no place for the account key
-  code the old page shows to compare, which is part of the trust check.
-  Add it to `ApproveDeviceModel` before porting.
-- Transfer and Recovery backup: incoming offers and the recovery secret
-  need careful mapping; the old pages work.
-- Link this device and Restore history: no Orbit screens yet.
+Then on the old pages, now ported (2026-10-22):
+- Approve a new device: `ApproveDeviceModel` carries the account key code,
+  shown on the review; approval keeps its confirmation dialog and the
+  phone's unlock, and history is sent only on "Send".
+- Transfer and Recovery backup: the connectors map the engine's transfer
+  rows and offers, the recovery secret's create, copy/share and restore
+  tabs, the error and busy states, and the danger zone's delete.
+- Link this device and Restore history were already Orbit connectors;
+  Restore history's "I have a recovery secret" now opens Recovery's
+  Restore tab (`?tab=restore`).
 
 Next: the owner tries a debug APK.
 
@@ -128,9 +131,12 @@ Windows layout), and Part B steps 3 to 5 (the rename, deleting
    their progress notes; the settings, profile and sign-in `FEATURE.md`
    files describe the Orbit connectors, the Accounts page and the
    device-wide lock.
-2. The old pages to Orbit: transfer, recovery, restore history, link this
-   device, then approve a new device (add the account key code to the Orbit
-   screen; it is part of the trust check).
+2. The old pages to Orbit - **done** (2026-10-22): Approve a new device,
+   transfer, recovery and restore history draw the Orbit screens through
+   their connectors (link this device was already wired). The account key
+   code is on the approval review, and Restore history opens Recovery on
+   its Restore tab. Deviations are in `DEVIATIONS.md` ("The last old
+   pages").
 3. E3 and E2 (needs the server: storage by kind and by chat, free a chat's
    media).
 4. S1 (needs the server: share link, app links, scan-to-chat).

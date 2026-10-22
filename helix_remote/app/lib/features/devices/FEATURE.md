@@ -3,7 +3,9 @@
 Linked devices (Phase A3b): `/devices` (list, rename, remove, lost or stolen,
 sign out all others), `/devices/link` (approve a new device), `/devices/activity`
 (the account's security log) and `/link-device` (this device shows a QR code
-to be linked).
+to be linked). The devices and security pages, and the approve page, draw the
+Orbit screens through connectors in `presentation/` (Part B batch 9 and the
+last-old-pages batch).
 
 ## Approving a device (safety checks)
 
@@ -11,14 +13,18 @@ to be linked).
    (`DevicesGateway.inspectLink`), else a sentence says why.
 2. The person is shown the server and a short **check number** derived from the
    code (`linkCheckNumber`), which the new device shows too, and is told not to
-   approve a device that is not in their hands.
+   approve a device that is not in their hands. The review also shows this
+   account's **account key code** (`LinkRequest.accountKeyCode`) so the person
+   can compare it with the new device, which shows the same code before it
+   keeps anything.
 3. When the phone has a screen lock it must be passed (`DeviceAuthenticator`)
-   before anything is sent.
+   before anything is sent. The Orbit approve button opens the app's
+   confirmation dialog first, then the system unlock.
 4. Only then does the engine seal the account key to the new device
    (`DeviceService.approveLink`).
 
 A QR scanner exists on Android/iOS (`qrScannerBuilderProvider`); Windows gets
-the paste field only.
+the paste field only, and `ApproveDeviceModel.canScan` hides the scan frame.
 
 ## Linking this device
 
@@ -49,8 +55,8 @@ approving device shows so the two codes can be compared.
 ## Sending history after a link
 
 History transfers are never automatic. When the approval is done the approve
-page offers "Send history to this device": the controller remembers the account's
-device ids before approving and sends only to the device that has appeared since
-(`sendHistoryToNewDevice`); if it has not finished joining the sentence says to
-wait and the button can be pressed again. The new device accepts or declines
-under the restore step or Settings > Backup.
+page's "Send" offers history to the new device: the controller remembers the
+account's device ids before approving and sends only to the device that has
+appeared since (`sendHistoryToNewDevice`); if it has not finished joining the
+sentence says to wait and the button can be pressed again. The new device
+accepts or declines under the restore step or Settings > Backup.

@@ -9,6 +9,7 @@ import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/page_parts.dart';
 import 'package:orbit_ui/src/components/pages.dart';
+import 'package:orbit_ui/src/components/state_kit.dart';
 import 'package:orbit_ui/src/components/toggles.dart';
 import 'package:orbit_ui/src/components/you_parts.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
@@ -329,7 +330,11 @@ class ApproveDeviceModel {
     this.error,
     this.checkNumber = '',
     this.serverHost = '',
+    this.accountKeyCode,
+    this.canScan = true,
+    this.historySending = false,
     this.historySent = false,
+    this.historyError,
     this.unlockWhat = 'your fingerprint, face or phone PIN',
     this.unlockButton = 'Use fingerprint',
   });
@@ -340,7 +345,16 @@ class ApproveDeviceModel {
   /// "72 914": what both devices must show.
   final String checkNumber;
   final String serverHost;
+
+  /// The account's key code, shown on this device for the new device's "Is
+  /// this your account?" check; null when this device cannot read it.
+  final String? accountKeyCode;
+
+  /// False where the platform has no camera: paste only.
+  final bool canScan;
+  final bool historySending;
   final bool historySent;
+  final String? historyError;
   final String unlockWhat;
   final String unlockButton;
 }
@@ -410,21 +424,22 @@ class _ApproveDeviceScreenState extends State<ApproveDeviceScreen> {
             slot: Column(
               children: [
                 const _Steps(_linkSteps, 0),
-                Padding(
-                  padding: const EdgeInsets.only(top: 14),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 320),
-                      child: LayoutBuilder(
-                        builder: (context, c) => OrbitScanFrame(
-                          width: c.maxWidth,
-                          height: 210,
-                          child: widget.camera?.call(context),
+                if (m.canScan)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        child: LayoutBuilder(
+                          builder: (context, c) => OrbitScanFrame(
+                            width: c.maxWidth,
+                            height: 210,
+                            child: widget.camera?.call(context),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -464,6 +479,8 @@ class _ApproveDeviceScreenState extends State<ApproveDeviceScreen> {
       case ApproveStage.review:
       case ApproveStage.approving:
         body = [
+          if (m.error != null)
+            OrbitInlineNotice(kind: OrbitNoticeKind.error, text: m.error!),
           OrbitHeroCard(
             icon: OrbitIcons.devices,
             title: 'Approve this device?',
@@ -480,6 +497,14 @@ class _ApproveDeviceScreenState extends State<ApproveDeviceScreen> {
               ],
             ),
           ),
+          if (m.accountKeyCode != null)
+            OrbitCodeBox(
+              label: 'Your account key code',
+              code: m.accountKeyCode!,
+              note:
+                  'The new device shows this code after you approve. Compare '
+                  'it there before its owner says yes.',
+            ),
           const OrbitInlineNotice(
             kind: OrbitNoticeKind.warning,
             text:
@@ -531,6 +556,11 @@ class _ApproveDeviceScreenState extends State<ApproveDeviceScreen> {
             sub: 'It shows in your list once its owner confirms the account',
             slot: _Steps(_linkSteps, 3),
           ),
+          if (m.historyError != null)
+            OrbitInlineNotice(
+              kind: OrbitNoticeKind.error,
+              text: m.historyError!,
+            ),
           OrbitSection(
             title: 'Chat history',
             footer: 'The new device asks before it accepts your history.',
@@ -554,7 +584,10 @@ class _ApproveDeviceScreenState extends State<ApproveDeviceScreen> {
                         label: 'Send',
                         kind: OrbitButtonKind.secondary,
                         height: 38,
-                        onPressed: a.onSendHistory ?? _none,
+                        busy: m.historySending,
+                        onPressed: m.historySending
+                            ? null
+                            : (a.onSendHistory ?? _none),
                       ),
               ),
             ],
@@ -953,34 +986,31 @@ class _RecCard extends StatelessWidget {
 
 // --------------------------------------------------------------- transfers
 
-enum TransferState {
-  preparing,
-  offered,
-  declined,
-  stopped,
-  ready,
-  receiving,
-  done,
-}
-
+/// One device-to-device transfer: where it has got to, the bar while it
+/// runs, and the buttons that make sense now (the shared transfer row).
 class TransferItem {
   const TransferItem({
     required this.id,
     required this.title,
-    required this.state,
+    required this.status,
     this.outgoing = false,
     this.progress,
-    this.stepLabel = '',
+    this.buttons = const [],
   });
 
   final String id;
   final String title;
-  final TransferState state;
+
+  /// Where it has got to, or why it stopped.
+  final String status;
   final bool outgoing;
+
+  /// 0..1 while it runs and the size is known.
   final double? progress;
 
-  /// "3 of 8".
-  final String stepLabel;
+  /// Button labels: Accept, Resume, Try again, Decline, Pause, Cancel,
+  /// Dismiss. [TransferActions.onAction] gets the label.
+  final List<String> buttons;
 }
 
 class TransferModel {
@@ -989,6 +1019,8 @@ class TransferModel {
     this.waiting = const [],
     this.error,
     this.busy = false,
+    this.incomingLoading = false,
+    this.incomingFailed = false,
   });
 
   final List<TransferItem> sending;
@@ -997,16 +1029,20 @@ class TransferModel {
   /// "This is your only device. …"
   final String? error;
   final bool busy;
+
+  /// The offers are still being read, or could not be read.
+  final bool incomingLoading;
+  final bool incomingFailed;
 }
 
 class TransferActions {
-  const TransferActions({this.onSend, this.onAction});
+  const TransferActions({this.onSend, this.onAction, this.onRetry});
 
   final VoidCallback? onSend;
 
-  /// A button on a card: its id and the button's label (Accept, Decline,
-  /// Resume, Pause, Cancel, Dismiss).
+  /// A button on a card: its id and the button's label.
   final void Function(String id, String action)? onAction;
+  final VoidCallback? onRetry;
 }
 
 /// `transfer`: send your history to your other devices, and what is
@@ -1026,7 +1062,12 @@ class TransferScreen extends StatelessWidget {
     final t = OrbitTokens.of(context);
     final m = model;
     final waiting = m.waiting
-        .where((x) => x.state == TransferState.ready)
+        .where(
+          (x) =>
+              x.buttons.contains('Accept') ||
+              x.buttons.contains('Resume') ||
+              x.buttons.contains('Try again'),
+        )
         .length;
     final err = m.error;
     return OrbitYouPage(
@@ -1107,7 +1148,14 @@ class TransferScreen extends StatelessWidget {
           for (final x in m.sending) _card(x),
         ],
         const OrbitGroupTitle('Waiting for this phone'),
-        if (m.waiting.isEmpty)
+        if (m.incomingLoading)
+          const OrbitPageLoading(label: 'Loading transfers…')
+        else if (m.incomingFailed)
+          OrbitLoadFailed(
+            title: 'Transfers could not be loaded.',
+            onRetry: actions.onRetry,
+          )
+        else if (m.waiting.isEmpty)
           const OrbitSectionFoot(
             'Nothing is waiting. When another of your devices sends its '
             'history, it shows up here.',
@@ -1120,69 +1168,27 @@ class TransferScreen extends StatelessWidget {
   }
 
   Widget _card(TransferItem x) {
-    final (
-      String status,
-      double? p,
-      List<(String, OrbitButtonKind)> buttons,
-    ) = switch (x.state) {
-      TransferState.preparing => (
-        'Getting your history ready (${x.stepLabel})',
-        x.progress,
-        [('Cancel', OrbitButtonKind.secondary)],
-      ),
-      TransferState.offered => (
-        'Sent. Your other device chooses whether to add it; it shows '
-            'there under Backup.',
-        null,
-        [('Cancel', OrbitButtonKind.secondary)],
-      ),
-      TransferState.declined => (
-        'Your other device declined it.',
-        null,
-        [('Dismiss', OrbitButtonKind.ghost)],
-      ),
-      TransferState.stopped => (
-        'Stopped: the connection dropped.',
-        x.progress,
-        [
-          ('Resume', OrbitButtonKind.primary),
-          ('Cancel', OrbitButtonKind.secondary),
-        ],
-      ),
-      TransferState.ready => (
-        'Ready to receive. Nothing is downloaded until you accept.',
-        null,
-        [
-          ('Accept', OrbitButtonKind.primary),
-          ('Decline', OrbitButtonKind.secondary),
-        ],
-      ),
-      TransferState.receiving => (
-        'Receiving (${x.stepLabel})',
-        x.progress,
-        [('Pause', OrbitButtonKind.secondary)],
-      ),
-      TransferState.done => (
-        'Done',
-        null,
-        [('Dismiss', OrbitButtonKind.ghost)],
-      ),
-    };
     return OrbitTransferCard(
       title: x.title,
-      status: status,
+      status: x.status,
       icon: x.outgoing ? OrbitIcons.uploadSimple : OrbitIcons.downloadSimple,
       iconWeight: OrbitIconWeight.bold,
-      progress: p,
+      progress: x.progress,
       actions: [
-        for (final (label, kind) in buttons)
+        for (final label in x.buttons)
           OrbitButton(
             label: label,
-            kind: kind,
+            kind: switch (label) {
+              'Accept' || 'Resume' || 'Try again' => OrbitButtonKind.primary,
+              'Dismiss' => OrbitButtonKind.ghost,
+              _ => OrbitButtonKind.secondary,
+            },
             height: 38,
             padding: 14,
             fontSize: 13,
-            onPressed: () => actions.onAction?.call(x.id, label),
+            onPressed: model.busy && label != 'Pause' && label != 'Cancel'
+                ? null
+                : () => actions.onAction?.call(x.id, label),
           ),
       ],
     );
@@ -1198,8 +1204,14 @@ class RecoveryModel {
     required this.secret,
     this.initialTab = RecoveryTab.create,
     this.made = false,
+    this.madeLabel = 'Made today',
     this.created = false,
+    this.createdNothing = false,
     this.restored,
+    this.handoffNote,
+    this.error,
+    this.busy = false,
+    this.saved = false,
   });
 
   /// Shown only now: "K7QM-X2PD-…".
@@ -1209,17 +1221,34 @@ class RecoveryModel {
   /// One exists already; a new one replaces it.
   final bool made;
 
+  /// "Made today", "Made 3 days ago".
+  final String madeLabel;
+
   /// Just created here.
   final bool created;
 
+  /// The backup had no history in it.
+  final bool createdNothing;
+
   /// "Restored 2,318 messages." once a restore finishes.
   final String? restored;
+
+  /// What copying or sharing did ("Copied. …", "It could not be shared…").
+  final String? handoffNote;
+
+  /// Why making or restoring the backup failed.
+  final String? error;
+  final bool busy;
+
+  /// "I saved it somewhere safe".
+  final bool saved;
 }
 
 class RecoveryActions {
   const RecoveryActions({
     this.onCopy,
     this.onShare,
+    this.onSaved,
     this.onCreate,
     this.onRestore,
     this.onDelete,
@@ -1227,6 +1256,7 @@ class RecoveryActions {
 
   final VoidCallback? onCopy;
   final VoidCallback? onShare;
+  final ValueChanged<bool>? onSaved;
   final VoidCallback? onCreate;
   final ValueChanged<String>? onRestore;
   final VoidCallback? onDelete;
@@ -1252,8 +1282,6 @@ class RecoveryScreen extends StatefulWidget {
 
 class _RecoveryScreenState extends State<RecoveryScreen> {
   late var _tab = widget.model.initialTab;
-  var _saved = false;
-  String? _note;
   final _secret = TextEditingController();
 
   @override
@@ -1271,16 +1299,18 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     final replacing = made && !m.created;
     final at = m.created
         ? 3
-        : _saved
+        : m.saved
         ? 2
-        : _note != null
+        : m.handoffNote != null
         ? 1
         : 0;
     final create = <Widget>[
       if (m.created) ...[
-        const OrbitInlineNotice(
+        OrbitInlineNotice(
           kind: OrbitNoticeKind.success,
-          text: 'Recovery backup created.',
+          text: m.createdNothing
+              ? 'There was no history to back up yet.'
+              : 'Recovery backup created.',
         ),
         const OrbitSectionFoot(
           'The secret is not stored anywhere on this phone or on the server. '
@@ -1295,81 +1325,72 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
                 'replaces it, and the secret you saved stops working.',
           ),
         const OrbitGroupTitle('Your recovery secret'),
-        OrbitCard(
-          dividers: false,
-          padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
-          children: [
-            OrbitCodeBox(
-              label: 'Shown only now',
-              code: m.secret,
-              size: OrbitCodeSize.secret,
-              margin: const EdgeInsets.only(top: 10),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OrbitButton(
-                      label: 'Copy',
-                      icon: OrbitIcons.copy,
-                      kind: OrbitButtonKind.secondary,
-                      onPressed: () {
-                        setState(
-                          () => _note =
-                              'Copied. Put it somewhere safe now: it leaves '
-                              'the clipboard in a minute.',
-                        );
-                        a.onCopy?.call();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OrbitButton(
-                      label: 'Share',
-                      icon: OrbitIcons.shareNetwork,
-                      kind: OrbitButtonKind.secondary,
-                      onPressed: () {
-                        setState(
-                          () => _note =
-                              'Shared. Check that it reached somewhere only '
-                              'you can open.',
-                        );
-                        a.onShare?.call();
-                      },
-                    ),
-                  ),
-                ],
+        if (m.secret.isEmpty && m.error == null)
+          const OrbitPageLoading(label: 'Making a secret…')
+        else if (m.secret.isNotEmpty) ...[
+          OrbitCard(
+            dividers: false,
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+            children: [
+              OrbitCodeBox(
+                label: 'Shown only now',
+                code: m.secret,
+                size: OrbitCodeSize.secret,
+                margin: const EdgeInsets.only(top: 10),
               ),
-            ),
-          ],
-        ),
-        OrbitSectionFoot(
-          _note ??
-              'Save it away from this phone, like in a password manager or '
-                  'on paper.',
-        ),
-        OrbitFormCard(
-          children: [
-            OrbitCheckbox(
-              label: 'I saved it somewhere safe',
-              on: _saved,
-              top: 0,
-              onChanged: (v) => setState(() => _saved = v),
-            ),
-          ],
-        ),
-        OrbitButtonRow(
-          children: [
-            OrbitButton(
-              label: 'Create recovery backup',
-              icon: OrbitIcons.key,
-              block: true,
-              onPressed: _saved ? (a.onCreate ?? _none) : null,
-            ),
-          ],
-        ),
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OrbitButton(
+                        label: 'Copy',
+                        icon: OrbitIcons.copy,
+                        kind: OrbitButtonKind.secondary,
+                        onPressed: m.busy ? null : (a.onCopy ?? _none),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OrbitButton(
+                        label: 'Share',
+                        icon: OrbitIcons.shareNetwork,
+                        kind: OrbitButtonKind.secondary,
+                        onPressed: m.busy ? null : (a.onShare ?? _none),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          OrbitSectionFoot(
+            m.handoffNote ??
+                'Save it away from this phone, like in a password manager or '
+                    'on paper.',
+          ),
+          OrbitFormCard(
+            children: [
+              OrbitCheckbox(
+                label: 'I saved it somewhere safe',
+                on: m.saved,
+                top: 0,
+                onChanged: m.busy ? null : (v) => a.onSaved?.call(v),
+              ),
+            ],
+          ),
+          OrbitButtonRow(
+            children: [
+              OrbitButton(
+                label: 'Create recovery backup',
+                icon: OrbitIcons.key,
+                block: true,
+                busy: m.busy,
+                onPressed: m.saved && !m.busy ? (a.onCreate ?? _none) : null,
+              ),
+            ],
+          ),
+        ],
       ],
     ];
     final restore = <Widget>[
@@ -1381,6 +1402,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
             controller: _secret,
             hint: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX',
             mono: true,
+            enabled: !m.busy,
             helper: 'Exactly as you saved it, with the dashes',
           ),
         ],
@@ -1392,13 +1414,19 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
           OrbitButton(
             label: 'Restore from recovery backup',
             block: true,
-            onPressed: () {
-              if (_secret.text.trim().isEmpty) {
-                showOrbitToast(context, 'Type your recovery secret first.');
-                return;
-              }
-              a.onRestore?.call(_secret.text.trim());
-            },
+            busy: m.busy,
+            onPressed: m.busy
+                ? null
+                : () {
+                    if (_secret.text.trim().isEmpty) {
+                      showOrbitToast(
+                        context,
+                        'Type your recovery secret first.',
+                      );
+                      return;
+                    }
+                    a.onRestore?.call(_secret.text.trim());
+                  },
           ),
         ],
       ),
@@ -1413,9 +1441,9 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
           slot: _tab == RecoveryTab.create ? _Steps(_recSteps, at) : null,
           pills: [
             made
-                ? const OrbitHeroPill(
+                ? OrbitHeroPill(
                     icon: OrbitIcons.checkCircle,
-                    text: 'Made today',
+                    text: m.madeLabel,
                     tone: OrbitPillTone.ok,
                   )
                 : const OrbitHeroPill(
@@ -1442,9 +1470,11 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
               OrbitSegment(RecoveryTab.restore, 'Restore'),
             ],
             value: _tab,
-            onChanged: (v) => setState(() => _tab = v),
+            onChanged: m.busy ? null : (v) => setState(() => _tab = v),
           ),
         ),
+        if (m.error != null)
+          OrbitInlineNotice(kind: OrbitNoticeKind.error, text: m.error!),
         ...(_tab == RecoveryTab.create ? create : restore),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),

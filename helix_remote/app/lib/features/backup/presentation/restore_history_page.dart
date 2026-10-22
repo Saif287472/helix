@@ -71,7 +71,8 @@ class RestoreHistoryPage extends ConsumerWidget {
         ),
         actions: RestoreActions(
           onRestore: () => ref.read(restoreFlowProvider.notifier).restore(),
-          onRecoverySecret: () => context.push(RoutePaths.backupRecovery),
+          onRecoverySecret: () =>
+              context.push('${RoutePaths.backupRecovery}?tab=restore'),
           onSkip: leave,
           onContinue: leave,
           onBack: afterSignIn ? null : () => context.pop(),

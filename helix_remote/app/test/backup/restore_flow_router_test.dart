@@ -120,7 +120,7 @@ void main() {
     // /restore, so this page bounced and the recovery-secret route after
     // sign-in could not be reached at all.
     expect(find.text('Restore your chats'), findsNothing);
-    expect(find.text('Recovery backup'), findsOneWidget);
+    expect(find.text('Recovery backup'), findsWidgets);
     expect(container.read(postSignInProvider), PostSignInStep.offerRestore);
 
     // And the step still holds: leaving it is not how it is skipped.

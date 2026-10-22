@@ -785,27 +785,41 @@ score exactly as at Review 4 after the changes below.
 
 ## Part B batch 9 (settings pages, devices and backup, wired into the app)
 
-- **Approve a new device stays on the old page.** The trust check shows the
-  account key code (`LinkRequest.accountKeyCode`) that the approving phone
-  compares with the new one. `ApproveDeviceScreen` has no place for it, so the
-  old page keeps this step until the code is added to `ApproveDeviceModel`
-  (`contracts/devices_backup.md`).
-  - **Owner:** pending (Part B batch 9).
-- **Transfer and Recovery backup stay on the old pages.** Both sides of a
-  device transfer, and the recovery secret's create and restore pages, still
-  draw the app's screens. The Orbit screens exist and are compared, but the
-  actions need a careful mapping (`HANDOFF.md`, "The shorter plan").
-  - **Owner:** pending (Part B batch 9).
-- **Link this device and Restore history stay on the old pages.** Link this
-  device is a QR page with no Orbit connector yet; restored offers appear
-  under the old restore step (`RestoreScreen` is compared but not wired).
-  - **Owner:** pending (Part B batch 9).
+- **The last old pages are now Orbit screens (done 2026-10-22).** Approve a
+  new device, both sides of a device transfer, Recovery backup (create and
+  restore) and Restore history draw the Orbit screens through their
+  connectors; the old pages and `transfer_tile.dart` are gone.
+  - **Owner:** done (pending review).
 - **Delete account asks for the number before texting a code.** On an account
   without a password, the code step first shows the number and asks the person
   to confirm, since the operator may charge for the text. The prototype goes
   straight to the code. `DeleteAccountScreen` takes `onSendCode` with the
   phone (`orbit_ui`, behaviour only).
   - **Owner:** pending (Part B batch 9).
+
+## The last old pages (transfer, recovery and approval, 2026-10-22)
+
+- **Approval shows a confirmation dialog, then the phone's unlock.** The
+  prototype's Approve button sends at once. The app keeps both trust checks:
+  `showOrbitDialog` asks first, and the system fingerprint/face/PIN prompt
+  follows. The account key code (`LinkRequest.accountKeyCode`) is on the
+  review with a note to compare it on the new device; it is part of the trust
+  check and not in the prototype.
+- **Without a camera only the paste field is offered.** `canScan` is false on
+  Windows and wherever the platform has no scanner, so `ApproveDeviceScreen`
+  hides the scan frame and the enter stage is the hero and the paste field.
+  The prototype always draws the camera.
+- **Delete recovery backup sits in the create tab's danger zone.** The
+  prototype's recovery page does not offer it; the app has the action and the
+  danger zone is the only place for it.
+- **Transfer rows keep the app's statuses and buttons.** `TransferItem` takes
+  the status sentence, progress and labels from the engine's `TransferView`:
+  Accept, Resume and Try again are primary, Dismiss is ghost and the rest
+  secondary; incoming offers have no Dismiss, and every button but Pause and
+  Cancel is disabled while busy.
+- **Restore history's "I have a recovery secret" opens Recovery on its Restore
+  tab** (`/backup/recovery?tab=restore`). The prototype's pages stand alone.
+
 
 ## Saved accounts and switching (after Part B batch 9)
 

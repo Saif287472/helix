@@ -17,7 +17,7 @@ import 'package:helix_remote/features/devices/presentation/security_activity_pag
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote_api/v2.dart' show NetworkException;
 import 'package:helix_remote_crypto/v2.dart' show LinkCode;
-import 'package:orbit_ui/orbit_ui.dart' show OrbitQr;
+import 'package:orbit_ui/orbit_ui.dart' show OrbitQr, OrbitSpinner;
 
 import '../support/a3b_fakes.dart';
 
@@ -181,6 +181,7 @@ void main() {
     }) async {
       final devices = FakeDevicesGateway();
       final auth = FakeDeviceAuthenticator();
+      useTallWindow(tester);
       await pumpPage(
         tester,
         const ApproveDevicePage(),
@@ -199,8 +200,17 @@ void main() {
     }
 
     Future<void> paste(WidgetTester tester, String code) async {
-      await tester.enterText(find.byType(TextField), code);
+      await tester.enterText(find.byType(EditableText), code);
+      await settle(tester);
       await tester.tap(find.text('Continue'));
+      await settle(tester);
+    }
+
+    /// "Approve", then the screen's confirmation dialog's system-unlock step.
+    Future<void> approve(WidgetTester tester) async {
+      await tester.tap(find.text('Approve'));
+      await settle(tester);
+      await tester.tap(find.text('Use fingerprint'));
       await settle(tester);
     }
 
@@ -227,7 +237,7 @@ void main() {
       expect(find.text('Approve this device?'), findsOneWidget);
       expect(find.textContaining('helix.example.org'), findsOneWidget);
       expect(find.text('482 913'), findsOneWidget);
-      expect(find.textContaining('do not approve it'), findsOneWidget);
+      expect(find.textContaining('Do not approve'), findsOneWidget);
     });
 
     testWidgets('approval needs the phone unlock; a refusal sends nothing', (
@@ -236,8 +246,7 @@ void main() {
       final (devices, auth) = await open(tester);
       auth.passes = false;
       await paste(tester, 'helix-link:1:ok');
-      await tester.tap(find.text('Approve'));
-      await settle(tester);
+      await approve(tester);
       expect(auth.asked, hasLength(1));
       expect(devices.calls, isNot(contains('approve')));
       expect(find.textContaining('phone\'s own unlock'), findsOneWidget);
@@ -247,15 +256,14 @@ void main() {
       final (devices, auth) = await open(tester);
       devices.holdApprove = Completer<void>();
       await paste(tester, 'helix-link:1:ok');
-      await tester.tap(find.text('Approve'));
-      await settle(tester);
+      await approve(tester);
       // Busy: a second tap changes nothing.
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(OrbitSpinner), findsWidgets);
       devices.holdApprove!.complete();
       await settle(tester);
       expect(auth.asked, hasLength(1));
       expect(devices.approved, 'helix-link:1:ok');
-      expect(find.textContaining('is joining your account'), findsOneWidget);
+      expect(find.text('The device is joining'), findsOneWidget);
     });
 
     testWidgets('the review shows the account key code to compare', (
@@ -268,8 +276,15 @@ void main() {
         accountKeyCode: 'a1b2 c3d4 e5f6 a7b8 c9d0',
       );
       await paste(tester, 'helix-link:1:ok');
-      expect(find.text('Your account key code'), findsOneWidget);
-      expect(find.text('a1b2 c3d4 e5f6 a7b8 c9d0'), findsOneWidget);
+      expect(find.text('YOUR ACCOUNT KEY CODE'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Text &&
+              (w.data ?? '').replaceAll('​', '') == 'a1b2 c3d4 e5f6 a7b8 c9d0',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('history is only sent when asked, to the new device alone', (
@@ -277,18 +292,17 @@ void main() {
     ) async {
       final (devices, _) = await open(tester);
       await paste(tester, 'helix-link:1:ok');
-      await tester.tap(find.text('Approve'));
-      await settle(tester);
+      await approve(tester);
 
       // Approved. Nothing was sent by itself.
       expect(devices.calls, isNot(contains('sendHistoryToNewDevice')));
-      expect(find.text('Send history to this device'), findsOneWidget);
+      expect(find.text('Send'), findsOneWidget);
 
-      await tester.tap(find.text('Send history to this device'));
+      await tester.tap(find.text('Send'));
       await settle(tester);
       expect(devices.historySentTo, {'d3'});
       expect(find.textContaining('on its way'), findsOneWidget);
-      expect(find.text('Send history to this device'), findsNothing);
+      expect(find.text('Send'), findsNothing);
     });
 
     testWidgets('sending history before the device has joined says to wait', (
@@ -297,15 +311,14 @@ void main() {
       final (devices, _) = await open(tester);
       devices.idsAfter = {'d1', 'd2'};
       await paste(tester, 'helix-link:1:ok');
-      await tester.tap(find.text('Approve'));
-      await settle(tester);
+      await approve(tester);
 
-      await tester.tap(find.text('Send history to this device'));
+      await tester.tap(find.text('Send'));
       await settle(tester);
       expect(find.textContaining('not finished joining'), findsOneWidget);
       // It can be tried again.
       devices.idsAfter = {'d1', 'd2', 'd3'};
-      await tester.tap(find.text('Send history to this device'));
+      await tester.tap(find.text('Send'));
       await settle(tester);
       expect(devices.historySentTo, {'d3'});
     });
@@ -316,8 +329,7 @@ void main() {
       final (devices, auth) = await open(tester);
       auth.available = false;
       await paste(tester, 'helix-link:1:ok');
-      await tester.tap(find.text('Approve'));
-      await settle(tester);
+      await approve(tester);
       expect(auth.asked, isEmpty);
       expect(devices.approved, isNotNull);
     });
@@ -326,8 +338,7 @@ void main() {
       final (devices, _) = await open(tester);
       devices.approveFails = LinkProblem.expired;
       await paste(tester, 'helix-link:1:ok');
-      await tester.tap(find.text('Approve'));
-      await settle(tester);
+      await approve(tester);
       expect(find.textContaining('expired'), findsOneWidget);
     });
 
@@ -345,7 +356,7 @@ void main() {
     ) async {
       await open(tester);
       expect(find.byType(_AutoScan), findsNothing);
-      expect(find.text('Or paste the code'), findsOneWidget);
+      expect(find.text('OR PASTE THE CODE'), findsOneWidget);
     });
   });
 

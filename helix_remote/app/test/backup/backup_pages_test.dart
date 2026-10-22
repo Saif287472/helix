@@ -13,6 +13,7 @@ import 'package:helix_remote/features/backup/presentation/restore_history_page.d
 import 'package:helix_remote/features/backup/presentation/transfer_page.dart';
 import 'package:helix_remote/shared/format.dart';
 import 'package:helix_remote/shared/route_paths.dart';
+import 'package:orbit_ui/orbit_ui.dart' show OrbitButton, OrbitProgress;
 
 import '../support/a3b_fakes.dart';
 
@@ -355,7 +356,7 @@ void main() {
       expect(backup.calls, contains('sendHistory'));
       expect(find.text('Sending your history'), findsOneWidget);
       expect(
-        find.textContaining('Waiting for your other device'),
+        find.textContaining('Your other device chooses whether to add it'),
         findsOneWidget,
       );
 
@@ -387,7 +388,7 @@ void main() {
       );
       await settle(tester);
       expect(find.text('Getting your history ready (1 of 4)'), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsWidgets);
+      expect(find.byType(OrbitProgress), findsWidgets);
     });
 
     testWidgets('a lone device gets a plain explanation', (tester) async {
@@ -491,8 +492,15 @@ void main() {
     final enginePattern = RegExp(r'^([A-Z0-9]{4}-){7}[A-Z0-9]{4}$');
 
     Finder secretText() => find.byWidgetPredicate(
-      (w) => w is Text && enginePattern.hasMatch(w.data ?? ''),
+      (w) =>
+          w is Text &&
+          enginePattern.hasMatch((w.data ?? '').replaceAll('\n', '')),
     );
+
+    String secretShown(WidgetTester tester) =>
+        tester.widget<Text>(secretText()).data!.replaceAll('\n', '');
+
+    Finder button(String label) => find.widgetWithText(OrbitButton, label);
 
     testWidgets('shows the engine\'s secret once, asks for confirmation, then '
         'creates', (tester) async {
@@ -507,20 +515,18 @@ void main() {
       // The secret is the engine's, not one the app made up.
       expect(backup.calls, contains('generateRecoverySecret'));
       expect(secretText(), findsOneWidget);
-      final secret = tester.widget<Text>(secretText()).data!;
+      final secret = secretShown(tester);
       expect(secret, startsWith('BBBB-'));
       expect(secret.length, 39);
 
       // Not creatable until the person says they saved it.
-      final create = find.widgetWithText(
-        FilledButton,
-        'Create recovery backup',
-      );
-      expect(tester.widget<FilledButton>(create).onPressed, isNull);
+      final create = button('Create recovery backup');
+      expect(tester.widget<OrbitButton>(create).onPressed, isNull);
 
-      await tester.tap(find.text('I saved it'));
+      await tester.tap(find.text('I saved it somewhere safe'));
       await settle(tester);
-      expect(tester.widget<FilledButton>(create).onPressed, isNotNull);
+      expect(tester.widget<OrbitButton>(create).onPressed, isNotNull);
+      await reveal(tester, create);
       await tester.tap(create);
       await settle(tester);
 
@@ -529,7 +535,7 @@ void main() {
       expect(find.text('Recovery backup created.'), findsOneWidget);
       // Shown once: after the backup exists the secret is off the screen.
       expect(secretText(), findsNothing);
-      expect(find.text('I saved it'), findsNothing);
+      expect(find.text('I saved it somewhere safe'), findsNothing);
     });
 
     testWidgets('the person cannot choose their own secret', (tester) async {
@@ -541,8 +547,8 @@ void main() {
       await settle(tester);
       expect(find.text('Type my own instead'), findsNothing);
       expect(find.text('Your own secret'), findsNothing);
-      // The only text field on the create tab does not exist at all.
-      expect(find.byType(TextField), findsNothing);
+      // No text field on the create tab at all.
+      expect(find.byType(EditableText), findsNothing);
     });
 
     testWidgets('Copy and Share hand the same secret over, once each tap', (
@@ -555,14 +561,14 @@ void main() {
         overrides: a3bOverrides(backup: FakeBackupGateway(), secrets: handoff),
       );
       await settle(tester);
-      final secret = tester.widget<Text>(secretText()).data!;
+      final secret = secretShown(tester);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Copy'));
+      await tester.tap(button('Copy'));
       await settle(tester);
       expect(handoff.copied, [secret]);
       expect(find.textContaining('leaves the clipboard in a minute'), findsOne);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Share'));
+      await tester.tap(button('Share'));
       await settle(tester);
       expect(handoff.shared, [secret]);
       expect(find.textContaining('Shared.'), findsOneWidget);
@@ -576,7 +582,7 @@ void main() {
         overrides: a3bOverrides(backup: FakeBackupGateway(), secrets: handoff),
       );
       await settle(tester);
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Share'));
+      await tester.tap(button('Share'));
       await settle(tester);
       expect(find.textContaining('could not be shared'), findsOneWidget);
     });
@@ -591,7 +597,7 @@ void main() {
         overrides: a3bOverrides(backup: backup),
       );
       await settle(tester);
-      final first = tester.widget<Text>(secretText()).data!;
+      final first = secretShown(tester);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
 
@@ -601,7 +607,7 @@ void main() {
         overrides: a3bOverrides(backup: backup),
       );
       await settle(tester);
-      expect(tester.widget<Text>(secretText()).data, isNot(first));
+      expect(secretShown(tester), isNot(first));
     });
 
     testWidgets('an engine that refuses is explained, with no secret shown', (
@@ -616,11 +622,12 @@ void main() {
       );
       await settle(tester);
 
-      await tester.tap(find.text('I saved it'));
+      await reveal(tester, find.text('I saved it somewhere safe'));
+      await tester.tap(find.text('I saved it somewhere safe'));
       await settle(tester);
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'Create recovery backup'),
-      );
+      final create = button('Create recovery backup');
+      await reveal(tester, create);
+      await tester.tap(create);
       await settle(tester);
       expect(
         find.text(backupProblemText(BackupProblem.weakSecret)),
@@ -654,14 +661,18 @@ void main() {
 
       await tester.tap(find.text('Restore'));
       await settle(tester);
-      final restore = find.widgetWithText(
-        FilledButton,
-        'Restore from recovery backup',
-      );
-      expect(tester.widget<FilledButton>(restore).onPressed, isNull);
-
-      await tester.enterText(find.byType(TextField), 'AAAA-BBBB');
+      final restore = button('Restore from recovery backup');
+      // An empty field asks for the secret instead of sending it.
+      await reveal(tester, restore);
+      await tester.tap(restore);
       await settle(tester);
+      expect(backup.calls, isNot(contains('restoreRecoveryBackup')));
+
+      // Let the "type your secret first" toast go before tapping again.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.enterText(find.byType(EditableText), 'AAAA-BBBB');
+      await settle(tester);
+      await reveal(tester, restore);
       await tester.tap(restore);
       await settle(tester);
       expect(backup.lastSecret, 'AAAA-BBBB');
@@ -683,11 +694,13 @@ void main() {
       await settle(tester);
       await tester.tap(find.text('Restore'));
       await settle(tester);
-      await tester.enterText(find.byType(TextField), '  AAAA-BBBB-CCCC-DDDD  ');
-      await settle(tester);
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'Restore from recovery backup'),
+      await tester.enterText(
+        find.byType(EditableText),
+        '  AAAA-BBBB-CCCC-DDDD  ',
       );
+      await settle(tester);
+      await reveal(tester, button('Restore from recovery backup'));
+      await tester.tap(button('Restore from recovery backup'));
       await settle(tester);
       // Only the surrounding whitespace is forgiven.
       expect(backup.lastSecret, 'AAAA-BBBB-CCCC-DDDD');
