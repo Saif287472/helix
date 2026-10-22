@@ -1,4 +1,4 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// A short piece of [text] around the first word of [query] that matches, with
 /// every matching word marked.

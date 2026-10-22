@@ -20,7 +20,7 @@ import '../support/orbit_theme.dart';
 
 /// Members the server's roster added without an announcement: the notice in
 /// the chat, the "Confirm NAME?" prompt in the group info and the
-/// conversation, and the app-wide banner.
+/// conversation, and the app-wide toast.
 void main() {
   const bobWaiting = PendingMemberInfo(
     account: 'bob',
@@ -268,7 +268,7 @@ void main() {
       );
     });
 
-    groupTest('the engine event shows a snackbar here', (tester) async {
+    groupTest('the engine event shows a toast here', (tester) async {
       final port = await pump(tester);
       port.signal(
         const GroupMemberUnconfirmedArrived(
@@ -311,7 +311,7 @@ void main() {
     });
   });
 
-  group('the app-wide banner', () {
+  group('the app-wide toast', () {
     groupTest('names the person and the group and opens the group info', (
       tester,
     ) async {
@@ -369,15 +369,13 @@ void main() {
         ),
         findsOneWidget,
       );
-      // Pressed through the widget: the snackbar floats in an overlay the
-      // test's hit testing does not reach.
-      tester.widget<SnackBarAction>(find.byType(SnackBarAction)).onPressed();
+      // Pressed through the widget: the toast is a timer-driven overlay entry.
+      await tester.tap(find.text('REVIEW'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('info:g1'), findsOneWidget);
     });
   });
-
   group('the group conversation', () {
     chat.chatTest('shows the prompt above the messages, and confirming works', (
       tester,

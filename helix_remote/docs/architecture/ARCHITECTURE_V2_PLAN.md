@@ -344,7 +344,11 @@ app, admin, cli
    ├─ helix_remote_crypto      X3DH, Double Ratchet, Sender Keys, attachment/backup crypto
    ├─ helix_remote_protocol    wire DTOs, frames, content types, error codes
    └─ helix_remote_domain      entities and value types only
-helix_remote_calls (WebRTC engine, Flutter)   helix_remote_ui (tokens, components, Flutter)
+helix_remote_calls (WebRTC engine, Flutter)   orbit_ui (the Orbit design system:
+                                              tokens, components, the screens,
+                                              the view models; Flutter)
+                                              helix_remote_ui (the old look, kept
+                                              for the admin console only)
 ```
 
 \* `helix_remote_db` uses `drift` + `sqlite3` (SQLCipher hook), with no Flutter
@@ -421,7 +425,7 @@ lib/
   features/<feature>/
     application/                Riverpod Notifiers/StreamProviders (UI state only)
     presentation/               screens + widgets (StatelessWidget/ConsumerWidget)
-  shared/widgets/               cross-feature widgets built on helix_remote_ui
+  shared/widgets/               cross-feature widgets built on orbit_ui
 ```
 
 - **Features:** `sign_in` (Global default page; hidden advanced mode: 3 taps
@@ -430,7 +434,7 @@ lib/
   Calls), `calls`, `groups`, `settings`, `devices`, `backup`, `profile`.
 - **Rules:**
   - Presentation imports only its own `application/`, `shared/`,
-    `helix_remote_ui` and `helix_remote_domain`.
+    `orbit_ui` and `helix_remote_domain`.
   - Never `helix_remote_db`, `_api`, `_crypto` or `_engine` directly
     (enforced by test).
   - Every list is a `StreamProvider` over a drift watch query.
@@ -675,6 +679,7 @@ C1 and C2 may run once P1 is done. C3 needs S3. A1 needs C3. X comes last.
 
 | Date | Change | Approved in |
 |---|---|---|
+| 2026-10-23 | ADR-031: Orbit is the app's design system. Section 6.1's package list and section 6's client rules change: the app's UI package is `packages/orbit_ui` (tokens, components, the Orbit screens and the view models), `presentation/` may import `orbit_ui` instead of `helix_remote_ui`, and the theme chosen on You > Appearance is the one the app draws (replacing "light theme only"). `packages/helix_remote_ui` survives as the operator console's kit only - its chat components, gallery, view models, their tests and its `orbit_ui` dependency were deleted, so it depends on Flutter alone. Visual regression moves from the deleted `helix_remote_ui` golden test to the prototype pixel gate (`orbit/flutter/tools/compare/partb/score_all.py`). | the user's Orbit port brief (`orbit/PORT_PLAN.md` Part B), steps 1-4 |
 | 2026-10-14 | ADR-030: blocks are visible (a `block_change` envelope to the blocked account at once, `blocked_by` on sends, call offers refused with `blocked`); the operator console shows each account's own name (sent in the clear, `PUT /v1/profile/name`, people migration 4) and full phone number (reported by the app, checked against the phone hash, sealed under the new optional `HELIX_PHONE_KEY`, `PUT /v1/account/phone-number`, identity migration 3). This replaces "only the hash and last four digits are stored" and silent blocks. | the user, 2026-10-14 (chose "Say they're blocked" + "Right away", and "Store, encrypted at rest" + "Send names to server") |
 | 2026-10-14 | Review batch 8 (G-02, G-03): the rule "no SQL outside `data/`" (§8.1) was never kept or tested - eight modules keep SQL in `module.dart` - so the rule becomes the one the code keeps: a module's SQL lives in its own files and names only its own schema, never in `api.dart` or `kernel/`, enforced by the server's `architecture_test.dart`. Modules split into `http/`, `application/`, `domain/`, `data/` when they grow; only identity has all four. Audit and metrics tables stay unpartitioned, with retention jobs (§4.3). The header no longer says cutover is in progress. | the user, 2026-10-14 ("Document the real rule") |
 | 2026-10-02 | A1: the app depends on `helix_remote_engine` and reads everything through a `RuntimeFactory` seam, so no test opens a keystore, a database file or a socket; `runtimeProvider` is rebuilt (and the old runtime closed) when the server changes. `presentation/` may import only its own feature, `shared/`, `helix_remote_ui` and `helix_remote_domain` - the Settings tab reads one `SettingsTabModel` instead of `serverUrlProvider`, and sign-out is a `SignOutAction` in the application layer. Drift watch streams do not cross isolates (the open A1 item): the FCM isolate writes the same file the UI isolate has open, so its changes reach the UI on the next query, not live; the app reconciles with `syncOnce` on resume. The FCM handler is registered before `runApp` and runs a headless engine. v2 `PhoneVerifyResponse` carries `hasPassword` and `account_id`, so the sign-in order is phone → SMS → (password \| name) rather than v1's lookup-then-decide; the optional sign-up password is on the name page for now. `helix_code.dart`, `deep_link.dart` and `link_channel.dart` are carried over unchanged from v1 (one fix: a `join?invite=` link now yields the bare origin instead of a URL with a trailing `?#`). Riverpod 3.4.3 and go_router 18.0.2 as registered in Phase 0; `cryptography_flutter` is not needed (crypto v2 has `SecureCryptoRandom`). Group calls stay deferred. | this session (autonomous run) |

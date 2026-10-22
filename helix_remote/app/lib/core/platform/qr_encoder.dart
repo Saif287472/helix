@@ -1,4 +1,4 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// Encodes [data] as a QR module matrix for `HelixQrDisplay`.

@@ -7,7 +7,7 @@ import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/links/link_channel.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/people/application/people_search.dart';
-import 'package:orbit_ui/orbit_ui.dart' as orbit;
+import 'package:helix_remote/shared/widgets/orbit_app_toast.dart';
 
 /// Turns links that arrive from outside the app into navigation.
 ///
@@ -98,16 +98,7 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
 
   /// The listener sits above the navigator, so a message goes into the
   /// navigator's overlay.
-  void _toast(String message) {
-    final overlay = ref
-        .read(appRouterProvider)
-        .routerDelegate
-        .navigatorKey
-        .currentState
-        ?.overlay;
-    if (overlay == null || !overlay.mounted) return;
-    orbit.showOrbitToast(overlay.context, overlay: overlay, message);
-  }
+  void _toast(String message) => showAppToast(ref, message);
 
   static bool _needsAccount(HelixDeepLink link) =>
       link.kind == HelixDeepLinkKind.groupLink ||

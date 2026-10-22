@@ -8,7 +8,7 @@ import 'package:helix_remote/features/calls/application/call_copy.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
 import 'package:helix_remote/features/calls/application/start_call.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' show CallLogRow, CallsDao;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// One row of the Calls tab: consecutive calls with the same person, in the
 /// same direction and on the same day, folded into one.

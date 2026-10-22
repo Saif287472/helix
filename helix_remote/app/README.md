@@ -23,7 +23,7 @@ import rules and every decision in it) and the docs in [`../docs/`](../docs/).
 - The messaging logic lives in the workspace packages under `../packages/`
   (`helix_remote_engine`, `helix_remote_db`, `helix_remote_api`,
   `helix_remote_crypto`, `helix_remote_protocol`, `helix_remote_calls`,
-  `helix_remote_ui`).
+  `orbit_ui`).
 
 ## Checks
 

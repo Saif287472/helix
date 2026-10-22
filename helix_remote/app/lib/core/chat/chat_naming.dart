@@ -1,6 +1,6 @@
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// The conversation id prefix of a direct chat; the rest is the peer's
 /// account id.

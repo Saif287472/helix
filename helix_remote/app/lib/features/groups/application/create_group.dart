@@ -5,7 +5,7 @@ import 'package:helix_remote/features/groups/application/group_errors.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_picture.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart' show HelixPersonItem;
+import 'package:orbit_ui/models.dart' show HelixPersonItem;
 
 /// The longest group name.
 const kGroupNameMaxLength = 100;

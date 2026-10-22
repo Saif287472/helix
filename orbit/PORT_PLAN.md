@@ -639,6 +639,34 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   page, notifications and calls for every account, one device-wide app lock,
   and every account's push token kept current. No prototype or preview
   screen for Accounts (the owner skipped it). See `HANDOFF.md`.
+- [x] Step 3 (pending your review): the app is called Orbit. The Android
+  label, the Windows window title, `MaterialApp.title`, `AppInfo.name` and
+  its rule test, the startup page's title and the call channel's description
+  all say Orbit, and the launcher icon is
+  `orbit/prototype/assets/orbit-mark.svg` rasterized to `assets/logo.png`
+  (1024 px, headless Chrome) through `flutter_launcher_icons`, so the five
+  Android `ic_launcher.png` and `windows/runner/resources/app_icon.ico`
+  changed with it. Its theme bullets were already met by batch 8: the chosen
+  theme is a device setting that drives `MaterialApp`, and there is no
+  high-contrast theme left to remove. Left alone on purpose: the Windows
+  URI-handler key still reads "Helix Remote Protocol" (the protocol is
+  Helix's, not the app's) and so do `applicationId` and the Kotlin package,
+  or an installed app would not upgrade.
+- [x] Step 4 (pending your review): the app draws only Orbit. Nothing in
+  `app/` imports `helix_remote_ui`, and the package is kept for the operator
+  console only: the colour, type and space tokens, `HelixThemes.console()`,
+  `HelixSkeleton` and `showHelixDestructiveDialog`. The gallery page, its
+  golden test and the old widget harness are deleted, the unused `light()`,
+  `highContrastLight()` and `signIn()` builders are gone, and the pubspec
+  depends on Flutter alone (7 rules tests). Docs follow the change: AGENTS.md,
+  `app/MODULE.md`, `app/README.md`, `packages/orbit_ui/lib/models.dart`, the
+  (now superseded) `docs/ui/COMPONENT_GALLERY.md` and
+  `docs/security/REGRESSION_TEST_MATRIX.md`. Because plan section 6.1 named
+  `helix_remote_ui` as a client package, the change is recorded as ADR-031
+  with its section 12 row. The pixel gate (`partb/score_all.py`, 241 phone
+  keys and 42 window keys) is the visual check now, so no golden is needed.
+  Deviations are in `DEVIATIONS.md` ("Part B step 4"). Tests: app 909,
+  orbit_ui 215, `helix_remote_ui` 7, all passing.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

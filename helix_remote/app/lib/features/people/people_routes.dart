@@ -6,7 +6,7 @@ import 'package:helix_remote/features/people/presentation/safety_scan_screen.dar
 import 'package:helix_remote/features/people/presentation/scan_chat_screen.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote/shared/route_paths.dart';
-import 'package:helix_remote/shared/widgets/people_search_panel.dart';
+import 'package:orbit_ui/orbit_ui.dart' show PeopleSearchMode;
 
 /// The people routes (see `PeoplePaths` for the paths). `search` is declared
 /// before the `:id` routes so it is not read as an account id.

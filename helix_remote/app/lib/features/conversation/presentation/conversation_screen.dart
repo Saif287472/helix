@@ -18,8 +18,6 @@ import 'package:helix_remote/features/conversation/application/timeline_builder.
 import 'package:helix_remote/features/conversation/application/timeline_provider.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
 import 'package:helix_remote/shared/pending_members.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart'
-    show HelixMessageActionIds, HelixMentionCandidate;
 import 'package:orbit_ui/orbit_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -128,14 +126,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
       ref.read(messageMediaProvider(rowid)).value ?? const <MediaPart>[];
 
   static ChatMessageAction? _actionOf(String id) => switch (id) {
-    HelixMessageActionIds.reply => ChatMessageAction.reply,
-    HelixMessageActionIds.copy => ChatMessageAction.copy,
-    HelixMessageActionIds.forward => ChatMessageAction.forward,
-    HelixMessageActionIds.edit => ChatMessageAction.edit,
-    HelixMessageActionIds.info => ChatMessageAction.info,
-    HelixMessageActionIds.select => ChatMessageAction.select,
-    HelixMessageActionIds.deleteForMe => ChatMessageAction.deleteForMe,
-    HelixMessageActionIds.deleteForEveryone =>
+    MessageActionIds.reply => ChatMessageAction.reply,
+    MessageActionIds.copy => ChatMessageAction.copy,
+    MessageActionIds.forward => ChatMessageAction.forward,
+    MessageActionIds.edit => ChatMessageAction.edit,
+    MessageActionIds.info => ChatMessageAction.info,
+    MessageActionIds.select => ChatMessageAction.select,
+    MessageActionIds.deleteForMe => ChatMessageAction.deleteForMe,
+    MessageActionIds.deleteForEveryone =>
       ChatMessageAction.deleteForEveryone,
     _ => null,
   };
@@ -170,7 +168,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     final menu = await _actions.menuFor(rowid);
     if (menu == null) return null;
     return ChatMessageMenu(
-      actions: {for (final a in menu.actions) ?_actionOf(a.id)},
+      actions: {for (final id in menu.actions) ?_actionOf(id)},
       allowReactions: menu.allowReactions,
       currentReaction: menu.currentReaction,
     );

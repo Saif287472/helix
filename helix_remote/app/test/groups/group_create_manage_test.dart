@@ -11,7 +11,7 @@ import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 import 'package:orbit_ui/orbit_ui.dart' show OrbitDialogPanel, OrbitExtendedFab;
 
 import '../support/group_support.dart';

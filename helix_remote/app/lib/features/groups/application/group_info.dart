@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// What a group admin can do to one member.
 enum MemberAction {

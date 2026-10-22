@@ -262,7 +262,11 @@ void main() {
     ).readAsStringSync();
     expect(manifest, contains('android:path="/open"'));
     expect(manifest, contains('android:path="/open/"'));
-    expect(manifest, isNot(contains('pathPrefix')));
+    // The invite and recovery link is always exactly /open#code, so nothing
+    // else on the host may open the app. A person's share link does have a
+    // path after it (`/u/<~name>`), so that one is a prefix (S1).
+    expect(manifest, isNot(contains('pathPrefix="/open')));
+    expect(manifest, contains('android:pathPrefix="/u/"'));
   });
 
   group('defaults and notifications', () {

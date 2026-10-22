@@ -169,7 +169,8 @@ class OrbitListLabel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          OrbitEyebrow(text),
+          // A long label at 2x text gives way, the count never does.
+          Flexible(child: OrbitEyebrow(text)),
           if (n != null) ...[
             const SizedBox(width: 6),
             // A number people read: `--ink-3`, never the decorative --ink-4.

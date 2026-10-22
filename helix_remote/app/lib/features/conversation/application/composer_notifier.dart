@@ -17,7 +17,7 @@ import 'package:helix_remote/features/conversation/application/conversation_head
 import 'package:helix_remote_engine/helix_remote_engine.dart' show MediaInput;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show Mention, MediaItemKind, MessageRef;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// What kind of file a picked attachment is, for the preview.
 enum DraftKind { image, video, audio, document }

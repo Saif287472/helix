@@ -9,7 +9,7 @@ import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/message_mapper.dart';
 import 'package:helix_remote/features/conversation/application/timeline_builder.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// What opens a conversation: which one, how many messages to start with
 /// (enough to cover the unread ones), and optionally a message to open at.
@@ -213,7 +213,7 @@ int initialLimitFor(OpenInfo open) =>
 /// The conversation's rows as the timeline wants them, live.
 ///
 /// A [StreamProvider] over the engine's windowed watch queries (messages and
-/// the reactions of that window), mapped to `helix_remote_ui` view models. A
+/// the reactions of that window), mapped to `orbit_ui` view models. A
 /// burst of writes is coalesced to one snapshot per short interval, so a
 /// thousand messages arriving at once is a few dozen rebuilds, not a thousand.
 final timelineProvider = StreamProvider.autoDispose

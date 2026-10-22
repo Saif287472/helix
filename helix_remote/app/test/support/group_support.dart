@@ -11,7 +11,7 @@ import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_navigation.dart';
 import 'package:helix_remote/features/groups/application/group_picture.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 import 'names_support.dart';
 
 /// A [GroupsPort] the test drives: it holds one group, records every call, and

@@ -8,7 +8,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' show PersonRow;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show PersonNaming, maskPhone, shortId;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// How a person is named, everywhere in the app.
 ///

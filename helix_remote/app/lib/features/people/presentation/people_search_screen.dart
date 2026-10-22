@@ -6,8 +6,6 @@ import 'package:helix_remote/features/people/application/people_search.dart';
 import 'package:helix_remote/features/people/application/phone_book_sync.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote/shared/widgets/orbit_people_panel.dart';
-import 'package:helix_remote/shared/widgets/people_search_panel.dart'
-    show PeopleSearchMode;
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 /// Connector: the standalone people search, the field over the same people
@@ -15,9 +13,9 @@ import 'package:orbit_ui/orbit_ui.dart' as orbit;
 /// everything else that needs "pick a person": a `helix://contact` link, a
 /// "new chat" button, a "new call" button.
 class PeopleSearchScreen extends ConsumerStatefulWidget {
-  const PeopleSearchScreen({super.key, this.mode = PeopleSearchMode.chats});
+  const PeopleSearchScreen({super.key, this.mode = orbit.PeopleSearchMode.chats});
 
-  final PeopleSearchMode mode;
+  final orbit.PeopleSearchMode mode;
 
   @override
   ConsumerState<PeopleSearchScreen> createState() => _PeopleSearchScreenState();
@@ -26,10 +24,18 @@ class PeopleSearchScreen extends ConsumerStatefulWidget {
 class _PeopleSearchScreenState extends ConsumerState<PeopleSearchScreen> {
   String _query = '';
 
+  /// Runs an action whose answer is one sentence to read, and reads it here:
+  /// the people panel draws no toast of its own.
+  Future<String?> _tell(Future<String?> Function() run) async {
+    final message = await run();
+    if (message != null && mounted) orbit.showOrbitToast(context, message);
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final people = ref.read(peopleActionsProvider);
-    final calls = widget.mode == PeopleSearchMode.calls;
+    final calls = widget.mode == orbit.PeopleSearchMode.calls;
     return orbit.PeopleSearchScreen(
       model: orbit.PeopleSearchModel(
         panel: orbitPeoplePanelModel(
@@ -57,13 +63,13 @@ class _PeopleSearchScreenState extends ConsumerState<PeopleSearchScreen> {
               ref.read(contactsPermissionProvider.notifier).openSettings(),
           onRefreshContacts: () =>
               ref.read(phoneBookSyncProvider.notifier).syncNow(),
-          onOpenPerson: (id) async {
+          onOpenPerson: (id) => _tell(() async {
             if (calls) return people.startCall(id, video: false);
             await people.openChat(id);
             return null;
-          },
+          }),
           onCallPerson: (id, {required video}) =>
-              people.startCall(id, video: video),
+              _tell(() => people.startCall(id, video: video)),
           onOpenContactInfo: (id) => context.push(PeoplePaths.person(id)),
           onOpenGroup: (groupId) =>
               people.openGroup(GroupSummary(id: groupId, title: '')),

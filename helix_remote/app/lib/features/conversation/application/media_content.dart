@@ -12,7 +12,7 @@ import 'package:helix_remote_db/helix_remote_db.dart'
     show AttachmentRow, AttachmentTransfer;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show AttachmentTransferView, TransferDirection, TransferPhase;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// One attachment of a message and where its transfer stands.
 @immutable

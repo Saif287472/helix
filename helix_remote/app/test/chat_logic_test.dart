@@ -10,7 +10,7 @@ import 'package:helix_remote/features/conversation/application/timeline_builder.
 import 'package:helix_remote/features/conversation/application/composer_notifier.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show BlobArea;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 MessageRow row(
   int id, {

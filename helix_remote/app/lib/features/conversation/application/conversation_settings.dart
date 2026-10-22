@@ -5,7 +5,7 @@ import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// One timer the disappearing-messages sheet offers.
 @immutable

@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+/// The mute lengths the app offers, and what the mute sheet answered. The
+/// sheet itself is drawn by the Orbit screens.
+library;
 
 /// How long a chat stays muted.
 enum MuteFor {
@@ -37,31 +38,3 @@ final class MuteLengthChoice extends MuteChoice {
 final class UnmuteChoice extends MuteChoice {
   const UnmuteChoice();
 }
-
-/// "Mute notifications": 8 hours, 1 week, always; and "Unmute" when
-/// [offerUnmute] (some chosen chat is muted already). Shared by the chat list
-/// and the conversation settings.
-Future<MuteChoice?> showMuteSheet(
-  BuildContext context, {
-  required bool offerUnmute,
-}) => showHelixBottomSheet<MuteChoice>(
-  context,
-  title: 'Mute notifications',
-  builder: (sheetContext) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (final length in MuteFor.values)
-        ListTile(
-          leading: const Icon(Icons.volume_off_outlined),
-          title: Text(length.label),
-          onTap: () => Navigator.pop(sheetContext, MuteLengthChoice(length)),
-        ),
-      if (offerUnmute)
-        ListTile(
-          leading: const Icon(Icons.volume_up_outlined),
-          title: const Text('Unmute'),
-          onTap: () => Navigator.pop(sheetContext, const UnmuteChoice()),
-        ),
-    ],
-  ),
-);

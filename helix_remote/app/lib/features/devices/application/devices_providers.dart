@@ -13,7 +13,7 @@ import 'package:helix_remote/shared/widgets/qr_scanner_view.dart';
 import 'package:helix_remote/core/security/device_auth.dart';
 import 'package:helix_remote/features/devices/application/devices_gateway.dart';
 import 'package:helix_remote/features/devices/application/devices_models.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 // -------------------------------------------------------------- the list
 

@@ -6,7 +6,7 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/message_mapper.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// One person's receipts for a message.
 @immutable

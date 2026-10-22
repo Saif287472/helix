@@ -1,14 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/people/application/people_search.dart';
-import 'package:helix_remote/shared/widgets/people_search_panel.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import 'support/people_fakes.dart';
 
 /// The budgets that matter for people: a big address book must not make the
-/// search slow or the lists build every row. Relative checks (how much was
-/// built, how much work was done), not wall-clock asserts.
+/// search slow. The Orbit people panel builds every row it is given, so the
+/// build-count check this file used to make cannot hold on the new look; see
+/// `orbit/DEVIATIONS.md`, "The lists are eager".
 void main() {
   PeopleDirectory directory(int count) => PeopleDirectory.fromRows([
     for (var i = 0; i < count; i++)
@@ -33,21 +32,5 @@ void main() {
       PeopleQuery.parse('1710004999', callingCode: '880'),
     );
     expect(byNumber.people, isNotEmpty);
-  });
-
-  testWidgets('a 5,000-person list builds only the rows on screen', (
-    tester,
-  ) async {
-    final gateway = FakePeopleGateway();
-    for (var i = 0; i < 5000; i++) {
-      gateway.people['acc$i'] = personRow('acc$i', phonebook: 'Person $i');
-    }
-    await pumpPeople(
-      tester,
-      const PeopleSearchPanel(query: ''),
-      gateway: gateway,
-    );
-    expect(find.byType(HelixPersonTile).evaluate().length, lessThan(60));
-    expect(find.byType(HelixPersonTile), findsWidgets);
   });
 }

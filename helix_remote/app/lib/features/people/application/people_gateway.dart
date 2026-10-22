@@ -9,7 +9,7 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ReportCategory;
-import 'package:helix_remote_ui/helix_remote_ui.dart' show HelixQrMatrix;
+import 'package:orbit_ui/models.dart' show HelixQrMatrix;
 import 'package:qr_flutter/qr_flutter.dart'
     show QrCode, QrErrorCorrectLevel, QrImage;
 

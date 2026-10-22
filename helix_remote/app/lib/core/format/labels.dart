@@ -1,6 +1,6 @@
 /// The short strings a chat screen shows for times, sizes and lengths.
 ///
-/// Components never format anything (`helix_remote_ui` view models carry
+/// Components never format anything (`orbit_ui`'s view models carry
 /// finished strings), so every label in the chat screens is made here, once,
 /// from a stored UTC time and an injected "now". Times are shown in the
 /// phone's local zone.

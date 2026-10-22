@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/groups/application/group_pending.dart';
 import 'package:helix_remote/shared/navigation/group_paths.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/shared/widgets/orbit_app_toast.dart';
 
-/// The app-wide banner for "a member was added to one of your groups by the
-/// server roster": whichever screen is up, a snackbar says so and offers to
+/// The app-wide notice for "a member was added to one of your groups by the
+/// server roster": whichever screen is up, a toast says so and offers to
 /// review it (the group's info page, where Confirm and Remove are).
 ///
 /// The prompt itself stays on the group's screens until the person answers;
@@ -22,13 +22,10 @@ class UnconfirmedMemberHost extends ConsumerWidget {
     ref.listen(unconfirmedMemberAlertsProvider, (_, next) {
       final alert = next.value;
       if (alert == null) return;
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      if (messenger == null) return;
-      showHelixSnackBar(
-        context,
+      showAppToast(
+        ref,
         alert.message,
         actionLabel: 'Review',
-        duration: const Duration(seconds: 8),
         onAction: () =>
             ref.read(appRouterProvider).push(GroupPaths.info(alert.groupId)),
       );

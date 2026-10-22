@@ -1,14 +1,22 @@
 # Helix Remote component gallery
 
-`helix_remote_ui` provides the shared visual language for the Remote client.
+**Superseded (2026-10-23).** The Remote app's visual language is now the Orbit
+design system, `packages/orbit_ui`: its tokens (`OrbitTokens`), its components
+under `lib/src/components/`, its screens under `lib/src/screens/`, and the view
+models the app feeds them (`lib/models.dart`). The port is tracked in
+`orbit/PORT_PLAN.md`, the accepted differences in `orbit/DEVIATIONS.md`, and
+what a screen must look like in the prototype under `orbit/prototype/` - each
+screen is scored against that prototype pixel for pixel
+(`orbit/flutter/tools/compare/partb/score_all.py`).
 
-- `HelixEmptyState` and `HelixErrorState` for predictable asynchronous outcomes.
-- `HelixSkeleton` and `HelixAsyncPanel` for content-aware loading.
-- `HelixStatusBadge` for compact state labels.
-- `showHelixDestructiveDialog` for dangerous, confirmed actions.
+What is still true:
 
-The app is light-only: themes are supplied by `HelixThemes.light()` and `HelixThemes.highContrastLight()` (there is no dark theme, and the shell pins `ThemeMode.light` in `app/lib/app/helix_remote_app_shell.dart`). UI text is plain English string literals; there is no localization layer. Use `HelixColorTokens`, `HelixSpace`, `HelixInsets`, and `HelixRadius` instead of new ad-hoc values.
+- UI text is plain English string literals. There is no localisation layer.
+- Every `IconButton` carries a `tooltip:`, and tap targets are at least 48 px.
+- Nothing blocks screenshots.
+- Colours come from the theme; no `Color(0x…)` or `Colors.x` in `app/lib`
+  (`app/test/product_rules_test.dart`).
 
-Use filled buttons for the primary action, tonal buttons for an important secondary action, outlined buttons for a visible alternative, and text buttons for low-emphasis actions. Destructive actions must use `showHelixDestructiveDialog`.
-
-`HelixBreakpoints` defines the compact, tablet, and desktop layout thresholds. Conversation surfaces use a list on compact screens and a master-detail layout from tablet width upward. Page transitions are configured by `HelixThemes`, and conversation avatars use a shared Hero tag when moving from the list to the detail surface.
+`helix_remote_ui` is no longer the client's kit: it keeps the old look for the
+operator console only (its tokens, `HelixThemes.console()`, `HelixSkeleton` and
+`showHelixDestructiveDialog`). See `packages/helix_remote_ui/MODULE.md`.

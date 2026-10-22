@@ -231,8 +231,22 @@ both change the server, so neither is live until production runs this branch.)
     so does `applicationId` / the Kotlin package, or an install would not
     upgrade. Step 3's theme bullets were already met by batch 8: the chosen
     theme is a device setting that drives `MaterialApp`, and there is no
-    high-contrast theme to remove. **Step 4** (deleting `helix_remote_ui`) and
-    **step 5** (the full verify) follow.
+    high-contrast theme to remove. **Step 4, the old kit out of the app -
+    done** (2026-10-23): `app/` imports nothing from `helix_remote_ui`, and
+    the package holds only what the operator console uses - the tokens,
+    `HelixThemes.console()`, `HelixSkeleton` and
+    `showHelixDestructiveDialog` - with a Flutter-only pubspec and 7 rules
+    tests. The gallery page, its golden test, the old widget harness and the
+    unused `light()`, `highContrastLight()` and `signIn()` builders are gone.
+    Because plan section 6.1 named the package as a client package, the
+    change is recorded as ADR-031 with its section 12 row; AGENTS.md,
+    `app/MODULE.md`, `app/README.md`, `docs/ui/COMPONENT_GALLERY.md` and
+    `REGRESSION_TEST_MATRIX.md` say the same now, and the two deviations the
+    owner still has to rule on (eager lists against the section 6.4 budgets,
+    the 46 px search bar against the 48 px rule) are written up in
+    `DEVIATIONS.md` ("Part B step 4"). App 909, orbit_ui 215 and ui 7 all
+    pass. **Step 5** (the full gate, then the owner's APK and Windows run)
+    follows.
 
 ## Batch 8, what is left
 
@@ -348,10 +362,20 @@ must say so.
 ## Waiting on the owner
 
 - Review of every "(pending review)" commit and the DEVIATIONS entries.
-- The admin test "only the last four phone digits are ever handled" has
-  failed since ADR-030 (AGENTS.md). Should the rule change?
 - A sound for the Orbit ringtone.
-- The privacy policy text after ADR-030 (GAPS.md W2).
+
+Decided and done since the last hand-off:
+
+- The operator sees the whole phone number (ADR-030, re-confirmed by the owner
+  on 2026-10-23). The admin rule "only the last four phone digits are ever
+  handled" has been rewritten as "the whole number is read in one file, and its
+  hash never": `admin/lib/src/features/common/format.dart` is the only place
+  that reads `account.phoneNumber`, the two account screens only call
+  `accountPhone()`, and the hash stays banned. `test/accounts_test.dart` shows
+  both answers. AGENTS.md's known-failure entry for it is gone.
+- The privacy policy text after ADR-030 (GAPS.md W2) is written up in all three
+  copies, with the reason the owner gave: a report of abuse is acted on by the
+  number it came from.
 
 # From the earlier handoff (2026-10-18, Part A)
 

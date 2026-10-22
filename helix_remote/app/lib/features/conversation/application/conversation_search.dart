@@ -6,7 +6,7 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/search_snippet.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// A message found by searching inside one conversation.
 @immutable

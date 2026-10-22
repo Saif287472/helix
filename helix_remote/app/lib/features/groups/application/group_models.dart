@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// A member's role in a group.
 enum GroupMemberRole {

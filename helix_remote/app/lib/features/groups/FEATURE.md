@@ -81,6 +81,6 @@ above the group conversation: Confirm (`GroupActions.confirmMember`) for everybo
 Remove (the existing `removeMember`, with its confirmation) only where the
 group's rules allow it. A plain member also sees "Only an admin can remove
 someone. If you do not know them, you can leave the group." The roster row says
-"Not confirmed". `GroupMemberUnconfirmed` events reach the info screen as a
-snackbar and every screen through `UnconfirmedMemberHost`, whose banner opens
+"Not confirmed". `GroupMemberUnconfirmed` events reach the info screen as a toast and every
+screen through `UnconfirmedMemberHost`, whose toast opens
 the group's info.

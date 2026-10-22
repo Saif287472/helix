@@ -49,7 +49,7 @@ void main() {
       offenders,
       isEmpty,
       reason:
-          'Add a named token to packages/helix_remote_ui instead, or use '
+          'Add a named token to packages/orbit_ui instead, or use '
           'Theme.of(context).colorScheme. Pick the group by what the colour '
           'means: HelixScrimColors for content over a dark backdrop, '
           'HelixStatusColors for severity, HelixCallColors for call state, '

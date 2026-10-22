@@ -4,13 +4,13 @@ import 'package:helix_remote/core/chat/chat_naming.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/chats/application/chat_list_mapper.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// The chat list, as the components want it.
 ///
 /// Every list in this app is a [StreamProvider] over a drift watch query
 /// (plan §6.4): the engine owns the query, this maps rows into the plain value
-/// objects in `helix_remote_ui` with the people-naming rule applied, and the
+/// objects in `orbit_ui` with the people-naming rule applied, and the
 /// widgets never see a row, a column or a clock.
 ///
 /// It waits for the people table once, so the first frame shows names rather

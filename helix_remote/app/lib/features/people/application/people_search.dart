@@ -8,7 +8,7 @@ import 'package:helix_remote/features/people/application/people_gateway.dart';
 import 'package:helix_remote/shared/navigation/conversation_seams.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show SetHelixNameRequest;
-import 'package:helix_remote_ui/helix_remote_ui.dart' show HelixNameSource;
+import 'package:orbit_ui/models.dart' show HelixNameSource;
 
 /// What a search box holds, read the way a person meant it.
 enum SearchIntent {

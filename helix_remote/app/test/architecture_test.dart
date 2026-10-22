@@ -10,7 +10,7 @@ import 'package:helix_remote_architecture_rules/helix_remote_architecture_rules.
 ///
 /// 1. **Presentation imports nothing below it.** A file in
 ///    `features/*/presentation/` may import its own `application/`, `shared/`,
-///    `helix_remote_ui`, `orbit_ui` and `helix_remote_domain` - and nothing
+///    `orbit_ui` and `helix_remote_domain` - and nothing
 ///    else. The engine, database, crypto and API are reached through a
 ///    notifier, so a widget cannot end up coupled to a ratchet, a row or a
 ///    socket.
@@ -185,7 +185,7 @@ String? _featureOf(String path) {
 ///
 /// Allowed: `dart:` and Flutter, this feature's own `application/` and its own
 /// `presentation/` siblings, `shared/`, and the two leaf packages
-/// (`helix_remote_ui`'s components and `helix_remote_domain`'s value types).
+/// (`orbit_ui`'s components and `helix_remote_domain`'s value types).
 /// Everything else - the engine, the database, the crypto, the API, `core/` -
 /// is reached through a provider, never imported by a widget.
 bool _forbiddenInPresentation(String uri) {
@@ -200,7 +200,6 @@ bool _forbiddenInPresentation(String uri) {
   if (uri.startsWith('package:helix_remote/features/')) return false;
   // The two leaf packages: components and value types, no I/O.
   const allowed = {
-    'package:helix_remote_ui/',
     'package:orbit_ui/',
     'package:helix_remote_domain/',
   };

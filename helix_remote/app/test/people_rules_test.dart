@@ -9,7 +9,7 @@ import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/home/application/home_tab.dart';
 import 'package:helix_remote/shared/navigation/conversation_seams.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
-import 'package:helix_remote/shared/widgets/people_search_panel.dart';
+import 'package:helix_remote/features/people/presentation/people_search_screen.dart';
 
 import 'support/people_fakes.dart';
 
@@ -32,7 +32,8 @@ void main() {
 
   final peopleFiles = [
     ...sources('lib/features/people'),
-    File('lib/shared/widgets/people_search_panel.dart'),
+    File('lib/shared/widgets/orbit_people_panel.dart'),
+    File('lib/features/people/presentation/people_search_screen.dart'),
     File('lib/shared/widgets/phone_book_sync_host.dart'),
     File('lib/shared/navigation/conversation_seams.dart'),
     File('lib/shared/navigation/people_paths.dart'),
@@ -77,10 +78,14 @@ void main() {
       final seams = FakeSeams();
       await pumpPeople(
         tester,
-        const PeopleSearchPanel(query: ''),
+        const PeopleSearchScreen(),
         gateway: gateway,
         seams: seams,
       );
+      await tester.enterText(find.byType(TextField), 'new');
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
       await tester.tap(find.text('New Person'));
       await tester.pump();
       await tester.pump();

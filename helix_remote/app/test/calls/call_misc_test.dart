@@ -7,7 +7,7 @@ import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
 import 'package:helix_remote/features/calls/presentation/call_detail_screen.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 import '../support/call_support.dart';
 import '../support/harness.dart';

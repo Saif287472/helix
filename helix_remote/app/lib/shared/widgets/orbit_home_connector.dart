@@ -182,8 +182,16 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
       return null;
     }
 
+    /// Runs an action whose answer is one sentence to read, and reads it here:
+    /// `HomeScreen` draws no toast for these.
+    Future<String?> tell(Future<String?> Function() run) async {
+      final message = await run();
+      if (message != null && context.mounted) showOrbitToast(context, message);
+      return null;
+    }
+
     Future<String?> callPerson(String id, {required bool video}) =>
-        peopleActions.startCall(id, video: video);
+        tell(() => peopleActions.startCall(id, video: video));
 
     final actions = HomeActions(
       onOpenYou: () => context.push(AppRoutes.settings),
@@ -204,7 +212,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
       onSearchChanged: (text) =>
           ref.read(chatSearchQueryProvider.notifier).set(text),
       onOpenCall: (id) => context.push(CallRoutes.detail(id)),
-      onCallBack: (id) async {
+      onCallBack: (id) => tell(() async {
         // Never fall back to another row: that would call the wrong person.
         final entry = callEntries.where((e) => e.id == id).firstOrNull;
         if (entry == null) return 'That call is no longer in the list.';
@@ -215,10 +223,9 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
         return outcome.started
             ? null
             : (outcome.message ?? 'The call could not be placed.');
-      },
-      onCall: (peerId, {required video}) async {
-        return peopleActions.startCall(peerId, video: video);
-      },
+      }),
+      onCall: (peerId, {required video}) =>
+          tell(() => peopleActions.startCall(peerId, video: video)),
       onDeleteCalls: (id) async {
         final entry = callEntries.firstWhere(
           (e) => e.id == id,
@@ -258,9 +265,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
             ref.read(contactsPermissionProvider.notifier).openSettings(),
         onRefreshContacts: () =>
             ref.read(phoneBookSyncProvider.notifier).syncNow(),
-        onOpenPerson: (id) async {
-          return peopleActions.startCall(id, video: false);
-        },
+        onOpenPerson: (id) => callPerson(id, video: false),
         onCallPerson: callPerson,
         onOpenContactInfo: (id) => context.push(PeoplePaths.person(id)),
         onOpenGroup: (gid) =>

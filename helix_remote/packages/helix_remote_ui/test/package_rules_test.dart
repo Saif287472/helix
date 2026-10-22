@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/harness.dart';
 
 /// The only files allowed to define colours.
-const _tokenFiles = {'lib/helix_remote_ui.dart', 'lib/src/chat_tokens.dart'};
+const _tokenFiles = {'lib/helix_remote_ui.dart'};
 
 final _rawColour = RegExp(r'(?<![\w.])Colors\.\w+|(?<![\w.])Color\(0x');
 
@@ -39,20 +39,20 @@ void main() {
       isEmpty,
       reason:
           'Use Theme.of(context).colorScheme or add a named token to '
-          'helix_remote_ui.dart / chat_tokens.dart. Not even '
+          'helix_remote_ui.dart. Not even '
           'Colors.transparent: use Material(type: transparency) or a null '
           'colour.',
     );
   });
 
-  test('the token files are the only place that defines Color(0x...)', () {
+  test('the token file is the only place that defines Color(0x...)', () {
     // Guards the scan above against a path-spelling change quietly exempting
-    // everything: both token files must exist and really hold literals.
+    // everything: the token file must exist and really hold literals.
     for (final path in _tokenFiles) {
       expect(File(path).existsSync(), isTrue, reason: path);
     }
     expect(
-      File('lib/src/chat_tokens.dart').readAsStringSync(),
+      File('lib/helix_remote_ui.dart').readAsStringSync(),
       contains('Color(0x'),
     );
   });
@@ -103,10 +103,9 @@ void main() {
     );
   });
 
-  // orbit_ui holds the view models this package re-exports while the app
-  // switches to the Orbit screens (orbit/PORT_PLAN.md Part B); it is a leaf
-  // with no I/O either.
-  test('the package depends on Flutter and orbit_ui only', () {
+  // The app moved to orbit_ui (orbit/PORT_PLAN.md Part B step 4), so nothing
+  // here may pull it back in: this package is a leaf with no I/O.
+  test('the package depends on Flutter only', () {
     final pubspec = File(
       'pubspec.yaml',
     ).readAsStringSync().replaceAll('\r\n', '\n');
@@ -119,7 +118,7 @@ void main() {
         r'^  (\w+):',
         multiLine: true,
       ).allMatches(deps).map((m) => m.group(1)).toSet(),
-      {'flutter', 'orbit_ui'},
+      {'flutter'},
     );
   });
 

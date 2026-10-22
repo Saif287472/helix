@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 import 'support/orbit_theme.dart';
 
@@ -11,8 +11,10 @@ import 'support/orbit_theme.dart';
 ///
 /// The tooltips and tap-target *rules* are source scans, in
 /// `product_rules_test.dart`; what is here is the part only a real render can
-/// answer: that the sign-in page, the shared controls and the high-contrast
-/// theme actually satisfy the platform guidelines.
+/// answer: that the sign-in page and the shared Orbit controls actually
+/// satisfy the platform guidelines, under the theme the app really draws with.
+/// (The 48 px floor lives in the Orbit widgets themselves, and is measured
+/// there in `orbit_ui/test/primitives_test.dart`.)
 void main() {
   Future<void> pumpSignIn(WidgetTester tester) async {
     final container = ProviderContainer(
@@ -60,28 +62,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the shared controls meet the guidelines', (tester) async {
+  testWidgets('the shared Orbit controls meet the guidelines', (tester) async {
+    void noop() {}
     await tester.pumpWidget(
       MaterialApp(
-        theme: HelixThemes.light(),
+        theme: orbitTestTheme(),
+        builder: orbitTestBuilder,
         home: Scaffold(
           body: Column(
             children: [
-              const HelixEmptyState(
-                icon: Icons.inbox_outlined,
+              const orbit.OrbitBanner(
+                kind: orbit.OrbitNoticeKind.info,
+                icon: orbit.OrbitIcons.info,
                 title: 'Nothing here',
-                message: 'When there is something, it shows up here.',
+                text: 'When there is something, it shows up here.',
+                actions: [orbit.OrbitNoticeAction('Continue', null)],
               ),
-              HelixErrorState(message: 'That did not work.', onRetry: () {}),
-              const HelixStatusBadge(label: 'Connected'),
+              orbit.OrbitBanner(
+                kind: orbit.OrbitNoticeKind.error,
+                icon: orbit.OrbitIcons.warningCircle,
+                title: 'That did not work.',
+                text: 'Try again in a moment.',
+                actions: [orbit.OrbitNoticeAction('Try again', noop)],
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  FilledButton(onPressed: () {}, child: const Text('Continue')),
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () {},
-                    icon: const Icon(Icons.arrow_back),
+                  orbit.OrbitButton(label: 'Continue', onPressed: noop),
+                  orbit.OrbitIconButton(
+                    icon: orbit.OrbitIcons.phone,
+                    tooltip: 'Call',
+                    onPressed: noop,
                   ),
                 ],
               ),
@@ -109,38 +120,6 @@ void main() {
 
     await expectLater(tester, meetsGuideline(textContrastGuideline));
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-  });
-
-  test('the tap-target minimums really are 48 px', () {
-    // The themes are where the guarantee actually lives, so it is asserted on
-    // them rather than inferred from a screen.
-    for (final theme in [
-      HelixThemes.light(),
-      HelixThemes.highContrastLight(),
-      HelixThemes.signIn(),
-      HelixThemes.signIn(highContrast: true),
-    ]) {
-      for (final style in [
-        theme.filledButtonTheme.style,
-        theme.outlinedButtonTheme.style,
-        theme.textButtonTheme.style,
-      ]) {
-        final size = style?.minimumSize?.resolve(<WidgetState>{});
-        expect(
-          size,
-          isNotNull,
-          reason: 'every button style declares a minimum size',
-        );
-        expect(size!.width, greaterThanOrEqualTo(48));
-        expect(size.height, greaterThanOrEqualTo(48));
-      }
-      final iconSize = theme.iconButtonTheme.style?.minimumSize?.resolve(
-        <WidgetState>{},
-      );
-      expect(iconSize, isNotNull, reason: 'icon buttons declare a minimum');
-      expect(iconSize!.width, greaterThanOrEqualTo(48));
-      expect(iconSize.height, greaterThanOrEqualTo(48));
-    }
   });
 
   testWidgets('the advanced-mode corner is 56 high, inside the 48 px floor', (

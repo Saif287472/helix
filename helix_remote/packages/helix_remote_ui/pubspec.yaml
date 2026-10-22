@@ -1,5 +1,5 @@
 name: helix_remote_ui
-description: Shared Helix Remote design tokens, themes, and UI components.
+description: The old Helix look, kept for the operator console as design tokens, themes and components.
 publish_to: none
 version: 1.0.0
 
@@ -11,9 +11,6 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  # The view models live in orbit_ui and are re-exported from here.
-  orbit_ui:
-    path: ../orbit_ui
 
 dev_dependencies:
   flutter_test:

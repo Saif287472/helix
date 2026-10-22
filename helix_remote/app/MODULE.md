@@ -50,16 +50,15 @@ lib/
 ```
 
 **Every list is a `StreamProvider` over a drift watch query.** The engine owns
-the query; `application/` maps rows into the plain value objects in
-`helix_remote_ui`; a widget never sees a row, a column or a clock, and never
-formats a date.
+the query; `application/` maps rows into the plain view models in `orbit_ui`; a
+widget never sees a row, a column or a clock, and never formats a date.
 
 ## What may import what
 
 Enforced by `test/architecture_test.dart`:
 
 - `presentation/` imports `dart:`/Flutter, its own feature, `shared/`,
-  `helix_remote_ui` and `helix_remote_domain`. **Nothing else** — not the
+  `orbit_ui` and `helix_remote_domain`. **Nothing else** — not the
   engine, the database, the crypto, the API or `core/`. Work goes in a Notifier
   or StreamProvider; the screen receives plain values.
 - A feature never imports another feature. Shared state goes through a provider

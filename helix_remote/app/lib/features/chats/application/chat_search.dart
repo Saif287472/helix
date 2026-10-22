@@ -8,7 +8,7 @@ import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/chats/application/chat_list_provider.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// One message found by the full-text search, and where to open it.
 @immutable

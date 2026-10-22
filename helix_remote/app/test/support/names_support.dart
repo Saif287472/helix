@@ -1,5 +1,5 @@
 import 'package:helix_remote/core/people/people_names.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// A [PeopleDirectory] from the four-name shape the call, group and journey
 /// tests state their people in.

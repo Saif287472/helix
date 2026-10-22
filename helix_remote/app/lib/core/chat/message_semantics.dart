@@ -4,7 +4,7 @@ import 'package:helix_remote/core/groups/pending_member_copy.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// What a stored message *means*, shared by the chat list (its preview line)
 /// and the conversation (its bubbles): which kind of thing it is, the words

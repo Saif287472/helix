@@ -235,8 +235,10 @@ class _Line extends StatelessWidget {
         hoverColor: t.hover,
         highlightColor: t.pressed,
         splashFactory: NoSplash.splashFactory,
-        child: SizedBox(
-          height: orbitRowHeight,
+        child: ConstrainedBox(
+          // `--row-h` is the row's floor, not its ceiling: at 2x text the two
+          // lines need more than 72 px and the row grows instead of clipping.
+          constraints: const BoxConstraints(minHeight: orbitRowHeight),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: OrbitSpace.gutter),
             child: Row(

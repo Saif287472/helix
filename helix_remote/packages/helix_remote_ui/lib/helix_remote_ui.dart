@@ -1,31 +1,13 @@
+/// The old Helix look, kept for the operator console only: the colour, space
+/// and radius tokens, the themes (including `HelixThemes.console()`) and the
+/// two widgets it draws. The app has moved to `orbit_ui` and imports nothing
+/// here (`orbit/PORT_PLAN.md`, Part B step 4).
 library;
 
-import 'dart:math' as math;
-import 'dart:typed_data';
-
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
-import 'package:orbit_ui/models.dart';
 
-export 'package:orbit_ui/models.dart';
-
-part 'src/chat_tokens.dart';
 part 'src/components.dart';
-part 'src/avatars.dart';
-part 'src/chat_list.dart';
-part 'src/message_bubble.dart';
-part 'src/message_media.dart';
-part 'src/conversation_parts.dart';
-part 'src/message_actions.dart';
-part 'src/composer.dart';
-part 'src/search_people.dart';
-part 'src/settings_banners.dart';
-part 'src/sheets_dialogs.dart';
-part 'src/security_views.dart';
-part 'src/shimmer.dart';
-part 'src/gallery.dart';
 
 abstract final class HelixColorTokens {
   static const brand = Color(0xFF166A64);
@@ -383,22 +365,9 @@ abstract final class HelixBreakpoints {
 
 /// Helix's theme.
 ///
-/// Light and colourful only. Dark mode is deferred for this product, so there
-/// is no `dark()` or `highContrastDark()`: the app shell pins
-/// `ThemeMode.light` and registers no dark theme, which makes a near-black
-/// surface unreachable rather than merely unused. Adding one back is a
-/// deliberate act, not something a caller can do by name.
+/// Light only, like everything else here: the console is the only surface that
+/// still draws these tokens, and no dark or high-contrast variant exists.
 abstract final class HelixThemes {
-  static ThemeData light() => _theme(Brightness.light, contrast: 0);
-  static ThemeData highContrastLight() => _theme(Brightness.light, contrast: 1);
-
-  /// The sign-in pages: the same components in the app icon's blue.
-  static ThemeData signIn({bool highContrast = false}) => _theme(
-    Brightness.light,
-    contrast: highContrast ? 1 : 0,
-    seed: HelixColorTokens.signInBlue,
-  );
-
   /// The operator console: the same components on slate cards with a blue
   /// accent. See [HelixConsoleColors].
   static ThemeData console() {
@@ -493,7 +462,6 @@ abstract final class HelixThemes {
 
   static ThemeData _theme(
     Brightness brightness, {
-    double contrast = 0,
     Color seed = HelixColorTokens.brand,
   }) {
     assert(
@@ -503,12 +471,11 @@ abstract final class HelixThemes {
     var colors = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
-      contrastLevel: contrast,
       dynamicSchemeVariant: seed == HelixColorTokens.brand
           ? DynamicSchemeVariant.tonalSpot
           : DynamicSchemeVariant.fidelity,
     );
-    if (seed != HelixColorTokens.brand && contrast == 0) {
+    if (seed != HelixColorTokens.brand) {
       // Exactly the icon's blue; white on it is 5.2:1.
       colors = colors.copyWith(
         primary: seed,

@@ -3,7 +3,7 @@ import 'package:helix_remote/features/calls/application/call_audio.dart';
 import 'package:helix_remote/features/calls/application/call_copy.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// Which screen a call is on.
 enum CallStage {

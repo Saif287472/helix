@@ -5,7 +5,7 @@ import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 import 'package:orbit_ui/orbit_ui.dart'
     show OrbitCallLogTile, OrbitExtendedFab, PeoplePanel;
 

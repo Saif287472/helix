@@ -17,9 +17,9 @@ PeoplePanelModel orbitPeoplePanelModel(
   String text,
   PeopleSearchMode mode,
 ) {
-  // People search runs only while something is typed, as the old Home's
-  // panel did: an empty field reads nothing from the people feature.
-  if (text.trim().isEmpty) return PeoplePanelModel(mode: mode);
+  // With nothing typed the panel browses: the people this device knows and the
+  // phone's contacts card, as `contracts/home.md` and the Orbit panel draw it
+  // (the card has no place once a search is running).
   final query = PeopleQuery.parse(
     text,
     callingCode: ref.read(ownCallingCodeProvider).asData?.value,
@@ -41,9 +41,6 @@ PeoplePanelModel orbitPeoplePanelModel(
     contactsCard = ContactsCard.openSettings;
   } else {
     contactsCard = ContactsCard.ask;
-  }
-  if (permission == ContactsPermission.granted) {
-    contactsCard = ContactsCard.refresh;
   }
   if (permission != ContactsPermission.granted &&
       permission != ContactsPermission.permanentlyDenied &&
@@ -72,8 +69,7 @@ PeoplePanelModel orbitPeoplePanelModel(
 
   LookupPrompt prompt;
   if (query.helixName != null) {
-    final name = query.raw.startsWith('~') ? query.raw : '~${query.helixName}';
-    prompt = FindName(name);
+    prompt = FindName('~${query.helixName}');
   } else if (query.intent == SearchIntent.phone) {
     if (query.e164 == null) {
       prompt = const NeedFullNumber();
@@ -84,8 +80,12 @@ PeoplePanelModel orbitPeoplePanelModel(
     prompt = const NoLookup();
   }
 
+  // An answer belongs to the text it was found for: once the field holds
+  // something else, it says nothing (a stale "Not on Orbit" would otherwise
+  // sit under a number that is on Orbit).
+  final answered = lookupState.answers(query);
   LookupView lookupView;
-  switch (lookupState.status) {
+  switch (answered ? lookupState.status : LookupStatus.idle) {
     case LookupStatus.idle:
       lookupView = LookupView.idle;
       break;
@@ -152,12 +152,6 @@ PeoplePanelModel orbitPeoplePanelModel(
     }
   } else {
     empty = PanelEmpty.none;
-  }
-  if (results != null &&
-      results.people.isEmpty &&
-      results.groups.isEmpty &&
-      !query.isBrowse) {
-    // avoid nobodyYet for searches
   }
 
   return PeoplePanelModel(

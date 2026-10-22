@@ -7,7 +7,20 @@ import 'package:helix_remote/features/conversation/application/conversation_head
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ContentLimits;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+
+/// Well-known ids for the message menu, so the rules here and the screen that
+/// draws them switch on the same constants.
+abstract final class MessageActionIds {
+  static const reply = 'reply';
+  static const forward = 'forward';
+  static const copy = 'copy';
+  static const edit = 'edit';
+  static const star = 'star';
+  static const info = 'info';
+  static const select = 'select';
+  static const deleteForMe = 'delete_for_me';
+  static const deleteForEveryone = 'delete_for_everyone';
+}
 
 /// The long-press menu of one message: which actions apply to it right now,
 /// and the reaction this account already gave.
@@ -19,7 +32,8 @@ class MessageMenu {
     this.currentReaction,
   });
 
-  final List<HelixMessageAction> actions;
+  /// The action ids, in menu order.
+  final List<String> actions;
   final bool allowReactions;
   final String? currentReaction;
 }
@@ -76,18 +90,23 @@ final class ConversationActions {
         now.difference(row.sentAt) <= ContentLimits.deleteWindow;
 
     final hasText = !deleted && !viewOnce && (row.body ?? '').isNotEmpty;
-    final all = helixDefaultMessageActions(
-      outgoing: row.outgoing,
-      hasText: hasText,
-      canEdit: canEdit,
-      canDeleteForEveryone: canDeleteForEveryone,
-    );
+    final all = [
+      MessageActionIds.reply,
+      if (hasText) MessageActionIds.copy,
+      MessageActionIds.forward,
+      MessageActionIds.star,
+      if (canEdit) MessageActionIds.edit,
+      if (row.outgoing) MessageActionIds.info,
+      MessageActionIds.select,
+      MessageActionIds.deleteForMe,
+      if (canDeleteForEveryone) MessageActionIds.deleteForEveryone,
+    ];
     final canForward =
         !deleted && !viewOnce && (row.kind == 'text' || row.kind == 'media');
     final actions = [
       for (final action in all)
         if (_offered(
-          action.id,
+          action,
           deleted: deleted,
           broken: broken,
           viewOnce: viewOnce,
@@ -118,11 +137,11 @@ final class ConversationActions {
   }) {
     switch (id) {
       // The engine keeps no stars, so the menu does not offer one.
-      case HelixMessageActionIds.star:
+      case MessageActionIds.star:
         return false;
-      case HelixMessageActionIds.reply:
+      case MessageActionIds.reply:
         return !deleted && !broken && !viewOnce;
-      case HelixMessageActionIds.forward:
+      case MessageActionIds.forward:
         return canForward;
       default:
         return true;

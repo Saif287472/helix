@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:helix_remote/features/chats/application/chat_actions.dart';
 import 'package:helix_remote/features/chats/application/chat_list_provider.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart' as app_mute;
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 

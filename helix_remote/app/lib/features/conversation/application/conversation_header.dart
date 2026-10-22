@@ -10,7 +10,7 @@ import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show PresenceResponse;
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// Everything the conversation's app bar and composer need to know about the
 /// chat they are in.

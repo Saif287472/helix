@@ -2,7 +2,7 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// What the mapper needs to know about the conversation a row is in.
 class MapperContext {

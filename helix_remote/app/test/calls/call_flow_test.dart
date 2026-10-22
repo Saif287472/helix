@@ -9,7 +9,7 @@ import 'package:helix_remote/features/calls/application/media/call_media_hub.dar
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 import 'package:helix_remote/features/calls/application/start_call.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 import '../support/call_support.dart';
 import '../support/names_support.dart';

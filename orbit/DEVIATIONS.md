@@ -1087,3 +1087,71 @@ score exactly as at Review 4 after the changes below.
   something to keep in step. `FullBackupMeta` still carries it so the server's
   two states stay distinguishable for a later reader.
   - **Owner:** pending review.
+
+
+## Part B step 4 (the app draws only Orbit, 2026-10-23)
+
+Nothing in `helix_remote/app` imports `helix_remote_ui` now: the last old-look
+pieces (the people search panel, the Chats and Calls tab lists, the dial pad,
+the mute sheet, the startup screen, the inline notice and the key-code display)
+are deleted - `mute_choice.dart` keeps only the lengths the sheet answers with -
+the message menu's ids are the app's own, and the toast and bottom
+sheet calls go to `orbit_ui`. The 241 phone keys and the 42 window keys score as
+at Review 4 and batch 10 - no draw changed at 1x (the two 2x fixes below are
+identical at 1x).
+
+- **The lists are eager** (`orbit_ui`): Home's chat list, the people panel and
+  the people page build one widget per row (`ListView(children:)`) where the
+  old widgets used `ListView.builder`. A §6.4 "builds only the rows on screen"
+  budget cannot hold on them, so `app/test/chat_performance_test.dart` and
+  `app/test/people_performance_test.dart` keep the one-pass filter checks and
+  drop the build-count guard.
+  - **Owner:** pending. Making them lazy is a redraw of those lists, so it goes
+    to the preview first.
+- **The search bar is 46 px, so its field measures 42 px**: the product rule
+  wants every tap target at least 48 px (`AGENTS.md`), and the design's
+  `.search` is 46 px tall (`prototype/css/components.css`). Part B must not
+  change a design, so `app/test/people_search_test.dart`'s accessibility group
+  checks every target on the screen except the field and says why.
+  - **Owner:** pending. Either the bar grows to 48 px - prototype first, then a
+    re-shoot of every state that has a search - or the rule makes an exception
+    for a text field.
+- **Rows and labels that cannot fit at 2x text** (not deviations at 1x; listed
+  for approval): a people row treats `--row-h` as a minimum (`ConstrainedBox`)
+  so two lines at 2x text are not clipped, and `OrbitListLabel` wraps its
+  eyebrow in a `Flexible` so a long section label at 2x text gives way instead
+  of overflowing, with the count kept whole. CSS does the same (the row's
+  content is centred, the eyebrow has no `nowrap`), and at 1x both draw
+  identically.
+- **With nothing typed the people panel browses.** The connector had grown a
+  guard that only searched, so the panel showed a single field and the
+  "People on Orbit" list - the contacts card and the people this device knows -
+  never appeared. `OrbitPeoplePanel` only draws that card when the query is
+  empty (as the prototype does), so browse is the empty-field state and the
+  search is what replaces it; the guard is gone and
+  `app/test/people_search_test.dart`'s `with nothing typed` group is re-ported
+  to Orbit (7 tests). No new draw: the panel already had both states.
+- **A toast from a host above the navigator** (`app/lib/shared/widgets/
+  orbit_app_toast.dart`): `MaterialApp.router(builder:)` hosts
+  (`UnconfirmedMemberHost`, `AppLinkListener`) sit above the Navigator, so they
+  have no `Overlay` ancestor and `showOrbitToast` failed with "No Overlay widget
+  found". The helper reads the router's own navigator `OverlayState` and passes
+  it in, which is what `app_link_listener.dart` had already been doing by hand.
+  The group-notice prompt is therefore a toast, not a snackbar (the app no
+  longer uses `ScaffoldMessenger` for it), and `FEATURE.md` and the test's group
+  name say so.
+- **How a router test builds Home without an engine**: `restore_flow_router_test`
+  hands over to Home, and Home now reads people providers too. Overriding each
+  of them is one test that breaks on the next provider, so the harness keeps the
+  runtime *pending* (`runtimeProvider.overrideWith((ref) =>
+  Completer<HelixRuntime>().future)`): Home's tabs draw, no provider reports a
+  failure, and nothing opens a database or a socket.
+- **What is left of `helix_remote_ui`**: the console's own kit - the colour,
+  space, radius and status tokens, `HelixThemes.console()`, `HelixSkeleton` and
+  the destructive dialog - because `admin` still draws the old look. Its
+  component gallery and golden test, every widget only the app used, the three
+  theme builders the app called (`light`, `highContrastLight`, `signIn`) and its
+  `orbit_ui` dependency are deleted; the package depends on Flutter alone and
+  its suite is the 7 rules tests. Deleting it whole is the console redesign
+  (`console/prototype`, direction A), which is parked. Recorded as ADR-031, with
+  §6.1 and §6 of the plan of record and the §12 change log.

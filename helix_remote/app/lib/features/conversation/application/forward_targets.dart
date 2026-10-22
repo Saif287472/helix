@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
 import 'package:helix_remote/core/people/people_names.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:orbit_ui/models.dart';
 
 /// Somewhere a message can be forwarded to: an existing chat, or a person
 /// there is no chat with yet (it is created when the message is sent).

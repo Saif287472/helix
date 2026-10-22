@@ -5,12 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
+import 'package:helix_remote/core/people/people_names.dart';
+import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/router/app_router.dart';
+import 'package:helix_remote/features/people/application/people_gateway.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 
 import '../support/a3b_fakes.dart';
 import '../support/orbit_theme.dart';
+import '../support/people_fakes.dart';
 
 /// The restore step wired into the real router: signing in on a new device
 /// shows "restore or skip" once, before the home tabs, and never otherwise.
@@ -23,11 +28,21 @@ void main() {
     useTallWindow(tester, height: 1600);
     auth = StreamController<AppAuthState>.broadcast();
     backup = FakeBackupGateway();
+    final people = FakePeopleGateway();
     container = newContainer([
       ...a3bOverrides(
         backup: backup,
         devices: FakeDevicesGateway(),
         settingsGateway: FakeSettingsGateway(),
+      ),
+      // Home is what the restore step hands over to, and it is built here
+      // without an engine: the runtime stays pending for the whole test, so
+      // Home's tabs draw and none of its data providers reports a failure.
+      runtimeProvider.overrideWith((ref) => Completer<HelixRuntime>().future),
+      peopleGatewayProvider.overrideWith((ref) async => people),
+      peopleRowsProvider.overrideWith((ref) => Stream.value(const [])),
+      contactsAccessProvider.overrideWithValue(
+        FakeContactsAccess(state: ContactsPermission.unsupported),
       ),
       authStateProvider.overrideWith((ref) async* {
         yield AppAuthState.signedOut;
