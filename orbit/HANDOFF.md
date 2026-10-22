@@ -119,12 +119,11 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: the pixel checks, batch 10 (the wide Windows
-layout), and Part B steps 3 to 5 (the rename, deleting `helix_remote_ui`, the
-full verify).
-The lists below keep their detail. (S1, E1, E4, E5 and E6 are built — see
-"Deferred work, in order", items 4 to 8. S1 and E6 both change the server, so
-neither is live until production runs this branch.)
+Deferred until the owner asks: batch 10 (the wide Windows layout) and Part B
+steps 3 to 5 (the rename, deleting `helix_remote_ui`, the full verify).
+The lists below keep their detail. (The pixel checks, S1, E1, E4, E5 and E6
+are built — see "Deferred work, in order", items 4 to 9. S1 and E6 both change
+the server, so neither is live until production runs this branch.)
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -192,7 +191,22 @@ neither is live until production runs this branch.)
    rebuild and switch to it (never done by an agent); the app works against an
    older server with its local record. Deviations in `DEVIATIONS.md`
    ("Part B E6").
-9. The pixel checks.
+9. The pixel checks - **done** (2026-10-22): both sides re-shot (the
+   prototype with `shoot_html.py`, the app with the preview build's `--shoot`)
+   and all 241 phone keys scored with `partb/prof.py`'s `total >16`. 236 are
+   exactly where Review 4 left them. Five are higher - `signin-password` 6.02
+   (was 2.14), `signin-password-error` 7.22 (2.86), `signin-takeover` 6.35
+   (2.76), `account` 4.10 (2.52), `account-nopass` 4.13 (2.54) - and every one
+   is a change already in `DEVIATIONS.md` ("Saved accounts and switching"):
+   the saved-account rows, "Remember me", "Use a code instead" and the
+   sign-out dialog's second line. Their numbers in `review4_scores.txt` are
+   now these, so the gate stops crying. Two real faults turned up and are
+   fixed: `TransferScreen` counted a stopped offer in its "N waiting here"
+   pill (the prototype counts only an unanswered one; the enum-to-buttons
+   rewrite widened it), and `shoot_html.py`'s 0.12 s final settle photographed
+   every scrolled page before its late re-scroll, which had moved the four
+   chat keys and `group-pending-member` by ~14 px; its default is now 0.5 s.
+   Nothing here needs a new APK: the pill fix is one line of orbit_ui.
 10. Batch 10 (the wide Windows layout).
 11. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
     full verify).
@@ -224,11 +238,12 @@ Done after 49a75a4 (the commit after it):
   preview is read as one line; Privacy waits for the phone-number dialog's
   answer (it read it before the dialog's 60ms-late Turn on, so a typed
   number always counted as Cancel).
-- Not run: the pixel check (`compare.sh`) on the batch 8 keys.
+- The pixel check (`compare.sh`) on the batch 8 keys: run 2026-10-22, every
+  one at its Review 4 score.
 
 To do:
 1. Run the pixel check on the batch 8 keys (the segment change moves no
-   pixels, but check).
+   pixels, but check). - **done** (2026-10-22, with the full 241-key pass).
 2. Log in DEVIATIONS "Part B batch 8": no ringtone row (needs a sound
    from the owner); the notifications preview text is a fixed sample;
    "Export first" only exports. (The storage note is resolved by E2/E3;
@@ -275,7 +290,10 @@ unless their content changed.
 touches must keep its Review 4 score (`partb/review4_scores.txt`) unless
 the change is deliberate and logged in DEVIATIONS. The prototype shots are
 not committed; make them with `tools/compare/shoot_html.py` (see the
-compare README). A cloud or Linux session cannot run this check, so it
+compare README). Shoot with the default settle (0.5 s since 2026-10-22): a
+page that scrolls itself moves again once the fonts land, and a short settle
+photographs it ~14 px early, which reads as a port regression on every
+timeline key. A cloud or Linux session cannot run this check, so it
 must say so.
 
 ## Lessons that cost time

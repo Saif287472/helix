@@ -528,7 +528,14 @@ def main():
     ap.add_argument('--no-manifest', action='store_true', help='do not write manifest.json')
     ap.add_argument('--timeout', type=float, default=30.0, help='seconds to wait for window.__orbitReady')
     ap.add_argument('--tries', type=int, default=2, help='attempts per state')
-    ap.add_argument('--settle', type=float, default=0.12, help='seconds after the page has stopped moving')
+    ap.add_argument(
+        '--settle',
+        type=float,
+        default=0.5,
+        help='seconds after the page has stopped moving (a scrolled page '
+        'still moves again once the fonts land: 0.12 shot the chat '
+        'timeline 14 px short of its final scroll)',
+    )
     ap.add_argument('--settle-cap', type=float, default=1.5, help='seconds to keep waiting for that')
     ap.add_argument('--blank-bytes', type=int, default=6000,
                     help='a smaller PNG than this counts as blank and is retaken (the smallest real '

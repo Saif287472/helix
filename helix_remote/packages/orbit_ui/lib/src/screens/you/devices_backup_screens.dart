@@ -1062,14 +1062,7 @@ class TransferScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final m = model;
-    final waiting = m.waiting
-        .where(
-          (x) =>
-              x.buttons.contains('Accept') ||
-              x.buttons.contains('Resume') ||
-              x.buttons.contains('Try again'),
-        )
-        .length;
+    final waiting = m.waiting.where((x) => x.buttons.contains('Accept')).length;
     final err = m.error;
     return OrbitYouPage(
       title: 'Send to my other devices',

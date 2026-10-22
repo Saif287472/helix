@@ -116,14 +116,18 @@ BackupModel _backup(BackupState s) => BackupModel(
 const _sendingOffered = TransferItem(
   id: 'out',
   title: 'Sending your history',
-  state: TransferState.offered,
+  status:
+      'Sent. Your other device chooses whether to add it; it shows there '
+      'under Backup.',
   outgoing: true,
+  buttons: ['Cancel'],
 );
 
 const _waitingReady = TransferItem(
   id: 'in',
   title: 'History from Office PC',
-  state: TransferState.ready,
+  status: 'Ready to receive. Nothing is downloaded until you accept.',
+  buttons: ['Accept', 'Decline'],
 );
 
 final Map<String, WidgetBuilder> settingsPreviews = {
@@ -288,16 +292,18 @@ final Map<String, WidgetBuilder> settingsPreviews = {
         TransferItem(
           id: 'out',
           title: 'Sending your history',
-          state: TransferState.declined,
+          status: 'Your other device declined it.',
           outgoing: true,
+          buttons: ['Dismiss'],
         ),
       ],
       waiting: [
         TransferItem(
           id: 'in',
           title: 'History from Office PC',
-          state: TransferState.stopped,
+          status: 'Stopped: the connection dropped.',
           progress: 0.4,
+          buttons: ['Resume', 'Cancel'],
         ),
       ],
     ),

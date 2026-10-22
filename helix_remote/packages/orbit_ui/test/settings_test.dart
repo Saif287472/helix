@@ -237,6 +237,28 @@ void main() {
     expect(acted, ('in', 'Accept'));
   });
 
+  testWidgets('transfer: a stopped history is not counted as waiting', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      const TransferScreen(
+        model: TransferModel(
+          waiting: [
+            TransferItem(
+              id: 'in',
+              title: 'History from Office PC',
+              status: 'Stopped: the connection dropped.',
+              progress: 0.4,
+              buttons: ['Resume', 'Cancel'],
+            ),
+          ],
+        ),
+      ),
+    );
+    expect(find.textContaining('waiting here'), findsNothing);
+  });
+
   testWidgets('recovery: Create waits for "I saved it"', (tester) async {
     var created = 0;
     var saved = false;

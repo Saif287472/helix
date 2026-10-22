@@ -132,6 +132,12 @@ fixed number of seconds and hopes. Then it waits for the page to **stop
 moving**: two small captures in a row that are byte-identical (bounded, because
 a blinking cursor never settles), and finally takes the real one.
 
+The last step is a sleep, `--settle` (0.5 s since 2026-10-22, was 0.12). A page
+that scrolls itself moves *again* after it has looked still: the fonts land, the
+text above reflows, and the browser's scroll anchoring slides the whole
+timeline. At 0.12 s the chat keys were photographed 14 px short of their final
+scroll and scored 10 points worse than the port they were checking.
+
 Proof that the wait matters, in `shots/_sample/`. It is not committed;
 `shoot_html.py --out shots/_sample/ group` and `shoot_html.py --out
 shots/_sample/too-early/ --no-wait group` remake it. Both are the same key, the same

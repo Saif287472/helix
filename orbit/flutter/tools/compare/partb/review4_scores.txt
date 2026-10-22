@@ -4,11 +4,11 @@ signin-phone-error total >16: 2.05%
 signin-offline total >16: 2.22%
 signin-code total >16: 1.42%
 signin-code-error total >16: 2.05%
-signin-password total >16: 2.14%
-signin-password-error total >16: 2.86%
+signin-password total >16: 6.02%
+signin-password-error total >16: 7.22%
 signin-name total >16: 3.70%
 signin-name-terms total >16: 4.32%
-signin-takeover total >16: 2.76%
+signin-takeover total >16: 6.35%
 signin-taken total >16: 2.94%
 signin-country total >16: 1.94%
 signin-advanced total >16: 1.60%
@@ -230,8 +230,8 @@ backup total >16: 5.38%
 backup-running total >16: 5.13%
 backup-failed total >16: 5.66%
 backup-never total >16: 5.37%
-account total >16: 2.52%
-account-nopass total >16: 2.54%
+account total >16: 4.10%
+account-nopass total >16: 4.13%
 appearance total >16: 5.57%
 startup total >16: 0.43%
 state-kit total >16: 0.98%
