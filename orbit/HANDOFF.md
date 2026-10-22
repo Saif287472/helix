@@ -121,6 +121,25 @@ pixel checks, DEVIATIONS and FEATURE.md updates, batch 10 (the wide
 Windows layout), and Part B steps 3 to 5 (the rename, deleting
 `helix_remote_ui`, the full verify). The lists below keep their detail.
 
+## Deferred work, in order (owner, 2026-10-22)
+
+1. DEVIATIONS and FEATURE.md updates - **done** (2026-10-22): batch 8,
+   batch 9 and saved accounts are in `DEVIATIONS.md`; `PORT_PLAN.md` has
+   their progress notes; the settings, profile and sign-in `FEATURE.md`
+   files describe the Orbit connectors, the Accounts page and the
+   device-wide lock.
+2. The old pages to Orbit: transfer, recovery, restore history, link this
+   device, then approve a new device (add the account key code to the Orbit
+   screen; it is part of the trust check).
+3. E3 and E2 (needs the server: storage by kind and by chat, free a chat's
+   media).
+4. S1 (needs the server: share link, app links, scan-to-chat).
+5. E1, then E4 to E6.
+6. The pixel checks.
+7. Batch 10 (the wide Windows layout).
+8. Part B steps 3 to 5 (the Orbit rename, deleting `helix_remote_ui`, the
+   full verify).
+
 ## Batch 8, what is left
 
 `contracts/you.md` is the spec. Already done in 49a75a4:

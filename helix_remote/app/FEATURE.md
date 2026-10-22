@@ -10,11 +10,17 @@ A person either signs in to **Helix Global** (the default, and the only server
 the app ever advertises) or joins a **personal server** behind a hidden corner
 or a shared link. After a v2 change to the protocol's `PhoneVerifyResponse` the
 flow learned something v1 could not know up front: whether the number already
-has an account, and whether that account has a password. So the order is now
-phone -> SMS code -> (password | name), where the third step is chosen by what
-the server said. A new number gets a name page and no password prompt; an
-existing account with a password gets the password page; one without goes
-straight to the confirmation.
+has an account, and whether that account has a password. So a number with a
+password goes straight to the password page ("Use a code instead" shows the
+number for confirmation first, then asks for a texted code). A new number gets
+the code and name pages; an existing account on a server that does not text
+goes to the name page.
+
+The sign-in page also lists the accounts signed in here (a tap opens one) and
+the numbers this phone remembers (`SavedAccountLine` from
+`core/platform/saved_accounts.dart`), with "Remember me on this device" on by
+default: a remembered number's tap fills it and opens the password step, and
+the x forgets it. Only numbers are stored; passwords never are.
 
 ## The rule that is easiest to get wrong
 
@@ -34,7 +40,7 @@ text on it.
 | `application/sign_in_state.dart` | The immutable state: mode, page, the fields, and the derived things (`e164`, `isNewAccount`, `requiresTerms`, `phoneLabel`). |
 | `application/sign_in_controller.dart` | The page machine. Every transition, every call into the engine, the server switch. |
 | `application/sign_in_copy.dart` | Every string a screen can show, and the mapping from a server error to one of them. |
-| `presentation/sign_in_screen.dart` | The five pages. Stateless, and they hold no rules. |
+| `presentation/sign_in_screen.dart` | The connector: the page machine's state and the saved numbers go into `orbit_ui`'s `SignInScreen`, and its taps come back as controller calls. It holds no rules. |
 | `presentation/widgets/sign_in_frame.dart` | The page layout, and `AdvancedModeCorner` (the hidden entry). |
 | `presentation/widgets/sign_in_fields.dart` | The fields, with the widget keys the tests drive. |
 | `presentation/widgets/legal_documents_sheet.dart` | The versioned Terms and Privacy Policy. |

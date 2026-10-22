@@ -761,3 +761,81 @@ score exactly as at Review 4 after the changes below.
     here".
   - The card's kind line can shrink (it overflowed at large text).
   - **Owner:** pending (Part B, S3).
+
+## Part B batch 8 (You, profile and the settings topics, wired into the app)
+
+- **Notifications - no ringtone row.** The prototype offers a ringtone
+  choice. `NotificationsScreen` leaves the row out until there is a sound to
+  ship; the owner owes one (`HANDOFF.md`, "Waiting on the owner").
+  - **Owner:** pending (Part B batch 8).
+- **Storage - the bar is messages against all media.** The prototype splits
+  storage by kind and lists the biggest chats. `StorageScreen` shows the two
+  shares the app has, and the chat list stays empty until the engine sums
+  media by kind and by chat (gap E2).
+  - **Owner:** pending (Part B batch 8).
+- **Notifications - the preview is a fixed sample.** The lock-screen preview
+  reads "Someone: See you at six?" in every theme; the prototype draws a
+  sample too, but the app does not make one from a real chat, because that
+  would show content in a settings page nobody asked to preview.
+  - **Owner:** pending (Part B batch 8).
+- **Account - "Export first" only exports.** The prototype asks the person to
+  export and stops; the app's delete page then still has to be opened by the
+  person. `AccountScreen`'s dialog follows the prototype.
+  - **Owner:** pending (Part B batch 8).
+
+## Part B batch 9 (settings pages, devices and backup, wired into the app)
+
+- **Approve a new device stays on the old page.** The trust check shows the
+  account key code (`LinkRequest.accountKeyCode`) that the approving phone
+  compares with the new one. `ApproveDeviceScreen` has no place for it, so the
+  old page keeps this step until the code is added to `ApproveDeviceModel`
+  (`contracts/devices_backup.md`).
+  - **Owner:** pending (Part B batch 9).
+- **Transfer and Recovery backup stay on the old pages.** Both sides of a
+  device transfer, and the recovery secret's create and restore pages, still
+  draw the app's screens. The Orbit screens exist and are compared, but the
+  actions need a careful mapping (`HANDOFF.md`, "The shorter plan").
+  - **Owner:** pending (Part B batch 9).
+- **Link this device and Restore history stay on the old pages.** Link this
+  device is a QR page with no Orbit connector yet; restored offers appear
+  under the old restore step (`RestoreScreen` is compared but not wired).
+  - **Owner:** pending (Part B batch 9).
+- **Delete account asks for the number before texting a code.** On an account
+  without a password, the code step first shows the number and asks the person
+  to confirm, since the operator may charge for the text. The prototype goes
+  straight to the code. `DeleteAccountScreen` takes `onSendCode` with the
+  phone (`orbit_ui`, behaviour only).
+  - **Owner:** pending (Part B batch 9).
+
+## Saved accounts and switching (after Part B batch 9)
+
+- **Sign-in has saved accounts and Remember me.** The prototype's sign-in has
+  no saved-account rows and no switch. `SignInScreen` lists the accounts
+  signed in here (a tap opens one) and the numbers this phone remembers (a
+  tap opens the password step), and keeps "Remember me" on by default; only
+  numbers are saved.
+  - **Owner:** pending (saved accounts).
+- **"Use a code instead" confirms the number first.** The prototype begins the
+  text straight away. The app shows the number and asks the person to confirm,
+  saying the operator may charge for it.
+  - **Owner:** pending (saved accounts).
+- **You has an Accounts page with no prototype.** `AccountsScreen` lists the
+  accounts signed in on this phone (the one on screen first), with Add account
+  and Remove. There is no prototype or preview screen: the owner skipped the
+  prototype, and the screen follows the Account page's style. Removing asks
+  first (`Remove <name>?`).
+  - **Owner:** pending (saved accounts).
+- **Account's sign-out dialog offers Switch account.** The prototype has one
+  sign-out. `AccountScreen` now offers "Switch account", which keeps the
+  account signed in, and "Sign out and remove", which deletes that account's
+  data on this phone only.
+  - **Owner:** pending (saved accounts).
+- **The app lock is one setting for the device.** The prototype's Privacy page
+  belongs to one account. The app keeps a `DeviceLock` in the account list, so
+  one lock covers every account signed in here and goes with the last one;
+  Privacy edits that setting for all of them.
+  - **Owner:** pending (saved accounts).
+- **Notifications name the account when more than one is signed in**, and
+  previews show the account's name only when message previews are on, like the
+  text. The prototype draws a single account.
+  - **Owner:** pending (saved accounts).

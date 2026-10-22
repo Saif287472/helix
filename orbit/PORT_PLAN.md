@@ -615,6 +615,22 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   Invite with a link shows every live link. The ones this device cannot
   show (made elsewhere or before a restart) say who made them and when, and
   can be revoked. Fixes gap B5.
+- [x] Step 2, batch 8 (pending your review): You, the profile editor,
+  Appearance, and the Privacy, Notifications, Chats, Storage and Account
+  pages draw the Orbit screens through connectors. The theme is a device
+  setting; the checkup, the share sheet and the picture stay as the app
+  builds them. Deviations (no ringtone row, the storage bar, the fixed
+  preview sample, "Export first") are in `DEVIATIONS.md`.
+- [x] Step 2, batch 9 (pending your review): Password, Delete account,
+  Blocked, About, Legal and Advanced, plus the device list, security
+  activity and Backup draw the Orbit screens. Approve a new device, transfer,
+  recovery, link this device and restore history stay on the old pages until
+  their trust checks and mappings move (`DEVIATIONS.md`).
+- [x] Saved accounts (pending your review): the account list, a database,
+  key and folder per account, switching, "Sign out and remove", the Accounts
+  page, notifications and calls for every account, one device-wide app lock,
+  and every account's push token kept current. No prototype or preview
+  screen for Accounts (the owner skipped it). See `HANDOFF.md`.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and
