@@ -14,7 +14,7 @@ several features); every tile and row opens a page registered in
 | Privacy | last seen / online / group-add audiences, found by phone / `~name` (server); read receipts, typing, default disappearing timer, the device's app lock, blocked list | server `people.privacy`, engine `EngineSettings`, `AppSettings`, `PeopleService.watchAll`, `accountsProvider`'s `DeviceLock` |
 | Notifications | alerts for messages / groups / calls, sound, vibrate, previews, OS permission, muted chats (with unmute) | `AppSettings.notify*`, `NotificationPermissionSource`, `ChatsService.watchChats` |
 | Chats | text size, Enter sends, media auto-download per kind | `AppSettings`, `MediaPolicySync` |
-| Storage and data | database and media size, how space is freed | `StorageUsageProbe` |
+| Storage and data | database and media size, the bar's split by kind, the biggest chats, and freeing one chat's photos and videos or documents (its messages stay) | `StorageUsageProbe`, `SettingsGateway.mediaStorage/biggestChats/freeChatSpace` (engine `MediaService`) |
 | Help and about | version, server, legal documents (ops API, bundled fallback), licences, a line saying problem reports go to the server | `SettingsGateway.serverDetails/legal`, `core/diagnostics/anomaly_log.dart` |
 | Advanced | server facts and allowed feature flags, sync now | `ops.serverInfo`, `Engine.syncOnce` |
 
@@ -45,10 +45,8 @@ several features); every tile and row opens a page registered in
 
 ## Known gaps
 
-- Clearing cached media needs an engine API that evicts downloaded files and
-  marks their attachments `remote` again; the Storage page therefore reads and
-  explains, it does not delete. Its bar is messages against all media and the
-  chat list is empty until E2.
+- Freeing space covers photos, videos, video notes, GIFs and documents; voice
+  notes stay with their messages. See "Storage: what counts" below.
 - Notification sound/vibrate select an Android channel; calls consult
   `AppSettings.notifyCalls` in the calls feature (A3a). There is no ringtone
   row until there is a sound to ship.
@@ -92,6 +90,19 @@ page is opened by the person next. A wrong password, a lockout, a wrong code, of
 refusal are each a sentence; success shows "Your account was deleted" while the
 engine's hard wipe and `signOutProvider` clean up and the router moves to
 sign-in. `DeleteAccountController` holds the code's challenge in memory only.
+
+## Storage: what counts
+
+The hero's total is the device probe (database, media, thumbnails and work in
+progress). The bar's three shares are the engine's known content: messages and
+keys (database), photos and videos (images, videos, video notes, GIFs), and
+files (documents, unknown kinds and voice notes). Biggest chats count
+downloaded photos, videos and documents; voice notes are not offered on their
+own. A chat's title and avatar come from the chat list ("Chat" until it has
+loaded). Freeing a chat deletes the files and thumbnails of `ready` downloads,
+clears their local paths and marks those attachments `remote`; messages, keys
+and pointers stay, and the files download again while the server keeps the
+object (30 days). Uploads and downloads in progress are never touched.
 
 ## Privacy: finding me by phone number
 

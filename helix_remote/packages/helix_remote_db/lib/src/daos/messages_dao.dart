@@ -34,6 +34,20 @@ final class SharedAttachment {
   final DateTime sentAt;
 }
 
+/// The bytes of downloaded attachments of one chat, per kind.
+@immutable
+final class StoredMediaByKind {
+  const StoredMediaByKind({
+    required this.conversationId,
+    required this.kind,
+    required this.bytes,
+  });
+
+  final String conversationId;
+  final String kind;
+  final int bytes;
+}
+
 /// Messages and everything attached to them. Every write that can change
 /// what the chat list shows updates the conversation summary in the same
 /// transaction.
@@ -527,6 +541,72 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     'SELECT count(*) AS n FROM attachments',
     readsFrom: {attachments},
   ).watchSingle().map((row) => row.read<int>('n'));
+
+  /// The bytes of downloaded attachments, grouped by chat and kind. Only a
+  /// kept file counts ([AttachmentRow.localPath]); a thumbnail alone is not
+  /// the media. With [readyOnly], only completed transfers count.
+  Future<List<StoredMediaByKind>> storedMediaByKind({
+    bool readyOnly = false,
+  }) async {
+    final rows = await customSelect(
+      'SELECT m.conversation_id AS conversation_id, a.kind AS kind, '
+      'coalesce(sum(a.size), 0) AS bytes '
+      'FROM attachments a '
+      'JOIN messages m ON m.local_rowid = a.message_rowid '
+      'WHERE a.local_path IS NOT NULL'
+      '${readyOnly ? ' AND a.transfer = ?' : ''} '
+      'GROUP BY m.conversation_id, a.kind',
+      variables: [
+        if (readyOnly) Variable.withString(AttachmentTransfer.ready.name),
+      ],
+      readsFrom: {attachments, messages},
+    ).get();
+    return [
+      for (final row in rows)
+        StoredMediaByKind(
+          conversationId: row.read<String>('conversation_id'),
+          kind: row.read<String>('kind'),
+          bytes: row.read<int>('bytes'),
+        ),
+    ];
+  }
+
+  /// Marks the downloaded attachments of [conversationId] whose [kinds] were
+  /// asked for as `remote` and clears their file pointers, so the caller can
+  /// delete the files. Only completed transfers are touched. Returns the rows
+  /// as they were.
+  Future<List<AttachmentRow>> detachLocalMedia(
+    String conversationId, {
+    required Set<String> kinds,
+  }) => transaction(() async {
+    if (kinds.isEmpty) return const [];
+    final query =
+        select(attachments).join([
+          innerJoin(
+            messages,
+            messages.localRowid.equalsExp(attachments.messageRowid),
+          ),
+        ])..where(
+          messages.conversationId.equals(conversationId) &
+              attachments.kind.isIn(kinds) &
+              attachments.transfer.equalsValue(AttachmentTransfer.ready) &
+              attachments.localPath.isNotNull(),
+        );
+    final found = [
+      for (final row in await query.get()) row.readTable(attachments),
+    ];
+    if (found.isEmpty) return found;
+    await (update(
+      attachments,
+    )..where((a) => a.id.isIn([for (final a in found) a.id]))).write(
+      const AttachmentsCompanion(
+        localPath: Value(null),
+        thumbnailPath: Value(null),
+        transfer: Value(AttachmentTransfer.remote),
+      ),
+    );
+    return found;
+  });
 
   // ------------------------------------------------------------- reads
 

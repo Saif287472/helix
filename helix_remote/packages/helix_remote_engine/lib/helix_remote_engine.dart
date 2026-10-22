@@ -53,6 +53,8 @@ export 'src/transfers/media_processor.dart'
     show BasicMediaProcessor, MediaProcessor, ProcessedMedia;
 export 'src/transfers/media_service.dart' show MediaService;
 export 'src/transfers/media_settings.dart' show MediaSettings;
+export 'src/transfers/media_storage.dart'
+    show ChatStorageUsage, FreeKind, MediaStorageUsage;
 export 'src/transfers/memory_blob_store.dart' show MemoryBlobStore;
 export 'src/transfers/outbound_media.dart' show MediaInput;
 export 'src/transfers/transfer_config.dart' show TransferConfig;

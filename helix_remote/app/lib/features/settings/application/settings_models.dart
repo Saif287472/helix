@@ -199,6 +199,45 @@ final class StorageSummary {
   int get totalBytes => databaseBytes + mediaBytes;
 }
 
+/// Downloaded attachments on this device, split by kind.
+@immutable
+final class MediaStorageSummary {
+  const MediaStorageSummary({
+    this.photosVideosBytes = 0,
+    this.voiceNoteBytes = 0,
+    this.filesBytes = 0,
+  });
+
+  /// Images, videos, video notes and GIFs.
+  final int photosVideosBytes;
+  final int voiceNoteBytes;
+
+  /// Documents, and attachments of a kind this version does not know.
+  final int filesBytes;
+
+  int get totalBytes => photosVideosBytes + voiceNoteBytes + filesBytes;
+}
+
+/// One chat's downloaded photos, videos and documents: what "free up space"
+/// can remove there. Voice notes stay with their messages.
+@immutable
+final class ChatStorageSizes {
+  const ChatStorageSizes({
+    required this.chatId,
+    this.photosVideosBytes = 0,
+    this.filesBytes = 0,
+  });
+
+  final String chatId;
+  final int photosVideosBytes;
+  final int filesBytes;
+
+  int get totalBytes => photosVideosBytes + filesBytes;
+}
+
+/// What a "free up space" action removes from one chat.
+enum StorageFreeKind { photosVideos, documents }
+
 /// The top of the Settings tab.
 @immutable
 final class SettingsHeader {

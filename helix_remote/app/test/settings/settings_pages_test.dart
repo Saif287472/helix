@@ -699,15 +699,32 @@ void main() {
   });
 
   group('Storage', () {
-    youTest('shows what Orbit keeps and where data use is set', (tester) async {
+    youTest('shows what Orbit keeps and frees a chat without its messages', (
+      tester,
+    ) async {
       useTallWindow(tester);
       final settings = FakeLocalSettings();
       await settings.set(AppSettings.backupOverMobile, true);
+      final gateway = FakeSettingsGateway()
+        ..storedMedia = const MediaStorageSummary(
+          photosVideosBytes: 12 * 1024 * 1024,
+          filesBytes: 2 * 1024 * 1024,
+          voiceNoteBytes: 1024 * 1024,
+        )
+        ..chatSizes = const [
+          ChatStorageSizes(
+            chatId: 'c1',
+            photosVideosBytes: 8 * 1024 * 1024,
+            filesBytes: 1024 * 1024,
+          ),
+        ]
+        ..freeBytes = 8 * 1024 * 1024;
       await pumpPage(
         tester,
         const StoragePage(),
         overrides: a3bOverrides(
           settings: settings,
+          settingsGateway: gateway,
           storage: FakeStorageProbe(
             const StorageUsage(
               databaseBytes: 3 * 1024 * 1024,
@@ -725,9 +742,44 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Allowed'), findsOneWidget);
+
+      // The biggest chats come from the engine, named by the chat list; with
+      // no runtime in this test the fallback name is used.
+      expect(
+        find.textContaining('BIGGEST CHATS', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.text('Chat'), findsOneWidget);
+      expect(find.text('9.0 MB'), findsOneWidget);
+      await tester.tap(find.text('Chat'));
+      await settle(tester);
+      expect(find.text('Remove photos and videos · 8.0 MB'), findsOneWidget);
+      expect(find.text('Remove documents · 1.0 MB'), findsOneWidget);
+      await tester.tap(find.text('Remove photos and videos · 8.0 MB'));
+      await settle(tester);
+      expect(find.text('8.0 MB freed'), findsOneWidget);
+      expect(gateway.freedChats, ['c1:photosVideos']);
+      await tester.pump(const Duration(seconds: 5));
+
       await tester.tap(find.text('Download automatically'));
       await settle(tester);
       expect(find.text('stub:${RoutePaths.chats}'), findsOneWidget);
+    });
+
+    youTest('says when the figures cannot be read', (tester) async {
+      useTallWindow(tester);
+      final gateway = FakeSettingsGateway()
+        ..storageFails = StateError('the database is closed');
+      await pumpPage(
+        tester,
+        const StoragePage(),
+        overrides: a3bOverrides(settingsGateway: gateway),
+      );
+      await settle(tester);
+      expect(
+        find.text('The storage figures could not be read.'),
+        findsOneWidget,
+      );
     });
 
     test('the download line names kinds with the same policy together', () {

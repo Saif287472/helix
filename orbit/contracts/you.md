@@ -439,15 +439,15 @@ Dart: `StorageScreen`, `StorageModel`, `StorageActions`.
 |---|---|---|---|---|
 | `totalBytes`, `databaseBytes`, `mediaBytes` (as labels) | `String` | have | `storageSummaryProvider` → `StorageSummary` (`about_providers.dart`, `core/platform/storage_usage.dart`) | Hero "1.2 GB on this phone · 184 MB messages and keys · 1.0 GB media". |
 | `loading`, `failed` | `bool` | have | `storageSummaryProvider` | |
-| `photosVideosBytes`, `filesBytes` | `int` | engine | nothing | The bar's split. `DeviceStorageUsageProbe` walks files and cannot tell kinds; needs a sum of `Attachments.size` by `kind` where `localPath` is set (`packages/helix_remote_db/lib/src/tables/messages.dart`). |
-| `biggestChats` | `List<StorageChat>` (`chatId`, `title`, `avatar`, `bytes`, `mediaBytes`, `documentBytes`) | engine | nothing | A query joining attachments, messages and conversations; no schema change. |
+| `photosVideosBytes`, `filesBytes` | `int` | have | `SettingsGateway.mediaStorage()` → engine `MediaService.storageUsage()` | The bar's split, from `Attachments.size` where a local copy exists. Photos are images, videos, video notes and GIFs; files are documents, unknown kinds and voice notes (voice notes have no free-up of their own). |
+| `biggestChats` | `List<StorageChat>` (`chatId`, `title`, `avatar`, `bytes`, `mediaBytes`, `documentBytes`) | have | `SettingsGateway.biggestChats()` (engine joins attachments and messages); title/avatar from the chat list | Downloaded media only, voice notes left out; `"Chat"` until the chat list loads. |
 | `autoDownloadSummary` | `String` | derive | the four media providers | "Photos on Wi-Fi, voice always, videos and documents never". |
 | `backupOverMobile` | `bool` | have | `backupOverMobileProvider` (`backup_providers.dart`) | "Allowed" / "Wi-Fi only". |
 
 ### Actions
 | Action | Signature | Tag | Calls today | Notes |
 |---|---|---|---|---|
-| `freeChatSpace` | `Future<int> Function(String chatId, FreeKind kind)` | engine | nothing | `FreeKind { photosVideos, documents }`; returns bytes freed. FEATURE.md's known gap: evict the files and mark the attachments `remote` again. They can be fetched again while the server keeps the object: 30 days for attachments. |
+| `freeChatSpace` | `Future<int> Function(String chatId, FreeKind kind)` | have | `SettingsGateway.freeChatSpace` → engine `MediaService.freeChatSpace` | `FreeKind { photosVideos, documents }`; deletes the files and thumbnails of `ready` downloads, clears their local paths and marks them `remote`, keeps messages, keys and pointers, and returns bytes freed. They can be fetched again while the server keeps the object: 30 days for attachments. |
 | `openAutoDownload` | `void Function()` | have | `context.push(RoutePaths.chats)` | |
 | `openBackup` | `void Function()` | have | `context.push(RoutePaths.backup)` | |
 | `retry` | `void Function()` | have | `ref.invalidate(storageSummaryProvider)` | |
@@ -471,13 +471,13 @@ The "Free up space in …" sheet, the "<n> MB freed" toast.
 |---|---|---|
 | Loading; "The storage figures could not be read." with retry | `storage_page.dart` | Keep in the new style. |
 | The probe returns zeros when it cannot read the folder | `DeviceStorageUsageProbe.measure` | Keep. |
-| "To free space, delete messages or a whole chat: the files go with them." | `storage_page.dart` | Replace only if per-chat freeing is built. |
+| "To free space, delete messages or a whole chat: the files go with them." | `storage_page.dart` | Replaced by E3: the screen now says "Tap a chat to free space without deleting its messages." |
 
 ### New backend work
 | Item | Why the design needs it | Engine / server / protocol | Size |
 |---|---|---|---|
-| Media size by kind and by chat | The bar's split, "Biggest chats" | Engine + `helix_remote_db` DAO query | S |
-| Free a chat's photos, videos or documents | "Free up space" sheet | Engine: delete files, set `transfer` back to remote, keep the pointer | M |
+| Media size by kind and by chat | The bar's split, "Biggest chats" | Engine + `helix_remote_db` DAO query | **Built** (E2, pending review) |
+| Free a chat's photos, videos or documents | "Free up space" sheet | Engine: delete files, set `transfer` back to remote, keep the pointer | **Built** (E3, pending review) |
 
 ## Account (`account`)
 

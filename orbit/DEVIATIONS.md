@@ -768,11 +768,10 @@ score exactly as at Review 4 after the changes below.
   choice. `NotificationsScreen` leaves the row out until there is a sound to
   ship; the owner owes one (`HANDOFF.md`, "Waiting on the owner").
   - **Owner:** pending (Part B batch 8).
-- **Storage - the bar is messages against all media.** The prototype splits
-  storage by kind and lists the biggest chats. `StorageScreen` shows the two
-  shares the app has, and the chat list stays empty until the engine sums
-  media by kind and by chat (gap E2).
-  - **Owner:** pending (Part B batch 8).
+- **Storage - the bar splits by kind and the biggest chats are listed**
+  (E2, E3, 2026-10-22). The prototype's split is built; see "Part B E2/E3"
+  below for where voice notes and the hero's total sit.
+  - **Owner:** pending review.
 - **Notifications - the preview is a fixed sample.** The lock-screen preview
   reads "Someone: See you at six?" in every theme; the prototype draws a
   sample too, but the app does not make one from a real chat, because that
@@ -853,3 +852,29 @@ score exactly as at Review 4 after the changes below.
   previews show the account's name only when message previews are on, like the
   text. The prototype draws a single account.
   - **Owner:** pending (saved accounts).
+
+## Part B E2/E3 (storage by kind and per-chat freeing, 2026-10-22)
+
+- **The hero's total and the bar count different things.** The hero is the
+  device probe (database, media files, thumbnails and transfers in progress);
+  the bar's three shares are the engine's known attachment bytes plus the
+  database, so the shares fill the bar. A few files therefore show in the
+  hero and not in the split.
+  - **Owner:** pending review.
+- **Voice notes count with files and stay out of Biggest chats.** The
+  prototype has no separate voice-note share, and a voice note cannot be
+  freed on its own in a "Free up space" sheet. The bar's files share therefore
+  adds voice notes to documents and unknown kinds; Biggest chats and the
+  sheet leave them out.
+  - **Owner:** pending review.
+- **Freeing covers finished downloads only.** The engine deletes the file and
+  thumbnail of attachments marked `ready`, clears their local paths and marks
+  them `remote`; messages, keys and pointers stay. Uploads and downloads in
+  progress are never touched. Files can be downloaded again while the server
+  keeps the object (30 days).
+  - **Owner:** pending review.
+- **Chat names come from the app's chat list.** The engine returns a
+  conversation id and byte counts, not a title; the Storage page looks the id
+  up in the chat and archived lists, and draws "Chat" with a generated avatar
+  until the list has loaded.
+  - **Owner:** pending review.

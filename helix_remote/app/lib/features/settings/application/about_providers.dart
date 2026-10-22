@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
@@ -76,6 +77,32 @@ final storageSummaryProvider = FutureProvider.autoDispose<StorageSummary>((
     mediaBytes: usage.mediaBytes,
   );
 });
+
+/// Everything the Storage page shows: the device's own figures, the engine's
+/// sums by kind and the chats with the most to free.
+final storageDetailProvider = FutureProvider.autoDispose<StorageDetail>((
+  ref,
+) async {
+  final gateway = ref.watch(settingsGatewayProvider);
+  final summary = await ref.watch(storageSummaryProvider.future);
+  final media = await gateway.mediaStorage();
+  final chats = await gateway.biggestChats();
+  return StorageDetail(summary: summary, media: media, chats: chats);
+});
+
+/// The Storage page's figures, once they have been read.
+@immutable
+final class StorageDetail {
+  const StorageDetail({
+    required this.summary,
+    required this.media,
+    required this.chats,
+  });
+
+  final StorageSummary summary;
+  final MediaStorageSummary media;
+  final List<ChatStorageSizes> chats;
+}
 
 // ---------------------------------------------------------------- advanced
 

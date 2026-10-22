@@ -7,7 +7,8 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException;
-import 'package:helix_remote_engine/helix_remote_engine.dart' show maskPhone;
+import 'package:helix_remote_engine/helix_remote_engine.dart'
+    show FreeKind, maskPhone;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart' as proto;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode, PhonePurpose;
@@ -94,6 +95,19 @@ abstract interface class SettingsGateway {
 
   /// Reads the mailbox once, now, instead of waiting for the socket.
   Future<void> syncNow();
+
+  // -------------------------------------------------------------- storage
+
+  /// What downloaded attachments take on this device, split by kind.
+  Future<MediaStorageSummary> mediaStorage();
+
+  /// The chats whose downloaded photos, videos and documents take the most
+  /// room, biggest first.
+  Future<List<ChatStorageSizes>> biggestChats();
+
+  /// Deletes the chat's downloaded [kind] and marks those attachments
+  /// `remote` again, keeping the messages. Answers the bytes freed.
+  Future<int> freeChatSpace(String chatId, StorageFreeKind kind);
 }
 
 final settingsGatewayProvider = Provider<SettingsGateway>(
@@ -358,6 +372,39 @@ final class EngineSettingsGateway implements SettingsGateway {
   Future<void> syncNow() async {
     final engine = (await _ref.read(runtimeProvider.future)).engine;
     await engine.syncOnce();
+  }
+
+  @override
+  Future<MediaStorageSummary> mediaStorage() async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    final usage = await engine.media.storageUsage();
+    return MediaStorageSummary(
+      photosVideosBytes: usage.photosVideosBytes,
+      voiceNoteBytes: usage.voiceNoteBytes,
+      filesBytes: usage.filesBytes,
+    );
+  }
+
+  @override
+  Future<List<ChatStorageSizes>> biggestChats() async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    return [
+      for (final chat in await engine.media.biggestChats())
+        ChatStorageSizes(
+          chatId: chat.conversationId,
+          photosVideosBytes: chat.photosVideosBytes,
+          filesBytes: chat.filesBytes,
+        ),
+    ];
+  }
+
+  @override
+  Future<int> freeChatSpace(String chatId, StorageFreeKind kind) async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    return engine.media.freeChatSpace(chatId, switch (kind) {
+      StorageFreeKind.photosVideos => FreeKind.photosVideos,
+      StorageFreeKind.documents => FreeKind.documents,
+    });
   }
 
   static AudienceChoice _audience(proto.Audience a) => switch (a) {

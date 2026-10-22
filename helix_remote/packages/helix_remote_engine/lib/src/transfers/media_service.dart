@@ -5,6 +5,7 @@ import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/transfers/blob_store.dart';
 import 'package:helix_remote_engine/src/transfers/media_janitor.dart';
+import 'package:helix_remote_engine/src/transfers/media_storage.dart';
 import 'package:helix_remote_engine/src/transfers/outbound_media.dart';
 import 'package:helix_remote_engine/src/transfers/transfer_config.dart';
 import 'package:helix_remote_engine/src/transfers/transfer_files.dart';
@@ -219,6 +220,98 @@ final class MediaService {
     final path = a?.thumbnailPath;
     if (blobs == null || a == null || path == null) return null;
     return await blobs.length(path) == null ? null : path;
+  }
+
+  // -------------------------------------------------------------- storage
+
+  static const _photoKinds = {'image', 'video', 'video_note', 'gif'};
+  static const _documentKinds = {'document', 'unknown'};
+
+  /// What downloaded attachments take on this device, by kind: photos and
+  /// videos, voice notes, and files. Read from the database; no file I/O.
+  Future<MediaStorageUsage> storageUsage() async {
+    var photos = 0;
+    var voice = 0;
+    var files = 0;
+    for (final row in await _db.messagesDao.storedMediaByKind()) {
+      if (_photoKinds.contains(row.kind)) {
+        photos += row.bytes;
+      } else if (row.kind == 'voice_note') {
+        voice += row.bytes;
+      } else {
+        files += row.bytes;
+      }
+    }
+    return MediaStorageUsage(
+      photosVideosBytes: photos,
+      voiceNoteBytes: voice,
+      filesBytes: files,
+    );
+  }
+
+  /// The chats whose downloaded photos, videos and documents take the most
+  /// room, biggest first. Voice notes are left out: they cannot be freed on
+  /// their own.
+  Future<List<ChatStorageUsage>> biggestChats({int limit = 5}) async {
+    final byChat = <String, ({int photos, int files})>{};
+    for (final row in await _db.messagesDao.storedMediaByKind(
+      readyOnly: true,
+    )) {
+      final current = byChat[row.conversationId] ?? (photos: 0, files: 0);
+      if (_photoKinds.contains(row.kind)) {
+        byChat[row.conversationId] = (
+          photos: current.photos + row.bytes,
+          files: current.files,
+        );
+      } else if (_documentKinds.contains(row.kind)) {
+        byChat[row.conversationId] = (
+          photos: current.photos,
+          files: current.files + row.bytes,
+        );
+      }
+    }
+    final chats =
+        [
+          for (final entry in byChat.entries)
+            if (entry.value.photos + entry.value.files > 0)
+              ChatStorageUsage(
+                conversationId: entry.key,
+                photosVideosBytes: entry.value.photos,
+                filesBytes: entry.value.files,
+              ),
+        ]..sort((a, b) {
+          final bySize = b.totalBytes.compareTo(a.totalBytes);
+          return bySize != 0
+              ? bySize
+              : a.conversationId.compareTo(b.conversationId);
+        });
+    return chats.take(limit).toList(growable: false);
+  }
+
+  /// Deletes the chat's downloaded [kind] and marks those attachments
+  /// `remote` again. The messages, pointers and keys stay, so the media can
+  /// be fetched again while the server keeps the object. Answers the bytes
+  /// freed; a file that was already gone counts zero.
+  Future<int> freeChatSpace(String conversationId, FreeKind kind) async {
+    final blobs = _store;
+    final rows = await _db.messagesDao.detachLocalMedia(
+      conversationId,
+      kinds: switch (kind) {
+        FreeKind.photosVideos => _photoKinds,
+        FreeKind.documents => _documentKinds,
+      },
+    );
+    var freed = 0;
+    for (final a in rows) {
+      final path = a.localPath;
+      if (path != null && await blobs.length(path) != null) {
+        await blobs.delete(path);
+        freed += a.size;
+      }
+      final thumbnail = a.thumbnailPath;
+      if (thumbnail != null) await blobs.delete(thumbnail);
+    }
+    return freed;
   }
 
   /// The user has finished looking at a view-once message (call it when the

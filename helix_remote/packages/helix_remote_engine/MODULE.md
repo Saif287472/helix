@@ -403,6 +403,9 @@ behave as before).
 | `media.downloadNow(attachmentId)` | download on demand |
 | `media.openLocalPath(id)` / `thumbnailPath(id)` | the file's `BlobStore` path, or null when it is not on this device |
 | `media.consumeViewOnce(messageRowid)` | after the viewer closed: deletes files, keys and the pointers (`payload`); the sender's side does this by itself once the `viewed` receipt arrives |
+| `media.storageUsage()` | `MediaStorageUsage`: downloaded bytes split into photos and videos (images, videos, video notes, GIFs), voice notes, and files (documents and kinds from a newer client), summed over attachments with a local copy; `totalBytes` adds the three |
+| `media.biggestChats({limit = 5})` | `ChatStorageUsage` (conversation id, photos/videos bytes, files bytes) for chats with downloaded media, biggest first, ties by conversation id; voice notes are left out because a free-up does not offer them |
+| `media.freeChatSpace(conversationId, FreeKind)` | `FreeKind.photosVideos` or `.documents`: deletes those `ready` downloads' files and thumbnails, clears their local paths and sets their attachments `remote`; messages, keys and pointers stay. Returns the bytes actually freed. Downloads again while the server keeps the object (30 days). Throws `StateError` without a `BlobStore` |
 | `transfers.watchQueue()` / `retryFailed()` / `drain()` / `registerStandalone(purpose, handler)` | the queue as a whole; `drain()` runs everything due (headless hosts, tests) |
 | `engine.drainTransfers()` | the same, from the engine |
 

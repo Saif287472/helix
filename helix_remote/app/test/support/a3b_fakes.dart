@@ -651,9 +651,22 @@ class FakeSettingsGateway implements SettingsGateway {
   Object? privacySaveFails;
   Object? serverFails;
   Object? syncFails;
+  Object? storageFails;
+  Object? freeFails;
   PrivacyPrefs? savedPrefs;
   String? changedTo;
   String? changedCurrent;
+
+  // ---- storage: what the engine says is downloaded, and what freeing did
+
+  MediaStorageSummary storedMedia = const MediaStorageSummary(
+    photosVideosBytes: 12 * 1024 * 1024,
+    filesBytes: 2 * 1024 * 1024,
+    voiceNoteBytes: 1024 * 1024,
+  );
+  List<ChatStorageSizes> chatSizes = const [];
+  int freeBytes = 0;
+  final List<String> freedChats = [];
 
   // ---- account deletion: what the server would accept, and what it got
 
@@ -817,6 +830,26 @@ class FakeSettingsGateway implements SettingsGateway {
   Future<void> syncNow() async {
     calls.add('syncNow');
     if (syncFails != null) throw syncFails!;
+  }
+
+  @override
+  Future<MediaStorageSummary> mediaStorage() async {
+    if (storageFails != null) throw storageFails!;
+    return storedMedia;
+  }
+
+  @override
+  Future<List<ChatStorageSizes>> biggestChats() async {
+    if (storageFails != null) throw storageFails!;
+    return chatSizes;
+  }
+
+  @override
+  Future<int> freeChatSpace(String chatId, StorageFreeKind kind) async {
+    calls.add('freeChatSpace:$chatId:${kind.name}');
+    if (freeFails != null) throw freeFails!;
+    freedChats.add('$chatId:${kind.name}');
+    return freeBytes;
   }
 }
 

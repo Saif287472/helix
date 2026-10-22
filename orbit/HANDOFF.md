@@ -119,10 +119,10 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: every backend item (S1, E1 to E6), the
-pixel checks, DEVIATIONS and FEATURE.md updates, batch 10 (the wide
-Windows layout), and Part B steps 3 to 5 (the rename, deleting
-`helix_remote_ui`, the full verify). The lists below keep their detail.
+Deferred until the owner asks: the remaining backend items (S1, E1, E4
+to E6), the pixel checks, batch 10 (the wide Windows layout), and Part B
+steps 3 to 5 (the rename, deleting `helix_remote_ui`, the full verify).
+The lists below keep their detail.
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -137,8 +137,12 @@ Windows layout), and Part B steps 3 to 5 (the rename, deleting
    code is on the approval review, and Restore history opens Recovery on
    its Restore tab. Deviations are in `DEVIATIONS.md` ("The last old
    pages").
-3. E3 and E2 (needs the server: storage by kind and by chat, free a chat's
-   media).
+3. E3 and E2 - **done** (2026-10-22): storage by kind and by chat, and
+   freeing a chat's photos/videos or documents, are in the engine
+   (`media.storageUsage/biggestChats/freeChatSpace`) and the local DAO;
+   the Storage page draws the split and the biggest chats. Engine-only,
+   despite the earlier "needs the server" note: no server route, protocol
+   change or migration, so no production restart.
 4. S1 (needs the server: share link, app links, scan-to-chat).
 5. E1, then E4 to E6.
 6. The pixel checks.
@@ -179,15 +183,16 @@ To do:
 1. Run the pixel check on the batch 8 keys (the segment change moves no
    pixels, but check).
 2. Log in DEVIATIONS "Part B batch 8": no ringtone row (needs a sound
-   from the owner); the storage bar is messages against all media and the
-   chat list is empty until E2; the notifications preview text is a fixed
-   sample; "Export first" only exports.
+   from the owner); the notifications preview text is a fixed sample;
+   "Export first" only exports. (The storage note is resolved by E2/E3;
+   see "Part B E2/E3".)
 3. **The approved backend items**, each as its own commit (helix-feature
    skill):
    - S1: the share link `/u/<~name>`, app links and scan-to-chat.
    - E1: share the profile photo with people you message.
-   - E2: storage size by kind and by chat.
-   - E3: free one chat's media and keep its messages.
+   - E2: storage size by kind and by chat - **done** (2026-10-22).
+   - E3: free one chat's media and keep its messages - **done**
+     (2026-10-22).
 4. **Docs.** `DEVIATIONS.md` gets a "Part B batch 8" section, `PORT_PLAN.md`
    a progress note, and the settings and profile `FEATURE.md` files need
    updating.
