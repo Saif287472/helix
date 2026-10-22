@@ -152,8 +152,14 @@ identifiers into a ticket or chat without checking it first.
   `ops.settings` and audited as `config.update`.
 - While on, every request except `/v1/health/*`, `/v1/admin/*` and `/v1/ops/*`
   is answered `503` with error code `maintenance` and `Retry-After: 300`.
-  That includes the `/v1/ws` upgrade, `/open` and `/.well-known/*`.
-  (`platform/http/pipeline.dart`.)
+  That includes the `/v1/ws` upgrade, `/open`, `/u/<~name>` and
+  `/.well-known/*` — a shared link's landing page shows the `503` too, which
+  is deliberate: it is served by the same node, and the app behind the button
+  could not reach the server anyway (`platform/http/pipeline.dart`).
+- The access log records the **route template**, never the request path, so a
+  `/u/<~name>` hit is logged as `/u/{name}`. The name a browser asked for is
+  in nothing the server keeps; it is in the server's own request log only if
+  an operator adds the path there, and in whatever the front proxy logs.
 - WebSockets that are already open are **not** closed by maintenance mode
   (the pipeline only sees HTTP requests; nothing else touches the sockets).
   Background jobs keep running.

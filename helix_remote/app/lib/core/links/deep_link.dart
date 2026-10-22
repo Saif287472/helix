@@ -1,4 +1,6 @@
 import 'package:helix_remote/core/links/helix_code.dart';
+import 'package:helix_remote_protocol/helix_remote_protocol.dart'
+    show SetHelixNameRequest;
 
 /// Parsed target for the `helix://` protocol registered by the mobile and
 /// Windows clients. Keeping parsing independent of platform channels makes
@@ -14,6 +16,13 @@ enum HelixDeepLinkKind {
   /// `HLX-GRP-…` code (the group token and the key that opens the preview).
   groupLink,
   contactAdd,
+
+  /// A person's share link: `https://<host>/u/<~name>` or `helix://u/<name>`.
+  /// [HelixDeepLink.helixName] is the name, lower case and without `~`. The
+  /// page behind the link never says whether the name exists, so this is
+  /// resolved by the app with a session, which is what honours "Find me by
+  /// ~name" and blocking.
+  personLink,
 }
 
 /// The host of shared invite and recovery links. Always Helix Global's, even
@@ -25,6 +34,11 @@ const kHelixLinkHost = 'helix.agiletechbd.com';
 /// the app's advanced mode.
 String helixCodeLink(String code) => 'https://$kHelixLinkHost/open#$code';
 
+/// The share link that opens a chat with the person using [helixName] (the
+/// bare name: `sam`, not `~sam`).
+String helixProfileLink(String helixName) =>
+    'https://$kHelixLinkHost/u/$helixName';
+
 class HelixDeepLink {
   const HelixDeepLink._({
     required this.kind,
@@ -33,6 +47,7 @@ class HelixDeepLink {
     this.code,
     this.callId,
     this.groupId,
+    this.helixName,
     this.contactLinkId,
     this.contactAccountId,
     this.contactNonce,
@@ -48,6 +63,9 @@ class HelixDeepLink {
   final String? code;
   final String? callId;
   final String? groupId;
+
+  /// [HelixDeepLinkKind.personLink]: the ~name, lower case, without `~`.
+  final String? helixName;
   final String? contactLinkId;
   final String? contactAccountId;
   final String? contactNonce;
@@ -64,6 +82,8 @@ class HelixDeepLink {
   /// * `helix://call/CALL_ID`
   /// * `helix://group/join?group=GROUP_ID&invite=CODE`
   /// * `helix://contact/add?v=1&id=ID&a=ACCOUNT&n=NONCE&e=MS&s=SIG`
+  /// * `helix://u/NAME`, and its shared form
+  ///   `https://<server>/u/<~name>` - a person's link
   ///
   /// A self-hosted web invite (`https://server.example/join?invite=CODE`) is
   /// also accepted when supplied by another platform entry point.
@@ -81,6 +101,7 @@ class HelixDeepLink {
           uri.queryParameters['server'],
         ),
         'call' => _call(_firstPathSegment(uri)),
+        'u' => _personLink(_firstPathSegment(uri)),
         'group' when uri.pathSegments.firstOrNull == 'join' => _groupJoin(
           uri.queryParameters['group'],
           uri.queryParameters['invite'] ?? uri.queryParameters['code'],
@@ -100,6 +121,17 @@ class HelixDeepLink {
         uri.host.isNotEmpty &&
         (uri.path == '/open' || uri.path == '/open/')) {
       return _serverCode(_decodeFragment(uri.fragment));
+    }
+
+    // A person's link, over https: exactly one name after `/u`. The server
+    // answers that path with one static page for every name, so the shape is
+    // all that is checked here - the lookup that says whose name it is needs
+    // a session and happens in the app.
+    if (uri.scheme == 'https' && uri.host.isNotEmpty) {
+      final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+      if (segments.length == 2 && segments.first == 'u') {
+        return _personLink(segments.last);
+      }
     }
 
     if ((uri.scheme == 'https' || uri.scheme == 'http') &&
@@ -200,6 +232,17 @@ class HelixDeepLink {
       contactExpiresAt: expiresAt,
       contactSignature: signature,
     );
+  }
+
+  static HelixDeepLink? _personLink(String? raw) {
+    final name = (raw ?? '')
+        .trim()
+        .replaceFirst(RegExp(r'^~'), '')
+        .toLowerCase();
+    // The server's own rule for a ~name, so an obviously broken link is
+    // dropped here instead of costing a lookup.
+    if (!SetHelixNameRequest.pattern.hasMatch(name)) return null;
+    return HelixDeepLink._(kind: HelixDeepLinkKind.personLink, helixName: name);
   }
 
   static String? _firstPathSegment(Uri uri) =>

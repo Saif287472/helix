@@ -140,6 +140,62 @@ void main() {
     expect(find.text('Scan someone’s code'), findsOneWidget);
   });
 
+  testWidgets('the sheet draws the code the app encoded, and its buttons '
+      'answer', (tester) async {
+    final qr = HelixQrMatrix(2, [true, false, false, true]);
+    var copied = 0;
+    var shared = 0;
+    var scanned = 0;
+    final model = YouModel(
+      name: 'Hasan',
+      avatar: const HelixAvatarModel(name: 'Hasan'),
+      helixName: 'hasan',
+      share: ShareCodeModel(
+        link: 'helix.agiletechbd.com/u/hasan',
+        qrSeed: 'hasan',
+        qr: qr,
+      ),
+    );
+    // Each button closes the sheet, so each tap needs the sheet opened again.
+    Future<void> open() => show(
+      tester,
+      YouScreen(
+        model: model,
+        start: const YouStart(share: true),
+        actions: YouActions(
+          copyShareLink: () => copied++,
+          shareLink: () => shared++,
+          scanCode: () => scanned++,
+        ),
+      ),
+    );
+    Future<void> reopen() async {
+      await tester.tap(find.byTooltip('Share your Orbit code'));
+      await tester.pumpAndSettle();
+    }
+
+    await open();
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<OrbitQr>(find.byType(OrbitQr)).matrix,
+      qr,
+      reason: 'the real modules, not the prototype’s pattern',
+    );
+    await tester.tap(find.text('Copy link'));
+    await tester.pumpAndSettle();
+    expect(copied, 1);
+
+    await reopen();
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    expect(shared, 1);
+
+    await reopen();
+    await tester.tap(find.text('Scan someone’s code'));
+    await tester.pumpAndSettle();
+    expect(scanned, 1);
+  });
+
   test('~name rules', () {
     expect(orbitNameState(''), isNull);
     expect(orbitNameState('ab')!.$1, isFalse);

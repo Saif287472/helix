@@ -21,6 +21,10 @@ abstract final class RoutePaths {
   /// signed out, because that is when it is used.
   static const linkThisDevice = '/link-device';
 
+  /// Scans another person's share code and opens the chat it names. Opened
+  /// from the share sheet, so it is not under `/home`.
+  static const scanChat = '/scan-chat';
+
   // Backup
   static const backup = '/backup';
   static const backupRestore = '/backup/restore';

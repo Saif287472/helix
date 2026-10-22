@@ -53,7 +53,7 @@ wait for the redesign. B5 is the server decision S3 below.
 
 | # | Item | Needed for | Recommendation |
 |---|---|---|---|
-| S1 | A share link `helix.agiletechbd.com/u/<~name>`, app links that open it, and scan-to-chat | You: the share sheet (QR, copy, share, scan someone's code) | **Build in Part B** (size M). It is the headline of the You page. It needs a `~name` and "Find me by ~name" turned on. |
+| S1 | A share link `helix.agiletechbd.com/u/<~name>`, app links that open it, and scan-to-chat | You: the share sheet (QR, copy, share, scan someone's code) | **Built** (Part B, pending review; the new route is `GET /u/{name}`). It is the headline of the You page. The sheet needs a `~name`; the link only opens a chat when its owner has "Find me by ~name" turned on. |
 | S2 | A live "~name is available" check | Profile editor | **Don't build.** It would let anyone probe which names are taken, which the server avoids on purpose. Instead: show "Looks good" from the name rules as you type, and the server's answer on Save. |
 | S3 | List a group's live invite links (id, approval, made by, date; never the secret) | Invite links page: revoking any link | **Built** (Part B, pending review). It fixes B5. |
 | S4 | List a group's bans from the server | Banned people, across devices | **Drop.** The design does not need it. |
@@ -201,7 +201,7 @@ and the checklist cover them too.
 5. Transfer wording → W4.
 
 ### You
-1. Share your code → **build** (S1).
+1. Share your code → **built** (S1).
 2. "~name is available" → **rules as you type, the server's answer on
    Save** (S2).
 3. The profile photo for contacts → **build** (E1).

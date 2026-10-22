@@ -6,6 +6,7 @@ import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/links/link_channel.dart';
 import 'package:helix_remote/core/router/app_router.dart';
+import 'package:helix_remote/features/people/application/people_search.dart';
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 /// Turns links that arrive from outside the app into navigation.
@@ -51,10 +52,23 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
   void _onLink(HelixDeepLink link) {
     final pending = ref.read(pendingLinkProvider.notifier);
     if (_needsAccount(link)) {
-      // A group link needs an account: it waits (parked in the provider) until
-      // the person is signed in, and is routed then.
+      // A link that needs an account waits (parked in the provider) until the
+      // person is signed in, and is handled then.
       pending.set(link);
       if (!_signedIn) return;
+      if (link.kind == HelixDeepLinkKind.personLink) {
+        // Nothing to navigate to yet: the name has to be looked up first, and
+        // the chat it resolves to is the destination.
+        pending.take();
+        unawaited(
+          ref.read(peopleActionsProvider).openPersonLink(link.helixName!).then((
+            failure,
+          ) {
+            if (failure != null && mounted) _toast(failure);
+          }),
+        );
+        return;
+      }
       routeDeepLink(ref.read(appRouterProvider), link);
       pending.take();
       return;
@@ -65,22 +79,10 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
       // applied by the next sign-in after a sign-out: drop it.
       if (_signedIn) {
         pending.set(null);
-        // The listener sits above the navigator, so the toast goes into the
-        // navigator's overlay.
-        final overlay = ref
-            .read(appRouterProvider)
-            .routerDelegate
-            .navigatorKey
-            .currentState
-            ?.overlay;
-        if (overlay != null && overlay.mounted) {
-          orbit.showOrbitToast(
-            overlay.context,
-            overlay: overlay,
-            "You're already signed in. Invite and recovery links are "
-            "for setting up a new device.",
-          );
-        }
+        _toast(
+          "You're already signed in. Invite and recovery links are "
+          "for setting up a new device.",
+        );
         return;
       }
       // Parked, and applied by the sign-in screen once the device is known to
@@ -94,9 +96,23 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
     pending.set(null);
   }
 
+  /// The listener sits above the navigator, so a message goes into the
+  /// navigator's overlay.
+  void _toast(String message) {
+    final overlay = ref
+        .read(appRouterProvider)
+        .routerDelegate
+        .navigatorKey
+        .currentState
+        ?.overlay;
+    if (overlay == null || !overlay.mounted) return;
+    orbit.showOrbitToast(overlay.context, overlay: overlay, message);
+  }
+
   static bool _needsAccount(HelixDeepLink link) =>
       link.kind == HelixDeepLinkKind.groupLink ||
-      link.kind == HelixDeepLinkKind.groupJoin;
+      link.kind == HelixDeepLinkKind.groupJoin ||
+      link.kind == HelixDeepLinkKind.personLink;
 
   bool get _signedIn => ref.read(authStateProvider).value == AppAuthState.ready;
 

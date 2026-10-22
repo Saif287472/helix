@@ -223,7 +223,12 @@ void routeDeepLink(GoRouter router, HelixDeepLink link) {
       unawaited(router.push(GroupRoutes.join, extra: link.inviteCode));
     case HelixDeepLinkKind.contactAdd:
       router.go('${AppRoutes.home}/people');
-    case HelixDeepLinkKind.invite || HelixDeepLinkKind.serverCode:
+    case HelixDeepLinkKind.invite ||
+        HelixDeepLinkKind.serverCode ||
+        HelixDeepLinkKind.personLink:
+      // The first two are handled above by the setup code. A person's link is
+      // not navigation: the name has to be looked up with a session first,
+      // which is what `AppLinkListener` does before it opens the chat.
       break;
   }
 }

@@ -725,6 +725,18 @@ abstract final class Routes {
   );
   static const openLink = ApiRoute(_get, '/open', module: 'ops', access: _pub);
 
+  /// The landing page for a share link `https://<host>/u/<~name>`, which opens
+  /// a chat with that person. Static HTML, and the name is never answered:
+  /// whether it exists is looked up by the app with a session, because that
+  /// lookup honours "Find me by ~name" and blocking, and an open page would
+  /// let anyone list the names that are taken.
+  static const shareLink = ApiRoute(
+    _get,
+    '/u/{name}',
+    module: 'ops',
+    access: _pub,
+  );
+
   // ------------------------------------------------------------------- admin
   static const adminSetupStatus = ApiRoute(
     _get,
@@ -911,7 +923,7 @@ abstract final class Routes {
     putHistoryBackup, getHistoryBackup, deleteHistoryBackup, putFullBackup,
     getFullBackup, deleteFullBackup, //
     live, ready, serverInfo, legal, crashReport, anomalies, metrics, assetLinks,
-    openLink, //
+    openLink, shareLink, //
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,
     s2sGroupActions, s2sGroupSync, s2sCallSignals, //

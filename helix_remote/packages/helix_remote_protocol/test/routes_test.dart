@@ -26,6 +26,7 @@ const publicRouteSnapshot = [
   'GET /v1/server/legal',
   'GET /.well-known/assetlinks.json',
   'GET /open',
+  'GET /u/{name}',
   'GET /.well-known/helix-server',
   'GET /v1/admin/setup',
   'POST /v1/admin/setup',
@@ -80,7 +81,10 @@ void main() {
       expect(
         route.path.startsWith('/v1/') ||
             route.path.startsWith('/.well-known/') ||
-            route.path == '/open',
+            // The two pages a browser opens: the shared-code landing page and
+            // the share link `/u/<~name>`.
+            route.path == '/open' ||
+            route.path == '/u/{name}',
         isTrue,
         reason: '$route',
       );

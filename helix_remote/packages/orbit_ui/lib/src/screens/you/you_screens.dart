@@ -553,11 +553,20 @@ class YouTile {
 }
 
 /// What the share sheet shows: your code and link.
+///
+/// [qr] is the real matrix of [link], when the app can encode one. Without it
+/// the sheet draws the prototype's pattern for [qrSeed], which is only ever
+/// what the design preview shows.
 class ShareCodeModel {
-  const ShareCodeModel({required this.link, this.qrSeed = 'my-helix-code'});
+  const ShareCodeModel({
+    required this.link,
+    this.qrSeed = 'my-helix-code',
+    this.qr,
+  });
 
   final String link;
   final String qrSeed;
+  final HelixQrMatrix? qr;
 }
 
 class YouModel {
@@ -1179,7 +1188,9 @@ class _ShareSheet extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 20, bottom: 6),
             child: Center(
-              child: OrbitQrCard(child: OrbitQr(seed: share.qrSeed)),
+              child: OrbitQrCard(
+                child: OrbitQr(seed: share.qrSeed, matrix: share.qr),
+              ),
             ),
           ),
           Padding(

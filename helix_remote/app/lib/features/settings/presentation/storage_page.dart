@@ -1,10 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:helix_remote/core/engine/failure_copy.dart';
 import 'package:helix_remote/features/chats/application/chat_list_provider.dart';
 import 'package:helix_remote/features/settings/application/about_providers.dart';
-import 'package:helix_remote/features/settings/application/settings_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
 import 'package:helix_remote/features/settings/application/settings_providers.dart';
 import 'package:helix_remote/shared/format.dart';
@@ -40,17 +38,8 @@ class StoragePage extends ConsumerWidget {
         item.id: item,
     };
 
-    Future<String?> free(StorageFreeKind kind, String chatId) async {
-      try {
-        final freed = await ref
-            .read(settingsGatewayProvider)
-            .freeChatSpace(chatId, kind);
-        ref.invalidate(storageDetailProvider);
-        return '${formatBytes(freed)} freed';
-      } on Object catch (error) {
-        return describeFailure(error).message;
-      }
-    }
+    Future<String?> free(StorageFreeKind kind, String chatId) =>
+        ref.read(storageFreeActionsProvider).free(chatId, kind);
 
     return orbit.StorageScreen(
       model: orbit.StorageModel(

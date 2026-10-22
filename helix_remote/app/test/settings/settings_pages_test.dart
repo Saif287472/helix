@@ -6,6 +6,7 @@ import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
 import 'package:helix_remote/core/platform/storage_usage.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote/features/profile/application/profile_gateway.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
 import 'package:helix_remote/features/settings/presentation/about_page.dart';
@@ -109,6 +110,78 @@ void main() {
       await tester.tap(find.text('Edit profile').first);
       await settle(tester);
       expect(find.text('stub:${RoutePaths.profile}'), findsOneWidget);
+    });
+
+    youTest('the share sheet carries the ~name link, QR and buttons', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      const link = 'https://helix.agiletechbd.com/u/anna.k';
+      final share = FakeShareAdapter();
+      await pumpPage(
+        tester,
+        const OrbitYouConnector(),
+        overrides: a3bOverrides(
+          settingsGateway: FakeSettingsGateway(),
+          profile: FakeProfileGateway(),
+          share: share,
+        ),
+        stubs: [RoutePaths.scanChat],
+      );
+      await settle(tester);
+      Future<void> openSheet() async {
+        await tester.tap(find.byTooltip('Share your Orbit code'));
+        await settle(tester);
+      }
+
+      await openSheet();
+      expect(find.text(link), findsOneWidget);
+      expect(
+        tester.widget<orbit.OrbitQr>(find.byType(orbit.OrbitQr)).matrix,
+        isNotNull,
+        reason: 'the sheet draws the link as a real code, not a pattern',
+      );
+
+      await tester.tap(find.text('Copy link'));
+      await settle(tester);
+      expect(find.text('Link copied'), findsOneWidget);
+      // Let the toast go away: it sits over the sheet and eats the next tap.
+      await tester.pump(const Duration(seconds: 3));
+      await settle(tester);
+
+      await openSheet();
+      await tester.tap(find.text('Share'));
+      await settle(tester);
+      expect(share.links, [link]);
+
+      await openSheet();
+      await tester.tap(find.text('Scan someone’s code'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.scanChat}'), findsOneWidget);
+    });
+
+    youTest('an account with no ~name has no link to share', (tester) async {
+      useTallWindow(tester);
+      final profile = FakeProfileGateway()
+        ..profile.set(
+          const ProfileData(
+            accountId: 'acct-1',
+            name: 'Anna Khan',
+            about: 'Busy',
+            phoneMasked: '+88017*****01',
+          ),
+        );
+      await pumpPage(
+        tester,
+        const OrbitYouConnector(),
+        overrides: a3bOverrides(
+          settingsGateway: FakeSettingsGateway(),
+          profile: profile,
+        ),
+      );
+      await settle(tester);
+      expect(find.byTooltip('Share your Orbit code'), findsNothing);
+      expect(find.textContaining('/u/'), findsNothing);
     });
   });
 

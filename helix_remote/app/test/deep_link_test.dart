@@ -122,6 +122,68 @@ void main() {
     });
   });
 
+  group("a person's share link", () {
+    test('opens a chat from both forms', () {
+      final web = HelixDeepLink.tryParse(
+        'https://helix.agiletechbd.com/u/anna',
+      );
+      expect(web?.kind, HelixDeepLinkKind.personLink);
+      expect(web?.helixName, 'anna');
+      expect(HelixDeepLink.tryParse('helix://u/anna')?.helixName, 'anna');
+      expect(
+        HelixDeepLink.tryParse('https://chat.example/u/anna')?.helixName,
+        'anna',
+        reason: 'a personal server serves the same page',
+      );
+    });
+
+    test('reads a ~, any case and a trailing slash the same way', () {
+      expect(
+        HelixDeepLink.tryParse('helix://u/~Anna.Taken')?.helixName,
+        'anna.taken',
+      );
+      expect(
+        HelixDeepLink.tryParse(
+          'https://helix.agiletechbd.com/u/anna/',
+        )?.helixName,
+        'anna',
+      );
+    });
+
+    test('is the link the app shares', () {
+      const link = 'https://helix.agiletechbd.com/u/anna';
+      expect(helixProfileLink('anna'), link);
+      expect(HelixDeepLink.tryParse(link)?.helixName, 'anna');
+    });
+
+    test('a name no server would accept opens nothing', () {
+      for (final path in [
+        'https://helix.agiletechbd.com/u/',
+        'https://helix.agiletechbd.com/u/anna/extra',
+        'https://helix.agiletechbd.com/u/1anna',
+        'https://helix.agiletechbd.com/u/an',
+        'https://helix.agiletechbd.com/u/anna!',
+        'http://helix.agiletechbd.com/u/anna',
+      ]) {
+        expect(
+          HelixDeepLink.tryParse(path),
+          isNull,
+          reason: '$path is not one valid ~name',
+        );
+      }
+    });
+
+    test('a query or fragment on the link changes nothing', () {
+      // The name is in the path, and the page behind it is static: what the
+      // app does with the link is a session call of its own.
+      final link = HelixDeepLink.tryParse(
+        'https://helix.agiletechbd.com/u/anna?utm=1#frag',
+      );
+      expect(link?.helixName, 'anna');
+      expect(link?.setupCode, isNull);
+    });
+  });
+
   group('what is not a link', () {
     test('rejects empty input, whitespace and a bare slash', () {
       for (final input in ['', '   ', '/', 'not a uri at all']) {

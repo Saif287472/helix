@@ -121,6 +121,7 @@ class FakeSecretHandoff implements SecretHandoff {
 class FakeShareAdapter implements ShareAdapter {
   bool result = true;
   final List<({String filename, Uint8List bytes, String mimeType})> shared = [];
+  final List<String> links = [];
 
   @override
   Future<bool> shareFile({
@@ -129,6 +130,12 @@ class FakeShareAdapter implements ShareAdapter {
     required String mimeType,
   }) async {
     shared.add((filename: filename, bytes: bytes, mimeType: mimeType));
+    return result;
+  }
+
+  @override
+  Future<bool> shareText({required String text, String? subject}) async {
+    links.add(text);
     return result;
   }
 }

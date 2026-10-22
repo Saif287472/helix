@@ -55,7 +55,7 @@ Then on the old pages, now ported (2026-10-22):
   Restore history's "I have a recovery secret" now opens Recovery's
   Restore tab (`?tab=restore`).
 
-Next: the owner tries a debug APK.
+Next: the owner builds and installs a debug APK to try it.
 
 Done after that (2026-10-21, the owner's urgent list):
 - 610c519: the anomaly log. Every build sends problem reports to its own
@@ -119,10 +119,11 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: the remaining backend items (S1, E1, E4
+Deferred until the owner asks: the remaining backend items (E1, E4
 to E6), the pixel checks, batch 10 (the wide Windows layout), and Part B
 steps 3 to 5 (the rename, deleting `helix_remote_ui`, the full verify).
-The lists below keep their detail.
+The lists below keep their detail. (S1 is built — see "Deferred work, in
+order", item 4.)
 
 ## Deferred work, in order (owner, 2026-10-22)
 
@@ -143,7 +144,20 @@ The lists below keep their detail.
    the Storage page draws the split and the biggest chats. Engine-only,
    despite the earlier "needs the server" note: no server route, protocol
    change or migration, so no production restart.
-4. S1 (needs the server: share link, app links, scan-to-chat).
+4. S1 - **done** (2026-10-22): the share link `helix.agiletechbd.com/u/<~name>`
+   (You > the QR button: link, a real scannable code, Copy link, Share, and
+   "Scan someone's code" on `/scan-chat`, which resolves the name and opens
+   the chat). `helix://u/<name>` and the https form both parse, and Android's
+   existing verified filter took a `/u/` prefix. **This is the one item in
+   the list that changes the server**: a new public route, `GET /u/{name}`,
+   serving one static page. No migration and no new `.env` line, but the
+   route only answers once production runs this branch, so the owner has to
+   rebuild and switch to it (never done by an agent). Deviations are in
+   `DEVIATIONS.md` ("Part B S1"). It also repairs the boundary cf3fcb8 broke:
+   the Storage page read a failure sentence from `core/` inside
+   `presentation/`, which `app/test/architecture_test.dart` forbids. Freeing
+   a chat's files is `StorageFreeActions` in `application/` now, and the rule
+   is green again.
 5. E1, then E4 to E6.
 6. The pixel checks.
 7. Batch 10 (the wide Windows layout).
@@ -188,7 +202,8 @@ To do:
    see "Part B E2/E3".)
 3. **The approved backend items**, each as its own commit (helix-feature
    skill):
-   - S1: the share link `/u/<~name>`, app links and scan-to-chat.
+   - S1: the share link `/u/<~name>`, app links and scan-to-chat - **done**
+     (2026-10-22).
    - E1: share the profile photo with people you message.
    - E2: storage size by kind and by chat - **done** (2026-10-22).
    - E3: free one chat's media and keep its messages - **done**

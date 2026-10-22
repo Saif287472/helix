@@ -50,4 +50,9 @@ final class OpsClient {
 
   /// The HTML landing page for shared `#HLX-…` links.
   Future<String> openPage() async => (await _t.send(Routes.openLink)).text;
+
+  /// The HTML landing page for a `/u/<~name>` share link. [helixName] is
+  /// without its `~`; the page never answers whether the name exists.
+  Future<String> sharePage(String helixName) async =>
+      (await _t.send(Routes.shareLink, params: {'name': helixName})).text;
 }

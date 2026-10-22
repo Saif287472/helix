@@ -76,3 +76,13 @@ in the fragment, which browsers never send. The page is served only at
 them), with a strict CSP that includes `frame-ancestors 'none'` plus
 `X-Frame-Options: DENY`, so the one-tap page cannot be framed. The pipeline
 adds `nosniff`, `no-store` and `no-referrer` to every response.
+
+`/u/<~name>` is the landing page for a share link — the one link a user sends
+to somebody who is not in their phone book (`https://<host>/u/<name>`). It is
+**one static document for any name**: it never looks the name up, so it cannot
+become a way to list the accounts on the server. Whether a `~name` exists is
+answered only to a signed-in account, by `GET /v1/people/by-name/{name}`, which
+honours "Find me by ~name" and blocking. The name comes from
+`location.pathname`, which the browser already has, so the page does not echo
+it. Served at `/u/<name>` and `/u/<name>/` and nowhere deeper, with the same
+headers as `/open`.

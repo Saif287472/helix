@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/people/application/people_failures.dart';
@@ -316,4 +317,51 @@ final class PeopleActions {
   /// Starts a call. Null when it started, else one sentence to show.
   Future<String?> startCall(String accountId, {required bool video}) =>
       _ref.read(conversationSeamsProvider).startCall(accountId, video: video);
+
+  /// Opens the chat a person's `/u/<~name>` link asks for.
+  ///
+  /// The link's web page never says whether a name exists - every name gets
+  /// the same document. This is the lookup that answers, and it is the app's
+  /// own, made with a session: the same call the search box makes when you
+  /// type `~name`, so it honours "Find me by ~name" and blocking, and only
+  /// ever tells the person who asked.
+  ///
+  /// Returns null when the chat is open, else one sentence to show.
+  Future<String?> openPersonLink(String helixName) async {
+    try {
+      final gateway = await _ref.read(peopleGatewayProvider.future);
+      final person = await gateway.findByHelixName(helixName);
+      if (person == null) {
+        // One sentence for "nobody has this name", "they are not findable by
+        // name" and "they blocked you": the server does not say which, so a
+        // link cannot be used to probe for an account.
+        return 'No Helix account is called ~$helixName on your server, '
+            'or it is not findable by name.';
+      }
+      if (person.accountId == gateway.selfAccountId) {
+        return 'That is your own ~name.';
+      }
+      await openChat(person.accountId);
+      return null;
+    } on Object catch (error) {
+      // The exception itself never reaches the screen: it can name an account
+      // or carry a server's own text.
+      return switch (PeopleFailure.of(error)) {
+        PeopleFailure.rateLimited => 'Too many lookups. Try again later.',
+        PeopleFailure.offline => 'No connection to your server.',
+        PeopleFailure.other => 'That lookup did not work. Try again.',
+      };
+    }
+  }
+
+  /// Opens the chat named by the text a camera just read.
+  ///
+  /// True when the chat is open. Anything that is not a share code - a safety
+  /// number, another app's QR - is refused here rather than looked up, so a
+  /// scan costs no request and the scanner keeps going.
+  Future<bool> openScannedCode(String text) async {
+    final link = HelixDeepLink.tryParse(text);
+    if (link?.kind != HelixDeepLinkKind.personLink) return false;
+    return await openPersonLink(link!.helixName!) == null;
+  }
 }

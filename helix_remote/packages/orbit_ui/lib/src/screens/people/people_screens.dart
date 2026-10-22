@@ -882,8 +882,9 @@ class ScanCodeActions {
   final VoidCallback? onMatch;
   final VoidCallback? onMismatch;
 
-  /// A code the camera read (safety number): true when it matches, and the
-  /// chat is then marked verified.
+  /// A code the camera read: true when it answers - a safety number that
+  /// matches, a share code that names someone you can message - and the page
+  /// then closes. False says what went wrong and scanning goes on.
   final Future<bool> Function(String text)? onCode;
 }
 
@@ -896,9 +897,10 @@ typedef ScanCameraSlot =
 /// marks and a sweeping line, and what to point it at. Without a camera, or
 /// when it was refused, it says what to do instead.
 ///
-/// A code is checked one at a time: a match says "Verified. Your chat is
-/// private." and goes back to the safety number; a mismatch says so, and
-/// scanning goes on.
+/// A code is checked one at a time, and what one means depends on the mode:
+/// a safety number that matches says "Verified. Your chat is private." and
+/// goes back to the number; a contact code that matches opens the chat it
+/// names. Either way a mismatch is said, and scanning goes on.
 class ScanCodeScreen extends StatefulWidget {
   const ScanCodeScreen({
     super.key,
@@ -928,21 +930,32 @@ class _ScanCodeScreenState extends State<ScanCodeScreen> {
     final check = widget.actions.onCode;
     if (check == null || _busy) return;
     _busy = true;
+    final contact = widget.model.mode == ScanMode.contact;
     try {
       final match = await check(text);
       if (!mounted) return;
       if (match) {
-        showOrbitToast(context, 'Verified. Your chat is private.');
+        showOrbitToast(
+          context,
+          contact
+              ? 'Found them. Opening your chat.'
+              : 'Verified. Your chat is private.',
+        );
         await Navigator.maybePop(context);
         return;
       }
       await showOrbitDialog(
         context,
-        title: 'That code does not match',
-        text:
-            'The code on their phone is not the one Orbit expects for this '
-            'chat. Do not trust this chat until you have compared the numbers '
-            'with them in person.',
+        title: contact
+            ? 'That is not a share code'
+            : 'That code does not match',
+        text: contact
+            ? 'It does not name anyone you can message. Either it is not a '
+                  'link from this app, or that person is not findable by name '
+                  'on your server.'
+            : 'The code on their phone is not the one Orbit expects for this '
+                  'chat. Do not trust this chat until you have compared the numbers '
+                  'with them in person.',
         actions: const [OrbitDialogAction('OK', kind: OrbitButtonKind.primary)],
       );
     } finally {

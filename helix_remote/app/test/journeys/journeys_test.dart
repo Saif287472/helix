@@ -11,6 +11,7 @@ import 'package:orbit_ui/orbit_ui.dart'
 
 import '../support/chat_harness.dart' show settle, testNow;
 import '../support/orbit_theme.dart' show findMessageText;
+import '../support/people_fakes.dart' show personRow;
 import 'journey_harness.dart';
 
 /// Whole-app walks across features, over the real router: the seams the
@@ -227,5 +228,50 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await settle(tester);
     expect(find.textContaining("You're already signed in"), findsNothing);
+  });
+
+  journeyTest("a person's share link opens the chat it names", (tester) async {
+    final app = await Journey.start(tester, wholeApp: true);
+    await app.signIn(tester);
+    app.people.byHelixName['nadia'] = personRow(
+      'nadia',
+      phonebook: 'Nadia',
+      helix: 'nadia',
+    );
+
+    // The same hand-off as an invite: the phone gives the running app the
+    // link, and the name in it is looked up with this account's session.
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'com.helix.remote/links',
+      const StandardMethodCodec().encodeMethodCall(
+        MethodCall('open', helixProfileLink('nadia')),
+      ),
+      (_) {},
+    );
+    await settle(tester, rounds: 10);
+
+    expect(app.people.calls, contains('findByHelixName:nadia'));
+    expect(app.people.calls, contains('openChat:nadia'));
+    expect(app.container.read(pendingLinkProvider), isNull);
+    expect(find.text('Nadia'), findsWidgets);
+
+    // A name nobody can be found under leaves the chat alone and says so.
+    app.router.go('/home');
+    await settle(tester, rounds: 10);
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'com.helix.remote/links',
+      const StandardMethodCodec().encodeMethodCall(
+        const MethodCall('open', 'helix://u/ghost'),
+      ),
+      (_) {},
+    );
+    await settle(tester, rounds: 10);
+    expect(find.textContaining('is not findable by name'), findsOneWidget);
+    expect(app.people.calls, contains('findByHelixName:ghost'));
+    expect(app.people.calls.where((c) => c.startsWith('openChat:')).length, 1);
+
+    await tester.pump(const Duration(seconds: 4));
+    await settle(tester);
+    expect(find.textContaining('is not findable by name'), findsNothing);
   });
 }

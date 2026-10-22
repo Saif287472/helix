@@ -219,6 +219,7 @@ void main() {
     Routes.metrics: (c) => c.admin.metrics(),
     Routes.assetLinks: (c) => c.ops.assetLinks(),
     Routes.openLink: (c) => c.ops.openPage(),
+    Routes.shareLink: (c) => c.ops.sharePage('someone'),
     // compliance
     Routes.exportData: (c) => c.compliance.export(),
     Routes.deleteAccount: (c) => c.compliance.deleteAccount(),

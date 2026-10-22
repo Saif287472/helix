@@ -104,6 +104,30 @@ final class StorageDetail {
   final List<ChatStorageSizes> chats;
 }
 
+final storageFreeActionsProvider = Provider<StorageFreeActions>(
+  StorageFreeActions.new,
+);
+
+/// One chat's files, without losing its messages.
+final class StorageFreeActions {
+  StorageFreeActions(this._ref);
+
+  final Ref _ref;
+
+  /// The one sentence for the page: how much came back, or why nothing did.
+  Future<String?> free(String chatId, StorageFreeKind kind) async {
+    try {
+      final freed = await _ref
+          .read(settingsGatewayProvider)
+          .freeChatSpace(chatId, kind);
+      _ref.invalidate(storageDetailProvider);
+      return '${formatBytes(freed)} freed';
+    } on Object catch (error) {
+      return describeFailure(error).message;
+    }
+  }
+}
+
 // ---------------------------------------------------------------- advanced
 
 class SyncState {

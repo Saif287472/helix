@@ -120,7 +120,8 @@ application/
                          (EnginePeopleGateway is the real one; tests fake it);
                          SafetyNumberData (groups, QR text/matrix); PhoneBookSyncLog
   people_search.dart     PeopleQuery.parse, searchPeople (pure), lookup controller,
-                         PeopleActions (open chat / start call)
+                         PeopleActions (open chat / start call, and the share link:
+                         openPersonLink / openScannedCode)
   phone_book_sync.dart   contactsPermissionProvider, phoneBookSyncProvider
   contact_info.dart      ContactPerson (TrustState), disappearing/report types (mute
                          is shared/widgets/mute_choice.dart's MuteFor),
@@ -130,9 +131,10 @@ application/
   people_failures.dart   PeopleFailure: rateLimited / offline / other
 presentation/            connectors for orbit_ui's pages: contact_info_screen.dart
                          (ContactScreen), safety_number_screen.dart, safety_scan_screen.dart
-                         (ScanCodeScreen over the scanner), people_search_screen.dart
+                         and scan_chat_screen.dart (both ScanCodeScreen, in its two
+                         modes, over the scanner), people_search_screen.dart
                          (the people panel of shared/widgets/orbit_people_panel.dart)
-people_routes.dart       /home/people, /search, /:id, /:id/safety, /:id/scan
+people_routes.dart       /scan-chat, /home/people, /search, /:id, /:id/safety, /:id/scan
 ```
 
 Platform code is behind an adapter in `core/platform/`: `ContactsAccess`
@@ -194,6 +196,31 @@ mismatch says so and does nothing else.
 
 Never in a snackbar or an error: a name or a number (`test/people_rules_test.dart`
 scans for interpolation).
+
+## A person's share link (S1)
+
+`https://helix.agiletechbd.com/u/<~name>` (and `helix://u/<name>`) is the one
+thing a person can hand to somebody who is not in their phone book. Both
+forms parse to `HelixDeepLinkKind.personLink` in `core/links/deep_link.dart`,
+which is the only place a name is normalised (trim, drop the leading `~`,
+lower case) and the server's `SetHelixNameRequest.pattern` decides whether the
+link is worth following at all.
+
+Nothing in this feature navigates for it. `AppLinkListener`
+(`shared/widgets/app_link_listener.dart`) holds the link until the device is
+signed in and calls `PeopleActions.openPersonLink`, and the same method
+resolves a code scanned in contact mode (`openScannedCode`). Both look the
+name up with a session through `PeopleGateway.findByHelixName` - which is why
+"Find me by ~name" and blocking are honoured - and then use the `openChat`
+seam. `GET /u/{name}` on the server is a static page and answers nothing about
+the name; the only lookup is this one.
+
+The sentences are deliberately blunt: a name that does not exist, one whose
+owner is not findable and one that has blocked you are all
+"No Helix account is called ~x on your server, or it is not findable by name."
+An answer that could tell them apart would let anyone walk the server's names.
+`test/person_link_test.dart` pins that the exception behind a failure never
+reaches the screen.
 
 ## Engine additions this feature needed (small, additive)
 

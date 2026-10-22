@@ -55,7 +55,7 @@ Your profile is drawn as an orbit (`SCREENS.md` design change 19,
 | `versionLabel` | `String` | have | `aboutAppProvider.version` (`core/platform/app_info.dart`, `kAppVersion`) | Footer "Orbit 2.0.0 · <host>". |
 | `serverHost` | `String` | have | `SettingsHeader.serverHost` | Footer. |
 | `selectedTopic` | `YouTopic?` | derive | the right pane's current route (frame.md) | Window only: the marked tile or row. |
-| `share` | `ShareCodeModel?` | server | nothing | Null hides the QR button under your profile. See "The share sheet". |
+| `share` | `ShareCodeModel?` | have | `profileProvider`'s `helixName` → `_shareCode` (`shared/widgets/orbit_you_connector.dart`) | Null (no `~name`) hides the QR button and the whole sheet. See "The share sheet". |
 
 #### The checkup (`CheckupItem`: `key`, `ok`, `title`, `statusText`, `fixLabel?`, `topic`)
 | Check | Ok when | Tag | Comes from today | Notes |
@@ -81,8 +81,8 @@ The rows Account, Help and about, Advanced have fixed subtitles; Storage uses `s
 #### The share sheet (`ShareCodeModel`)
 | Field | Type | Tag | Comes from today | Notes |
 |---|---|---|---|---|
-| `link` | `String` | server | nothing | `helix.agiletechbd.com/u/<name>`. The link host has no `/u/` page, the app has no app-link filter for it, and `HelixDeepLink.tryParse` (`core/links/deep_link.dart`) does not parse it. It needs a `~name`. |
-| `qr` | `HelixQrMatrix` | server | `encodeQr` exists | The payload is `link`. |
+| `link` | `String` | have | `helixProfileLink(helixName)` (`core/links/deep_link.dart`) | `helix.agiletechbd.com/u/<name>`. Built (S1): the server answers `GET /u/{name}` with a static page (ops), and `HelixDeepLink.tryParse` reads both the https and `helix://` form. Needs a `~name` — no name, no sheet. |
+| `qr` | `HelixQrMatrix` | have | `encodeQr(link)` (`core/platform/qr_encoder.dart`) | The payload is `link`; the sheet draws the real matrix, so it scans. `qrSeed` is the fallback the preview uses. |
 | `name`, `helixName`, `avatar` | as above | have | as above | The small profile at the top of the sheet: the planet and its ring, the name and the ~name. |
 
 ### Actions
@@ -92,9 +92,9 @@ The rows Account, Help and about, Advanced have fixed subtitles; Storage uses `s
 | `openTopic` | `void Function(YouTopic)` | have | `RoutePaths.account`, `.privacy`, `.notifications`, `.chats`, `.storage`, `.about`, `.advanced`, `.devices`, `.backup`, `.blocked`, `.changePassword`, `.backupRecovery` (`shared/route_paths.dart`) | `YouTopic.appearance` needs a new route. Tiles, rows, search results and the checkup's arrows all use it. |
 | `fixRecovery` | `void Function()` | have | `context.push(RoutePaths.backupRecovery)` | The prototype opens the Create tab. |
 | `turnOnAppLock` | `Future<String?> Function()` | have | `appLockActionsProvider.setEnabled(true)` (`settings_providers.dart`) | Called after the screen's "Turn on app lock?" dialog. The phone's own prompt follows. Returns a sentence when it could not. |
-| `copyShareLink` | `Future<void> Function()` | server | nothing (pattern: `features/groups/application/group_invites.dart`) | |
-| `shareLink` | `Future<void> Function()` | server | nothing (`SharePlus`, as group invites do) | `ShareAdapter` (`core/platform/share_adapter.dart`) only shares files. |
-| `scanCode` | `void Function()` | server | nothing | Opens `scan` (people_groups.md; scanner slot `qrScannerBuilderProvider`, `shared/widgets/qr_scanner_view.dart`). A scanned `/u/<name>` would resolve with `PeopleGateway.findByHelixName`, then `openChat` (`features/people/application/people_gateway.dart`). Useless until `link` exists. |
+| `copyShareLink` | `Future<void> Function()` | have | `Clipboard.setData`, then the "Link copied" toast (`shared/widgets/orbit_you_connector.dart`) | |
+| `shareLink` | `Future<void> Function()` | have | `ShareAdapter.shareText` (`core/platform/share_adapter.dart`), subject "Message me on Helix" | The interface gained `shareText`; files still go through `shareFile`. Windows uses the same `ShareParams` path. |
+| `scanCode` | `void Function()` | have | `context.push(RoutePaths.scanChat)` → `ScanChatScreen` → `PeopleActions.openScannedCode` | Contact mode of the scanner screen (`features/people/presentation/scan_chat_screen.dart`). A scanned `/u/<name>` resolves with `PeopleGateway.findByHelixName`, then `openChat`. |
 
 ### Kept inside the screen
 Search mode, its text, the search index (fixed titles plus the tiles' live
@@ -129,8 +129,8 @@ position.
 ### New backend work
 | Item | Why the design needs it | Engine / server / protocol | Size |
 |---|---|---|---|
-| Share link `/u/<name>` | Share sheet: link, QR, copy, share | Server: a `/u/` page on the link host. App: an app-link filter (Android), the Windows protocol, `HelixDeepLink` parsing. Lookup already exists: `/v1/people/by-name/{name}` (honours `discoverable_by_name`, people `MODULE.md`). | M |
-| Scan someone's code to start a chat | "Scan someone's code" | App only, once the link exists: scanner → `findByHelixName` → `openChat`. Today `helix://contact/add?…` is parsed but nothing makes or resolves it; the router just opens People (`core/router/app_router.dart`). | S |
+| Share link `/u/<name>` | Share sheet: link, QR, copy, share | **Built (S1).** Server: `GET /u/{name}` in ops serves one static page and never answers whether the name exists. App: the Android filter took a `/u/` prefix (the host was already claimed in `assetlinks.json`), Windows had `helix://`, `HelixDeepLink` parses both. Lookup stays the session-carrying `/v1/people/by-name/{name}` (honours `discoverable_by_name`, people `MODULE.md`). | M |
+| Scan someone's code to start a chat | "Scan someone's code" | **Built (S1).** App only: `/scan-chat` → the scanner in contact mode → `findByHelixName` → `openChat`. The parsed-but-unused `helix://contact/add` is left alone; a person's link is the one format. | S |
 
 ## Edit profile (`profile`)
 

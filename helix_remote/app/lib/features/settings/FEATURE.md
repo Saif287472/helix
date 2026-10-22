@@ -8,7 +8,7 @@ several features); every tile and row opens a page registered in
 
 | Page | What it does | Where the data comes from |
 |---|---|---|
-| You | header (name, about or server host, picture), the orbit, the checkup and the tiles | `SettingsGateway.watchHeader`, `shared/you_facts.dart`, `core/platform/profile_image_source.dart` |
+| You | header (name, about or server host, picture), the orbit, the checkup and the tiles; the QR button opens the share sheet (link, real code, Copy link, Share, "Scan someone's code") and shows only when the account has a `~name` | `SettingsGateway.watchHeader`, `shared/you_facts.dart`, `core/platform/profile_image_source.dart`, `profileProvider`'s `helixName` + `core/links/deep_link.dart` (`helixProfileLink`) + `core/platform/qr_encoder.dart` + `core/platform/share_adapter.dart` |
 | Account | masked phone, `~name`, change/set password, export, "Switch account", "Sign out and remove", delete | `SettingsGateway` (`account`, `changePassword`, `exportAccount`, `deleteAccount`), core `signOutProvider`, `accountsProvider` |
 | Accounts | the accounts signed in on this phone, to open, add or remove (asks first) | `accountLinesProvider`, `accountsPageProvider` (`core/engine/runtime_providers.dart`) |
 | Privacy | last seen / online / group-add audiences, found by phone / `~name` (server); read receipts, typing, default disappearing timer, the device's app lock, blocked list | server `people.privacy`, engine `EngineSettings`, `AppSettings`, `PeopleService.watchAll`, `accountsProvider`'s `DeviceLock` |

@@ -5,6 +5,7 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
 import 'package:helix_remote_server/src/kernel/crypto.dart';
 import 'package:helix_remote_server/src/modules/ops/open_page.dart';
+import 'package:helix_remote_server/src/modules/ops/share_page.dart';
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/config/server_config.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
@@ -118,6 +119,15 @@ CREATE TABLE $s.settings (
         _openLink,
         rateLimit: _probe,
         // The Android link filter matches `/open` and `/open/` only.
+        trailingSlash: true,
+      )
+      ..add(
+        name,
+        Routes.shareLink,
+        _shareLink,
+        rateLimit: _probe,
+        // A trailing slash is the same page: the name is what the browser
+        // already has, and nothing below one more segment is this route.
         trailingSlash: true,
       );
   }
@@ -355,13 +365,20 @@ CREATE TABLE $s.settings (
     );
   }
 
-  Future<Response> _openLink(HelixRequest request) async => Response.ok(
-    openPageHtml,
+  Future<Response> _openLink(HelixRequest request) async =>
+      _landingPage(openPageHtml);
+
+  Future<Response> _shareLink(HelixRequest request) async =>
+      _landingPage(sharePageHtml);
+
+  /// One of the two pages a browser opens straight from a shared link. They
+  /// carry a one-tap action on a code, so they must not be framed
+  /// (clickjacking): `frame-ancestors` is the modern control and
+  /// `x-frame-options` covers old browsers.
+  Response _landingPage(String html) => Response.ok(
+    html,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      // The page carries a one-tap action on a shared code: it must not be
-      // framed (clickjacking). `frame-ancestors` is the modern control and
-      // `x-frame-options` covers old browsers.
       'content-security-policy':
           "default-src 'none'; style-src 'unsafe-inline'; "
           "script-src 'unsafe-inline'; frame-ancestors 'none'; "

@@ -75,12 +75,12 @@ Format:
   anti-aliasing.
 - **Owner:** approved 2026-10-18 (Review 2).
 
-## QR display — draws the prototype's SVG pattern, not a real encoder
+## QR display — draws the prototype's SVG pattern until the app hands it a matrix
 
 - **Prototype:** `js/kit.js` line 39 (`Kit.qr`), drawing a deterministic 29×29 matrix SVG pattern for display.
-- **Flutter:** `OrbitQr` and `OrbitQrCard` (`packages/orbit_ui/lib/src/components/codes.dart`) paint the prototype's matrix cell for cell (`orbitQrCells` ports its FNV and xorshift with JavaScript's 32-bit rules; a test checks it against Node).
+- **Flutter:** `OrbitQr` and `OrbitQrCard` (`packages/orbit_ui/lib/src/components/codes.dart`) paint the prototype's matrix cell for cell (`orbitQrCells` ports its FNV and xorshift with JavaScript's 32-bit rules; a test checks it against Node). When the app passes a `HelixQrMatrix`, the same widget paints that instead, so every real code in the app (link this device, the safety number, and since S1 the share sheet) is scannable. `orbit_ui` still has no generator and never encodes: the app builds the matrix in `app/lib/core/platform/qr_encoder.dart` and passes it through the model.
 - **Why:** Encoding and rendering arbitrary dynamic QR codes needs a QR generator package (e.g. `qr_flutter`), which the app may not have or want as a dependency in `orbit_ui`. The prototype draws the pattern alone.
-- **Owner:** pending (to decide in Part B whether to add a real QR generator or slot).
+- **Owner:** the split is the design (pattern for the preview, matrix from the app); since S1 no shipped screen is left showing a pattern. Pending review (Part B, S1).
 
 ## Prototype fixes made during Review 3.1 (not deviations; listed for approval)
 
@@ -685,9 +685,10 @@ score exactly as at Review 4 after the changes below.
   shared `MuteFor`, "Always" is the year 9999; the people feature had its
   own of 100 years).
   - **Owner:** pending (Part B batch 6).
-- **Scan someone's code (contact mode) is not wired**: there is no route
-  for it yet; it depends on the code format of `you.md` (batch 8).
-  - **Owner:** pending (Part B batch 6).
+- **Scan someone's code (contact mode) waits on the code format**: there is
+  no route for it yet; it depends on the code format of `you.md` (batch 8).
+  - **Owner:** pending (Part B batch 6). Built by S1 — see "Part B S1" at
+    the end of this file.
 
 ## Part B batch 7 (groups, wired into the app)
 
@@ -877,4 +878,58 @@ score exactly as at Review 4 after the changes below.
   conversation id and byte counts, not a title; the Storage page looks the id
   up in the chat and archived lists, and draws "Chat" with a generated avatar
   until the list has loaded.
+  - **Owner:** pending review.
+
+## Part B S1 (the share link, app links and scan-to-chat, 2026-10-22)
+
+- **The link answers in the app, not on the web page.** `GET /u/{name}`
+  (`server/lib/src/modules/ops/share_page.dart`) serves one static page for
+  every name, taken or not: it never looks the name up, so it cannot be asked
+  to list the server's accounts. The button launches `helix://u/<name>`
+  (Android uses an `intent://` URL for the same thing), and the app resolves
+  the name with a session through `GET /v1/people/by-name/{name}`, which is
+  where "Find me by ~name" and blocking are honoured.
+  - **Owner:** pending review. Say if you want the page to answer instead;
+    that is a name-enumeration oracle and was refused in the plan.
+- **One sentence covers three cases.** A link to a name that does not exist,
+  one whose owner has stopped being findable, and one from somebody who
+  blocked you all get the same "No Helix account is called ~x on your server,
+  or it is not findable by name." Any difference would leak which of the three
+  it was. Own name gets its own plain sentence.
+  - **Owner:** pending review.
+- **A `~name` is per-server, so the link is too.** The page sits on Helix
+  Global (`kHelixLinkHost`) whatever server you use, and the app looks the
+  name up on the *receiver's* server. `~anna` therefore opens Anna as the
+  receiver knows her; if the two accounts are on different servers it can
+  name somebody else or nobody. This matches how `~name` uniqueness already
+  works — one server, not a global directory.
+  - **Owner:** pending review.
+- **The share sheet shows only with a `~name`.** The prototype draws it for
+  every account. Without a name there is nothing to link and no code to draw,
+  so You hides the QR button (and its "an account with no ~name" test asserts
+  the whole sheet is gone) until one is set in the profile editor.
+  - **Owner:** pending review.
+- **The sheet's three buttons are the app's, not the prototype's.** Copy link
+  writes the system clipboard and toasts "Link copied"; Share opens the
+  platform share sheet (`ShareAdapter.shareText`, subject "Message me on
+  Helix"); Scan someone's code pushes `/scan-chat`. The prototype's sheet has
+  no behaviour behind them.
+  - **Owner:** pending review.
+- **`/scan-chat` is a top-level route.** `/home/people/<id>/scan` is the
+  safety-number scanner and its `:id` segment would swallow a path under
+  `/home/people`, so contact scanning got its own path beside `/scan` rather
+  than a nested one.
+  - **Owner:** pending review.
+- **Contact scan reuses the safety scanner's screen with its own wording.**
+  `ScanMode.contact` says "Found them. Opening your chat." on a match and
+  "That is not a share code" on one that names nobody; the safety number's
+  "Verified. Your chat is private." and "That code does not match" stay for
+  `ScanMode.safety`. One screen, two jobs, because the prototype drew them
+  identically apart from the words.
+  - **Owner:** pending review.
+- **No infra change.** Android's autoVerify filter already claimed the whole
+  host through `/.well-known/assetlinks.json` (`handle_all_urls`), so `/u/`
+  only needed a `<data android:pathPrefix="/u/" />` entry in the existing
+  filter; Windows already handles `helix://`. The route adds no migration and
+  no `.env` line, but it needs the server rebuilt and restarted to answer.
   - **Owner:** pending review.

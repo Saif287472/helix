@@ -285,6 +285,74 @@ void main() {
       expect(codes, ['wrong', 'next']);
     });
 
+    testWidgets('a share code says what a scan of it does', (tester) async {
+      var opened = false;
+      late ValueChanged<String> read;
+      await show(
+        tester,
+        ScanCodeScreen(
+          model: const ScanCodeModel(mode: ScanMode.contact),
+          actions: ScanCodeActions(
+            onCode: (text) async {
+              opened = true;
+              return true;
+            },
+          ),
+          camera: (context, onCode) {
+            read = onCode;
+            return const SizedBox.expand();
+          },
+        ),
+      );
+      read('https://helix.agiletechbd.com/u/anna');
+      await tester.pumpAndSettle();
+      expect(opened, isTrue);
+      // Contact mode never speaks of verification: the code names a person,
+      // and what happens is that their chat opens.
+      expect(find.text('Found them. Opening your chat.'), findsOneWidget);
+      expect(find.text('Verified. Your chat is private.'), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('a code that names nobody is refused, and scanning goes on', (
+      tester,
+    ) async {
+      final codes = <String>[];
+      late ValueChanged<String> read;
+      await show(
+        tester,
+        ScanCodeScreen(
+          model: const ScanCodeModel(mode: ScanMode.contact),
+          actions: ScanCodeActions(
+            onCode: (text) async {
+              codes.add(text);
+              return false;
+            },
+          ),
+          camera: (context, onCode) {
+            read = onCode;
+            return const SizedBox.expand();
+          },
+        ),
+      );
+      read('https://example.com/not-a-helix-code');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That is not a share code'),
+        findsOneWidget,
+        reason: 'not the safety number’s words',
+      );
+      expect(find.text('That code does not match'), findsNothing);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      read('https://helix.agiletechbd.com/u/anna');
+      await tester.pumpAndSettle();
+      expect(codes, [
+        'https://example.com/not-a-helix-code',
+        'https://helix.agiletechbd.com/u/anna',
+      ]);
+    });
+
     testWidgets('people search can draw the whole people panel', (
       tester,
     ) async {

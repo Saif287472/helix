@@ -200,6 +200,7 @@ smaller id survives, the other ends with reason `glare`.
 | `GET /v1/ops/metrics` | — → Prometheus text | Admin token, or the server's `HELIX_METRICS_TOKEN` (opens this route only). |
 | `GET /.well-known/assetlinks.json` | — → Android asset links | |
 | `GET /open` | — → HTML landing page for `#HLX-…` links | Also served at `/open/`, and nowhere below it. CSP `frame-ancestors 'none'` and `X-Frame-Options: DENY`. |
+| `GET /u/{name}` | — → HTML landing page for a `/u/<~name>` share link | One static page for any one-segment name (also at `/u/<name>/`); it never says whether the name exists, so it is not a way to list accounts. The app asks `GET /v1/people/by-name/{name}` with a session, which honours "Find me by ~name" and blocking. Same headers as `/open`. |
 
 ## compliance
 

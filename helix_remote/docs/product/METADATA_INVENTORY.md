@@ -60,6 +60,15 @@ timers are inside the encrypted content, so they are not server data at all.
 - Phone-hash discovery (`POST /v1/people/discover`) needs authentication, is
   limited per device and capped at 5,000 matches a day; only volume is logged,
   never the hashes queried.
+- The share link (`GET /u/{name}`) is the one public route that carries a
+  person's `~name` in its URL. It stores nothing and answers nothing: every
+  name, taken or not, gets the same static page, so asking it cannot list the
+  server's names. The name reaches the server only as a request line — the
+  application log records the route template (`/u/{name}`), while whatever
+  front proxy logs the raw path is the operator's own retention. Whether the
+  name exists is answered only by the authenticated
+  `GET /v1/people/by-name/{name}`, which honours "Find me by ~name" and
+  blocking and is rate-limited.
 - Client-side, device-local only: the phone-book names and numbers used to show
   people, and the whole message history, in the SQLCipher database. Renaming
   someone in Helix also writes the name to the phone's contacts, with the

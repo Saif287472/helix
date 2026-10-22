@@ -93,6 +93,45 @@ void main() {
       },
     );
 
+    test('the share link page is one static document for any name', () async {
+      // Registered first, so a real name is proved to answer the same way
+      // as a made-up one: the page must not be a way to list accounts.
+      final alice = await h.registerGlobal(aliceNumber);
+      await h.api.call(
+        Routes.setHelixName,
+        bearer: alice.bearer,
+        body: const SetHelixNameRequest(name: 'anna.taken').toJson(),
+      );
+      final taken = await h.api.call(
+        Routes.shareLink,
+        params: {'name': 'anna.taken'},
+      );
+      final free = await h.api.call(
+        Routes.shareLink,
+        params: {'name': 'nobodyhere'},
+      );
+      expect(taken.status, 200);
+      expect(taken.headers['content-type'], startsWith('text/html'));
+      expect(
+        taken.headers['content-security-policy'],
+        contains("frame-ancestors 'none'"),
+      );
+      expect(taken.headers['x-frame-options'], 'DENY');
+      expect(taken.body, free.body, reason: 'the name is never answered');
+      expect(taken.body, isNot(contains('anna.taken')));
+      // The browser's own path is what the page reads.
+      expect(taken.body, contains('location.pathname'));
+      expect(taken.body, contains('helix://'));
+
+      Future<int> status(String path) async =>
+          (await http.get(h.server.baseUri.replace(path: path))).statusCode;
+      expect(await status('/u/anna'), 200);
+      expect(await status('/u/anna/'), 200);
+      expect(await status('/u/'), 404);
+      expect(await status('/u/anna/extra'), 404);
+      expect(await status('/ushing'), 404);
+    });
+
     test('crash reports need the flag, and are logged redacted', () async {
       final alice = await h.registerGlobal(aliceNumber);
       final report = const CrashReport(

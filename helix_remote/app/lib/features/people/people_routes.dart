@@ -3,12 +3,18 @@ import 'package:helix_remote/features/people/presentation/contact_info_screen.da
 import 'package:helix_remote/features/people/presentation/people_search_screen.dart';
 import 'package:helix_remote/features/people/presentation/safety_number_screen.dart';
 import 'package:helix_remote/features/people/presentation/safety_scan_screen.dart';
+import 'package:helix_remote/features/people/presentation/scan_chat_screen.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
+import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/shared/widgets/people_search_panel.dart';
 
 /// The people routes (see `PeoplePaths` for the paths). `search` is declared
 /// before the `:id` routes so it is not read as an account id.
 final List<RouteBase> peopleRoutes = [
+  GoRoute(
+    path: RoutePaths.scanChat,
+    builder: (context, state) => const ScanChatScreen(),
+  ),
   GoRoute(
     path: PeoplePaths.home,
     builder: (context, state) => const PeopleSearchScreen(),

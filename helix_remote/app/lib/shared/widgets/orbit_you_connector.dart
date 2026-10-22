@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/links/deep_link.dart';
+import 'package:helix_remote/core/platform/qr_encoder.dart';
+import 'package:helix_remote/core/platform/share_adapter.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/features/backup/application/backup_providers.dart';
 import 'package:helix_remote/features/devices/application/devices_providers.dart';
@@ -121,6 +127,14 @@ class OrbitYouConnector extends ConsumerWidget {
     final accountId = header?.accountId ?? '';
     final count = devices?.count ?? 1;
     final lastBackup = backup?.lastBackupAt;
+    // The share link is `/u/<~name>`, so there is nothing to share until the
+    // account has a ~name: without one the sheet, and the code in it, is not
+    // offered at all.
+    final helixName = profile?.helixName;
+    final share = helixName == null || helixName.isEmpty
+        ? null
+        : _shareCode(helixName);
+    final link = share?.link;
 
     return orbit.YouScreen(
       model: orbit.YouModel(
@@ -190,13 +204,39 @@ class OrbitYouConnector extends ConsumerWidget {
         versionLabel: ref.watch(aboutAppProvider).version,
         serverHost: header?.serverHost ?? '',
         unlockWhat: unlockWhat(),
+        share: share,
       ),
       actions: orbit.YouActions(
         openProfile: () => context.push(RoutePaths.profile),
         openTopic: (topic) => context.push(routeOf(topic)),
         fixRecovery: () => context.push(RoutePaths.backupRecovery),
         turnOnAppLock: () => ref.read(appLockActionsProvider).setEnabled(true),
+        copyShareLink: link == null
+            ? null
+            : () {
+                unawaited(Clipboard.setData(ClipboardData(text: link)));
+                orbit.showOrbitToast(context, 'Link copied');
+              },
+        shareLink: link == null
+            ? null
+            : () => unawaited(
+                ref
+                    .read(shareAdapterProvider)
+                    .shareText(text: link, subject: 'Message me on Helix'),
+              ),
+        scanCode: () => context.push(RoutePaths.scanChat),
       ),
+    );
+  }
+
+  /// Your share code: the link, and the QR that carries it, so a scan of the
+  /// screen is the same as a tap on the link.
+  static orbit.ShareCodeModel _shareCode(String helixName) {
+    final link = helixProfileLink(helixName);
+    return orbit.ShareCodeModel(
+      link: link,
+      qrSeed: helixName,
+      qr: encodeQr(link),
     );
   }
 }
