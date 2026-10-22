@@ -288,6 +288,7 @@ final class EngineBackupGateway implements BackupGateway {
         engine.BackupFailure.incomplete => BackupProblem.incomplete,
         engine.BackupFailure.expired => BackupProblem.expired,
         engine.BackupFailure.notAllowed => BackupProblem.notAllowed,
+        engine.BackupFailure.waitingForWifi => BackupProblem.waitingForWifi,
       };
 
   static TransferStage _stage(engine.HistoryTransferPhase phase) =>

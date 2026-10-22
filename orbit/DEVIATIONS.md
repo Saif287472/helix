@@ -1007,3 +1007,37 @@ score exactly as at Review 4 after the changes below.
 - **No server change.** One count query, one field on `BackupProgress`, and
   the ring's own drawing. No migration, no `.env` line, nothing to deploy.
   - **Owner:** pending review.
+
+## Part B E5 (a separate "waiting for Wi-Fi" backup failure, 2026-10-22)
+
+- **The engine has a new failure value, and it is the app that raises it.**
+  `BackupFailure.waitingForWifi` is thrown only by `PolicyBackupRemote`
+  (`app/lib/core/engine/backup_policy.dart`), the one place that knows the
+  network is metered; the engine itself still never sees Wi-Fi. `notAllowed`
+  goes back to meaning what its doc says — the signed-in session does not
+  allow it — and the app's own `_guard` still uses it for "no server chosen"
+  and an unexpected engine error.
+  - **Owner:** pending review.
+- **A new value is stored by name, and reading is tolerant.** The last failure
+  is kept in the `backup.history` settings JSON and in `backup.transfers.in`
+  offer rows; both decode through `BackupFailure.values.asNameMap()`, so a
+  row written before this change still reads, and one written after reads on
+  an older build as no failure at all (the card then shows only its headline,
+  "The last backup did not finish"). No migration, nothing to deploy.
+  - **Owner:** pending review.
+- **The app's mapping is exhaustive on purpose.** `EngineBackupGateway`
+  `_problem` is a `switch` over every engine value, so adding one is a compile
+  error until the copy exists. `BackupProblem.waitingForWifi` is the app's
+  own name for it; `backup_copy.dart` still names no key, code or exception.
+  Nothing in the engine switches exhaustively over `BackupFailure`
+  (`BackupException.translate` keeps its `_ =>` fallback), so a real server
+  refusal — a 403, or an api code nothing else maps — still becomes
+  `notAllowed`, which is why that sentence is about the sign-in.
+  - **Owner:** pending review.
+- **Two sentences instead of one hedge.** The old `notAllowed` text covered
+  both causes ("If you are on mobile data, … or connect to Wi-Fi") and so
+  taught nothing. Now a metered refusal says to turn on backup over mobile
+  data or wait for Wi-Fi, and a refused account says to check the sign-in.
+  The Backup page shows only the sentence (the short title is the restore
+  step's card); `backup_pages_test.dart` pins both.
+  - **Owner:** pending review.

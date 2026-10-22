@@ -270,7 +270,7 @@ None.
 ### Copy that differs in meaning
 | Prototype | App | Note |
 |---|---|---|
-| Failed: "You were on mobile data and backups wait for Wi-Fi" | "The backup did not run. If you are on mobile data, turn on backup over mobile data or connect to Wi-Fi." | The app hedges because it cannot tell the cause (see `waitingForWifi`). |
+| Failed: "You were on mobile data and backups wait for Wi-Fi" | "You were on mobile data and backups wait for Wi-Fi. Turn on backup over mobile data, or back up when you are on Wi-Fi." | Built (E5): the phone now tells the two causes apart, so a refused account has its own sentence ("Helix would not take the backup…"). |
 | Delete: "A new one is made on the next run if daily backup is on." | "A new phone will not be able to restore from it until you back up again." | Both are true. The prototype loses the warning about restoring on a new phone. |
 
 ### New backend work

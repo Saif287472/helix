@@ -128,11 +128,31 @@ void main() {
     ) async {
       await open(
         tester,
+        FakeBackupGateway()..backUpFails = BackupProblem.waitingForWifi,
+      );
+      await tester.tap(find.text('Back up now'));
+      await settle(tester);
+      expect(
+        find.text(backupProblemText(BackupProblem.waitingForWifi)),
+        findsOneWidget,
+        reason: 'the phone knows the network was the reason, not a guess',
+      );
+    });
+
+    backupTest('a refused account says what a refused account says', (
+      tester,
+    ) async {
+      await open(
+        tester,
         FakeBackupGateway()..backUpFails = BackupProblem.notAllowed,
       );
       await tester.tap(find.text('Back up now'));
       await settle(tester);
-      expect(find.textContaining('connect to Wi-Fi'), findsOneWidget);
+      expect(
+        find.text(backupProblemText(BackupProblem.notAllowed)),
+        findsOneWidget,
+        reason: 'the two reasons no longer share one hedged sentence',
+      );
     });
 
     backupTest('the last failure from a scheduled backup is shown', (

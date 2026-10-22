@@ -19,6 +19,7 @@ enum BackupProblem {
   incomplete,
   expired,
   notAllowed,
+  waitingForWifi,
   unknown,
 }
 

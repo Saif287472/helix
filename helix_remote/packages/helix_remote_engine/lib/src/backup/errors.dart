@@ -56,6 +56,11 @@ enum BackupFailure {
 
   /// The signed-in session does not allow it (signed out, suspended).
   notAllowed,
+
+  /// The host refused the upload because the network is metered and backups
+  /// wait for Wi-Fi. Nothing is wrong with the backup itself; it runs again
+  /// when the rule allows it.
+  waitingForWifi,
 }
 
 /// Thrown by `BackupService` operations. [failure] is what to show;

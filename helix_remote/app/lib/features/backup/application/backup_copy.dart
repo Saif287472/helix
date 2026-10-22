@@ -4,6 +4,7 @@ import 'package:helix_remote/features/backup/application/backup_models.dart';
 ///
 /// Nothing here names a key, a code, a host or an exception: the engine's
 /// failures carry none of those, and this keeps it that way.
+
 /// 2318 as "2,318", for "Restored 2,318 messages".
 String messageCount(int n) =>
     '$n'.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
@@ -19,7 +20,8 @@ String backupProblemTitle(BackupProblem problem) => switch (problem) {
   BackupProblem.rolledBack => 'An older backup was refused',
   BackupProblem.offline => 'You are offline',
   BackupProblem.conflict => 'Another device is backing up',
-  BackupProblem.notAllowed => 'Not on mobile data',
+  BackupProblem.notAllowed => 'Helix refused it',
+  BackupProblem.waitingForWifi => 'Waiting for Wi-Fi',
   _ => 'The restore did not finish',
 };
 
@@ -62,7 +64,10 @@ String backupProblemText(BackupProblem problem) => switch (problem) {
     'The transfer is no longer available. Ask the other device to send it '
         'again.',
   BackupProblem.notAllowed =>
-    'The backup did not run. If you are on mobile data, turn on backup over '
-        'mobile data or connect to Wi-Fi.',
+    'Helix would not take the backup. Check that you are still signed in on '
+        'this phone, then try again.',
+  BackupProblem.waitingForWifi =>
+    'You were on mobile data and backups wait for Wi-Fi. Turn on backup over '
+        'mobile data, or back up when you are on Wi-Fi.',
   BackupProblem.unknown => 'That did not work. Try again.',
 };

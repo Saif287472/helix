@@ -278,7 +278,7 @@ void main() {
             isA<BackupException>().having(
               (e) => e.failure,
               'failure',
-              BackupFailure.notAllowed,
+              BackupFailure.waitingForWifi,
             ),
           ),
         );

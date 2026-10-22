@@ -25,7 +25,7 @@ final class PolicyBackupRemote implements BackupRemote {
   @override
   Future<void> putHistory(HistoryBackup backup) async {
     if (!await mayUpload()) {
-      throw const BackupException(BackupFailure.notAllowed, 'metered network');
+      throw const BackupException(BackupFailure.waitingForWifi, 'metered');
     }
     return _inner.putHistory(backup);
   }

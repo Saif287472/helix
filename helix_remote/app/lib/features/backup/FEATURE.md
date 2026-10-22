@@ -28,7 +28,8 @@ in `presentation/` (`BackupScreen`, `RestoreScreen`, `TransferScreen` and
   `HelixRuntime.open`), so Pause means pause and a new device asks before
   downloading. The restore step lists them.
 - **Mobile data** is enforced at the one place a backup leaves the phone:
-  `PolicyBackupRemote` (core) refuses an *upload* on mobile data unless allowed;
+  `PolicyBackupRemote` (core) refuses an *upload* on mobile data unless allowed,
+  as its own `waitingForWifi` failure so the page can name the switch;
   the engine records it and retries after its normal interval. Restores and
   the manual recovery backup are never blocked.
 - **Schedule and media** are the engine's: once a day, text history with

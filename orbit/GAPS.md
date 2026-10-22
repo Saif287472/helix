@@ -67,7 +67,7 @@ wait for the redesign. B5 is the server decision S3 below.
 | E2 | Storage size by kind and by chat (a database query) | Storage bar and Biggest chats | **Built** (Part B, pending review). Engine + local DAO only; no server change. |
 | E3 | Free one chat's photos, videos or documents, keeping the messages | Biggest chats → Free up space | **Built** (Part B, pending review). Engine + local DAO only; no server change. |
 | E4 | A total for a running backup | The backup ring's percentage | **Built** (Part B, pending review). Engine + app + the ring; no server change. |
-| E5 | A separate "waiting for Wi-Fi" backup failure | The failed backup's reason | **Build** (S) |
+| E5 | A separate "waiting for Wi-Fi" backup failure | The failed backup's reason | **Built** (Part B, pending review). One engine value, raised by the app's own policy; no server change. |
 | E6 | Every device knows whether a recovery backup exists, and when it was made | The checkup and Backup on every device; warning before replacing it | **Build** (S) |
 | E7 | A total while history is being prepared ("3 of 8") | Send to my other devices | **Don't build.** Use a plain moving bar |
 | E8 | Remove a finished incoming transfer | "Dismiss" | **Don't build in the engine.** Use a local hidden list |
