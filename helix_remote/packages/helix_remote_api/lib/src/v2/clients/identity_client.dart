@@ -63,6 +63,14 @@ final class IdentityClient {
     json: request.toJson(),
   );
 
+  /// Whether the number is a Helix user and whether that account has a
+  /// password, before any code is texted (ADR-032).
+  Future<AccountStatusResponse> accountStatus(String phoneNumber) => _t.call(
+    Routes.accountStatus,
+    AccountStatusResponse.fromJson,
+    json: AccountStatusRequest(phoneNumber: phoneNumber).toJson(),
+  );
+
   /// A new device starts QR linking.
   Future<LinkCreateResponse> createLink(LinkCreateRequest request) => _t.call(
     Routes.linkCreate,

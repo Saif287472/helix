@@ -348,6 +348,51 @@ final class PhoneVerifyResponse {
   );
 }
 
+/// `POST /v1/auth/account-status`. Asked before any code is texted, so the app
+/// can send a new number straight to the code and an account with a password
+/// straight to the password (ADR-032). It is a deliberate answer to an
+/// unauthenticated caller about whether a number is a Helix user; the answer
+/// unlocks nothing by itself, because every route that creates an account or
+/// changes a password still demands a phone verification.
+final class AccountStatusRequest {
+  const AccountStatusRequest({required this.phoneNumber});
+
+  /// E.164, e.g. `+8801712345678`.
+  final String phoneNumber;
+
+  JsonMap toJson() => {'phone_number': phoneNumber};
+
+  factory AccountStatusRequest.fromJson(JsonReader json) =>
+      AccountStatusRequest(phoneNumber: json.nonEmpty('phone_number'));
+
+  @override
+  String toString() => 'AccountStatusRequest(number redacted)';
+}
+
+final class AccountStatusResponse {
+  const AccountStatusResponse({
+    required this.accountExists,
+    required this.hasPassword,
+  });
+
+  final bool accountExists;
+
+  /// Only meaningful when [accountExists]: false means the account can only be
+  /// entered with a code, never with a password.
+  final bool hasPassword;
+
+  JsonMap toJson() => {
+    'account_exists': accountExists,
+    'has_password': hasPassword,
+  };
+
+  factory AccountStatusResponse.fromJson(JsonReader json) =>
+      AccountStatusResponse(
+        accountExists: json.boolean('account_exists'),
+        hasPassword: json.boolean('has_password'),
+      );
+}
+
 // ----------------------------------------------------------------- invites
 
 final class InviteLookupRequest {

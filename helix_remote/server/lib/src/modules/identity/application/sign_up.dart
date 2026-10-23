@@ -35,6 +35,22 @@ final class SignUp {
 
   // ------------------------------------------------------------ phone codes
 
+  /// Whether the number is a Helix user and whether that account has a
+  /// password, asked before any code is texted so the app can choose the
+  /// right next screen (ADR-032 is the decision to answer an unauthenticated
+  /// caller at all). The answer grants nothing: `register`, `password/reset`
+  /// and password sign-in still demand what only a code gives them.
+  Future<AccountStatusResponse> accountStatus(AccountStatusRequest req) async {
+    final existing = await c.store.accountByPhone(
+      c.db,
+      c.phoneHash(requireE164(req.phoneNumber)),
+    );
+    return AccountStatusResponse(
+      accountExists: existing != null,
+      hasPassword: existing?.hasPassword ?? false,
+    );
+  }
+
   Future<PhoneChallengeResponse> requestPhoneChallenge(
     PhoneChallengeRequest req,
   ) async {

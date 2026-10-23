@@ -7,6 +7,7 @@ import 'package:test/test.dart';
 const publicRouteSnapshot = [
   'POST /v1/auth/phone/challenges',
   'POST /v1/auth/phone/verify',
+  'POST /v1/auth/account-status',
   'POST /v1/auth/invites/lookup',
   'POST /v1/auth/invites/self-issue',
   'POST /v1/auth/register',

@@ -50,6 +50,7 @@ void main() {
     Routes.phoneVerify: (c) => c.identity.phoneVerify(
       const PhoneVerifyRequest(challengeId: 'c', code: '1'),
     ),
+    Routes.accountStatus: (c) => c.identity.accountStatus('+1'),
     Routes.inviteLookup: (c) => c.identity.inviteLookup('code'),
     Routes.inviteSelfIssue: (c) => c.identity.inviteSelfIssue(),
     Routes.register: (c) => c.identity.register(

@@ -52,6 +52,13 @@ final class AccountService {
         PhoneVerifyRequest(challengeId: challengeId, code: code),
       );
 
+  /// Whether [phoneNumber] already has an account here, and whether that
+  /// account has a password. Asked before any code is texted so the app can
+  /// choose the next screen (ADR-032). It is only a hint for the UI:
+  /// [verifyPhone] is what the server actually trusts.
+  Future<AccountStatusResponse> accountStatus(String phoneNumber) =>
+      _ctx.api.identity.accountStatus(phoneNumber);
+
   // ------------------------------------------------------ registration
 
   /// Creates an account (or, with [replaceExisting], takes over the

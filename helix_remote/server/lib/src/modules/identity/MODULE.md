@@ -89,7 +89,7 @@ the ephemeral store:
 
 ## Routes and limits
 
-All 28 identity routes from `Routes` are served. Every public route has a
+All 29 identity routes from `Routes` are served. Every public route has a
 per-IP policy (`IdentityLimits` in `http/identity_routes.dart`). Codes also
 have per-number limits (5/hour, a resend gap of `HELIX_OTP_RESEND_SECONDS`,
 default 30) and 5 attempts per challenge. Passwords lock after 5 failures:
@@ -110,6 +110,19 @@ every client salt is 32 bytes), and a sign-in that runs the same transaction
 against an id no account can have and locks after 5 failures on the same
 schedule (`decoyPasswordFailure`; the counter is in the ephemeral store under
 `identity:pwdecoy:`, compare-and-set, 25 hours).
+
+**Account status (ADR-032).** `POST /v1/auth/account-status` answers
+`account_exists` and `has_password` for a number before any code is texted, so
+the app can send a new number to the code and an account with a password to the
+password. That is a deliberate exception to the deniability the decoys above
+protect: 30 per hour per IP, no account id and no last four digits, and it
+grants nothing - `register` still demands a phone verification, password
+sign-in still demands the auth key, and the sealed identity key is only ever
+released to one of those two proofs. So there is no sessionless password reset:
+the AIK seed exists only inside `passwords.wrapped_identity_key`, sealed under
+the old password, and a code cannot open it. A number whose password is
+forgotten either links from a device that still has it, or comes in through
+`register` with `replace_existing` and starts a new identity.
 
 **Recovery lookup** (`POST /v1/auth/recovery/lookup`, 10 per hour per IP) tells the
 holder of a valid code whether a phone verification must accompany the redeem

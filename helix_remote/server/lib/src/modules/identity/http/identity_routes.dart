@@ -19,6 +19,11 @@ abstract final class IdentityLimits {
     30,
     const Duration(hours: 1),
   );
+  static final accountStatus = RateLimitPolicy.per(
+    'identity.account_status',
+    30,
+    const Duration(hours: 1),
+  );
   static final invite = RateLimitPolicy.per(
     'identity.invite',
     30,
@@ -98,6 +103,16 @@ void registerIdentityRoutes(
       rateLimit: IdentityLimits.verify,
       (q) async => jsonResponse(
         (await signUp.verify(q.json(PhoneVerifyRequest.fromJson))).toJson(),
+      ),
+    )
+    ..add(
+      m,
+      Routes.accountStatus,
+      rateLimit: IdentityLimits.accountStatus,
+      (q) async => jsonResponse(
+        (await signUp.accountStatus(
+          q.json(AccountStatusRequest.fromJson),
+        )).toJson(),
       ),
     )
     ..add(

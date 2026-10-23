@@ -87,6 +87,12 @@ abstract final class Routes {
     module: 'identity',
     access: _pub,
   );
+  static const accountStatus = ApiRoute(
+    _post,
+    '/v1/auth/account-status',
+    module: 'identity',
+    access: _pub,
+  );
   static const inviteLookup = ApiRoute(
     _post,
     '/v1/auth/invites/lookup',
@@ -908,7 +914,8 @@ abstract final class Routes {
 
   /// Every route above. Order is documentation order.
   static const List<ApiRoute> all = [
-    phoneChallenge, phoneVerify, inviteLookup, inviteSelfIssue, register, //
+    phoneChallenge, phoneVerify, accountStatus, inviteLookup,
+    inviteSelfIssue, register, //
     passwordParams, passwordSignIn, linkCreate, linkPoll, addDevice,
     deviceChallenge, deviceSignIn, refreshSession, recoveryLookup,
     recoveryRedeem, signOut, account, setPassword, setHelixName,

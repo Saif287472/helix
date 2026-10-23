@@ -138,6 +138,16 @@ void main() {
         PhoneVerifyResponse.fromJson,
       );
       expectRoundTrip(
+        const AccountStatusRequest(phoneNumber: '+8801700000000'),
+        (v) => v.toJson(),
+        AccountStatusRequest.fromJson,
+      );
+      expectRoundTrip(
+        const AccountStatusResponse(accountExists: true, hasPassword: false),
+        (v) => v.toJson(),
+        AccountStatusResponse.fromJson,
+      );
+      expectRoundTrip(
         PasswordSignInResponse(
           accountId: accountA,
           identityKey: bytes(32),
@@ -224,6 +234,10 @@ void main() {
       expect(
         const RefreshRequest(refreshToken: 'secret-token').toString(),
         isNot(contains('secret')),
+      );
+      expect(
+        const AccountStatusRequest(phoneNumber: '+8801700000000').toString(),
+        isNot(contains('1700')),
       );
     });
 

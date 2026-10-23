@@ -194,6 +194,48 @@ void main() {
       },
     );
 
+    test('account-status answers a number before any code is texted', () async {
+      Future<TestResponse> ask(String number) => h.api.call(
+        Routes.accountStatus,
+        body: AccountStatusRequest(phoneNumber: number).toJson(),
+      );
+
+      final stranger = AccountStatusResponse.fromJson((await ask(alice)).json);
+      expect(stranger.accountExists, isFalse);
+      expect(stranger.hasPassword, isFalse);
+      expect(h.sms.sent, isEmpty, reason: 'asking is not texting');
+
+      final device = await h.registerGlobal(alice);
+      final created = AccountStatusResponse.fromJson((await ask(alice)).json);
+      expect(created.accountExists, isTrue);
+      expect(
+        created.hasPassword,
+        isFalse,
+        reason: 'registered, but with no password',
+      );
+
+      await h.api.call(
+        Routes.setPassword,
+        bearer: device.bearer,
+        body: SetPasswordRequest(
+          password: PasswordSetup(
+            kdf: const KdfParams(),
+            salt: bytes(16, 30),
+            authKey: bytes(32, 31),
+            wrappedIdentityKey: WrappedKey(
+              nonce: bytes(12, 32),
+              ciphertext: bytes(48, 33),
+            ),
+          ),
+        ).toJson(),
+      );
+      expect(
+        AccountStatusResponse.fromJson((await ask(alice)).json).hasPassword,
+        isTrue,
+      );
+      expect((await ask('not a number')).errorCode, 'invalid_field');
+    });
+
     test(
       'refresh rotates; reusing an old refresh token ends the device sessions',
       () async {
