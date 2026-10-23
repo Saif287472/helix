@@ -1155,3 +1155,25 @@ identical at 1x).
   its suite is the 7 rules tests. Deleting it whole is the console redesign
   (`console/prototype`, direction A), which is parked. Recorded as ADR-031, with
   §6.1 and §6 of the plan of record and the §12 change log.
+
+## Part C step 4 (the themes page behind Appearance, 2026-10-23)
+
+- **The page has no prototype screen, so it has no pixel key.** The prototype's
+  Appearance ends at the caption "More themes are on the way." and nothing in
+  `prototype/js/screens/` lists, downloads or deletes a theme, so there is
+  nothing to compare a screenshot against: `screens.json`, the generated preview
+  index and the 241 phone keys are unchanged by this step. The page is built only
+  out of parts the port already draws - `OrbitYouPage`, `OrbitCard`,
+  `OrbitListRow`, `OrbitButton`, `OrbitIconButton`, `OrbitSpinner`,
+  `OrbitPageLoading`, `OrbitLoadFailed`, `OrbitSectionFoot`, `OrbitGroupTitle` -
+  and its behaviour is tested instead (7 widget tests in
+  `packages/orbit_ui/test/theme_packs_test.dart`, 6 provider tests and the
+  1x/2x rules sweep on the app side).
+  - **Owner:** if you want this page in the gate, the prototype needs the screen
+    first; then it joins `screens.json` like any other.
+- **The `appearance` key holds because the preview does not draw the new row.**
+  `_PreviewAppearance` passes no `AppearanceActions`, and the row is only drawn
+  when the page has somewhere to go, so the render the gate scored at 5.57% is
+  byte-for-byte what it was. In the app the row is there. A re-shoot with
+  `onGetMore` wired would move that key, and the prototype side has nothing to
+  match it.

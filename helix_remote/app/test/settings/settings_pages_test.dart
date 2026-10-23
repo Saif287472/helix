@@ -10,6 +10,7 @@ import 'package:helix_remote/features/profile/application/profile_gateway.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
 import 'package:helix_remote/features/settings/presentation/about_page.dart';
+import 'package:helix_remote/features/settings/presentation/appearance_page.dart';
 import 'package:helix_remote/features/settings/presentation/account_page.dart';
 import 'package:helix_remote/features/settings/presentation/advanced_page.dart';
 import 'package:helix_remote/features/settings/presentation/blocked_page.dart';
@@ -96,6 +97,23 @@ void main() {
       // There is no host-your-own-server guide anywhere in Settings.
       expect(find.textContaining('Host your own'), findsNothing);
       expect(find.textContaining('host your own'), findsNothing);
+    });
+
+    youTest('Appearance opens the page of themes to get', (tester) async {
+      useTallWindow(tester);
+      await pumpPage(
+        tester,
+        const AppearancePage(),
+        overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
+        stubs: [RoutePaths.themePacks],
+      );
+      await settle(tester);
+      // The one row under the two cards, and no "on the way" caption: the
+      // themes a server publishes are reachable.
+      expect(find.textContaining('More themes are on the way'), findsNothing);
+      await tester.tap(find.text('More themes'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.themePacks}'), findsOneWidget);
     });
 
     youTest('Edit profile opens the profile', (tester) async {

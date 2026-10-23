@@ -36,6 +36,7 @@ abstract final class RoutePaths {
 
   // Settings pages
   static const appearance = '/settings/appearance';
+  static const themePacks = '/settings/appearance/themes';
   static const account = '/settings/account';
   static const changePassword = '/settings/account/password';
   static const deleteAccount = '/settings/account/delete';

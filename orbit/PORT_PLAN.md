@@ -798,7 +798,7 @@ reuse that effect.
      offer, cannot be used with the format's own reason, deleted, not on this
      device). Accounting: `StorageUsage.packBytes` from the probe, its own
      segment on the Storage page only when there are any, and not freeable there
-     (step 4's Appearance page deletes). Tests: 29 new in
+     (the theme page deletes). Tests: 29 new in
      `app/test/settings/theme_packs_test.dart` plus the Storage-page label, on
      real temp folders and real Ed25519 signatures; app suite green, analyze
      clean.
@@ -807,8 +807,39 @@ reuse that effect.
      which is the safe state and not a bug. Step 4 is the page that lists, taps
      and deletes.
 4. **A theme gallery on Appearance:** download, delete and "get more".
-   - When a chosen pack is missing or fails its checks, the app falls back
-     to Orbit.
+   - [x] **Done 2026-10-23 (pending your review).** Your shape: Appearance keeps
+     its two cards exactly as they are and gains one row, "More themes", that
+     opens `/settings/appearance/themes`. Nothing in the prototype is that page -
+     its Appearance ends at "More themes are on the way." - so it has no pixel
+     key, and `DEVIATIONS.md` records that; it is built only out of the parts the
+     port already has (`OrbitYouPage`, `OrbitCard`, `OrbitListRow`, `OrbitButton`,
+     `OrbitIconButton`, `OrbitSpinner`, the state kit).
+     `ThemeGalleryScreen` (`packages/orbit_ui/lib/src/screens/you/`) takes
+     `ThemeGalleryModel` (the rows, the list's status, whose server it is, the
+     failure's sentence) and `ThemeGalleryActions` (use, get, update, delete,
+     retry - each handing back the one line to toast): two groups, "On this
+     phone" then "On <host>", one trailing control per row, and the row itself as
+     "Use" for a theme this device holds and is not drawing with.
+     `themeGalleryProvider` on the app side puts the built-ins first, then the
+     packs this device holds - each named by its own signed document - then the
+     server's offers, named by nothing but their slug, because the list route
+     carries no display name on purpose and a name there would be unsigned. An
+     offer is only ever "Get"; a pack this device holds is "Update" when the
+     largest revision on offer is higher than the one it has. `ThemePackPage` is
+     those four verbs over step 3's manager, and `PackBusy` marks exactly the row
+     whose download is in flight. The row marked in use is the chosen id, or
+     Orbit when the choice names a pack this device no longer holds, so deleting
+     the theme on screen says so on the Orbit row instead of leaving the page
+     with nothing marked. Step 3's `_refresh` now awaits the re-read: without it
+     a theme just downloaded had a frame in which it was neither on this phone
+     nor on offer, and its row blinked back to "Get".
+     Tests: 7 in `packages/orbit_ui/test/theme_packs_test.dart`, 6 more in the
+     app's page group, the Appearance row's navigation in
+     `settings_pages_test.dart`, and the new page in the rules sweep at 1x and
+     2x text. orbit_ui 222, app suite green, analyze clean.
+   - **Waiting on you:** a key for the pixel gate cannot be taken for a page the
+     prototype does not have. If you want one, the prototype needs the screen
+     first.
 5. **A ringtone picker** on the Notifications page.
    - One default ringtone is bundled.
    - A chosen ringtone is downloaded ahead of time, because a call cannot

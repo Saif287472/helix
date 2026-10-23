@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -11,9 +12,13 @@ import 'package:helix_remote/core/theme/orbit_packs.dart';
 import 'package:helix_remote_crypto/v2.dart'
     show Ed25519KeyPair, Sha256Accumulator;
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote/features/settings/application/about_providers.dart'
+    show serverTitleProvider;
 import 'package:helix_remote/features/settings/application/theme_packs.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show OrbitPackEntry;
+import 'package:orbit_ui/orbit_ui.dart'
+    show ListStatus, ThemeGalleryModel, ThemePackItem, ThemePackPlace;
 
 import '../support/orbit_theme.dart';
 
@@ -573,6 +578,175 @@ void main() {
     });
   });
 
+  group('the More themes page', () {
+    /// The page's model, with the server's list already in hand and kept alive
+    /// for the test, the way the open page keeps it.
+    Future<ThemeGalleryModel> gallery(ProviderContainer container) async {
+      container.listen(hostedPacksProvider, (_, _) {});
+      try {
+        await container.read(hostedPacksProvider.future);
+      } on Object {
+        // A host that does not answer is what some of these tests are about.
+      }
+      return container.read(themeGalleryProvider);
+    }
+
+    test(
+      'names a theme this phone holds, and an offer by nothing but its id',
+      () async {
+        final container = libraryContainer(
+          source: FakePackSource([
+            await signedPack(by: publisherKey),
+            await signedPack(
+              by: publisherKey,
+              id: 'hologram',
+              name: 'Hologram',
+            ),
+          ]),
+          host: 'Helix Global',
+        );
+        expect(
+          await container.read(themePackActionsProvider).install('synthwave'),
+          'Synthwave theme downloaded.',
+        );
+
+        final model = await gallery(container);
+        expect(model.host, 'Helix Global');
+        expect(model.status, ListStatus.ready);
+        final byId = themesById(model.themes);
+        expect(byId.keys, ['orbit', 'night', 'synthwave', 'hologram']);
+
+        expect(byId['orbit']!.name, 'Orbit');
+        expect(byId['orbit']!.builtIn, isTrue);
+        expect(byId['orbit']!.inUse, isTrue);
+        expect(byId['night']!.name, 'Orbit Night');
+        expect(byId['synthwave']!.place, ThemePackPlace.onThisPhone);
+        // The name the publisher signed, not the folder it was downloaded into.
+        expect(byId['synthwave']!.name, 'Synthwave');
+        expect(byId['synthwave']!.detail, matches(RegExp(r' (B|KB|MB|GB)$')));
+
+        // The list route carries no display name on purpose, so an offer is only
+        // ever its id until the signed document arrives.
+        expect(byId['hologram']!.place, ThemePackPlace.onTheServer);
+        expect(byId['hologram']!.name, 'hologram');
+        expect(byId['hologram']!.detail, endsWith('to download'));
+      },
+    );
+
+    test('the theme on screen is the one marked in use, and Orbit is when a '
+        'chosen pack went away', () async {
+      final container = libraryContainer(
+        source: FakePackSource([await signedPack(by: publisherKey)]),
+      );
+      final page = container.read(themePackPageProvider);
+
+      expect(await page.use('night'), 'Orbit Night theme on');
+      var byId = themesById((await gallery(container)).themes);
+      expect(byId['night']!.inUse, isTrue);
+      expect(byId['orbit']!.inUse, isFalse);
+
+      expect(await page.get('synthwave'), 'Synthwave theme downloaded.');
+      expect(await page.use('synthwave'), 'Synthwave theme on');
+      expect(container.read(orbitTokensProvider).meta.name, 'Synthwave');
+
+      expect(await page.delete('synthwave'), 'Synthwave theme deleted.');
+      // The choice is kept for the next download; Orbit is on screen meanwhile.
+      expect(container.read(themeChoiceProvider), 'synthwave');
+      expect(container.read(orbitTokensProvider).meta.name, 'Orbit');
+      byId = themesById((await gallery(container)).themes);
+      expect(byId['orbit']!.inUse, isTrue);
+      // The server still offers it, so it is back in the lower group.
+      expect(byId['synthwave']!.place, ThemePackPlace.onTheServer);
+    });
+
+    test('a pack the server has revised is offered an update, not a second '
+        'download', () async {
+      final container = libraryContainer(
+        source: FakePackSource([
+          await signedPack(by: publisherKey),
+          await signedPack(by: publisherKey, revision: 3, name: 'Synthwave 3'),
+        ]),
+      );
+      final page = container.read(themePackPageProvider);
+      // This device got r1 when that was all there was; the host now lists r3.
+      expect(
+        await container
+            .read(themePackActionsProvider)
+            .install('synthwave', revision: 1),
+        'Synthwave theme downloaded.',
+      );
+
+      // One offer per id, the largest revision, and this device holds r1.
+      var byId = themesById((await gallery(container)).themes);
+      expect(byId['synthwave']!.place, ThemePackPlace.onThisPhone);
+      expect(byId['synthwave']!.updateAvailable, isTrue);
+
+      expect(await page.update('synthwave'), 'Synthwave 3 theme downloaded.');
+      byId = themesById((await gallery(container)).themes);
+      expect(byId['synthwave']!.name, 'Synthwave 3');
+      expect(byId['synthwave']!.updateAvailable, isFalse);
+      expect(byId.keys, ['orbit', 'night', 'synthwave']);
+    });
+
+    test('a download waits its own row, and no other', () async {
+      final source = GatedPackSource(await signedPack(by: publisherKey));
+      final container = libraryContainer(source: source);
+      final page = container.read(themePackPageProvider);
+      final pending = page.get('synthwave');
+      await pumpEventQueue();
+
+      expect(container.read(packBusyProvider), 'synthwave');
+      final byId = themesById((await gallery(container)).themes);
+      expect(byId['synthwave']!.busy, isTrue);
+      // Still an offer: nothing is a theme until the gate has passed.
+      expect(byId['synthwave']!.place, ThemePackPlace.onTheServer);
+      expect(byId['orbit']!.busy, isFalse);
+
+      source.open();
+      expect(await pending, 'Synthwave theme downloaded.');
+      expect(container.read(packBusyProvider), isNull);
+      expect(
+        themesById((await gallery(container)).themes)['synthwave']!.busy,
+        isFalse,
+      );
+    });
+
+    test(
+      'a refused pack is said in the format\'s own words and stays an offer',
+      () async {
+        final container = libraryContainer(
+          source: FakePackSource([await signedPack(by: otherKey)]),
+        );
+        final said = await container
+            .read(themePackPageProvider)
+            .get('synthwave');
+        expect(said, contains('cannot be used'));
+        expect(said, isNot(contains('synthwave'))); // never quoted back
+        final byId = themesById((await gallery(container)).themes);
+        expect(byId['synthwave']!.place, ThemePackPlace.onTheServer);
+        expect(byId['synthwave']!.busy, isFalse);
+      },
+    );
+
+    test('a server that cannot be reached still shows this phone\'s themes, '
+        'and asks again', () async {
+      final source = OfflinePackSource();
+      final container = libraryContainer(source: source, host: 'My server');
+      final page = container.read(themePackPageProvider);
+
+      var model = await gallery(container);
+      expect(source.listCalls, 1);
+      expect(model.status, ListStatus.failed);
+      expect(model.error, 'That did not work. Try again.');
+      expect(model.host, 'My server');
+      expect(themesById(model.themes).keys, ['orbit', 'night']);
+
+      page.retry();
+      model = await gallery(container);
+      expect(source.listCalls, 2);
+      expect(model.status, ListStatus.failed);
+    });
+  });
   group('storage', () {
     test('theme packs are counted as themselves, not as media', () async {
       final base = await AppPaths.appDirectory();
@@ -624,7 +798,7 @@ Future<String> packsRoot() async => (await AppPaths.packsDirectory()).path;
 
 /// A container with the themes [main] would seed, this test's anchor, and one
 /// temp folder to write into.
-ProviderContainer libraryContainer({FakePackSource? source}) {
+ProviderContainer libraryContainer({PackSource? source, String? host}) {
   final container = ProviderContainer(
     overrides: [
       orbitThemeLibraryProvider.overrideWithValue(orbitTestThemes),
@@ -632,6 +806,7 @@ ProviderContainer libraryContainer({FakePackSource? source}) {
       downloadedThemesAtStartupProvider.overrideWithValue(const {}),
       packPublishersProvider.overrideWithValue(trusted),
       if (source != null) packSourceProvider.overrideWithValue(source),
+      if (host != null) serverTitleProvider.overrideWithValue(host),
     ],
   );
   addTearDown(container.dispose);
@@ -765,6 +940,56 @@ final class FakePackSource implements PackSource {
     if (bytes == null) throw StateError('the host has no file $digest');
     return bytes;
   }
+}
+
+/// The page's rows, by theme id, in the order the page lists them.
+Map<String, ThemePackItem> themesById(List<ThemePackItem> items) => {
+  for (final item in items) item.id: item,
+};
+
+/// A host that holds a pack's bytes back until the test opens it: what a
+/// download in flight looks like from the page.
+final class GatedPackSource implements PackSource {
+  GatedPackSource(this.pack);
+
+  final HostedPack pack;
+  final Completer<void> _gate = Completer<void>();
+
+  void open() => _gate.complete();
+
+  @override
+  Future<List<OrbitPackEntry>> list() async => [pack.listed];
+
+  @override
+  Future<List<int>> manifest(String id, int revision) async {
+    await _gate.future;
+    return pack.manifestBytes;
+  }
+
+  @override
+  Future<List<int>> file(String id, int revision, String digest) async {
+    await _gate.future;
+    return pack.byDigest[digest]!;
+  }
+}
+
+/// A host that never answers the list route: offline, or a server built before
+/// the pack routes went live.
+final class OfflinePackSource implements PackSource {
+  int listCalls = 0;
+
+  @override
+  Future<List<OrbitPackEntry>> list() async {
+    listCalls++;
+    throw StateError('the host is not there');
+  }
+
+  @override
+  Future<List<int>> manifest(String id, int revision) async => const [];
+
+  @override
+  Future<List<int>> file(String id, int revision, String digest) async =>
+      const [];
 }
 
 Future<String> sha256Hex(List<int> bytes) async {

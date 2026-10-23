@@ -130,7 +130,19 @@ theme arrived, that it was already up to date, that the theme is built in (so
 there is nothing to download), that the pack is no longer on offer, that it
 cannot be used, that it was deleted, that it is not on this device. A refusal is
 the format's own plain-English reason, never anything a pack wrote about itself.
-After either action the theme library is re-read, so a pack that just arrived is
-choosable on Appearance without a restart, and one that just went leaves the app
-drawing Orbit while the person's choice stays saved. The page that lists and
-taps these is Part C step 4.
+After either action the theme library is re-read - and awaited, so a row never
+has a frame in which it is neither on this phone nor on offer - and a pack that
+just arrived is choosable without a restart, while one that just went leaves the
+app drawing Orbit with the person's choice still saved.
+
+`presentation/theme_packs_page.dart` (route `/settings/appearance/themes`, one
+row under Appearance's two cards) is `orbit_ui`'s `ThemeGalleryScreen`.
+`themeGalleryProvider` assembles it: the built-in themes, then this device's
+packs named by their own signed document, then the host's offers named by
+nothing but their slug, because the list route carries no display name and a
+name there would be unsigned. An offer is "Get"; a pack this device holds is
+"Update" when the largest revision on offer is higher than its own, and a row
+whose action is running shows a spinner and nothing else. `ThemePackPage` is
+those four verbs over `ThemePackActions` plus the theme choice, and `PackBusy`
+is which row is waiting. The row marked in use is the chosen id - or Orbit, when
+the choice names a pack this device no longer holds.

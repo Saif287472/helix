@@ -1761,11 +1761,16 @@ class AppearanceModel {
 }
 
 class AppearanceActions {
-  const AppearanceActions({this.onPick});
+  const AppearanceActions({this.onPick, this.onGetMore});
 
   /// Draws the app in this theme from now on; the page then says
   /// "Orbit Night theme on".
   final Future<void> Function(String id)? onPick;
+
+  /// Opens the themes this account's server offers
+  /// (`orbit/PORT_PLAN.md` Part C step 4). With none, the page is the built-in
+  /// themes only and says more are on the way, as the prototype does.
+  final VoidCallback? onGetMore;
 }
 
 /// `appearance`: the current theme, then a card per theme drawn in that
@@ -1862,11 +1867,30 @@ class AppearanceScreen extends StatelessWidget {
         grid(false),
         const OrbitGroupTitle('Dark'),
         grid(true),
+        if (actions.onGetMore != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: OrbitCard(
+              dividerIndent: 14,
+              children: [
+                OrbitListRow(
+                  icon: OrbitIcons.downloadSimple,
+                  iconColor: 1,
+                  title: 'More themes',
+                  sub: 'Get the themes this account\u2019s server offers',
+                  end: OrbitRowEnd.chevron,
+                  onTap: actions.onGetMore,
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
           child: OrbitText(
-            'Each theme changes colours, type, shapes and patterns. More '
-            'themes are on the way.',
+            actions.onGetMore == null
+                ? 'Each theme changes colours, type, shapes and patterns. More '
+                      'themes are on the way.'
+                : 'Each theme changes colours, type, shapes and patterns.',
             textAlign: TextAlign.center,
             style: t.font.style(
               size: OrbitType.caption,

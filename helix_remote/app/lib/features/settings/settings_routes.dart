@@ -12,6 +12,7 @@ import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
+import 'package:helix_remote/features/settings/presentation/theme_packs_page.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 
 /// The settings pages, added to the router with one line. The You page
@@ -21,6 +22,10 @@ final List<RouteBase> settingsRoutes = [
   GoRoute(
     path: RoutePaths.appearance,
     builder: (context, state) => const AppearancePage(),
+  ),
+  GoRoute(
+    path: RoutePaths.themePacks,
+    builder: (context, state) => const ThemePacksPage(),
   ),
   GoRoute(
     path: RoutePaths.account,

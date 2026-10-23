@@ -248,9 +248,17 @@ Rules that are the device's, not the format's:
   stops passing its checks or is deleted, the app draws Orbit and keeps the
   choice, so re-downloading brings it back.
 - **Its bytes are counted as themes.** The Storage page reports packs separately
-  from media (a person deletes them on Appearance, not there) and names them in
-  the split line only when there are any.
+  from media (a person deletes them on the themes page, not there) and names them
+  in the split line only when there are any.
+- **The page says which of the two it is naming.** You > Appearance's "More
+  themes" row opens it: a theme this device holds is named by its own signed
+  document, and one the server merely offers by the slug in the list, because
+  the list route carries no display name on purpose. The page never shows a name
+  it has not checked, and never reads a theme document before the gate has
+  passed.
 
 `app/test/settings/theme_packs_test.dart` pins all of this, including that an
-unsigned, untrusted, swapped, over-cap or effect-asking pack writes nothing.
+unsigned, untrusted, swapped, over-cap or effect-asking pack writes nothing;
+`packages/orbit_ui/test/theme_packs_test.dart` pins the page's four verbs, its
+two groups, its waiting row and its "nothing is on offer" note.
 

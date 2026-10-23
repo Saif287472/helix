@@ -14,12 +14,15 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   commits, reviewed after the fact. Nobody but the owner pushes.
 - One commit per batch, marked "(pending review)" in the message and in
   `PORT_PLAN.md`'s progress notes.
-- Part C step 1 (the pack format, the gate and the signing tool) and step 2
-  (the server endpoint that serves a pack folder) are the same way. Step 2
-  changes the server, so it went through a plan the owner approved first
-  ("after this, also start part C step 2. i will approve the plan",
-  2026-10-23). Nothing further in Part C is approved: step 3 (the download
-  manager) and step 4 (the gallery) wait for the same go-ahead.
+- Part C step 1 (the pack format, the gate and the signing tool), step 2 (the
+  server endpoint that serves a pack folder) and step 3 (the download manager)
+  are the same way. Step 2 changes the server, so it went through a plan the
+  owner approved first ("after this, also start part C step 2. i will approve
+  the plan", 2026-10-23). Step 4 (the themes page) was built on the owner's two
+  answers of 2026-10-23: a new page behind Appearance, and the publisher anchor
+  staying a build-time define. Nothing further in Part C is approved: step 5
+  (the ringtone picker) and step 6 (the animation runtime) wait for a sound and
+  for a dependency ruling.
 
 ## Done (pending the owner's review)
 
@@ -41,7 +44,9 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 5452757 | The operator's whole number, and the privacy text that says why |
 | c1a24bf | Part B step 5: the full gate, format fixes and the matrix path |
 | 66ad91b | Part C step 1: the pack format, the one gate and the signing tool (ADR-033) |
-| (this) | Part C step 2: the server serves a pack folder, and `publish` fills it |
+| fc0536e | Part C step 2: the server serves a pack folder, and `publish` fills it |
+| d8fc536 | Part C step 3: the pack store, the trust anchor and the theme library |
+| (this) | Part C step 4: the themes page behind Appearance, in `orbit_ui` and the app |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -271,7 +276,8 @@ both change the server, so neither is live until production runs this branch.)
 
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
-`PORT_PLAN.md` Part C is the plan. Steps 1, 2 and 3 are built; step 4 is not.
+`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3 and 4 are built; step 5 (the
+ringtone picker) is not.
 
 12. Part C step 1, the pack format and the signing tool - **done**
     (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
@@ -342,22 +348,36 @@ both change the server, so neither is live until production runs this branch.)
     temp folders, real Ed25519 keys, unsigned/untrusted/swapped/over-cap/
     unknown-effect packs each writing nothing) plus the Storage label; app suite
     and analyze clean.
-15. Part C step 4, the gallery on Appearance - not started, and not approved.
-    Everything it needs is here (list, install, update, delete, the fallback),
-    so it is a page and a connector: `hostedPacksProvider` for what the account's
-    server offers, `installedPacksProvider` for what this device holds,
-    `themePackActionsProvider` for the verbs. The prototype has no such screen,
-    so it needs your design call before it is built.
-16. **Deviation to rule on:** step 1's note said the publisher key would go in
-    "the app's trust anchor, which step 3 adds with the download page". Step 3
-    made the anchor a **build-time define** instead, with no page where anyone
-    types a key: a release app cannot take its own trust decision from its UI
-    without turning a theme download into a self-granted permission, and step
-    1's own line "the release build stays the trust anchor" points the same way.
-    Consequence: a pack becomes downloadable only when a build is made with the
-    define, i.e. with an APK rebuild you control. Say if you want the editable
-    page anyway (it would need the key list to be signed by something the app
-    already trusts, which is the same problem one layer down).
+15. Part C step 4, the themes page behind Appearance - **done** (2026-10-23),
+    on your call: Appearance keeps its two cards and gains one "More themes"
+    row that opens `/settings/appearance/themes`. `ThemeGalleryScreen` in
+    `packages/orbit_ui/lib/src/screens/you/theme_packs_screen.dart` draws two
+    groups - "On this phone" (the built-ins, then every pack that passed its
+    checks when it was read), then "On <host>" - one trailing control per row
+    (Get / Update / a delete icon / a spinner while that row works) and the row
+    tap as "Use". The app side is `themeGalleryProvider` and `ThemePackPage` in
+    `features/settings/application/theme_packs.dart` over step 3's manager: an
+    offer is named by its slug alone, because the list route carries no display
+    name and a name there would be unsigned; the row marked "In use" is Orbit
+    when the saved choice names a pack this device no longer holds. Tests: 7
+    (`packages/orbit_ui/test/theme_packs_test.dart`), 6 in the app's page group,
+    the navigation in `settings_pages_test.dart`, and the page in the 1x/2x rules
+    sweep. No server, protocol, api or engine file changed, and no pixel key: see
+    `DEVIATIONS.md`, "Part C step 4".
+16. **Ruled (2026-10-23, you): the publisher anchor stays a build-time define.**
+    Step 1's note had said the key would go in "the app's trust anchor, which
+    step 3 adds with the download page"; step 3 made it
+    `--dart-define=HELIX_PACK_PUBLISHERS=slug:hex,…` with no page where anyone
+    types a key, because a release app must not take its own trust decision from
+    its UI - that turns a theme download into a self-granted permission. You
+    chose to keep it. Consequence, unchanged: a pack becomes downloadable only
+    in a build made with the define, so it is an APK rebuild you control, after
+    `keygen`.
+17. Part C step 5, the ringtone picker, is next in the plan and not started. It
+    needs a sound of its own (the one outstanding item on you from Part B) and,
+    on Android, a notification channel per ringtone or the app playing the sound
+    itself; `notification_call_ringer.dart` is today's ringer. Step 6 (the
+    animation runtime) also waits on a dependency ruling - Lottie or Rive.
 
 ## Batch 8, what is left
 

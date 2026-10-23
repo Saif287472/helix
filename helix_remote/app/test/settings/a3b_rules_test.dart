@@ -10,6 +10,9 @@ import 'package:helix_remote/core/engine/backup_policy.dart';
 import 'package:helix_remote/core/platform/app_info.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote/core/theme/orbit_packs.dart' show PackSource;
+import 'package:helix_remote/features/settings/application/theme_packs.dart'
+    show packSourceProvider;
 import 'package:helix_remote/features/backup/presentation/backup_page.dart';
 import 'package:helix_remote/features/backup/presentation/recovery_backup_page.dart';
 import 'package:helix_remote/features/backup/presentation/restore_history_page.dart';
@@ -30,6 +33,7 @@ import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
+import 'package:helix_remote/features/settings/presentation/theme_packs_page.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_controller.dart';
 import 'package:helix_remote/shared/widgets/orbit_you_connector.dart';
 import 'package:helix_remote_api/v2.dart'
@@ -37,7 +41,7 @@ import 'package:helix_remote_api/v2.dart'
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show BackupException, BackupFailure, BackupRemote;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show ErrorCode, FullBackup, HistoryBackup;
+    show ErrorCode, FullBackup, HistoryBackup, OrbitPackEntry;
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../support/a3b_fakes.dart';
@@ -49,6 +53,7 @@ void main() {
   final pages = <String, Widget Function()>{
     'You': () => const OrbitYouConnector(),
     'Appearance': () => const AppearancePage(),
+    'More themes': () => const ThemePacksPage(),
     'Account': () => const AccountPage(),
     'Change password': () => const ChangePasswordPage(),
     'Privacy': () => const PrivacyPage(),
@@ -72,13 +77,19 @@ void main() {
     'Profile': () => const ProfilePage(),
   };
 
-  List<Override> overrides() => a3bOverrides(
-    backup: FakeBackupGateway(),
-    devices: FakeDevicesGateway(),
-    profile: FakeProfileGateway(),
-    settingsGateway: FakeSettingsGateway(),
-    extra: [engineConfigNameOverride],
-  );
+  List<Override> overrides(String page) => [
+    ...a3bOverrides(
+      backup: FakeBackupGateway(),
+      devices: FakeDevicesGateway(),
+      profile: FakeProfileGateway(),
+      settingsGateway: FakeSettingsGateway(),
+      extra: [engineConfigNameOverride],
+    ),
+    // The themes page talks to the server's pack list, which no a3b fake
+    // carries: a host with nothing to offer is what the page is drawn against.
+    if (page == 'More themes')
+      packSourceProvider.overrideWithValue(const NoPacksOnOffer()),
+  ];
 
   for (final scale in [1.0, 2.0]) {
     for (final entry in pages.entries) {
@@ -88,7 +99,7 @@ void main() {
         await pumpPage(
           tester,
           entry.value(),
-          overrides: overrides(),
+          overrides: overrides(entry.key),
           textScale: scale,
           stubs: const [],
         );
@@ -333,6 +344,22 @@ void main() {
       expect(keys.every((k) => k.startsWith('app.')), isTrue);
     });
   });
+}
+
+/// A host that publishes no theme pack: the themes page is drawn against this,
+/// so its "nothing is on offer" note is what the guidelines are checked on.
+final class NoPacksOnOffer implements PackSource {
+  const NoPacksOnOffer();
+
+  @override
+  Future<List<OrbitPackEntry>> list() async => const [];
+
+  @override
+  Future<List<int>> manifest(String id, int revision) async => const [];
+
+  @override
+  Future<List<int>> file(String id, int revision, String digest) async =>
+      const [];
 }
 
 final _history = HistoryBackup(
