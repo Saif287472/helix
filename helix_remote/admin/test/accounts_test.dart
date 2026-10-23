@@ -404,8 +404,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(
         find.descendant(
-          of: find.byType(NavigationBar),
-          matching: find.text('Users'),
+          of: find.byType(ConsoleDock),
+          matching: find.byIcon(Icons.people_outline),
         ),
       );
       await tester.pumpAndSettle();

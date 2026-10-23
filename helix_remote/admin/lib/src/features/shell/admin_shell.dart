@@ -96,6 +96,21 @@ class _AdminShellState extends State<AdminShell> {
     };
   }
 
+  /// The phone's place switcher: the Orbit dock shape, the console's colours.
+  Widget _dock(List<AdminPlace> places, AdminPlace selected) => ConsoleDock(
+    items: [
+      for (final p in places)
+        ConsoleDockItem(
+          icon: p.icon,
+          selectedIcon: p.selectedIcon,
+          label: p.shortTitle,
+          tooltip: p.title,
+          on: p == selected,
+          onTap: () => setState(() => _place = p),
+        ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -141,19 +156,29 @@ class _AdminShellState extends State<AdminShell> {
                 ),
               ),
               bottomNavigationBar: mobile
-                  ? NavigationBar(
-                      selectedIndex: places.indexOf(place),
-                      onDestinationSelected: (i) =>
-                          setState(() => _place = places[i]),
-                      destinations: [
-                        for (final p in places)
-                          NavigationDestination(
-                            icon: Icon(p.icon),
-                            selectedIcon: Icon(p.selectedIcon),
-                            label: p.shortTitle,
-                            tooltip: p.title,
-                          ),
-                      ],
+                  ? SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                        // Centred when it fits, swipeable when it does not:
+                        // four places and a large text size are wider than a
+                        // 360 dp phone.
+                        child: LayoutBuilder(
+                          builder: (context, constraints) =>
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minWidth: constraints.maxWidth,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [_dock(places, place)],
+                                  ),
+                                ),
+                              ),
+                        ),
+                      ),
                     )
                   : null,
               body: Align(

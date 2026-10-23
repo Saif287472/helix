@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/src/app.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 import 'support/fake_admin_server.dart';
@@ -84,9 +85,7 @@ void main() {
     await check(tester);
   });
 
-  testWidgets('the phone layout has a bottom bar with every place', (
-    tester,
-  ) async {
+  testWidgets('the phone layout has a dock with every place', (tester) async {
     h.saveSession();
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -95,12 +94,24 @@ void main() {
     await tester.pumpWidget(HelixAdminApp(services: h.services()));
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationBar), findsOneWidget);
-    for (final place in const ['Overview', 'Users', 'Invites', 'Ops & Logs']) {
+    expect(find.byType(ConsoleDock), findsOneWidget);
+    // Only the open place is named; the others are an icon each.
+    expect(
+      find.descendant(
+        of: find.byType(ConsoleDock),
+        matching: find.text('Overview'),
+      ),
+      findsOneWidget,
+    );
+    for (final icon in const [
+      Icons.people_outline,
+      Icons.local_activity_outlined,
+      Icons.settings_outlined,
+    ]) {
       expect(
         find.descendant(
-          of: find.byType(NavigationBar),
-          matching: find.text(place),
+          of: find.byType(ConsoleDock),
+          matching: find.byIcon(icon),
         ),
         findsOneWidget,
       );
@@ -109,8 +120,8 @@ void main() {
 
     await tester.tap(
       find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('Users'),
+        of: find.byType(ConsoleDock),
+        matching: find.byIcon(Icons.people_outline),
       ),
     );
     await tester.pumpAndSettle();

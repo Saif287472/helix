@@ -454,6 +454,164 @@ class ConsoleChipRow extends StatelessWidget {
   );
 }
 
+/// One tab of a [ConsoleDock].
+class ConsoleDockItem {
+  const ConsoleDockItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.on,
+    required this.onTap,
+    this.tooltip,
+  });
+
+  /// The glyph while the place is not the one being looked at.
+  final IconData icon;
+
+  /// The glyph once it is - the open tab's icon is filled, like the other
+  /// icons of the place.
+  final IconData selectedIcon;
+
+  /// The words beside the icon, and what a screen reader is told.
+  final String label;
+
+  final bool on;
+  final VoidCallback onTap;
+
+  /// What a long press says; [label] when not given.
+  final String? tooltip;
+}
+
+/// The places of the console on a phone, in the shape the Orbit app uses for
+/// its own tabs (`packages/orbit_ui/lib/src/components/bars.dart`): a 62 px
+/// pill, 7 px in, its tabs 4 px apart. A tab is 50 px tall and at least 56 px
+/// wide, and only the open one shows its name - the rest are an icon each.
+/// The colours are the console's own slate and blue, not a theme pack's.
+class ConsoleDock extends StatelessWidget {
+  const ConsoleDock({super.key, required this.items});
+
+  static const _height = 62.0;
+  static const _tabHeight = 50.0;
+  static const _edge = 1.0;
+
+  final List<ConsoleDockItem> items;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: 'Places',
+    // The pill is drawn behind the tabs rather than around them: its content
+    // box is shorter than a 50 px tab.
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: HelixConsoleColors.surface,
+              border: Border.all(
+                color: HelixConsoleColors.border,
+                width: _edge,
+              ),
+              borderRadius: BorderRadius.circular(_height / 2),
+              boxShadow: [
+                BoxShadow(
+                  color: HelixConsoleColors.text.withValues(alpha: 0.07),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          height: _height,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6 + _edge),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, item) in items.indexed) ...[
+                  if (i > 0) const SizedBox(width: 4),
+                  _tab(item),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _tab(ConsoleDockItem item) {
+    final ink = item.on
+        ? HelixConsoleColors.surface
+        : HelixConsoleColors.textMuted;
+    final radius = BorderRadius.circular(_tabHeight / 2);
+    return Tooltip(
+      message: item.tooltip ?? item.label,
+      excludeFromSemantics: true,
+      child: Semantics(
+        button: true,
+        selected: item.on,
+        label: item.label,
+        excludeSemantics: true,
+        child: Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: radius),
+          child: InkWell(
+            onTap: item.onTap,
+            customBorder: RoundedRectangleBorder(borderRadius: radius),
+            child: Container(
+              height: _tabHeight,
+              constraints: const BoxConstraints(minWidth: 56),
+              padding: EdgeInsets.only(left: 16, right: item.on ? 18 : 16),
+              decoration: BoxDecoration(
+                color: item.on ? HelixConsoleColors.accent : null,
+                borderRadius: radius,
+                boxShadow: item.on
+                    ? [
+                        BoxShadow(
+                          color: HelixConsoleColors.accent.withValues(
+                            alpha: 0.32,
+                          ),
+                          blurRadius: 12,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    item.on ? item.selectedIcon : item.icon,
+                    size: 23,
+                    color: ink,
+                  ),
+                  if (item.on) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: ink,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A number with its label: one tile in the dashboard grid.
 class ConsoleMetricTile extends StatelessWidget {
   const ConsoleMetricTile({
