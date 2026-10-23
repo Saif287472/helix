@@ -21,6 +21,7 @@ v2 server and are the current statements; this file keeps the v1-to-v2 compariso
 | Phone number | hash + plaintext/last-4 paths | keyed hash + last 4 digits; plaintext only in memory while texting a code |
 | Discovery salt | public endpoint | authenticated |
 | Phone discovery entry | salted hash of the number (the salt is public: a dump let anyone test numbers) | pepper-keyed index of the client hash (a dump alone cannot test numbers); none for accounts that opted out of discovery; the online oracle stays (accepted risk T-5) |
+| "Is this number one of yours, and does it have a password?" | known only after an SMS code (`/phone/verify`), and hidden behind decoys on the password path | also answered **before** any code by `POST /v1/auth/account-status`: two booleans, no account id, no last four, 30 checks an hour per address, grants nothing (ADR-032, threat T-12) |
 | TURN credential name | `<expiry>:<account id>` in the clear on `turn:` | `<expiry>:<random id>`; no account or device id |
 | Sibling devices' push tokens | listed to every device | never listed |
 | Sender of a message | yes | yes (sealed sender reserved for later) |

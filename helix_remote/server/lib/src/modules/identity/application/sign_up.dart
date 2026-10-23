@@ -38,8 +38,9 @@ final class SignUp {
   /// Whether the number is a Helix user and whether that account has a
   /// password, asked before any code is texted so the app can choose the
   /// right next screen (ADR-032 is the decision to answer an unauthenticated
-  /// caller at all). The answer grants nothing: `register`, `password/reset`
-  /// and password sign-in still demand what only a code gives them.
+  /// caller at all). The answer grants nothing: `register`, the recovery
+  /// routes and password sign-in still demand what only a code or a key gives
+  /// them.
   Future<AccountStatusResponse> accountStatus(AccountStatusRequest req) async {
     final existing = await c.store.accountByPhone(
       c.db,

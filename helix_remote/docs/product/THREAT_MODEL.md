@@ -108,7 +108,9 @@ metadata). The cryptography has **not been externally reviewed**
   answers decoy parameters for unknown numbers, so it is not a number oracle: the decoy salt is
   32 bytes like a real one, a decoy sign-in runs the same transaction, and it locks after five
   failures on the same schedule (review A-06, 2026-10-10; before that, the 16-byte decoy salt, the
-  missing lockout and the shorter work each told the two apart).
+  missing lockout and the shorter work each told the two apart). The server does answer "does this
+  number have an account, and does it have a password?" - elsewhere, and since ADR-032 by decision:
+  T-12.
 - **Residual risk**: A weak password can still be found offline, and a successful guess yields the
   account identity private key. The decoy lockout lives in the ephemeral store, which a Postgres
   crash empties, while a real account's lockout survives one; and a decoy check writes no row, so
@@ -164,3 +166,20 @@ metadata). The cryptography has **not been externally reviewed**
 - **Residual risk**: Every account here registers the same push token, so a server that holds two of
   them can tell they share a phone (a person who needs two unlinkable accounts should keep them on
   different phones or servers). The numbers in the account list are as readable as the keystore.
+
+### T-12: "Is this number a Helix user?" (the account-status oracle)
+- **Description**: `POST /v1/auth/account-status` answers, to anyone and without a code, whether a
+  number has an account on this server and whether that account has a password (ADR-032,
+  2026-10-23). Anyone who can type numbers can list which of them are Helix users.
+- **Mitigation**: The reply is two booleans - no account id, no name, no last four digits, no salt,
+  no lockout state - and it grants nothing: every route that opens or changes an account still
+  demands a verified code, a recovery code or a device key. Checks are limited to 30 an hour per
+  client address in Postgres, so they hold across nodes: 720 a day per address, against the 5,000 a
+  day an authenticated account gets from the discovery oracle (T-5). It is a deliberate decision,
+  taken to stop sign-in demanding a password from people who have no account; the design that hid
+  the answer asked them for an SMS code first, which is the fault ADR-032 fixes.
+- **Residual risk**: An attacker with many addresses (dial-up pool, Tor exits, a botnet) is not
+  stopped by a per-address bucket, and the answer is useful for targeting: a number with an account
+  but no password says an SMS play or a recovery-code request is worth trying. Nothing tells a
+  person that their number was asked about, and the question is asked by the app on the number page,
+  so a person who only opens sign-in sends their number to the server before choosing anything.

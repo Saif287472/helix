@@ -15,6 +15,8 @@ sequenceDiagram
     participant Server (REST)
     participant DB (Postgres)
 
+    Client->>Server: POST /v1/auth/account-status (phone number)
+    Server-->>Client: account_exists, has_password (which screen comes next, ADR-032)
     Client->>Server: POST /v1/auth/phone/challenges (phone number)
     Server->>SMS gateway: Send the code (the number is not stored)
     Client->>Server: POST /v1/auth/phone/verify (challenge, code)
@@ -26,8 +28,11 @@ sequenceDiagram
     Note over Client: Optional: set a password (POST /v1/account/password)
 ```
 
-The raw phone number reaches the server only in the code request, where it is hashed and
-forwarded to the SMS gateway. A personal server registers by invite instead of by SMS.
+The raw phone number reaches the server in the status check and in the code request, and is hashed
+there; only the code request forwards it to the SMS gateway, and it is not stored in the clear (the
+account's own reported number is sealed - ADR-030). Answering the status check is the one place the
+server confirms a number to an unauthenticated caller, by decision (ADR-032, threat T-12). A
+personal server registers by invite instead of by SMS.
 
 ## 1a. Password sign-in on another device
 
