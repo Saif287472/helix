@@ -146,4 +146,18 @@ void main() {
     expect(AnomalyLog.queued, hasLength(AnomalyLog.maxQueued));
     expect(AnomalyLog.queued.first.where, 'step 5');
   });
+
+  test('a burst that overflowed the queue says how much was lost', () async {
+    for (var i = 0; i < AnomalyLog.maxQueued + 3; i++) {
+      AnomalyLog.state('step $i', 'odd');
+    }
+    final sent = <AnomalyReport>[];
+    AnomalyLog.install((report) async => sent.add(report));
+    await AnomalyLog.flush();
+
+    final entries = [for (final report in sent) ...report.entries];
+    final note = entries.singleWhere((e) => e.where == 'diagnostics.queue');
+    expect(note.message, 'entries dropped');
+    expect(note.fields, {'dropped': '3'});
+  });
 }

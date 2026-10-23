@@ -31,9 +31,10 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 /// phone numbers, e-mail addresses, tokens and key-shaped text, and nothing
 /// here is ever given message content: callers pass errors, not data.
 ///
-/// Entries wait in memory (at most [maxQueued]; the oldest go first) until
-/// the device has a session, so errors from before sign-in are sent after
-/// it. The same anomaly again within [repeatWindow] only counts up.
+/// Entries wait in memory (at most [maxQueued]; the oldest go first, and how
+/// many a burst pushed out is reported once something is sent) until the
+/// device has a session, so errors from before sign-in are sent after it.
+/// The same anomaly again within [repeatWindow] only counts up.
 abstract final class AnomalyLog {
   static const maxQueued = 200;
   static const flushEvery = Duration(seconds: 20);
@@ -47,6 +48,7 @@ abstract final class AnomalyLog {
   static Future<void> Function(AnomalyReport report)? _send;
   static Timer? _timer;
   static bool _sending = false;
+  static int _dropped = 0;
 
   /// What is waiting to be sent, oldest first.
   static List<Anomaly> get queued => [for (final e in _queue) e.toAnomaly()];
@@ -132,6 +134,7 @@ abstract final class AnomalyLog {
       );
       while (_queue.length > maxQueued) {
         _queue.removeAt(0);
+        _dropped++;
       }
       _schedule(soon: soon);
     } on Object {
@@ -157,12 +160,32 @@ abstract final class AnomalyLog {
           ),
         );
         _queue.removeRange(0, batch.length);
+        _noteDropped();
       }
     } on Object {
       // Offline or signed out: kept for the next try.
     } finally {
       _sending = false;
     }
+  }
+
+  /// A burst that overflowed the queue lost its oldest entries; once
+  /// something has gone out, say how many, from the front of what is left.
+  static void _noteDropped() {
+    final dropped = _dropped;
+    if (dropped == 0) return;
+    _dropped = 0;
+    _queue.insert(
+      0,
+      _Entry(
+        at: now(),
+        kind: 'state',
+        where: 'diagnostics.queue',
+        message: 'entries dropped',
+        stack: '',
+        fields: {'dropped': '$dropped'},
+      ),
+    );
   }
 
   static void _schedule({bool soon = false}) {
@@ -246,6 +269,7 @@ abstract final class AnomalyLog {
     _timer?.cancel();
     _timer = null;
     _sending = false;
+    _dropped = 0;
     fullDetail = kDebugMode;
     now = DateTime.now;
   }

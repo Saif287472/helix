@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
+import 'package:helix_remote/core/diagnostics/frame_watch.dart';
 import 'package:helix_remote/core/calls/call_host.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
@@ -25,6 +26,10 @@ import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote/shared/widgets/app_text_scale.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
+/// How long the launch has been going, for the two startup entries (first
+/// frame, engine ready) in the anomaly log. Started by [main].
+final _launch = Stopwatch();
+
 /// The app entry point.
 ///
 /// The order matters and is fixed:
@@ -35,6 +40,7 @@ import 'package:orbit_ui/orbit_ui.dart';
 /// 3. notifications, then the deep link the launcher handed us;
 /// 4. [ProviderScope], because every screen below it is a `ConsumerWidget`.
 Future<void> main(List<String> args) async {
+  _launch.start();
   FlutterError.onError = (details) {
     // The console gets the exception's type only; the anomaly log masks
     // keys, tokens and phone numbers before anything leaves the device.
@@ -51,6 +57,8 @@ Future<void> main(List<String> args) async {
         AnomalyLog.crash(error, stack);
         return true;
       };
+      // A phone that stutters says so, at most one entry per quarter hour.
+      FrameWatch.install();
 
       registerPushBackgroundHandler();
       await LocalNotifications.init();
@@ -123,9 +131,24 @@ class HelixRemoteApp extends ConsumerStatefulWidget {
 }
 
 class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
+  /// The engine becomes ready once per launch; only the first is timed.
+  bool _readyReported = false;
+
   @override
   void initState() {
     super.initState();
+    // The cost a person feels on opening the app (and after a first sign-up):
+    // the engine's start - database, keys, session restore - is where a slow
+    // phone spends its time, so both moments are timed into the anomaly log.
+    ref.listenManual(authStateProvider, (previous, next) {
+      if (_readyReported || next.value != AppAuthState.ready) return;
+      _readyReported = true;
+      AnomalyLog.state(
+        'startup.engine_ready',
+        'engine ready',
+        fields: {'ms': '${_launch.elapsedMilliseconds}'},
+      );
+    }, fireImmediately: true);
     final link = widget.initialLink;
     if (link != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -134,6 +157,11 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      AnomalyLog.state(
+        'startup.first_frame',
+        'first frame',
+        fields: {'ms': '${_launch.elapsedMilliseconds}'},
+      );
       unawaited(_restoreServer());
       // These stay alive for the whole run: the anomaly log, the
       // auto-download limits that follow the network, the push token (sent

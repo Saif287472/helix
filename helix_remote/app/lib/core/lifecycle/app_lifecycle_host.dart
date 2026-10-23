@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
@@ -50,6 +51,13 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
         break;
     }
   }
+
+  /// Android says when memory is short. Nothing here can free much (the
+  /// database, the engine and the images are what a phone holds), but a run
+  /// of these is the likeliest reason for the app being killed, so it is
+  /// recorded once a minute at most.
+  @override
+  void didHaveMemoryPressure() => AnomalyLog.state('app', 'memory pressure');
 
   /// Reconnects the socket and catches up over REST.
   ///
