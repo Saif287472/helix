@@ -170,6 +170,21 @@ published anything.
 `/settings/notifications/ringtones`, from the Notifications page's Ringtone row,
 which is drawn only where a call rings through a notification channel) is
 `orbit_ui`'s `RingtoneGalleryScreen`: the phone's own sound first, then this
-device's packs, then the host's offers. Nothing here plays a sound - the copy the
-phone's system can read, and the one channel per ringtone that makes a chosen
-sound ring, are the batch after this one.
+device's packs, then the host's offers.
+
+Choosing one is what makes it a ringtone. `core/sounds/orbit_ringtones.dart`
+writes one copy of the pack's file into the app's external files folder
+(`AppPaths.ringtoneDirectory`, over `getExternalStorageDirectory`), and
+`CallNotifications` rings it on a channel of its own, whose id carries the pack
+id and the audio kind and whose sound is the copy's `content://` address. Android
+fixes a channel's sound when the channel is made, which is why there is one
+channel per ringtone rather than one for all; the provider declared in
+`AndroidManifest.xml` (`res/xml/helix_remote_ringtones.xml`) serves exactly that
+folder, because the system reads a channel's sound with its own process.
+Deleting a pack deletes its copy and its channel; choosing the phone's own sound
+deletes every copy. A copy that cannot be written reverts the choice to the
+phone's own sound, so the page never says "in use" for a sound a call cannot
+ring. Both the running app (`NotificationCallRinger`) and the FCM isolate read
+`Ringtones.chosen()`, which re-checks the pack through the gate on every call;
+null - no Windows, no choice, no pack or no copy - is the phone's own ringtone
+channel, unchanged.

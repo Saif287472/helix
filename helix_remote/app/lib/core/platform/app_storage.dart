@@ -91,6 +91,32 @@ abstract final class AppPaths {
   static Future<Directory> packsDirectory() async =>
       Directory(p.join((await _base()).path, 'packs'));
 
+  /// Android only: `<external files>/ringtones`, where the copy of the chosen
+  /// ringtone lives so the system's notification service can read it through
+  /// the provider in `AndroidManifest.xml` (`core/sounds/orbit_ringtones.dart`).
+  ///
+  /// Null where the platform has no such folder. Only [create] makes the
+  /// folder: reading the choice must not leave one on a device that never
+  /// chose a downloaded ringtone.
+  static Future<Directory?> ringtoneDirectory({bool create = true}) async {
+    if (!isAndroid()) return null;
+    final external = await externalStorageDirectory();
+    if (external == null) return null;
+    final dir = Directory(p.join(external.path, 'ringtones'));
+    if (create) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  /// Android's app-specific external files folder, which other processes (the
+  /// notification service included) can be handed a `content://` URI for.
+  @visibleForTesting
+  static Future<Directory?> Function() externalStorageDirectory =
+      getExternalStorageDirectory;
+
+  /// Whether this is Android. A test sets it to exercise the ringtone copy on
+  /// a Windows machine, which is the one place a ringtone is a channel's sound.
+  static bool Function() isAndroid = () => Platform.isAndroid;
+
   /// Everything the app keeps on disk, for the storage page.
   static Future<Directory> appDirectory() => _base();
 

@@ -25,12 +25,12 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   packs): built and tested, with only the `keygen` between it and an offer.
   Steps 5 and 6 are now ruled by the owner (2026-10-23): a ringtone arrives as a
   signed pack and Android rings with a channel per ringtone, and the animation
-  runtime is Lottie. Step 5's first three parts are built the same way - the
-  pack format that carries a sound, the device that holds one, and the Ringtones
-  page that chooses one; what is left is the copy Android's system reads and a
-  channel per ringtone, which waits on a real sound. What is still owed is that
-  sound and the one moment step 6 is for, and step 9 (premium themes) waits for
-  the `keygen` and a Play Billing decision.
+  runtime is Lottie. Step 5 is built end to end on the device - the pack format
+  that carries a sound, the device that holds one, the Ringtones page that
+  chooses one, and the copy Android's system rings with on a channel of its own.
+  What is still owed is the sound itself, the one moment step 6 is for, and
+  step 9 (premium themes), which waits for the `keygen` and a Play Billing
+  decision.
 
 ## Done (pending the owner's review)
 
@@ -60,7 +60,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 3db988c | The owner's rulings on Part C steps 5 and 6, recorded in the plan |
 | e43d865 | Part C step 5's format half: a pack may be a sound |
 | be5f6b0 | Part C step 5's device half: one pack folder, and a store for sounds |
-| (this) | Part C step 5's picker: the Ringtones page, its route and the choice |
+| a1316cf | Part C step 5's picker: the Ringtones page, its route and the choice |
+| (this) | Part C step 5's second half: the copy Android rings with, a channel per ringtone |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -291,10 +292,10 @@ both change the server, so neither is live until production runs this branch.)
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
 `PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4, 7 and 8 are built, and so
-are step 5's first three quarters: a pack may be a sound, this device can hold
-one, and the Ringtones page chooses one. What is left of step 5 is the copy
-Android's system reads and a channel per ringtone, which waits on a real
-ringtone file; step 6 is ruled (Lottie) and waits on the moment it animates.
+is step 5 in full: a pack may be a sound, this device can hold one, the
+Ringtones page chooses one, and a call rings it on a channel of the chosen
+pack's own. What is left of step 5 is the sound file itself (a signed pack, a
+design decision); step 6 is ruled (Lottie) and waits on the moment it animates.
 Step 9 waits for the `keygen` and a Play Billing decision.
 
 12. Part C step 1, the pack format and the signing tool - **done**
@@ -391,20 +392,19 @@ Step 9 waits for the `keygen` and a Play Billing decision.
     chose to keep it. Consequence, unchanged: a pack becomes downloadable only
     in a build made with the define, so it is an APK rebuild you control, after
     `keygen`.
-17. Part C step 5, the ringtone picker, is three quarters built: its **format**
-    is item 20, the device's **sound store** is item 21, and the **picker** is
-    item 22. What is left is the copy Android's system reads and a notification
-    channel per ringtone (5c-2). **Both halves are now
+17. Part C step 5, the ringtone picker - **done** (2026-10-23): its **format**
+    is item 20, the device's **sound store** is item 21, the **picker** is
+    item 22, and the **copy Android rings with** is item 23. **Both halves were
     ruled (2026-10-23, you):** the sound arrives **as a signed pack** - which
     means the pack format has to carry a file that is not a theme, and no server
     file changes, because the three pack routes serve a file by its digest and
     never look at what it is - and Android rings with **a channel per
     ringtone**, not with the app playing it, because a call must ring when the
-    app is not alive. `notification_call_ringer.dart` is today's ringer. What is
-    still owed on step 5 is the sound itself: a ringtone is a design decision,
-    not a generated tone. Step 6 is ruled **Lottie**; its dependency and its
-    `DEPENDENCY_RISK_REGISTER.md` entry come with the first animation that
-    ships, and which moment animates is still yours to name.
+    app is not alive. What is still owed on step 5 is the sound itself: a
+    ringtone is a design decision, not a generated tone. Step 6 is ruled
+    **Lottie**; its dependency and its `DEPENDENCY_RISK_REGISTER.md` entry come
+    with the first animation that ships, and which moment animates is still
+    yours to name.
 18. Part C step 7, Jungle, Ocean and Metal - **done** (2026-10-23). Three records
     in `THEMES` in `prototype/tools/themes.py`, and the generator's own outputs:
     `css/themes.css`, `js/themes.js` and `assets/themes/{jungle,ocean,metal}.json`
@@ -535,12 +535,9 @@ Step 9 waits for the `keygen` and a Play Billing decision.
       kinds are built by the same helpers. App suite 969 green, `flutter
       analyze` clean. Docs: `THEME_PACK_FORMAT.md` "What the phone does", the
       app's `MODULE.md` (`sounds/`).
-    - **Still owed on step 5:** the picker in `orbit_ui` and its connector, the
-      choice in `device_settings.json` ("Phone default" as an *absent* value, not
-      a slug), the copy of the file somewhere Android's system can read it (a new
-      `AppPaths` folder over `getExternalStorageDirectory`), and one notification
-      channel per ringtone wired into `notification_call_ringer.dart`. Plus the
-      sound itself, and the offer-kind decision in item 20.
+    - **Still owed on step 5 when this was written:** the picker (item 22) and
+      the copy plus the per-ringtone channel (item 23), both done directly
+      after. The sound itself and the offer-kind decision in item 20 remain.
 
 22. Part C step 5's picker, the Ringtones page - **done** (2026-10-23). The
     Notifications page's ringtone row now opens a page that lists what this
@@ -592,14 +589,55 @@ Step 9 waits for the `keygen` and a Play Billing decision.
       990 green, orbit_ui 229, domain 61, `flutter analyze` clean. Docs:
       `DEVIATIONS.md` "Part C step 5", the settings `FEATURE.md`, the app's
       `MODULE.md`, `THEME_PACK_FORMAT.md` and the domain's `MODULE.md`.
-    - **Still owed on step 5 (5c-2):** the copy of the chosen file somewhere
-      Android's system can read it (a new `AppPaths` folder over
-      `getExternalStorageDirectory`), and one notification channel per ringtone
-      wired into `CallNotifications` and `notification_call_ringer.dart` (and
-      the background push path that shows the incoming call). Until then the
-      choice is stored and listed but a call still rings with the existing
-      channel's sound. Plus a real ringtone file, and item 20's offer-kind
-      decision if you want it settled at the source.
+    - **The second half is item 23** (the copy Android's system reads and a
+      channel per ringtone), built directly after this. The sound itself is
+      still owed, and so is item 20's offer-kind decision if you want it settled
+      at the source.
+
+23. Part C step 5's second half, the sound a call rings with - **done**
+    (2026-10-23). A chosen ringtone is now what an incoming call actually rings.
+    - `core/sounds/orbit_ringtones.dart` is the one place the phone's form of a
+      ringtone is built: `CallRingtone` (pack id, channel id, content URI),
+      `publish` (one copy of the pack's file into the app's external files
+      folder, written to a `.part` and renamed so a call never reads half a
+      file; the previous choice's copy is removed), `forget` (that pack's
+      copies, or all of them) and `chosen` (the choice, gate-checked again
+      through `SoundPackStore`, plus the copy's existence). It is provider-free
+      because the FCM isolate rings through it.
+    - The copy is served by the stock `androidx.core.content.FileProvider`
+      under `com.helix.remote.ringtones`, declared in `AndroidManifest.xml` and
+      scoped by `res/xml/helix_remote_ringtones.xml` to `external-files-path
+      path="ringtones/"` alone. It is exported because a notification channel
+      stores a URI, not a per-URI grant, so Android's system reads it with no
+      grant; the scoped path keeps that reach to the copies. `AppPaths` gained
+      `ringtoneDirectory` over `getExternalStorageDirectory` (created only when
+      a copy is written) and two test hooks so the Android path runs on Windows
+      in tests.
+    - Android fixes a channel's sound at creation, so `CallNotifications` makes
+      `_forRingtone`'s channel (id `helix_incoming_calls_ringtone.<id><suffix>`,
+      name `Incoming calls: <id>`) before the first notification that uses it,
+      and `showIncoming` takes a `CallRingtone?`. `forgetRingtone` deletes the
+      pack's channels when it is removed. Both ringers pass
+      `Ringtones.chosen()`: the running app's `NotificationCallRinger` and the
+      FCM isolate in `push_background.dart` (one read per wake-up).
+    - The page's verbs keep the phone and the page in agreement: choosing
+      publishes first and reverts to the phone's own sound if the copy cannot be
+      written; a re-download of the chosen pack republishes it; deleting a pack
+      deletes its copy and its channel but keeps the choice, so a re-download
+      brings the ringtone back. The existing channel, its sound and its flags
+      are untouched when no pack is chosen.
+    - No server, protocol, api, engine or domain file changed, so the
+      pending-redeploy list is unchanged, and no pixel key moved. Tests: 15 new
+      (14 in `app/test/settings/ringtone_channel_test.dart` - the channel id
+      and URI, the manifest and path rules, the copy's lifecycle, and
+      `chosen`'s fallbacks; 1 in `sound_packs_test.dart` for a re-download that
+      cannot be set up). App suite 1005 green, `flutter analyze` clean. Docs:
+      `DEVIATIONS.md` "Part C step 5", the settings `FEATURE.md`, the app's
+      `MODULE.md`, `PORT_PLAN.md`.
+    - **On you:** a new APK is needed to hear any of it (the phone must build
+      the manifest, the provider and the channel code), and a real sound pack
+      is still the missing half of step 5: with one published and a build
+      carrying the publisher anchor, a call rings with it.
 
 ## Batch 8, what is left
 
@@ -745,8 +783,9 @@ must say so.
   to the list entry (protocol, server, api and app, plus a redeploy); or publish
   sounds into a second folder and name it with a second env line.
 - A real ringtone: a signed sound pack to publish, so the Ringtones page has
-  something to list beyond the phone's own. Until then the page, its choice and
-  its tests run against fakes.
+  something to list beyond the phone's own. Until then the page, its choice,
+  the copy and the per-ringtone channel run against fakes; a new APK is needed
+  to hear any of it on the phone.
 - Part B step 5's second bullet: the debug APK on your phone and the Windows
   run. Nothing was built for you here (AGENTS.md: the owner builds).
 - S1's `/u/<~name>` page and E6's `GET /v1/backups/full/meta` are code in this

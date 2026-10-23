@@ -1229,12 +1229,41 @@ identical at 1x).
     alternatives - a `contents` field in the list DTO (protocol and server
     change) or a second folder - are still yours; the app-side probe is what
     makes either of them a small change later.
-- **Choosing a ringtone is stored but not heard yet.** This half writes the
-  choice into `device_settings.json`; the wiring that makes a call ring with it
-  - the copy Android's system can read and one notification channel per
-  ringtone - is the next item (5c-2). Until then a downloaded ringtone is
-  listed, chosen and marked "In use", and a call still rings with the sound of
-  the existing incoming-call channel.
+- **A call rings a copy outside the app's private folder, through an exported
+  provider.** Android's notification service plays a channel's sound from its own
+  process, so it cannot open the pack folder, which is app-private. Choosing a
+  ringtone writes one copy into the app's external files folder
+  (`getExternalStorageDirectory()/ringtones/<id><suffix>`, made by
+  `AppPaths.ringtoneDirectory`), and a stock
+  `androidx.core.content.FileProvider` (`com.helix.remote.ringtones`) serves that
+  one subfolder. It is `exported="true"` because a channel stores a URI, not a
+  per-URI grant, so the system opens it with no grant; the path rules in
+  `res/xml/helix_remote_ringtones.xml` name only `external-files-path
+  path="ringtones/"`, so nothing else of the app is reachable through it. The
+  copy is plaintext audio - it is the ringtone, not message content - exists only
+  while its ringtone is the choice, and goes when another is chosen or its pack
+  is removed. It is the one file the app writes outside its private folder; the
+  manifest comment says why.
+- **A channel per ringtone, not one channel whose sound changes.** Android fixes
+  a channel's sound at creation, so `Ringtones.channelId` is the pack id plus the
+  audio kind and `CallNotifications` creates the channel before the first
+  notification that uses it. An update of the same pack keeps the same name (same
+  id, same suffix) and therefore the same channel, rather than adding a second
+  entry to the system's settings. `CallNotifications.forgetRingtone` deletes the
+  channels of a removed pack, so no entry is left that can never ring again. The
+  chosen channel's name in the system's settings is `Incoming calls: <id>`.
+- **A copy that cannot be written is a choice that is not kept.** `publish`
+  returns false when external storage cannot be written; choosing a ringtone, or
+  re-downloading the chosen one, then reverts the device setting to the phone's
+  own sound, so the page and the phone agree about what rings. No copy means
+  `Ringtones.chosen()` returns null and the existing incoming-call channel rings,
+  unchanged: a phone that never chose a pack behaves exactly as before.
+- **The chosen file is re-checked on every call.** `Ringtones.chosen()` reads the
+  device setting, loads the pack through `SoundPackStore` (the signature, the
+  manifest and the hashed bytes - the same gate as every other read), and only
+  then checks that the copy exists. A pack edited after its download, a deleted
+  pack or a missing copy is the phone's own ringtone. The check runs in the FCM
+  isolate too, which is why the helper is provider-free.
 
 ## Part C step 7 (Jungle, Ocean and Metal, 2026-10-23)
 

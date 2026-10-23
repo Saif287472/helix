@@ -944,16 +944,37 @@ reuse that effect.
      Notifications row's navigation; app suite 990 green, orbit_ui 229, domain
      61, `flutter analyze` clean. Deviations are in `DEVIATIONS.md`, "Part C
      step 5".
-   - **What step 5 still needs:** the copy of the chosen file somewhere
-     Android's system can read it - a new `AppPaths` folder over
-     `getExternalStorageDirectory` - and one notification channel per ringtone
-     wired into `CallNotifications`, `notification_call_ringer.dart` and the
-     background push path that shows the incoming call. Until that lands the
-     choice is stored and listed but a call still rings with the existing
-     channel's sound. And the sound itself: a signed sound pack, which is a
-     design decision, not a generated tone. The offer-kind decision is now the
-     app-side probe (item above); if you would rather settle it at the source,
-     the alternatives are still yours.
+   - [x] **Step 5's second half, the sound a call rings with, done 2026-10-23
+     (pending your review).** Choosing a ringtone now changes what a call rings
+     with. `core/sounds/orbit_ringtones.dart` writes one copy of the pack's file
+     into the app's external files folder (`AppPaths.ringtoneDirectory` over
+     `getExternalStorageDirectory`), names the channel by pack id and audio kind
+     (`helix_incoming_calls_ringtone.<id><suffix>`) and the copy by
+     `content://com.helix.remote.ringtones/ringtones/<id><suffix>`. Android fixes
+     a channel's sound when it is made, so `CallNotifications` makes the chosen
+     ringtone's channel before the first notification on it; removing a pack
+     deletes its channel, and choosing the phone's own sound deletes every copy.
+     The provider is the stock `androidx.core.content.FileProvider`, exported
+     because a channel stores a URI rather than a grant, and scoped by
+     `res/xml/helix_remote_ringtones.xml` to the `ringtones/` subfolder alone -
+     nothing else of the app is reachable through it. Both the running app
+     (`notification_call_ringer.dart`) and the FCM isolate
+     (`push_background.dart`) ask `Ringtones.chosen()`, which re-checks the pack
+     through the same gate on every call; no choice, no pack, no copy or a
+     non-Android platform is the existing channel, unchanged. A copy that cannot
+     be written reverts the choice to the phone's own sound, so the page and the
+     phone agree. **No server, protocol, api, engine or domain file changed**,
+     so the pending-redeploy list is unchanged. Tests: 14 new in
+     `app/test/settings/ringtone_channel_test.dart` (the channel id and URI, the
+     manifest and path rules, the copy's lifecycle, and `chosen`'s fallbacks)
+     and 1 more in `sound_packs_test.dart` for a re-download that cannot be set
+     up; app suite 1005 green, `flutter analyze` clean. Deviations are in
+     `DEVIATIONS.md`, "Part C step 5".
+   - **What step 5 still needs:** the sound itself - a signed sound pack, which
+     is a design decision, not a generated tone. A new APK is needed to hear the
+     wiring on a phone. The offer-kind decision is now the app-side probe (item
+     above); if you would rather settle it at the source, the alternatives are
+     still yours.
 6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
    dependency risk register.
    - **Ruled by the owner (2026-10-23): Lottie.** The dependency and its

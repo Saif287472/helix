@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
+import 'package:helix_remote/core/sounds/orbit_ringtones.dart'
+    show CallRingtone, Ringtones;
 
 /// What a person pressed on an incoming-call notification.
 enum CallNotificationAction { accept, decline, open }
@@ -29,6 +31,8 @@ final class CallNotificationResponse {
 /// Shared by the running app (`CallRinger`) and the FCM isolate
 /// (`push_background.dart`), which is why it lives in `core/`.
 abstract final class CallNotifications {
+  static final _vibration = Int64List.fromList(const [0, 800, 600, 800, 600]);
+
   /// Rings with the phone's ringtone, like the phone app. A channel's sound
   /// cannot change once created, hence the id.
   static final _incoming = AndroidNotificationChannel(
@@ -42,8 +46,26 @@ abstract final class CallNotifications {
     ),
     audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
     enableVibration: true,
-    vibrationPattern: Int64List.fromList(const [0, 800, 600, 800, 600]),
+    vibrationPattern: _vibration,
   );
+
+  /// The channel that rings [ringtone]: one per ringtone, because Android fixes
+  /// a channel's sound when it is created. The system shows this name in its
+  /// own notification settings, so it says which sound it is.
+  static AndroidNotificationChannel _forRingtone(CallRingtone ringtone) =>
+      AndroidNotificationChannel(
+        ringtone.channelId,
+        'Incoming calls: ${ringtone.id}',
+        description:
+            'Rings for incoming Helix calls with the '
+            '${ringtone.id} ringtone.',
+        importance: Importance.max,
+        playSound: true,
+        sound: UriAndroidNotificationSound(ringtone.uri),
+        audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+        enableVibration: true,
+        vibrationPattern: _vibration,
+      );
 
   static const _missed = AndroidNotificationChannel(
     'helix_missed_calls',
@@ -98,6 +120,25 @@ abstract final class CallNotifications {
     await android?.createNotificationChannel(_missed);
   }
 
+  /// Deletes the channel that rang ringtone [id], for a pack that was removed:
+  /// Android would otherwise keep an `Incoming calls: <id>` entry in its
+  /// settings that no notification can ever use again.
+  static Future<void> forgetRingtone(String id) async {
+    if (!Platform.isAndroid) return;
+    final android = LocalNotifications.plugin
+        ?.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android == null) return;
+    final prefix = '${Ringtones.channelPrefix}$id.';
+    for (final channel
+        in await android.getNotificationChannels() ??
+            const <AndroidNotificationChannel>[]) {
+      if (!channel.id.startsWith(prefix)) continue;
+      await android.deleteNotificationChannel(channelId: channel.id);
+    }
+  }
+
   /// "Missed call from X", for a call that rang while the app was not on
   /// screen. Replaced by a later one from the same call.
   static Future<void> showMissed({
@@ -136,6 +177,11 @@ abstract final class CallNotifications {
   ///
   /// [showCaller] is the notification-previews setting: false puts "Helix" in
   /// place of the caller's name and makes the notification `private`.
+  ///
+  /// [ringtone] is the sound a ringtone pack was chosen for, from
+  /// [Ringtones.chosen] (null for the phone's own ringtone). Its channel is
+  /// made here the first time it rings, and re-made if a person deleted it in
+  /// the system's settings.
   static Future<void> showIncoming({
     required String callId,
     required String callerName,
@@ -143,6 +189,7 @@ abstract final class CallNotifications {
     bool fullScreen = false,
     bool showCaller = false,
     String? account,
+    CallRingtone? ringtone,
   }) async {
     if (!Platform.isAndroid) return;
     final plugin = LocalNotifications.plugin;
@@ -151,6 +198,14 @@ abstract final class CallNotifications {
       callerName: callerName,
       showCaller: showCaller,
     );
+    final channel = ringtone == null ? null : _forRingtone(ringtone);
+    if (channel != null) {
+      final android = plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await android?.createNotificationChannel(channel);
+    }
     await plugin.show(
       id: idFor(callId),
       title: presentation.title,
@@ -161,9 +216,9 @@ abstract final class CallNotifications {
       },
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _incoming.id,
-          _incoming.name,
-          channelDescription: _incoming.description,
+          channel?.id ?? _incoming.id,
+          channel?.name ?? _incoming.name,
+          channelDescription: channel?.description ?? _incoming.description,
           importance: Importance.max,
           priority: Priority.max,
           category: AndroidNotificationCategory.call,
@@ -177,6 +232,7 @@ abstract final class CallNotifications {
           additionalFlags: Int32List.fromList(const [4]),
           onlyAlertOnce: true,
           timeoutAfter: ringFor.inMilliseconds,
+          sound: channel?.sound,
           audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
           subText: switch (video) {
             true => 'Helix video call',

@@ -18,6 +18,9 @@ import 'package:orbit_ui/orbit_ui.dart'
         ThemePackPlace,
         phoneRingtoneId,
         phoneRingtoneLabel;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart'
+    show getExternalStorageDirectory;
 
 import '../support/pack_fixtures.dart';
 
@@ -201,6 +204,47 @@ void main() {
         expect(container.read(ringtoneLabelProvider), phoneRingtoneLabel);
       },
     );
+
+    test('a re-download that cannot be set up keeps the phone\'s own sound '
+        'chosen', () async {
+      // Android's copy lives outside the app folder, which a test can only
+      // reach through the platform hooks.
+      final external = Directory.systemTemp.createTempSync('helix_ringtones');
+      addTearDown(() {
+        AppPaths.isAndroid = () => Platform.isAndroid;
+        AppPaths.externalStorageDirectory = getExternalStorageDirectory;
+        external.deleteSync(recursive: true);
+      });
+      AppPaths.isAndroid = () => true;
+      AppPaths.externalStorageDirectory = () async => external;
+
+      final container = soundContainer(
+        source: FakePackSource([
+          await signedSoundPack(by: publisherKey),
+          await signedSoundPack(by: publisherKey, revision: 2),
+        ]),
+      );
+      final actions = container.read(soundPackActionsProvider);
+      await actions.install('chime', revision: 1);
+      await container.read(ringtonePageProvider).use('chime');
+      expect(container.read(ringtoneLabelProvider), 'chime');
+
+      // The folder Android would read the new copy from cannot be made (storage
+      // full, or a file where the folder belongs).
+      final ringtoneDir = Directory(p.join(external.path, 'ringtones'));
+      ringtoneDir.deleteSync(recursive: true);
+      File(ringtoneDir.path).writeAsStringSync('not a dir');
+
+      expect(
+        await actions.install('chime'),
+        'chime ringtone downloaded, but it could not be set up on this phone.',
+      );
+      expect(container.read(ringtoneLabelProvider), phoneRingtoneLabel);
+      expect(
+        await container.read(deviceSettingsStoreProvider).readRingtone(),
+        isNull,
+      );
+    });
   });
 
   group('the Ringtones page', () {

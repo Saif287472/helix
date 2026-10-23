@@ -5,6 +5,7 @@ import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 
 /// Rings through the incoming-call notification (Android): its channel plays
@@ -34,6 +35,7 @@ final class NotificationCallRinger implements CallRinger {
     fullScreen: fullScreen,
     showCaller: await _previews(),
     account: account?.call(),
+    ringtone: await Ringtones.chosen(),
   );
 
   Future<bool> _previews() async {

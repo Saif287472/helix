@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
 import 'package:helix_remote/core/format/labels.dart' show formatBytes;
+import 'package:helix_remote/core/notifications/call_notifications.dart';
+import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
 import 'package:helix_remote/core/sounds/orbit_sounds.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart'
     show deviceSettingsStoreProvider;
@@ -119,9 +121,19 @@ final class SoundPackActions {
       if (change == PackChange.alreadyCurrent) return 'Already up to date.';
       final sound = await store.load(id);
       if (sound == null) return 'That sound cannot be used on this phone.';
-      // The copy Android's system reads is made when the choice is made, not
-      // here: downloading a ringtone must not put a file outside the app's own
-      // folder that a person never chose.
+      // A re-download of the chosen ringtone (or its update) restores the copy
+      // Android's system rings with; any other sound waits until it is chosen.
+      if (await _ref.read(deviceSettingsStoreProvider).readRingtone() ==
+          sound.id) {
+        if (!await Ringtones.publish(sound)) {
+          // The page must not say a ringtone is in use that a call cannot ring.
+          await _ref
+              .read(ringtoneChoiceProvider.notifier)
+              .choose(phoneRingtoneId);
+          return '${sound.id} ringtone downloaded, but it could not be set up '
+              'on this phone.';
+        }
+      }
       return '${sound.id} ringtone downloaded.';
     } on PackNotHosted {
       return 'That ringtone is no longer on offer.';
@@ -140,6 +152,11 @@ final class SoundPackActions {
     final store = _ref.read(soundPackStoreProvider);
     try {
       if (!await store.remove(id)) return 'That ringtone is not on this phone.';
+      // The copy outside the pack folder and the channel that rang it go with
+      // the pack; the choice is kept, so the phone rings with its own sound
+      // until the pack is downloaded again.
+      await Ringtones.forget(id: id);
+      await CallNotifications.forgetRingtone(id);
       await _refresh();
       return '$id ringtone deleted.';
     } on Object catch (e) {
@@ -176,14 +193,21 @@ final class RingtonePage {
   /// from now on. Only a sound this device holds gets there; the page lists
   /// what it holds.
   Future<String?> use(String id) async {
+    final choice = _ref.read(ringtoneChoiceProvider.notifier);
     if (id == phoneRingtoneId) {
-      await _ref.read(ringtoneChoiceProvider.notifier).choose(id);
+      await choice.choose(id);
+      await Ringtones.forget();
       return '$phoneRingtoneLabel on';
     }
-    if (await _ref.read(soundPackStoreProvider).load(id) == null) {
-      return 'That ringtone is not on this phone.';
+    final sound = await _ref.read(soundPackStoreProvider).load(id);
+    if (sound == null) return 'That ringtone is not on this phone.';
+    await choice.choose(id);
+    // The copy is what Android's system rings with: a choice whose copy cannot
+    // be written would look set and still ring the phone's own sound.
+    if (!await Ringtones.publish(sound)) {
+      await choice.choose(phoneRingtoneId);
+      return 'That ringtone could not be set up on this phone.';
     }
-    await _ref.read(ringtoneChoiceProvider.notifier).choose(id);
     return '$id ringtone on';
   }
 

@@ -15,6 +15,7 @@ import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show IncomingNotice;
 
@@ -144,6 +145,11 @@ Future<void> _wakeAccount(
       await LocalNotifications.init();
       await CallNotifications.init();
     }
+    // One read for this pass: every call it rings rings with the same sound
+    // (the device's choice), and this isolate has no providers.
+    final ringtone = summary.pendingCalls.isEmpty
+        ? null
+        : await Ringtones.chosen();
     // A call that rang while the app was closed: the offer waits on the
     // server and is opened by the running app, so all this knows is who is
     // calling. The notification takes the screen over a locked phone and
@@ -164,6 +170,7 @@ Future<void> _wakeAccount(
         fullScreen: true,
         // Its buttons open this account before the call rings.
         account: account,
+        ringtone: ringtone,
       );
     }
   } finally {
