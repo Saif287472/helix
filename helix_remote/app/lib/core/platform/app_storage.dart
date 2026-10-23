@@ -83,6 +83,14 @@ abstract final class AppPaths {
     return File(p.join(dir.path, 'device_settings.json'));
   }
 
+  /// `<app folder>/packs`: the theme packs downloaded on this device
+  /// (`core/theme/orbit_packs.dart`). Device-level like [deviceSettingsFile],
+  /// because a theme is chosen on the device and not per account, so signing
+  /// out leaves it. Not created here: measuring what the app holds must not
+  /// leave an empty folder behind on a device that never downloaded one.
+  static Future<Directory> packsDirectory() async =>
+      Directory(p.join((await _base()).path, 'packs'));
+
   /// Everything the app keeps on disk, for the storage page.
   static Future<Directory> appDirectory() => _base();
 

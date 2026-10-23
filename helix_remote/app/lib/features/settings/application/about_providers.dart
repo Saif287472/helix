@@ -75,6 +75,7 @@ final storageSummaryProvider = FutureProvider.autoDispose<StorageSummary>((
   return StorageSummary(
     databaseBytes: usage.databaseBytes,
     mediaBytes: usage.mediaBytes,
+    packBytes: usage.packBytes,
   );
 });
 

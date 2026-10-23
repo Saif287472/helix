@@ -17,6 +17,7 @@ import 'package:helix_remote/core/push/push_registration.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
+import 'package:helix_remote/core/theme/orbit_packs.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/shared/widgets/app_link_listener.dart';
 import 'package:helix_remote/shared/widgets/phone_book_sync_host.dart';
@@ -55,8 +56,11 @@ Future<void> main(List<String> args) async {
       await LocalNotifications.init();
       await CallNotifications.init();
       // The themes and the chosen one are read before the first frame, so
-      // no screen ever draws without its tokens.
+      // no screen ever draws without its tokens. The packs this device holds
+      // are gate-checked here too: one that fails its checks is not a theme,
+      // and the app opens on what it ships rather than waiting for a download.
       final themes = await loadBuiltInThemes();
+      final packs = await _installedPackThemes();
       final theme =
           await const FileDeviceSettingsStore().readTheme() ?? defaultThemeId;
 
@@ -65,6 +69,7 @@ Future<void> main(List<String> args) async {
         ProviderScope(
           overrides: [
             orbitThemeLibraryProvider.overrideWithValue(themes),
+            downloadedThemesAtStartupProvider.overrideWithValue(packs),
             initialThemeIdProvider.overrideWithValue(theme),
           ],
           child: HelixRemoteApp(initialLink: _initialLink(args)),
@@ -76,6 +81,18 @@ Future<void> main(List<String> args) async {
       AnomalyLog.crash(error, stack);
     },
   );
+}
+
+/// The themes the packs on this device add, or none when the pack folder
+/// cannot be read at all (no app folder on this host). A pack that is merely
+/// broken is already left out by the store; the app still starts on what it
+/// ships.
+Future<Map<String, OrbitTokens>> _installedPackThemes() async {
+  try {
+    return await const ThemePackStore().themeTokens();
+  } on Object {
+    return const {};
+  }
 }
 
 /// The link the launcher gave us, if it was one.

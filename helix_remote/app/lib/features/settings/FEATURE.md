@@ -94,15 +94,18 @@ sign-in. `DeleteAccountController` holds the code's challenge in memory only.
 ## Storage: what counts
 
 The hero's total is the device probe (database, media, thumbnails and work in
-progress). The bar's three shares are the engine's known content: messages and
-keys (database), photos and videos (images, videos, video notes, GIFs), and
-files (documents, unknown kinds and voice notes). Biggest chats count
-downloaded photos, videos and documents; voice notes are not offered on their
-own. A chat's title and avatar come from the chat list ("Chat" until it has
-loaded). Freeing a chat deletes the files and thumbnails of `ready` downloads,
-clears their local paths and marks those attachments `remote`; messages, keys
-and pointers stay, and the files download again while the server keeps the
-object (30 days). Uploads and downloads in progress are never touched.
+progress, and downloaded theme packs). The bar's three shares are the engine's
+known content: messages and keys (database), photos and videos (images, videos,
+video notes, GIFs), and files (documents, unknown kinds and voice notes). Biggest
+chats count downloaded photos, videos and documents; voice notes are not offered
+on their own. A chat's title and avatar come from the chat list ("Chat" until it
+has loaded). Freeing a chat deletes the files and thumbnails of `ready`
+downloads, clears their local paths and marks those attachments `remote`;
+messages, keys and pointers stay, and the files download again while the server
+keeps the object (30 days). Uploads and downloads in progress are never touched.
+Pack bytes are named in the split line ("· 2.0 MB themes") only when there are
+any, and are not freeable here: they are deleted on You > Appearance, with the
+theme they carry.
 
 ## Privacy: finding me by phone number
 
@@ -112,3 +115,22 @@ registered with; on a linked device it throws before sending and the page asks
 for the number once (a country code is required), then retries. A server
 refusal says Helix checks the number against the one the account was verified
 with.
+
+## Theme packs: getting, updating and deleting one
+
+`application/theme_packs.dart` is the download manager's wiring; the store and
+the trust anchor are in `core/theme/orbit_packs.dart` and nothing here repeats
+their rules. `ApiPackSource` is `PackSource` over the signed-in account's server
+(`runtime.api.ops`), so `install` asks that host for the list, the manifest and
+each file by its SHA-256. `installedPacksProvider` reads this device's folder
+through the provider's store (the build's anchor); `hostedPacksProvider` asks
+the host, and is `autoDispose` because it needs the network.
+`ThemePackActions.install`/`remove` return the sentence the page shows: which
+theme arrived, that it was already up to date, that the theme is built in (so
+there is nothing to download), that the pack is no longer on offer, that it
+cannot be used, that it was deleted, that it is not on this device. A refusal is
+the format's own plain-English reason, never anything a pack wrote about itself.
+After either action the theme library is re-read, so a pack that just arrived is
+choosable on Appearance without a restart, and one that just went leaves the app
+drawing Orbit while the person's choice stays saved. The page that lists and
+taps these is Part C step 4.

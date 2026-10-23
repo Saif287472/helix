@@ -271,8 +271,7 @@ both change the server, so neither is live until production runs this branch.)
 
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
-`PORT_PLAN.md` Part C is the plan. Steps 1 and 2 are built; steps 3 to 4 are
-not.
+`PORT_PLAN.md` Part C is the plan. Steps 1, 2 and 3 are built; step 4 is not.
 
 12. Part C step 1, the pack format and the signing tool - **done**
     (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
@@ -319,9 +318,46 @@ not.
     ADR-033's consequences. The pipeline's `no-store` covers these routes like
     every other response, so the device's own cache (step 3) is what avoids a
     repeat download.
-14. Part C step 3, the download manager, and step 4, the gallery - not started,
-    and not approved. Step 3 also adds the page where the owner's publisher key
-    would go, which is what makes a pack usable at all (the anchor ships empty).
+14. Part C step 3, the download manager - **done** (2026-10-23). App-side
+    only, deliberately: no `orbit_ui`, protocol, api or server file moved, so
+    the pixel gate's 241 keys still score the same. `core/theme/orbit_packs.dart`
+    is `ThemePackStore` (the device's `packs` folder in the server's own layout,
+    files written and read by sha256 so nothing opens a path a pack named,
+    download staged and renamed only after `checkOrbitPack` passes, **every**
+    pack re-checked on **every** read, highest revision kept with a downgrade
+    refused and the older one deleted, and the revision already on the device
+    never refetched) and `PackTrust` (the anchor:
+    `--dart-define=HELIX_PACK_PUBLISHERS=slug:hex`, empty by default exactly as
+    `HELIX_GLOBAL_PINS` is, so every pack is refused as `unknownPublisher` until
+    you run `keygen`). The theme library is now packs merged **under** the
+    built-ins, so no pack can take Orbit's or Night's name; the saved choice
+    must be a theme id on read and must exist to be chosen; and when a chosen
+    pack is deleted or stops passing, the app draws Orbit and keeps the choice
+    for a re-download. `features/settings/application/theme_packs.dart` is the
+    manager the pages will call: `ApiPackSource` over the signed-in account's
+    server, install/update/delete each answering one plain sentence, the library
+    re-read afterwards. Accounting: `StorageUsage.packBytes`, its own segment on
+    the Storage page only when there are any, not freeable there (Appearance
+    deletes). Tests: 29 new (`app/test/settings/theme_packs_test.dart`, real
+    temp folders, real Ed25519 keys, unsigned/untrusted/swapped/over-cap/
+    unknown-effect packs each writing nothing) plus the Storage label; app suite
+    and analyze clean.
+15. Part C step 4, the gallery on Appearance - not started, and not approved.
+    Everything it needs is here (list, install, update, delete, the fallback),
+    so it is a page and a connector: `hostedPacksProvider` for what the account's
+    server offers, `installedPacksProvider` for what this device holds,
+    `themePackActionsProvider` for the verbs. The prototype has no such screen,
+    so it needs your design call before it is built.
+16. **Deviation to rule on:** step 1's note said the publisher key would go in
+    "the app's trust anchor, which step 3 adds with the download page". Step 3
+    made the anchor a **build-time define** instead, with no page where anyone
+    types a key: a release app cannot take its own trust decision from its UI
+    without turning a theme download into a self-granted permission, and step
+    1's own line "the release build stays the trust anchor" points the same way.
+    Consequence: a pack becomes downloadable only when a build is made with the
+    define, i.e. with an APK rebuild you control. Say if you want the editable
+    page anyway (it would need the key list to be signed by something the app
+    already trusts, which is the same problem one layer down).
 
 ## Batch 8, what is left
 
@@ -442,8 +478,12 @@ must say so.
   **empty**, so `checkOrbitPack` refuses every pack as `unknownPublisher`.
   Run `dart run tool/theme_pack_tool.dart keygen --seed-file <somewhere
   private>` from `helix_remote/`, keep the seed file off ordinary backups,
-  and paste the public key it prints into the app's anchor (Part C step 3
-  adds the page; until then it is a one-line constant in `core/theme/`).
+  and build the app with
+  `--dart-define=HELIX_PACK_PUBLISHERS=<publisher id>:<the 64-hex public key
+  keygen prints>` (comma-separate more than one). Step 3 made the anchor that
+  define rather than a page where a key is typed - see the deviation entry in
+  the Part C section, which is yours to rule on. Nothing is downloadable, and
+  no pack page can work, until a build carries the key.
 - **A pack folder and a redeploy, before anything is downloadable.** Step 2's
   routes answer an empty list until the production `.env`
   (`J:\Projects\Servers\helix_server\helix\.env`) says

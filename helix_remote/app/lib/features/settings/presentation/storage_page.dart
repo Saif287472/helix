@@ -50,10 +50,16 @@ class StoragePage extends ConsumerWidget {
           _ => orbit.StorageStatus.loading,
         },
         totalLabel: '${formatBytes(total)} on this phone',
+        // Downloaded theme packs are only named when there are any, so a
+        // device that never got one reads exactly as it did before.
         splitLabel: summary == null
             ? ''
-            : '${formatBytes(summary.databaseBytes)} messages and keys · '
-                  '${formatBytes(summary.mediaBytes)} media',
+            : [
+                '${formatBytes(summary.databaseBytes)} messages and keys',
+                '${formatBytes(summary.mediaBytes)} media',
+                if (summary.packBytes > 0)
+                  '${formatBytes(summary.packBytes)} themes',
+              ].join(' · '),
         messagesShare: known == 0 ? 1 : (summary?.databaseBytes ?? 0) / known,
         mediaShare: known == 0 ? 0 : photos / known,
         filesShare: known == 0 ? 0 : files / known,

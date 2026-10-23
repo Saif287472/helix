@@ -771,6 +771,41 @@ reuse that effect.
      cannot bypass.
 3. **A download manager in the app:** cache, delete, update, and accounting
    on the Storage page.
+   - [x] **Done 2026-10-23 (pending your review).** All app-side: no
+     `orbit_ui`, protocol, api or server file changed, so the 241-key pixel gate
+     is untouched. `app/lib/core/theme/orbit_packs.dart` is `ThemePackStore`,
+     which keeps a pack in the server's own layout under the app's `packs`
+     folder (`manifest.json` in `packs/<id>/r<revision>` beside a `files` folder
+     of SHA-256 names), and so a device never opens a path a pack named. It
+     stages a download and renames only after `checkOrbitPack` passes, so a
+     refused pack cannot replace the theme on screen; it re-checks **every** pack
+     on **every** read, so a folder edited afterwards or a publisher a newer app
+     stopped trusting is simply not a theme (and stays on disk: deleting is the
+     person's action); it keeps the highest revision, refuses a downgrade,
+     deletes the older one after an update, and never refetches the revision it
+     already holds. `PackTrust` is the anchor:
+     `--dart-define=HELIX_PACK_PUBLISHERS=slug:hex,slug:hex`, empty by default
+     like `HELIX_GLOBAL_PINS`, so nothing is downloadable before you run
+     `keygen` - the read path reads a broken define as "trusts nobody" so a typo
+     cannot stop the app starting, and the pack pages fail the action instead.
+     The theme library is now the packs merged under the built-ins, so a pack
+     can never take Orbit's or Night's name, and the saved choice is checked as
+     a theme id both ways; when a chosen pack goes or stops passing, the app
+     draws Orbit and keeps the choice. `features/settings/application/theme_packs.dart`
+     is the manager: `ApiPackSource` over the account's own server, and
+     install/update/delete that answer in one plain sentence (which theme
+     arrived, already up to date, built in so nothing to download, no longer on
+     offer, cannot be used with the format's own reason, deleted, not on this
+     device). Accounting: `StorageUsage.packBytes` from the probe, its own
+     segment on the Storage page only when there are any, and not freeable there
+     (step 4's Appearance page deletes). Tests: 29 new in
+     `app/test/settings/theme_packs_test.dart` plus the Storage-page label, on
+     real temp folders and real Ed25519 signatures; app suite green, analyze
+     clean.
+   - **Waiting on you:** the `keygen` and the define in step 1's note - until a
+     build carries a publisher key, every pack is refused as `unknownPublisher`,
+     which is the safe state and not a bug. Step 4 is the page that lists, taps
+     and deletes.
 4. **A theme gallery on Appearance:** download, delete and "get more".
    - When a chosen pack is missing or fails its checks, the app falls back
      to Orbit.

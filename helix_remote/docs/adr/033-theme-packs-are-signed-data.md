@@ -51,7 +51,12 @@ where the checking happens.
   the gate, not imports of it. That keeps `helix_remote_domain` free of any
   Helix or Flutter dependency (its architecture test already demanded this),
   keeps `OrbitEffectKind` the single source of what can be drawn, and puts the
-  keys in the release build that ships them.
+  keys in the release build that ships them. Step 3 gives that a concrete shape:
+  `--dart-define=HELIX_PACK_PUBLISHERS=slug:hex,slug:hex`, the same build-time
+  switch as `HELIX_GLOBAL_PINS`, read by `PackTrust` in
+  `app/lib/core/theme/orbit_packs.dart`. Not a page where a person types a key:
+  a release app cannot take a trust decision from its own UI without turning the
+  download of code-adjacent data into a self-granted permission.
 - **Nothing is trusted until the owner publishes a key.** The app's anchor map
   ships empty for now, so every downloaded pack is refused as
   `unknownPublisher`. That is the safe direction for the step that only defines

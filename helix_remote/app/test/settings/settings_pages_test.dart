@@ -839,6 +839,32 @@ void main() {
       expect(find.text('stub:${RoutePaths.chats}'), findsOneWidget);
     });
 
+    youTest('names the themes a person downloaded, beside the rest', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      await pumpPage(
+        tester,
+        const StoragePage(),
+        overrides: a3bOverrides(
+          settingsGateway: FakeSettingsGateway(),
+          storage: FakeStorageProbe(
+            const StorageUsage(
+              databaseBytes: 3 * 1024 * 1024,
+              mediaBytes: 20 * 1024 * 1024,
+              packBytes: 2 * 1024 * 1024,
+            ),
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('25 MB on this phone'), findsOneWidget);
+      expect(
+        find.text('3.0 MB messages and keys · 20 MB media · 2.0 MB themes'),
+        findsOneWidget,
+      );
+    });
+
     youTest('says when the figures cannot be read', (tester) async {
       useTallWindow(tester);
       final gateway = FakeSettingsGateway()

@@ -191,12 +191,19 @@ final class LegalText {
 /// How much room Helix uses, for the storage page.
 @immutable
 final class StorageSummary {
-  const StorageSummary({this.databaseBytes = 0, this.mediaBytes = 0});
+  const StorageSummary({
+    this.databaseBytes = 0,
+    this.mediaBytes = 0,
+    this.packBytes = 0,
+  });
 
   final int databaseBytes;
   final int mediaBytes;
 
-  int get totalBytes => databaseBytes + mediaBytes;
+  /// Downloaded theme packs (`core/theme/orbit_packs.dart`).
+  final int packBytes;
+
+  int get totalBytes => databaseBytes + mediaBytes + packBytes;
 }
 
 /// Downloaded attachments on this device, split by kind.

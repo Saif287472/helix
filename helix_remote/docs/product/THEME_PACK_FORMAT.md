@@ -195,3 +195,62 @@ has no copy of the limits except the two it refuses to stream past (64 KiB and
 can serve an older revision, a different pack, or nothing at all - it cannot
 make a device accept anything, because `checkOrbitPack` still runs over the
 bytes on the phone. That is the whole point of a pack being data.
+
+## What the phone does (step 3)
+
+`helix_remote/app/lib/core/theme/orbit_packs.dart` keeps what a person
+downloads, in the server's own layout under the app's `packs` folder:
+
+```
+packs/<pack id>/r<revision>/manifest.json
+packs/<pack id>/r<revision>/files/<sha256>
+```
+
+Rules that are the device's, not the format's:
+
+- **The gate runs on every read, not only on download.** A folder that was
+  edited afterwards, or that a newer app no longer trusts the publisher of, is
+  simply not a theme. Its bytes stay on disk - deleting what a person downloaded
+  is their action, not the app's reaction to a check.
+- **Nothing is opened by a path a pack named.** Files are written and read by
+  their SHA-256, which is what the route asks for too, so the folder a device
+  holds is content-addressed and a file two revisions share is stored once.
+- **A download is staged, checked, then renamed.** Bytes land in
+  `packs/.staging/<id>-r<rev>-<time>` and only a pack that passes the gate is
+  moved into place, so a refused or truncated download can never replace the
+  theme on screen, and staging is removed whatever happens.
+- **Revision numbers only compare inside one publisher and one id.** The store
+  keeps the highest revision it has, refuses a downgrade (the newest thing on
+  offer is what an update downloads), and returns `alreadyCurrent` without
+  fetching when the revision on the device is already the one asked for. Older
+  revisions of the same pack are deleted after a new one is in place, because
+  the person cannot switch to them and they are the bulk of the folder's bytes.
+- **Bandwidth is refused before it is spent.** A file over 8 MiB, a total over
+  24 MiB or more than 16 files, as the manifest itself declares them, are
+  refused before a byte is fetched; the delivered bytes are then re-checked
+  against the manifest by the gate.
+- **The anchor is the build's.** `PackTrust` reads
+  `--dart-define=HELIX_PACK_PUBLISHERS=slug:hex,slug:hex` (the same shape as
+  `HELIX_GLOBAL_PINS`), so the keys are release state compiled into the app that
+  ships them, not data the network can hand out. It is empty by default, which
+  means every pack is refused as `unknownPublisher` until the owner publishes a
+  key and it reaches a build. A malformed value is read as "trusts nobody" on
+  the start-up and theme-library read paths, so a typo in a define cannot stop
+  the app starting or leave it with no theme; the pages that manage packs fail
+  the action instead, so the typo is noticed rather than shipped silently.
+- **A pack never takes a built-in theme's name.** The theme library is the
+  downloaded packs with the built-ins merged over them, and a download of an id
+  that is built in is refused in words, so Orbit and Orbit Night are always the
+  app's own bytes.
+- **The choice is a theme id, and it is checked on the way in and on the way
+  out.** The saved value must match the pack id shape to be read at all, and a
+  choice that is not currently in the library cannot be made. When a chosen pack
+  stops passing its checks or is deleted, the app draws Orbit and keeps the
+  choice, so re-downloading brings it back.
+- **Its bytes are counted as themes.** The Storage page reports packs separately
+  from media (a person deletes them on Appearance, not there) and names them in
+  the split line only when there are any.
+
+`app/test/settings/theme_packs_test.dart` pins all of this, including that an
+unsigned, untrusted, swapped, over-cap or effect-asking pack writes nothing.
+
