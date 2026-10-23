@@ -149,20 +149,52 @@ final class AdminHarness {
     await pumpApp(tester);
   }
 
-  /// Opens a place from the header (the test window is wide): `Overview`,
-  /// `Users & Devices`, `Invites` or `Ops & Logs`.
-  Future<void> goTo(WidgetTester tester, String place) async {
-    await tester.tap(
-      find.descendant(of: find.byType(AppBar), matching: find.text(place)),
-    );
+  /// Starts it signed in on a phone: the dock and the system drawer, not the
+  /// header pills.
+  Future<void> startPhone(
+    WidgetTester tester, {
+    Size size = const Size(400, 800),
+  }) async {
+    saveSession();
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(HelixAdminApp(services: services()));
     await tester.pumpAndSettle();
   }
 
-  /// Opens Ops & Logs and one of its sub-tabs: `Reports`, `Audit`, `Logs`
-  /// or `Config`.
+  /// Opens a place from the header (the test window is wide): `Overview`,
+  /// `Users & Devices`, `Invites`, `Reports` or `System`. The pill bar
+  /// scrolls when the places do not fit, and the test font is much wider
+  /// than the shipped one, so a later place can be off the edge.
+  Future<void> goTo(WidgetTester tester, String place) async {
+    final pill = find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text(place),
+    );
+    await tester.ensureVisible(pill);
+    await tester.tap(pill);
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the System place and one of its sub-tabs: `Audit`, `Logs` or
+  /// `Config`.
   Future<void> openOps(WidgetTester tester, String tab) async {
-    await goTo(tester, 'Ops & Logs');
+    await goTo(tester, 'System');
     await tester.tap(find.text(tab).first);
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the phone's system drawer from the gear in the header. The window
+  /// has to be narrow enough for the dock layout, as `pumpApp` is not.
+  Future<void> openSystemDrawer(WidgetTester tester) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byIcon(Icons.settings_outlined),
+      ),
+    );
     await tester.pumpAndSettle();
   }
 }

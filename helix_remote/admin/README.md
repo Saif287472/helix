@@ -33,10 +33,17 @@ user asks;** say whether a new APK is needed instead (see `AGENTS.md`).
 | Overview | server facts, health, maintenance mode, federation switch, feature flags, activity numbers (open sockets, requests, 5xx share, dead jobs, undelivered messages, crash reports) | `config`, `updateConfig`, `featureFlags`, `setFeatureFlag`, `ops.ready`, `metrics` |
 | Accounts | paged list, search by Helix name or last 4 digits, status filter; detail with devices; suspend or resume, ban, delete (type `DELETE`), revoke device, recovery code (shown once) | `accounts`, `account`, `suspend`, `unsuspend`, `ban`, `deleteAccount`, `revokeDevice`, `createRecoveryCode` |
 | Invites | only when the server registers by invite; create (code shown once), cancel | `invites`, `createInvite`, `cancelInvite` |
-| Reports | open, resolved, dismissed; resolve or dismiss; open the reported account | `reports`, `resolveReport` |
-| Audit log | newest first, "Load more" paging | `audit` |
-| Server log | recent lines, filter, copy, "Follow live" over the admin WebSocket (polls where a socket is impossible) | `logs`, `logStream` |
-| Settings | server name, change admin password, App lock, purge dead jobs, sign out | `updateConfig`, `changePassword`, `purge` |
+| Reports | open, resolved, dismissed; resolve or dismiss; open the reported account. The Reports item wears how many are open (`50+` when the console has only seen a page). | `reports`, `resolveReport` |
+| System > Audit | newest first, "Load more" paging | `audit` |
+| System > Logs | recent lines, filter, copy, "Follow live" over the admin WebSocket (polls where a socket is impossible) | `logs`, `logStream` |
+| System > Config | server name, its properties and session, change admin password, App lock, maintenance, feature flags, purge dead jobs, sign out | `updateConfig`, `changePassword`, `purge` |
+
+The places come in two groups. Overview, Accounts, Invites and Reports are
+what an operator works through; Audit, Logs and Config are the server's own
+system. On a window 700 dp or wider all of them are pills in the header; on a
+phone the first group is the pill dock at the bottom (the same shape the app's
+Orbit tabs use) and the second sits behind the gear in the header, in a drawer
+that also says when the session ends and offers sign out.
 
 ## Layout
 

@@ -17,7 +17,7 @@ const flagLabels = {
   'group_calls': 'Group calls',
 };
 
-/// Ops & Logs > Config: the server's name and properties, federation, the
+/// System > Config: the server's name and properties, federation, the
 /// admin password and App lock, maintenance, feature flags and sign-out.
 class ConfigView extends StatelessWidget {
   const ConfigView({super.key, required this.server});
@@ -93,20 +93,6 @@ class ConfigView extends StatelessWidget {
   Future<void> _appLock(BuildContext context, bool on) async {
     final problem = await AdminSessionScope.read(context).setAppLock(on);
     if (problem != null && context.mounted) showMessage(context, problem);
-  }
-
-  Future<void> _signOut(BuildContext context) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Sign out?',
-      message:
-          'This ends every admin session on the server, on this device and '
-          'any other. You will need the admin password to sign in again.',
-      action: 'Sign out',
-    );
-    if (confirmed && context.mounted) {
-      await AdminSessionScope.read(context).signOut();
-    }
   }
 
   Future<void> _maintenance(BuildContext context, bool on) async {
@@ -402,7 +388,7 @@ class ConfigView extends StatelessWidget {
                         'it from this device. You will need the admin '
                         'password to sign back in',
                     trailing: FilledButton(
-                      onPressed: () => _signOut(context),
+                      onPressed: () => confirmAndSignOut(context),
                       style: ConsoleButtons.filledTone(
                         HelixConsoleColors.danger,
                       ),

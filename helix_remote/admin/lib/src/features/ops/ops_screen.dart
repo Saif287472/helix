@@ -2,85 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:helix_admin/src/features/audit/audit_screen.dart';
 import 'package:helix_admin/src/features/dashboard/server_controller.dart';
 import 'package:helix_admin/src/features/logs/logs_screen.dart';
-import 'package:helix_admin/src/features/reports/reports_controller.dart';
-import 'package:helix_admin/src/features/reports/reports_screen.dart';
 import 'package:helix_admin/src/features/settings/settings_screen.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
 import 'package:helix_admin/src/widgets/console_kit.dart';
-import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
-/// "Operations & System": the four things an operator does about the server
-/// itself, behind one segmented bar: Reports, Audit, Logs and Config.
-class OpsScreen extends StatefulWidget {
+/// What an operator does about the server itself, behind one segmented bar:
+/// the audit trail, the live log and the configuration. Moderation reports are
+/// a place of their own; on a phone these three are reached from the system
+/// drawer, and [tab] is where the drawer sent the operator.
+class OpsScreen extends StatelessWidget {
   const OpsScreen({
     super.key,
     required this.adminContext,
     required this.server,
+    required this.tab,
+    required this.onTabChanged,
     this.pageSize,
     this.pollInterval,
   });
 
   final AdminContext adminContext;
   final ServerController server;
+  final OpsTab tab;
+  final ValueChanged<OpsTab> onTabChanged;
   final int? pageSize;
   final Duration? pollInterval;
 
-  @override
-  State<OpsScreen> createState() => _OpsScreenState();
-}
-
-class _OpsScreenState extends State<OpsScreen> {
-  static const _reports = 0;
-  static const _audit = 1;
-  static const _logs = 2;
-
-  late final ReportsController _reportsController;
-  int _tab = _reports;
-
-  /// The last count of open reports seen, kept while the Reports filter is
-  /// on something else so the badge does not flicker away.
-  int _openCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _reportsController = ReportsController(
-      widget.adminContext,
-      pageSize: widget.pageSize ?? PageRequest.defaultLimit,
-    )..addListener(_onReports);
-    _reportsController.refresh();
-  }
-
-  void _onReports() {
-    final c = _reportsController;
-    if (c.status == ReportStatus.open && c.loaded && !c.loading) {
-      final count = c.items.length;
-      if (count != _openCount && mounted) setState(() => _openCount = count);
-    }
-  }
-
-  @override
-  void dispose() {
-    _reportsController
-      ..removeListener(_onReports)
-      ..dispose();
-    super.dispose();
-  }
-
-  Widget _body() => switch (_tab) {
-    _reports => ReportsView(
-      controller: _reportsController,
-      adminContext: widget.adminContext,
+  Widget _body() => switch (tab) {
+    OpsTab.audit => AuditScreen(adminContext: adminContext, pageSize: pageSize),
+    OpsTab.logs => LogsScreen(
+      adminContext: adminContext,
+      pollInterval: pollInterval,
     ),
-    _audit => AuditScreen(
-      adminContext: widget.adminContext,
-      pageSize: widget.pageSize,
-    ),
-    _logs => LogsScreen(
-      adminContext: widget.adminContext,
-      pollInterval: widget.pollInterval,
-    ),
-    _ => ConfigView(server: widget.server),
+    OpsTab.config => ConfigView(server: server),
   };
 
   @override
@@ -97,21 +51,30 @@ class _OpsScreenState extends State<OpsScreen> {
               const SizedBox(height: 12),
               ConsoleSegmented(
                 segments: [
-                  ConsoleSegment('Reports', badge: _openCount),
-                  const ConsoleSegment('Audit'),
-                  const ConsoleSegment('Logs'),
-                  const ConsoleSegment('Config'),
+                  for (final t in OpsTab.values) ConsoleSegment(t.label),
                 ],
-                selected: _tab,
-                onSelected: (i) => setState(() => _tab = i),
+                selected: tab.index,
+                onSelected: (i) => onTabChanged(OpsTab.values[i]),
               ),
             ],
           ),
         ),
         Expanded(
-          child: KeyedSubtree(key: ValueKey(_tab), child: _body()),
+          child: KeyedSubtree(key: ValueKey(tab), child: _body()),
         ),
       ],
     );
   }
+}
+
+/// The three things [OpsScreen] shows, in the order the bar draws them.
+enum OpsTab {
+  audit('Audit'),
+  logs('Logs'),
+  config('Config');
+
+  const OpsTab(this.label);
+
+  /// The word on its segment.
+  final String label;
 }

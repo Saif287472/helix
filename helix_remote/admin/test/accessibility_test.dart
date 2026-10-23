@@ -60,7 +60,8 @@ void main() {
     'Overview',
     'Users & Devices',
     'Invites',
-    'Ops & Logs',
+    'Reports',
+    'System',
   ]) {
     testWidgets(place, (tester) async {
       await h.startSignedIn(tester);
@@ -69,8 +70,8 @@ void main() {
     });
   }
 
-  for (final tab in const ['Reports', 'Audit', 'Logs', 'Config']) {
-    testWidgets('Ops & Logs > $tab', (tester) async {
+  for (final tab in const ['Audit', 'Logs', 'Config']) {
+    testWidgets('System > $tab', (tester) async {
       await h.startSignedIn(tester);
       await h.openOps(tester, tab);
       await check(tester);
@@ -85,14 +86,13 @@ void main() {
     await check(tester);
   });
 
-  testWidgets('the phone layout has a dock with every place', (tester) async {
-    h.saveSession();
-    tester.view.physicalSize = const Size(400, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(HelixAdminApp(services: h.services()));
-    await tester.pumpAndSettle();
+  /// Starts the console on a phone: the dock layout, not the header pills.
+  Future<void> phone(WidgetTester tester) => h.startPhone(tester);
+
+  testWidgets('the phone layout has a dock with the operating places', (
+    tester,
+  ) async {
+    await phone(tester);
 
     expect(find.byType(ConsoleDock), findsOneWidget);
     // Only the open place is named; the others are an icon each.
@@ -106,7 +106,7 @@ void main() {
     for (final icon in const [
       Icons.people_outline,
       Icons.local_activity_outlined,
-      Icons.settings_outlined,
+      Icons.shield_outlined,
     ]) {
       expect(
         find.descendant(
@@ -116,6 +116,14 @@ void main() {
         findsOneWidget,
       );
     }
+    // The system places are not in the dock: the gear opens them as a drawer.
+    expect(
+      find.descendant(
+        of: find.byType(ConsoleDock),
+        matching: find.byIcon(Icons.settings_outlined),
+      ),
+      findsNothing,
+    );
     await check(tester);
 
     await tester.tap(
@@ -126,6 +134,38 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('alice'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the phone drawer holds the system places and sign-out', (
+    tester,
+  ) async {
+    await phone(tester);
+    await h.openSystemDrawer(tester);
+
+    expect(find.byType(ConsoleDrawer), findsOneWidget);
+    for (final row in const ['Audit trail', 'Live log', 'Configuration']) {
+      expect(find.text(row), findsOneWidget);
+    }
+    expect(find.textContaining('Signed in until'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+    await check(tester);
+
+    await tester.tap(find.text('Live log'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConsoleDrawer), findsNothing);
+    expect(find.text('Live Server Console'), findsOneWidget);
+    expect(find.text('Operations & System'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a narrow phone shows the dock, then the drawer, with room', (
+    tester,
+  ) async {
+    await h.startPhone(tester, size: const Size(320, 640));
+    expect(tester.takeException(), isNull);
+
+    await h.openSystemDrawer(tester);
     expect(tester.takeException(), isNull);
   });
 

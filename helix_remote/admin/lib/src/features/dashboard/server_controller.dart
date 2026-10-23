@@ -5,10 +5,11 @@ import 'package:helix_admin/src/features/common/feature_controller.dart';
 import 'package:helix_admin/src/features/dashboard/metrics_summary.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
-/// The server's state: configuration, feature flags, health and the metrics
-/// summary. The dashboard shows it and flips the switches; Settings renames
-/// the server and purges. The shell keeps one for the whole session so the
-/// title and the Invites tab follow the server's own answers.
+/// The server's state: configuration, feature flags, health, the metrics
+/// summary and the open-report count. The dashboard shows it and flips the
+/// switches; Settings renames the server and purges. The shell keeps one for
+/// the whole session so the title, the Invites tab and the Reports badge all
+/// follow the server's own answers.
 final class ServerController extends FeatureController {
   ServerController(super.ctx);
 
@@ -17,6 +18,8 @@ final class ServerController extends FeatureController {
   ReadyResponse? _ready;
   MetricsSummary? _metrics;
   int? _latencyMs;
+  int _openReports = 0;
+  bool _openReportsMore = false;
 
   bool _loading = false;
   String? _error;
@@ -44,6 +47,12 @@ final class ServerController extends FeatureController {
 
   bool get loading => _loading;
 
+  /// How many reports are open, as the console last saw it: the count of one
+  /// page, plus whether the server said there were more than that page. The
+  /// Reports navigation item wears it.
+  int get openReports => _openReports;
+  bool get openReportsMore => _openReportsMore;
+
   /// The configuration could not be loaded (and none was loaded before).
   String? get error => _error;
 
@@ -62,7 +71,7 @@ final class ServerController extends FeatureController {
     return mode == null || mode != RegistrationMode.phone;
   }
 
-  /// Reloads everything. The four reads are independent: one failing leaves
+  /// Reloads everything. The reads are independent: one failing leaves
   /// a note instead of hiding the rest.
   Future<void> refresh() async {
     _loading = true;
@@ -99,6 +108,16 @@ final class ServerController extends FeatureController {
         },
         clear: () => _metricsNote = null,
       ),
+      // One page of open reports: the number the Reports item wears. A
+      // failure leaves the last answer where it was; nothing shows it.
+      _read(() async {
+        final page = await ctx.api.admin.reports(
+          status: ReportStatus.open,
+          page: const PageRequest(),
+        );
+        _openReports = page.items.length;
+        _openReportsMore = page.nextCursor != null;
+      }, (e) {}),
     ]);
     if (isDisposed) return;
     final e = configError;
@@ -109,6 +128,15 @@ final class ServerController extends FeatureController {
       _error = null;
     }
     _loading = false;
+    notifyListeners();
+  }
+
+  /// Records what the Reports screen just counted, so the badge is right as
+  /// soon as the operator resolves something, not at the next refresh.
+  void reportOpenReports(int count, {bool more = false}) {
+    if (_openReports == count && _openReportsMore == more) return;
+    _openReports = count;
+    _openReportsMore = more;
     notifyListeners();
   }
 

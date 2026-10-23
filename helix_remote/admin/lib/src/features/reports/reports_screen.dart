@@ -9,9 +9,60 @@ import 'package:helix_admin/src/widgets/paged_list.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
+/// The Reports place: the moderation queue, with the state that belongs to it.
+/// [onOpenCount] passes what is waiting up to the shell, so the count on the
+/// navigation item and the queue the operator is looking at always agree.
+class ReportsScreen extends StatefulWidget {
+  const ReportsScreen({
+    super.key,
+    required this.adminContext,
+    this.onOpenCount,
+    this.pageSize,
+  });
+
+  final AdminContext adminContext;
+  final void Function(int count, {bool more})? onOpenCount;
+  final int? pageSize;
+
+  @override
+  State<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends State<ReportsScreen> {
+  late final ReportsController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ReportsController(
+      widget.adminContext,
+      pageSize: widget.pageSize ?? PageRequest.defaultLimit,
+    )..addListener(_tellShellWhatIsOpen);
+    _controller.refresh();
+  }
+
+  void _tellShellWhatIsOpen() {
+    final c = _controller;
+    if (c.status != ReportStatus.open || !c.loaded || c.loading) return;
+    widget.onOpenCount?.call(c.items.length, more: c.hasMore);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_tellShellWhatIsOpen)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ReportsView(controller: _controller, adminContext: widget.adminContext);
+}
+
 /// The moderation queue: open reports first, resolve or dismiss each, and
-/// jump to the reported account. The [controller] belongs to the caller (the
-/// Ops screen reads its open count for the tab badge).
+/// jump to the reported account. The [controller] belongs to the caller
+/// ([ReportsScreen]), which reads the open count from it for the badge.
 class ReportsView extends StatelessWidget {
   const ReportsView({
     super.key,

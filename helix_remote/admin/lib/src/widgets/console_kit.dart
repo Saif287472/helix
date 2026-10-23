@@ -243,12 +243,9 @@ class ConsolePill extends StatelessWidget {
 
 /// One option in a [ConsoleSegmented].
 class ConsoleSegment {
-  const ConsoleSegment(this.label, {this.badge = 0});
+  const ConsoleSegment(this.label);
 
   final String label;
-
-  /// A red count beside the label (open reports); zero shows nothing.
-  final int badge;
 }
 
 /// The segmented bar under a place's title: one selected segment, filled blue.
@@ -306,9 +303,7 @@ class _SegmentButton extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: segment.badge > 0
-          ? '${segment.label}, ${segment.badge} open'
-          : segment.label,
+      label: segment.label,
       excludeSemantics: true,
       child: Material(
         color: selected ? HelixConsoleColors.accent : Colors.transparent,
@@ -319,46 +314,15 @@ class _SegmentButton extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 44),
             child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      segment.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: foreground,
-                      ),
-                    ),
-                  ),
-                  if (segment.badge > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: HelixConsoleColors.dangerSurface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: HelixConsoleColors.dangerBorder,
-                        ),
-                      ),
-                      child: Text(
-                        '${segment.badge}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: HelixConsoleColors.danger,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+              child: Text(
+                segment.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: foreground,
+                ),
               ),
             ),
           ),
@@ -463,6 +427,8 @@ class ConsoleDockItem {
     required this.on,
     required this.onTap,
     this.tooltip,
+    this.badge = 0,
+    this.badgeMore = false,
   });
 
   /// The glyph while the place is not the one being looked at.
@@ -480,6 +446,12 @@ class ConsoleDockItem {
 
   /// What a long press says; [label] when not given.
   final String? tooltip;
+
+  /// A red count in the tab's corner (open reports); zero shows nothing.
+  final int badge;
+
+  /// Whether [badge] is the whole count or the most the console has seen.
+  final bool badgeMore;
 }
 
 /// The places of the console on a phone, in the shape the Orbit app uses for
@@ -553,7 +525,9 @@ class ConsoleDock extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: item.on,
-        label: item.label,
+        label: item.badge > 0
+            ? '${item.label}, ${consoleCount(item.badge, more: item.badgeMore)} open'
+            : item.label,
         excludeSemantics: true,
         child: Material(
           color: Colors.transparent,
@@ -584,10 +558,21 @@ class ConsoleDock extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    item.on ? item.selectedIcon : item.icon,
-                    size: 23,
-                    color: ink,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(
+                        item.on ? item.selectedIcon : item.icon,
+                        size: 23,
+                        color: ink,
+                      ),
+                      if (item.badge > 0)
+                        Positioned(
+                          right: -8,
+                          top: -6,
+                          child: ConsoleCount(item.badge, more: item.badgeMore),
+                        ),
+                    ],
                   ),
                   if (item.on) ...[
                     const SizedBox(width: 8),
@@ -610,6 +595,255 @@ class ConsoleDock extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A count as the operator reads it: `7`, or `50+` when that is the most the
+/// console has seen.
+String consoleCount(int count, {bool more = false}) =>
+    '$count${more ? '+' : ''}';
+
+/// The red count a navigation item rides on when something waits (open
+/// reports). Decorative: the item's own semantics carry the number in words.
+class ConsoleCount extends StatelessWidget {
+  const ConsoleCount(this.count, {super.key, this.more = false});
+
+  final int count;
+  final bool more;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: HelixConsoleColors.danger,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        consoleCount(count, more: more),
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          height: 1.2,
+          color: HelixConsoleColors.surface,
+        ),
+      ),
+    ),
+  );
+}
+
+/// One labelled block of [ConsoleDrawerRow]s in a [ConsoleDrawer].
+class ConsoleDrawerGroup extends StatelessWidget {
+  const ConsoleDrawerGroup({
+    super.key,
+    required this.label,
+    required this.rows,
+  });
+
+  final String label;
+  final List<ConsoleDrawerRow> rows;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+        child: ConsoleCardLabel(label),
+      ),
+      for (final (i, row) in rows.indexed) ...[
+        if (i > 0) const _DrawerHairline(),
+        row,
+      ],
+    ],
+  );
+}
+
+/// One destination in a [ConsoleDrawer]: a glyph, its words, and what waits
+/// there. At least 56 px tall, so it clears the 48 px rule with room left.
+class ConsoleDrawerRow extends StatelessWidget {
+  const ConsoleDrawerRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.subtitle,
+    this.selected = false,
+    this.badge = 0,
+    this.badgeMore = false,
+    this.tone,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final bool selected;
+
+  /// Open reports waiting behind this row; zero shows nothing.
+  final int badge;
+  final bool badgeMore;
+
+  /// The colour of the glyph and the words, for a row that is not a plain
+  /// destination - signing out is red.
+  final ConsoleTone? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink =
+        tone?.text ??
+        (selected ? HelixConsoleColors.accent : HelixConsoleColors.textBody);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: badge > 0
+          ? '$label, ${consoleCount(badge, more: badgeMore)} open'
+          : label,
+      hint: subtitle,
+      excludeSemantics: true,
+      child: Material(
+        color: selected ? HelixConsoleColors.accentSurface : Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(icon, size: 22, color: ink),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: ink,
+                          ),
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              height: 1.3,
+                              color: HelixConsoleColors.textMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (badge > 0) ...[
+                    const SizedBox(width: 8),
+                    ConsoleCount(badge, more: badgeMore),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The phone's system drawer: the places an operator reaches for rarely, with
+/// the session at the top and the way out at the bottom. It slides in from the
+/// right (`Scaffold.endDrawer`), 85% of the window wide and no wider than
+/// 420 px, and holds flat hairline rows rather than cards.
+class ConsoleDrawer extends StatelessWidget {
+  const ConsoleDrawer({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.groups,
+    this.onSignOut,
+  });
+
+  /// The server this console is signed in to.
+  final String title;
+
+  /// The session, in words: when it ends.
+  final String subtitle;
+
+  final List<ConsoleDrawerGroup> groups;
+  final VoidCallback? onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final wanted = MediaQuery.sizeOf(context).width * 0.85;
+    return Drawer(
+      width: wanted > 420 ? 420.0 : wanted,
+      backgroundColor: HelixConsoleColors.surface,
+      semanticLabel: 'System and configuration',
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: HelixConsoleColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: HelixConsoleColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const _DrawerHairline(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 12),
+                children: groups,
+              ),
+            ),
+            if (onSignOut != null) ...[
+              const _DrawerHairline(),
+              ConsoleDrawerRow(
+                icon: Icons.logout,
+                label: 'Sign out',
+                subtitle: 'Ends every admin session on this server',
+                tone: ConsoleTone.danger,
+                onTap: onSignOut!,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The 1 px line between drawer rows and blocks: a hairline, not a card.
+class _DrawerHairline extends StatelessWidget {
+  const _DrawerHairline();
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(height: 1, color: HelixConsoleColors.border),
+  );
 }
 
 /// A number with its label: one tile in the dashboard grid.

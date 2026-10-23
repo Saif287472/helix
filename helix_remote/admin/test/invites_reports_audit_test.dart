@@ -178,7 +178,7 @@ void main() {
 
     Future<void> openReports(WidgetTester tester) async {
       await h.startSignedIn(tester);
-      await h.goTo(tester, 'Ops & Logs');
+      await h.goTo(tester, 'Reports');
     }
 
     testWidgets('shows the open reports first', (tester) async {
@@ -247,7 +247,9 @@ void main() {
     });
 
     testWidgets('a load failure is an error, not "no reports"', (tester) async {
-      h.server.fail('GET /v1/admin/reports', ErrorCode.internal);
+      // Every time, not once: the shell reads the same route for the badge
+      // before the Reports place does.
+      h.server.fail('GET /v1/admin/reports', ErrorCode.internal, times: null);
       await openReports(tester);
 
       expect(find.text('Something went wrong'), findsOneWidget);

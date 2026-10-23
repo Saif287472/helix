@@ -334,7 +334,7 @@ class _Health extends StatelessWidget {
           title: 'Maintenance mode',
           subtitle: 'On',
           note:
-              'Apps get 503 until it is turned off in Ops & Logs > Config. '
+              'Apps get 503 until it is turned off in System > Config. '
               'This console keeps working.',
           dot: HelixConsoleColors.warn,
         ),

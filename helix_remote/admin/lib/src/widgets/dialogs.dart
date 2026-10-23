@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_admin/src/features/common/format.dart';
+import 'package:helix_admin/src/session/admin_session_scope.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -36,6 +37,23 @@ Future<bool> showConfirmDialog(
       ),
     ) ??
     false;
+
+/// Asks, then ends the admin session on the server and forgets it on this
+/// device. Config's session card and the phone's system drawer both use it, so
+/// the operator reads one warning about signing out.
+Future<void> confirmAndSignOut(BuildContext context) async {
+  final confirmed = await showConfirmDialog(
+    context,
+    title: 'Sign out?',
+    message:
+        'This ends every admin session on the server, on this device and '
+        'any other. You will need the admin password to sign in again.',
+    action: 'Sign out',
+  );
+  if (confirmed && context.mounted) {
+    await AdminSessionScope.read(context).signOut();
+  }
+}
 
 /// What [showReasonDialog] returns when the operator confirms: the optional
 /// reason (null when left empty), which goes to the audit log.
