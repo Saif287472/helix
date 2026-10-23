@@ -1,4 +1,4 @@
-# Orbit Part B: where it stands (handoff, 2026-10-20)
+# Orbit Part B: where it stands (handoff, 2026-10-23)
 
 For picking the port up on another machine or in a cloud session. The plan
 of record is `PORT_PLAN.md` (Part B); what each screen needs is in
@@ -7,11 +7,10 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 
 ## The branch
 
-- Work happens on `orbit-ui`, never on `main`. On the main PC it is the
-  worktree `J:/wt/orbit`; elsewhere, check the branch out. It was pushed to
-  `origin` on 2026-10-20 so it can be continued away from that PC. Push it
-  again only when the owner asks. Never merge it into `main`: the owner
-  merges after review.
+- The port ran on `orbit-ui` (worktree `J:/wt/orbit`, pushed to `origin` on
+  2026-10-20) until the owner took it into `main`. Part B's steps 3 to 5 and
+  the phone-number decision went straight to `main` as "(pending review)"
+  commits, reviewed after the fact. Nobody but the owner pushes.
 - One commit per batch, marked "(pending review)" in the message and in
   `PORT_PLAN.md`'s progress notes.
 
@@ -30,7 +29,10 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 6e4b53a | S3: the server lists a group's live invite links (groups migration 4) |
 | 49a75a4 | **WIP** batch 8: You, profile, Appearance (unfinished) |
 | 77ee515 | Batch 8: the settings connectors and the tests (WIP: items below) |
-| (next) | Batch 9 connectors (the shorter plan) |
+| 90447a7 | Part B step 3: the app is called Orbit, on the Orbit mark |
+| a1c5792 | Part B step 4: the app draws only Orbit; `helix_remote_ui` is the console's kit (ADR-031) |
+| 5452757 | The operator's whole number, and the privacy text that says why |
+| (this) | Part B step 5: the full gate, format fixes and the matrix path |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -119,8 +121,9 @@ owner skipped the prototype, so Accounts has no prototype or preview screen):
   pass as foreground push wakes, so the two cannot race one database.
 No server change or migration. A new APK is needed to try it.
 
-Deferred until the owner asks: Part B steps 3 to 5 (the rename, deleting
-`helix_remote_ui`, the full verify).
+Part B steps 3 to 5 are built (the Orbit name, the old kit out of the app,
+the full gate). Only step 6 is left, and that is the owner's: the APK, the
+Windows run and the merge.
 The lists below keep their detail. (The pixel checks, S1, E1, E4, E5, E6 and
 batch 10 are built — see "Deferred work, in order", items 4 to 10. S1 and E6
 both change the server, so neither is live until production runs this branch.)
@@ -245,8 +248,17 @@ both change the server, so neither is live until production runs this branch.)
     owner still has to rule on (eager lists against the section 6.4 budgets,
     the 46 px search bar against the 48 px rule) are written up in
     `DEVIATIONS.md` ("Part B step 4"). App 909, orbit_ui 215 and ui 7 all
-    pass. **Step 5** (the full gate, then the owner's APK and Windows run)
-    follows.
+    pass. **Step 5, the full gate - done** (2026-10-23): everything
+    `scripts/verify.ps1` runs, run step by step. app 909 (the journeys are in
+    it), engine 313, orbit_ui 215, api 201, admin 191, db 140, protocol 84,
+    crypto 74, rules 20, `helix_remote_ui` 7, cli 13, calls 5, domain 4, the
+    server on Postgres 404; `flutter analyze`, `dart analyze server tool`,
+    `dart format` and the governance check (27 controls) are clean, and the
+    drift code is up to date. The two server failures under load were each
+    green alone (now listed in AGENTS.md as timing flakes). Nine files were a
+    six app files were a line off `dart format` and are formatted. What is left
+    of Part B is yours:
+    the APK on the phone, the Windows run, and the merge.
 
 ## Batch 8, what is left
 
@@ -301,8 +313,9 @@ To do:
 After batch 8 comes batch 9: settings pages, devices and backup
 (`contracts/devices_backup.md`, with E4, E5 and E6). Batch 10, the wide
 Windows layout (`contracts/frame.md`), is built and its pixel check is done.
-What is left is Part B steps 3 to 5: the Orbit rename, deleting
-`helix_remote_ui`, and the full verify.
+Part B steps 3 to 5 are done (2026-10-23): the Orbit rename, `helix_remote_ui`
+demoted to the console, the full gate. Step 6 - build, try, merge - is the
+owner's.
 
 ## How every batch is checked
 
@@ -312,8 +325,8 @@ From `helix_remote/`:
 - `dart format --output=none --set-exit-if-changed app admin server packages tool`
 - `dart run tool/check_governance_controls.dart`
 - `flutter test` in `app`, `packages/orbit_ui`, `packages/helix_remote_ui`
-  and `packages/helix_remote_architecture_rules`, plus any package you
-  changed.
+  (the console kit, 7 rules tests) and
+  `packages/helix_remote_architecture_rules`, plus any package you changed.
 - Also `flutter analyze` in `orbit/flutter/apps/orbit_preview`.
 
 Server tests need PostgreSQL 17 and `HELIX_TEST_DATABASE_URL`: run
@@ -354,15 +367,25 @@ must say so.
 - `OrbitTapArea` gives a 48px target without moving pixels, but only when
   its parents' bounds contain it, so put it outermost.
   `OrbitTapArea(merge: true)` merges a field's own semantics.
-- Presentation imports only its own `application/`, `shared/`, `orbit_ui`,
-  `helix_remote_ui` and `helix_remote_domain`. Something that reads several
+- Presentation imports only its own `application/`, `shared/`, `orbit_ui` and
+  `helix_remote_domain` (since step 4 nothing in the app imports
+  `helix_remote_ui`). Something that reads several
   features goes in `shared/` (see `orbit_home_connector.dart` and
   `orbit_you_connector.dart`). orbit_ui changes are behaviour only.
 
 ## Waiting on the owner
 
+- Another agent is working in this same tree: the identity module has
+  uncommitted ADR-032 password-reset code (protocol routes, api client, server,
+  REST_V2.md, identity tests) and `dart analyze server tool` fails on it while
+  it is mid-edit. It is NOT part of any Part B commit - the gate numbers below
+  are what this branch's own suites give.
 - Review of every "(pending review)" commit and the DEVIATIONS entries.
 - A sound for the Orbit ringtone.
+- Part B step 5's second bullet: the debug APK on your phone and the Windows
+  run. Nothing was built for you here (AGENTS.md: the owner builds).
+- S1's `/u/<~name>` page and E6's `GET /v1/backups/full/meta` are code in this
+  branch; they answer only after you tag, build and switch production.
 
 Decided and done since the last hand-off:
 

@@ -123,6 +123,11 @@ prototype's `data.js` was shaped like those models.
   `helix_remote_ui` re-exports them. The old and new screens then share the
   same types while the features are switched over one at a time.
 
+**Update (2026-10-23, step 4):** the re-export is over. The models live only
+in `orbit_ui` (`package:orbit_ui/models.dart`), the app's mappers import that
+and `helix_remote_ui` keeps no copy - it is the operator console's kit now
+(ADR-031).
+
 ## Part A: build the UI alone
 
 ### Phase 0: freeze the prototype (it is the specification)
@@ -667,6 +672,22 @@ Progress (2026-10-19, on branch `orbit-ui` in `J:/wt/orbit`):
   keys and 42 window keys) is the visual check now, so no golden is needed.
   Deviations are in `DEVIATIONS.md` ("Part B step 4"). Tests: app 909,
   orbit_ui 215, `helix_remote_ui` 7, all passing.
+- [x] Step 5 (pending your review): the full gate, run on 2026-10-23 exactly
+  as `scripts/verify.ps1` runs it. The generated drift code is up to date;
+  `dart format` is clean over all 895 files (six app files from step 4 were a
+  line off and are formatted now);
+  `flutter analyze` and `dart analyze server tool` are clean; app 909 (the
+  journey tests are in it), engine 313, orbit_ui 215, api 201, admin 191,
+  db 140, protocol 84, crypto 74, rules 20, `helix_remote_ui` 7, cli 13,
+  calls 5, domain 4; the server suite on Postgres is 404, plus the two
+  timing flakes it always has under load (`calls_test.dart` "hang-up from
+  either side, and a decline" and `security_test.dart` "signed prekeys
+  rotate when due"), each green when run alone and both now listed in
+  AGENTS.md; the governance check passes (27 controls, after the matrix
+  named a bare `theme_gallery_test.dart` instead of its path). Step 5's
+  second bullet is yours: the APK on the phone and the Windows run. Nothing
+  in Part B goes live by itself - S1's `/u/<~name>` route and E6's
+  `GET /v1/backups/full/meta` answer only once production runs this code.
 
 Part B must never:
 - **Change a design.** Any visual change goes back to the preview first and

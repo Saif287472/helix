@@ -13,7 +13,10 @@ import 'package:orbit_ui/orbit_ui.dart' as orbit;
 /// everything else that needs "pick a person": a `helix://contact` link, a
 /// "new chat" button, a "new call" button.
 class PeopleSearchScreen extends ConsumerStatefulWidget {
-  const PeopleSearchScreen({super.key, this.mode = orbit.PeopleSearchMode.chats});
+  const PeopleSearchScreen({
+    super.key,
+    this.mode = orbit.PeopleSearchMode.chats,
+  });
 
   final orbit.PeopleSearchMode mode;
 

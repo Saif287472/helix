@@ -13,8 +13,7 @@ import 'package:helix_remote/features/groups/application/group_errors.dart';
 import 'package:helix_remote/features/groups/application/group_info.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
-import 'package:orbit_ui/models.dart'
-    show HelixAvatarModel, HelixPersonNames;
+import 'package:orbit_ui/models.dart' show HelixAvatarModel, HelixPersonNames;
 import 'package:orbit_ui/orbit_ui.dart' show InviteLinkItem;
 import 'package:share_plus/share_plus.dart';
 

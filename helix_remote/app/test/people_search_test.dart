@@ -339,7 +339,12 @@ void main() {
         'looked up', (tester) async {
       final lonely = FakePeopleGateway(ownNumberValue: null)
         ..put(personRow('mum', phonebook: 'Mum'));
-      await pumpPeople(tester, const PeopleSearchScreen(), gateway: lonely, seams: seams);
+      await pumpPeople(
+        tester,
+        const PeopleSearchScreen(),
+        gateway: lonely,
+        seams: seams,
+      );
       await type(tester, '01711000002');
       expect(find.textContaining('Without a country code'), findsOne);
       expect(find.textContaining('Find +'), findsNothing);
@@ -456,8 +461,8 @@ void main() {
 /// this walks the tree and leaves the field out, rather than dropping the
 /// check with it. See `orbit/DEVIATIONS.md`, "The search bar is 46 px".
 void expectTargets(WidgetTester tester) {
-  final root = tester.binding.renderViews.first.owner?.semanticsOwner
-      ?.rootSemanticsNode;
+  final root =
+      tester.binding.renderViews.first.owner?.semanticsOwner?.rootSemanticsNode;
   expect(root, isNotNull, reason: 'the test asked for semantics');
   final small = <String>[];
   bool walk(SemanticsNode node) {

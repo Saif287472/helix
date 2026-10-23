@@ -246,17 +246,15 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-10-14, after review batch 9 (server 398 on Postgres, app 814,
-engine 299, api 194, admin 191, ui 183 with 1 golden test skipped off Linux, db
-140, protocol 84, crypto 73, rules 20, cli 13, calls 5, domain 4; `flutter analyze` and
-`dart analyze server tool` clean; the governance check passes).
-
-Since 8c8a066 (ADR-030, 2026-10-17), confirmed 2026-10-20:
-- Fixed on the `orbit-ui` branch (2026-10-20), still failing on `main` until
-  it merges: the api route-parity table lacked `setPhoneNumber` and
-  `setOwnName`, and engine `calls_test.dart` "a caller the callee blocked is
-  told at once" closed its databases while Bob was still handling the second
-  offer (it failed under `flutter test` only).
+None as of 2026-10-23, after Part B step 5's full gate (server 404 on
+Postgres, app 909, engine 313, orbit_ui 215, api 201, admin 191, db 140,
+protocol 84, crypto 74, rules 20, `helix_remote_ui` 7 (the console kit, after
+its goldens left), cli 13, calls 5, domain 4; `flutter analyze` and
+`dart analyze server tool` clean; the format check and the governance check
+pass). The two failures the 2026-10-20 note listed - the api route-parity
+table lacking `setPhoneNumber` and `setOwnName`, and engine `calls_test.dart`
+"a caller the callee blocked is told at once" - were fixed on the `orbit-ui`
+branch, which is now merged.
 
 Some server tests are timing-sensitive and can fail while the machine is busy
 with other test runs (they pass alone; rerun them alone before calling a failure
@@ -269,7 +267,11 @@ connection not acquired, or the 30 s test timeout), `devices_test.dart`
 recovery-code redeem...") and `cli_test.dart` ("two CLI homes exchange
 messages..."): the client's password hashing runs in the server's isolate
 there. `devices_test.dart` has also failed once when run alone (2026-10-14; it
-failed the same way before any review batch) and passed on the next runs. Do not run Flutter analysis or tests alongside the server suite.
+failed the same way before any review batch) and passed on the next runs. Seen
+2026-10-23 under the full suite at `--concurrency=3`, and green when each was
+run alone: `test/client/engine/calls_test.dart` ("hang-up from either side, and
+a decline") and `test/client/engine/security_test.dart` ("signed prekeys
+rotate when due"). Do not run Flutter analysis or tests alongside the server suite.
 The two timing budgets in `app/test/performance_budget_test.dart` can likewise
 flake under load.
 

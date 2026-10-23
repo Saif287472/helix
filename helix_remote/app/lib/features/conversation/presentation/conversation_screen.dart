@@ -133,8 +133,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     MessageActionIds.info => ChatMessageAction.info,
     MessageActionIds.select => ChatMessageAction.select,
     MessageActionIds.deleteForMe => ChatMessageAction.deleteForMe,
-    MessageActionIds.deleteForEveryone =>
-      ChatMessageAction.deleteForEveryone,
+    MessageActionIds.deleteForEveryone => ChatMessageAction.deleteForEveryone,
     _ => null,
   };
 

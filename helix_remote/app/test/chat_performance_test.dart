@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
-import 'package:orbit_ui/orbit_ui.dart' show OrbitMessageBubble, OrbitTimelineEntry;
+import 'package:orbit_ui/orbit_ui.dart'
+    show OrbitMessageBubble, OrbitTimelineEntry;
 
 import 'support/chat_harness.dart';
 import 'support/orbit_theme.dart';

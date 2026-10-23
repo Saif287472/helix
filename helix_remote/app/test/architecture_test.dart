@@ -199,10 +199,7 @@ bool _forbiddenInPresentation(String uri) {
   // about staying off the layers below.
   if (uri.startsWith('package:helix_remote/features/')) return false;
   // The two leaf packages: components and value types, no I/O.
-  const allowed = {
-    'package:orbit_ui/',
-    'package:helix_remote_domain/',
-  };
+  const allowed = {'package:orbit_ui/', 'package:helix_remote_domain/'};
   if (allowed.any(uri.startsWith)) return false;
   // Everything else in this app - engine, database, crypto, api, core - is
   // reached through a provider, not imported by a widget.
