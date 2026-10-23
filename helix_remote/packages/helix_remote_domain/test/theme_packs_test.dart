@@ -451,6 +451,34 @@ void main() {
       expect(check.detail, isNot(contains('forged')));
     });
   });
+
+  group('the slug a publisher builds from', () {
+    // `tool/theme_pack_tool.dart build` turns a slug into a folder before any
+    // manifest exists, so this predicate is the only thing between `--ids` and
+    // a path. The manifest checks below prove the same rule on the wire.
+    test('is a theme the format can name', () {
+      for (final slug in ['bloom', 'jungle', 'a', 'a.b_c-d9']) {
+        expect(isOrbitPackName(slug), isTrue, reason: slug);
+      }
+    });
+
+    test('is never a path, a name or an empty string', () {
+      for (final bad in [
+        '',
+        ' ',
+        '..',
+        '../orbit',
+        'themes/bloom',
+        'Bloom',
+        'bloom ',
+        '-bloom',
+        '.bloom',
+        'a' * 65,
+      ]) {
+        expect(isOrbitPackName(bad), isFalse, reason: '"$bad" was accepted');
+      }
+    });
+  });
 }
 
 /// The theme file entry the pinned manifest signs for.

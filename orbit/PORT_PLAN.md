@@ -886,6 +886,42 @@ reuse that effect.
      both workspaces.
 8. **Bloom, Mochi, Papyrus, Arcade, Terminal and Field become packs.** They
    are the first ones, and they test the pipeline.
+   - [x] **Done 2026-10-23 (pending your review).** The pipeline was all there;
+     what was missing was a way to run it for a theme table instead of one
+     hand-built folder at a time, and proof that the real documents survive it.
+     `tool/theme_pack_tool.dart build --themes packages/orbit_ui/assets/themes
+     --ids bloom,mochi,papyrus,arcade,terminal,field --out build/packs
+     --publisher … --revision 1 --seed-file …` now stages every slug into
+     `<out>/<slug>/themes/<slug>.json` and writes (and signs) that folder's
+     manifest, so `verify` and `publish` take over from there unchanged. A slug
+     is checked by the format's own rule before it becomes a path - the rule is
+     one exported predicate, `isOrbitPackName`, not a second copy of it - a
+     document that calls itself another theme is still refused, and a staged
+     file from another generation is refused rather than silently mixed. What
+     `build` writes is staging: `publish` remains the step that decides what a
+     server offers, and a published revision is still immutable.
+     Proof that the six (and step 7's three) really pack: a new group in
+     `app/test/settings/theme_packs_test.dart` takes **every** theme document in
+     `assets/themes` except the two the app ships, signs it with a key that
+     exists only for the run and installs it through the real `ThemePackStore` -
+     the app's own gate, this build's own effect and pattern registries, the
+     real pack folder - then asserts each arrived as its own signed name and
+     that no two are the same theme. It reads the folder, so a theme added to
+     the table is packed and tested without anything here being widened again.
+     `pack`, `sign`, `verify` and `publish` are untouched, so no server, api,
+     engine or `orbit_ui` file changed and the pixel gate has nothing new to
+     score.
+     Run by hand for all nine with a throwaway key in a temp folder: nine
+     `usable:` verifications and nine published revisions, 18 files, nothing in
+     the repo.
+     Tests: 2 in the domain (the slug rule), 1 in the app file, both green, with
+     the domain and app suites clean afterwards and `dart analyze tool` and
+     `flutter analyze` quiet.
+   - **Waiting on you:** the `keygen` and the real seed. Nothing can be offered
+     until packs are signed with a key a build trusts and published into
+     `HELIX_PACKS_DIR`; the command is in `docs/product/THEME_PACK_FORMAT.md`,
+     and step 7's open question is now one argument - `--ids` takes any of the
+     nine, so six or nine is your call at publish time, not a code change.
 9. **Later: premium themes.** On Android, selling digital items inside the
    app means Google Play Billing.
 

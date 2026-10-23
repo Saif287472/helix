@@ -42,6 +42,13 @@ const orbitPackFileKinds = <String, List<String>>{
 /// How many id and publisher characters a manifest may use.
 const orbitPackNameMaxChars = 64;
 
+/// Whether [value] is a slug a pack may be named by, as `id` or `publisher`.
+///
+/// A publisher building packs from a folder of theme documents needs this
+/// before a slug becomes a file or folder name; the app never needs it, because
+/// [checkOrbitPack] refuses a manifest that breaks it.
+bool isOrbitPackName(String value) => _isName(value);
+
 /// The caps a pack is refused against, in bytes and counts.
 ///
 /// A built-in theme document is about 9 KiB, so a whole pack of one theme fits

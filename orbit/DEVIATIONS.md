@@ -1199,7 +1199,9 @@ identical at 1x).
   sets re-scored with no key over the 0.25 margin.
 - **The app offers none of the three.** `builtInThemeIds` is still Orbit and
   Night, so a person sees Jungle, Ocean and Metal only in the preview and in the
-  prototype until step 8 ships the pack pipeline - the same state the six
+  prototype until a pack is published from them - the same state the six
   aesthetic themes are already in.
   - **Owner:** step 8's list names six themes. Say whether Jungle, Ocean and
-    Metal join it as packs or become built-in themes the app ships.
+    Metal join it as packs or become built-in themes the app ships. Step 8 is
+    built and its answer is one argument - `build --ids` takes any of the nine -
+    so it is a publish-time choice, not a code change.

@@ -578,6 +578,90 @@ void main() {
     });
   });
 
+  group('the theme table as packs', () {
+    /// Part C step 8, end to end. `tool/theme_pack_tool.dart build` stages
+    /// these nine documents into pack folders and signs them; this is the same
+    /// nine through the app's own gate, the registries this build actually
+    /// ships and a real download into the pack folder. A document that cannot
+    /// come back as a theme is a generator bug arriving as a refused download,
+    /// which is the failure this keeps out of a phone.
+    ///
+    /// `orbit` and `night` are not here: the app ships those two, so a pack
+    /// would only be a second claim to a name the built-in owns.
+    final ids =
+        Directory('../packages/orbit_ui/assets/themes')
+            .listSync()
+            .whereType<File>()
+            .map((f) => f.uri.pathSegments.last)
+            .where((name) => name.endsWith('.json'))
+            .map((name) => name.substring(0, name.length - 5))
+            .where((id) => id != 'orbit' && id != 'night')
+            .toList()
+          ..sort();
+
+    Future<Map<String, Object?>> document(String id) async =>
+        jsonDecode(
+              File(
+                '../packages/orbit_ui/assets/themes/$id.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+
+    test(
+      'every theme the generator writes installs and draws itself',
+      () async {
+        expect(ids, isNotEmpty, reason: 'the theme folder was not found');
+        final store = ThemePackStore(trustedPublishers: trusted);
+        final docs = {for (final id in ids) id: await document(id)};
+        final packs = <HostedPack>[
+          for (final entry in docs.entries)
+            await signedPack(
+              by: publisherKey,
+              id: entry.key,
+              name: entry.value['name']! as String,
+              theme: entry.value,
+            ),
+        ];
+        final source = FakePackSource(packs);
+        for (final pack in packs) {
+          expect(
+            await store.install(source, pack.manifest.id),
+            PackChange.installed,
+            reason: '${pack.manifest.id} was refused',
+          );
+        }
+
+        final installed = await store.installed();
+        expect(installed.map((p) => p.id).toSet(), docs.keys.toSet());
+        // The name a person reads on the page is the signed document's own.
+        for (final pack in installed) {
+          expect(
+            pack.name,
+            docs[pack.id]!['name'],
+            reason: '${pack.id} installed under the wrong name',
+          );
+        }
+
+        // And each theme is the bytes it was published as, not a copy of the
+        // first one: the same parse the built-ins go through, token for token.
+        final tokens = await store.themeTokens();
+        expect(tokens.keys, docs.keys.toSet());
+        for (final id in docs.keys) {
+          expect(
+            tokens[id]!.meta.name,
+            docs[id]!['name'],
+            reason: '$id did not arrive as its own theme',
+          );
+        }
+        expect(
+          tokens.values.map((t) => t.meta.vibe).toSet().length,
+          tokens.length,
+          reason: 'two of the real themes share a vibe, so one is not itself',
+        );
+      },
+    );
+  });
+
   group('the More themes page', () {
     /// The page's model, with the server's list already in hand and kept alive
     /// for the test, the way the open page keeps it.

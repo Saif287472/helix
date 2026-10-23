@@ -1,11 +1,16 @@
-/// The Orbit theme-pack tool: make a publisher key, build a pack, sign it, and
-/// check one the way the app does (`orbit/PORT_PLAN.md` Part C step 1,
-/// ADR-033, `docs/product/THEME_PACK_FORMAT.md`).
+/// The Orbit theme-pack tool: make a publisher key, build packs from the theme
+/// table or a folder, sign them, check one the way the app does, and publish it
+/// (`orbit/PORT_PLAN.md` Part C steps 1 and 8, ADR-033,
+/// `docs/product/THEME_PACK_FORMAT.md`).
 ///
 /// A publisher - today only Helix itself - runs this from `helix_remote/`:
 ///
 /// ```
 /// dart run tool/theme_pack_tool.dart keygen  --seed-file keys/orbit.hex
+/// dart run tool/theme_pack_tool.dart build   --themes packages/orbit_ui/assets/themes
+///                                            --ids bloom,mochi,papyrus \
+///                                            --publisher agiletechbd --revision 1 \
+///                                            --seed-file keys/orbit.hex
 /// dart run tool/theme_pack_tool.dart pack    --in build/synthwave --id synthwave \
 ///                                            --publisher agiletechbd --revision 1 \
 ///                                            --seed-file keys/orbit.hex
@@ -46,6 +51,8 @@ Future<void> main(List<String> args) async {
       await _keygen(options);
     case 'pack':
       await _pack(options);
+    case 'build':
+      await _build(options);
     case 'sign':
       await _sign(options);
     case 'verify':
@@ -75,6 +82,16 @@ Orbit theme packs (orbit/PORT_PLAN.md Part C)
       writes DIR/manifest.json (or --out). The folder must hold exactly one
       .json theme document whose own "id" is --id. With --seed-file the
       manifest is signed in the same step.
+
+  build --themes DIR --ids SLUG,SLUG --out DIR
+        --publisher SLUG --revision N [--seed-file PATH]
+      The same step for a whole theme table: for each slug it copies
+      DIR/<slug>.json into OUT/<slug>/themes/<slug>.json and writes that
+      folder's manifest, so one command stages and builds every theme a
+      publisher means to offer. The document's own "id" must still be the
+      slug, and a staged file that is a different generation of the same theme
+      is refused rather than overwritten - the folder it writes is staging, and
+      publish is the step that decides what a server offers.
 
   sign --manifest FILE --seed-file PATH
       Signs a manifest that was built unsigned.
@@ -150,6 +167,88 @@ Future<void> _pack(Map<String, String> o) async {
   final outputPath = o['out'] == null
       ? '${folder.path}/manifest.json'
       : File(o['out']!).path;
+  await _manifest(
+    folder,
+    outputPath,
+    id: id,
+    publisher: publisher,
+    revision: revision,
+    seedPath: o['seed-file'],
+  );
+}
+
+/// Part C step 8: the theme table itself becomes pack folders, so a publisher's
+/// command is one line for as many themes as they mean to offer instead of one
+/// folder built by hand per theme.
+///
+/// What it writes is staging, not an offer: `publish` is still the step that
+/// decides what a server serves, and a revision already published there is
+/// still never rewritten.
+Future<void> _build(Map<String, String> o) async {
+  final themes = o['themes'];
+  final out = o['out'];
+  final publisher = o['publisher'];
+  final revision = int.tryParse(o['revision'] ?? '');
+  final ids = _slugs(o['ids']);
+  if (themes == null) _die('build needs --themes DIR');
+  if (out == null) _die('build needs --out DIR');
+  if (publisher == null) _die('build needs --publisher SLUG');
+  if (revision == null || revision < 1) {
+    _die('build needs --revision N, from 1');
+  }
+  if (ids.isEmpty) _die('build needs --ids SLUG,SLUG');
+  final source = _folder(themes);
+  final root = Directory(out)..createSync(recursive: true);
+  for (final id in ids) {
+    // A slug is about to become a folder name, so the format's own rule checks
+    // it first: `--ids ../orbit` names no theme anyone could ever download.
+    if (!isOrbitPackName(id)) {
+      _die('"$id" is not a slug a pack may be named by');
+    }
+    final document = File('${source.path}/$id.json');
+    if (!document.existsSync()) {
+      _die(
+        '${source.path} has no $id.json - build packs the theme documents '
+        'that exist, it does not invent one',
+      );
+    }
+    final bytes = document.readAsBytesSync();
+    final folder = Directory('${root.path}/$id');
+    final staged = File('${folder.path}/themes/$id.json');
+    if (staged.existsSync() && !_sameBytes(staged.readAsBytesSync(), bytes)) {
+      _die(
+        '${staged.path} is another generation of $id; stage into a fresh '
+        '--out, or delete it, rather than mix two',
+      );
+    }
+    staged.parent.createSync(recursive: true);
+    staged.writeAsBytesSync(bytes);
+    await _manifest(
+      folder,
+      '${folder.path}/manifest.json',
+      id: id,
+      publisher: publisher,
+      revision: revision,
+      seedPath: o['seed-file'],
+    );
+  }
+  stdout.writeln('');
+  stdout.writeln('built ${ids.length} packs in ${root.path}');
+  stdout.writeln('then: verify --in <that folder> --key <publisher key>');
+  stdout.writeln('and:  publish --in <that folder> --out the pack folder');
+}
+
+/// The manifest of the pack in [folder]: every file it holds hashed, its one
+/// theme document checked against [id], signed when a seed is given, written to
+/// [outputPath].
+Future<void> _manifest(
+  Directory folder,
+  String outputPath, {
+  required String id,
+  required String publisher,
+  required int revision,
+  String? seedPath,
+}) async {
   final delivered = await _filesIn(folder);
   if (delivered.isEmpty) _die('${folder.path} holds no pack files');
 
@@ -170,7 +269,7 @@ Future<void> _pack(Map<String, String> o) async {
         ),
     ],
   );
-  final signed = await _withSignature(manifest, o['seed-file']);
+  final signed = await _withSignature(manifest, seedPath);
   File(outputPath).writeAsStringSync(
     '${const JsonEncoder.withIndent('  ').convert(signed)}\n',
   );
@@ -180,7 +279,7 @@ Future<void> _pack(Map<String, String> o) async {
     '${manifest.files.map((f) => f.bytes).fold(0, (a, b) => a + b)} bytes',
   );
   stdout.writeln('manifest: $outputPath');
-  if (o['seed-file'] == null) {
+  if (seedPath == null) {
     stdout.writeln(
       'unsigned: run sign --manifest $outputPath --seed-file PATH',
     );
@@ -481,6 +580,12 @@ Iterable<String> _patternKindsIn(List<int> themeBytes) {
 
 Set<String>? _csv(String? value) =>
     value == null ? null : {for (final part in value.split(',')) part.trim()};
+
+/// `--ids`, as slugs in order, with blanks dropped.
+List<String> _slugs(String? value) => [
+  for (final part in (value ?? '').split(','))
+    if (part.trim().isNotEmpty) part.trim(),
+];
 
 Directory _folder(String path) {
   final folder = Directory(path);

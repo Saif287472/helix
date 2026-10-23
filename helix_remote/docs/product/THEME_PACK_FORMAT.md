@@ -145,18 +145,30 @@ never drawn, and the chosen theme falls back to Orbit.
 
 ```
 dart run tool/theme_pack_tool.dart keygen --seed-file keys/agiletechbd.hex
-dart run tool/theme_pack_tool.dart pack   --in build/synthwave \
-  --id synthwave --publisher agiletechbd --revision 1 \
+dart run tool/theme_pack_tool.dart build \
+  --themes packages/orbit_ui/assets/themes \
+  --ids bloom,mochi,papyrus,arcade,terminal,field \
+  --out build/packs --publisher agiletechbd --revision 1 \
   --seed-file keys/agiletechbd.hex
-dart run tool/theme_pack_tool.dart sign   --manifest build/synthwave/manifest.json \
-  --seed-file keys/agiletechbd.hex
-dart run tool/theme_pack_tool.dart verify --in build/synthwave --key <publisher key>
-dart run tool/theme_pack_tool.dart publish --in build/synthwave \
+dart run tool/theme_pack_tool.dart verify --in build/packs/bloom --key <publisher key>
+dart run tool/theme_pack_tool.dart publish --in build/packs/bloom \
   --out "$HELIX_PACKS_DIR"
 ```
 
 `keygen` prints the publisher key and writes the private one; it never prints
-the private key. `pack` hashes the folder (its own `manifest.json` is never
+the private key. `build` is Part C step 8's one command: for every slug it
+copies `--themes/<slug>.json` to `--out/<slug>/themes/<slug>.json` and writes
+that folder's manifest, signing it when `--seed-file` is given, so a whole
+theme table is staged without anyone building a folder by hand. The slug is
+checked with the format's own rule (`isOrbitPackName`) before it becomes a
+path, the document's own `id` must still be the slug, and a staged file that is
+a different generation of the same theme is refused rather than overwritten.
+What `build` writes is staging; `publish` is what makes an offer.
+`pack` is the same step for one folder that already exists - a pack with a font
+or an image beside its theme, which `build` cannot stage because those files
+are not in the theme table. A folder built without a seed stays unsigned until
+`sign --manifest FILE --seed-file PATH` signs it.
+`pack` hashes the folder (its own `manifest.json` is never
 listed) and refuses a folder whose single `.json` document calls itself another
 theme. `verify` runs the app's own gate, not a copy of it; `--effects` and
 `--patterns` are the publisher's dry run of the registry check, because
@@ -166,6 +178,12 @@ re-checks the folder against the manifest on the way: a file the manifest names
 must be there and must hash to what was signed, and an already-published
 revision is never rewritten (build `--revision 2` instead), because that name
 is the bytes a device may already hold.
+
+Every theme document the generator writes is put through this pipeline in
+`app/test/settings/theme_packs_test.dart` ("the theme table as packs"), signed
+with a key that exists only for that run and installed through the real store,
+so a theme that only looks right in JSON fails a test instead of arriving on a
+phone as a refused download.
 
 The seed file is a secret. Keep it off this machine's ordinary backups and off
 any build server; losing it strands every pack ever signed with it, and leaking
