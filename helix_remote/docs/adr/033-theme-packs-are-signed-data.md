@@ -3,7 +3,7 @@
 Status: accepted (2026-10-23).
 
 Plan of record: `docs/architecture/ARCHITECTURE_V2_PLAN.md` (§6.1, §12 change
-log) and `orbit/PORT_PLAN.md` (Part C step 1).
+log) and `orbit/PORT_PLAN.md` (Part C steps 1-2).
 
 ## Context
 
@@ -61,9 +61,10 @@ where the checking happens.
   refusal `OrbitEffects.validate` already makes when a theme is parsed. A pack
   that asks for something the build does not have is refused, not degraded.
 - **Signing is a repository tool, not app code.**
-  `helix_remote/tool/theme_pack_tool.dart` is `keygen`, `pack`, `sign` and
-  `verify`. It reads a private key from a file named by `--seed-file`, uses it
-  once, and never prints it. No client code can sign anything.
+  `helix_remote/tool/theme_pack_tool.dart` is `keygen`, `pack`, `sign`,
+  `verify` and `publish`. It reads a private key from a file named by
+  `--seed-file`, uses it once, and never prints it. No client code can sign
+  anything.
 - **`helix_remote_domain` gains its first dependency**, `cryptography` at the
   version `helix_remote_crypto` already declared, so the workspace lockfile did
   not move. It takes Ed25519 and SHA-256 from there; the crypto package's own
@@ -76,10 +77,13 @@ where the checking happens.
 
 ## Consequences
 
-- Part C step 2 (the server endpoint) has a contract to serve against and does
-  not need to understand packs at all: it lists them, and the app checks them.
-  A malicious or compromised endpoint can serve an old pack or no pack, and
-  cannot serve a new one.
+- Part C step 2 is the server endpoint that serves this folder, and it needed
+  no part of the format: `HELIX_PACKS_DIR` is a tree of files the operator puts
+  there with `publish`, `GET /v1/packs` lists the folder's own names and stats,
+  the manifest is streamed byte for byte, and a file is picked by its SHA-256.
+  The server holds no copy of these checks, signs nothing and holds no key, so a
+  malicious or compromised endpoint can serve an old pack or no pack and cannot
+  serve a new one.
 - A pack revision is only comparable inside one publisher and one id; the app
   keeps the highest revision it has for a theme id, which is what makes a
   re-download an upgrade rather than a downgrade (step 3's job).

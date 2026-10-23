@@ -496,6 +496,34 @@ void main() {
         (v) => v.toJson(),
         ReadyResponse.fromJson,
       );
+      expectRoundTrip(
+        OrbitPackList(
+          packs: [
+            OrbitPackEntry(
+              id: 'synthwave',
+              revision: 3,
+              manifestBytes: 253,
+              totalBytes: 109,
+              updatedAt: t0,
+            ),
+            OrbitPackEntry(
+              id: 'field',
+              revision: 1,
+              manifestBytes: 400,
+              totalBytes: 0,
+              updatedAt: t0,
+            ),
+          ],
+        ),
+        (v) => v.toJson(),
+        OrbitPackList.fromJson,
+      );
+      // A server with no pack folder answers an empty list, not an error.
+      expectRoundTrip(
+        const OrbitPackList(packs: []),
+        (v) => v.toJson(),
+        OrbitPackList.fromJson,
+      );
     });
 
     test('unknown call signal kinds decode as unknown', () {

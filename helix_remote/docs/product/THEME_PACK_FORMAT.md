@@ -1,10 +1,11 @@
 # Orbit theme packs: the format
 
-Status: current, step 1 of `orbit/PORT_PLAN.md` Part C (2026-10-23).
+Status: current, steps 1-2 of `orbit/PORT_PLAN.md` Part C (2026-10-23).
 Decided by [ADR-033](../adr/033-theme-packs-are-signed-data.md).
 Implemented by `packages/helix_remote_domain/lib/domain/theme_packs.dart`,
-checked by `packages/helix_remote_domain/test/theme_packs_test.dart`, and
-written by `helix_remote/tool/theme_pack_tool.dart`.
+checked by `packages/helix_remote_domain/test/theme_packs_test.dart`,
+written by `helix_remote/tool/theme_pack_tool.dart`, and served by
+`helix_remote/server/lib/src/modules/ops/pack_host.dart`.
 
 A theme pack is **data**. It carries a theme document in the JSON the built-in
 themes are already written in, and it may only switch on effects this build
@@ -150,6 +151,8 @@ dart run tool/theme_pack_tool.dart pack   --in build/synthwave \
 dart run tool/theme_pack_tool.dart sign   --manifest build/synthwave/manifest.json \
   --seed-file keys/agiletechbd.hex
 dart run tool/theme_pack_tool.dart verify --in build/synthwave --key <publisher key>
+dart run tool/theme_pack_tool.dart publish --in build/synthwave \
+  --out "$HELIX_PACKS_DIR"
 ```
 
 `keygen` prints the publisher key and writes the private one; it never prints
@@ -158,17 +161,37 @@ listed) and refuses a folder whose single `.json` document calls itself another
 theme. `verify` runs the app's own gate, not a copy of it; `--effects` and
 `--patterns` are the publisher's dry run of the registry check, because
 `orbit_ui` cannot be imported by a Dart script - say so in the output when they
-are left out.
+are left out. `publish` copies a signed pack into the server's folder, and
+re-checks the folder against the manifest on the way: a file the manifest names
+must be there and must hash to what was signed, and an already-published
+revision is never rewritten (build `--revision 2` instead), because that name
+is the bytes a device may already hold.
 
 The seed file is a secret. Keep it off this machine's ordinary backups and off
 any build server; losing it strands every pack ever signed with it, and leaking
 it lets anyone ship a theme to every device.
 
-## What the server has to do (step 2)
+## What the server does (step 2)
 
-Serve the folder, and a list of it, over HTTPS: for each pack, its `id`,
-`publisher`, `revision`, the manifest, and the files the manifest names. The
-endpoint does not sign anything, does not need the publisher key, and cannot
-make a device accept a pack - the app re-checks every byte against the manifest
-it downloaded. A malicious or broken endpoint can serve an older revision or no
-pack at all; it cannot serve a new one.
+Three public routes, no session, in the `ops` module
+(`server/lib/src/modules/ops/pack_host.dart`, `MODULE.md`):
+
+```
+GET /v1/packs
+GET /v1/packs/{pack_id}/revisions/{revision}/manifest
+GET /v1/packs/{pack_id}/revisions/{revision}/files/{digest}
+```
+
+`HELIX_PACKS_DIR` is the folder they read, in the layout `publish` writes
+(`<id>/r<revision>/manifest.json` and the same folder's `files/<sha256>`). The
+list is the folder's own names and file stats - it carries no display name,
+because a name here would be unsigned while the one a device shows comes from
+the signed theme document. The manifest comes out as it went in, byte for byte,
+and a file is picked by its SHA-256 rather than by a path.
+
+The endpoint signs nothing, holds no key, and knows no part of this format: it
+has no copy of the limits except the two it refuses to stream past (64 KiB and
+8 MiB), and it never parses what it serves. So a malicious or broken endpoint
+can serve an older revision, a different pack, or nothing at all - it cannot
+make a device accept anything, because `checkOrbitPack` still runs over the
+bytes on the phone. That is the whole point of a pack being data.

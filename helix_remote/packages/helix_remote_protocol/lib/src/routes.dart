@@ -752,6 +752,38 @@ abstract final class Routes {
     access: _pub,
   );
 
+  // ------------------------------------------------------------- theme packs
+  // The three pack routes carry no session and no account: a theme pack is
+  // the same for every device, and the app checks a pack against its own
+  // signature rather than trusting whoever served it (ADR-033). So none of
+  // these routes can leak anything about an account, and the list is only
+  // what the operator's own pack folder holds.
+
+  /// What packs this server hosts. `GET` of a folder listing, so it is the
+  /// one pack route whose answer changes.
+  static const packs = ApiRoute(_get, '/v1/packs', module: 'ops', access: _pub);
+
+  /// A pack's `manifest.json`, as signed: the bytes are served unchanged, so
+  /// the app hashes what it got and checks the signature over that.
+  static const packManifest = ApiRoute(
+    _get,
+    '/v1/packs/{pack_id}/revisions/{revision}/manifest',
+    module: 'ops',
+    access: _pub,
+  );
+
+  /// One file of a pack, named by its SHA-256 in lowercase hex. A hash, not a
+  /// path, because the manifest already gives every file a hash: the endpoint
+  /// then has no path to sanitise, a client asks for exactly the bytes the
+  /// manifest promised, and the same file published in two revisions is one
+  /// file here. [digest] must be 64 lowercase hex characters.
+  static const packFile = ApiRoute(
+    _get,
+    '/v1/packs/{pack_id}/revisions/{revision}/files/{digest}',
+    module: 'ops',
+    access: _pub,
+  );
+
   // ------------------------------------------------------------------- admin
   static const adminSetupStatus = ApiRoute(
     _get,
@@ -940,6 +972,7 @@ abstract final class Routes {
     getFullBackup, deleteFullBackup, getFullBackupMeta, //
     live, ready, serverInfo, legal, crashReport, anomalies, metrics, assetLinks,
     openLink, shareLink, //
+    packs, packManifest, packFile, //
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,
     s2sGroupActions, s2sGroupSync, s2sCallSignals, //

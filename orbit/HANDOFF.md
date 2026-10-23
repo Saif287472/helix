@@ -14,9 +14,12 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   commits, reviewed after the fact. Nobody but the owner pushes.
 - One commit per batch, marked "(pending review)" in the message and in
   `PORT_PLAN.md`'s progress notes.
-- Part C step 1 (the pack format, the gate and the signing tool) is the same
-  way, and it is the last commit in this handoff. Step 2 is the server
-  endpoint, which an agent does not start without the owner's go-ahead.
+- Part C step 1 (the pack format, the gate and the signing tool) and step 2
+  (the server endpoint that serves a pack folder) are the same way. Step 2
+  changes the server, so it went through a plan the owner approved first
+  ("after this, also start part C step 2. i will approve the plan",
+  2026-10-23). Nothing further in Part C is approved: step 3 (the download
+  manager) and step 4 (the gallery) wait for the same go-ahead.
 
 ## Done (pending the owner's review)
 
@@ -37,7 +40,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | a1c5792 | Part B step 4: the app draws only Orbit; `helix_remote_ui` is the console's kit (ADR-031) |
 | 5452757 | The operator's whole number, and the privacy text that says why |
 | c1a24bf | Part B step 5: the full gate, format fixes and the matrix path |
-| (this) | Part C step 1: the pack format, the one gate and the signing tool (ADR-033) |
+| 66ad91b | Part C step 1: the pack format, the one gate and the signing tool (ADR-033) |
+| (this) | Part C step 2: the server serves a pack folder, and `publish` fills it |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -267,7 +271,8 @@ both change the server, so neither is live until production runs this branch.)
 
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
-`PORT_PLAN.md` Part C is the plan. Step 1 is built; steps 2 to 4 are not.
+`PORT_PLAN.md` Part C is the plan. Steps 1 and 2 are built; steps 3 to 4 are
+not.
 
 12. Part C step 1, the pack format and the signing tool - **done**
     (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
@@ -290,12 +295,33 @@ both change the server, so neither is live until production runs this branch.)
     ADR-033, its section 12 row, and the dependency register entry for the
     domain package's first hosted dependency (`cryptography`, the version the
     lockfile already had - it did not move).
-13. Part C step 2, the server endpoint - **not started**. It changes the
-    server, so it waits for the owner's go-ahead (and, now given: build the
-    plan first, then implement it once approved).
-14. Part C step 3, the download manager, and step 4, the gallery - not started.
-    Step 3 also adds the page where the owner's publisher key would go, which
-    is what makes a pack usable at all (the anchor ships empty).
+13. Part C step 2, the server endpoint - **done** (2026-10-23, on the plan the
+    owner approved: publish by folder plus tool, the `ops` module owns the
+    routes, and a file is picked by its sha256). Three public routes -
+    `GET /v1/packs`, `…/revisions/{revision}/manifest`, `…/files/{digest}` -
+    read the folder `HELIX_PACKS_DIR` names
+    (`server/lib/src/modules/ops/pack_host.dart`), and the server holds **no**
+    part of the pack format: it lists the folder's own names and file stats,
+    streams the manifest byte for byte, and takes a digest rather than the
+    manifest's path, so the route has no path to sanitise, a file in two
+    revisions is stored once, and a client can only ask for bytes a manifest
+    named. The list carries no display name - the one a device shows comes from
+    the signed theme document, and an unsigned name here would be forgeable.
+    Caps the format refuses at (64 KiB, 8 MiB) are the only numbers the server
+    knows, and past them it answers 413 instead of streaming; anything a pack
+    could not be named by is a 404, checked before the folder is touched.
+    `publish` (the tool's fifth command) writes the layout, re-checks every
+    file against the signed manifest, refuses an unsigned manifest, and will not
+    rewrite a revision that is already published. No table, no migration, no
+    admin upload. Tests: server 16 (host without a database, routes on
+    Postgres), protocol 84, api 205 with the route-parity table. Docs:
+    `REST_V2.md`, `ops/MODULE.md`, the env table, `THEME_PACK_FORMAT.md` and
+    ADR-033's consequences. The pipeline's `no-store` covers these routes like
+    every other response, so the device's own cache (step 3) is what avoids a
+    repeat download.
+14. Part C step 3, the download manager, and step 4, the gallery - not started,
+    and not approved. Step 3 also adds the page where the owner's publisher key
+    would go, which is what makes a pack usable at all (the anchor ships empty).
 
 ## Batch 8, what is left
 
@@ -418,6 +444,14 @@ must say so.
   private>` from `helix_remote/`, keep the seed file off ordinary backups,
   and paste the public key it prints into the app's anchor (Part C step 3
   adds the page; until then it is a one-line constant in `core/theme/`).
+- **A pack folder and a redeploy, before anything is downloadable.** Step 2's
+  routes answer an empty list until the production `.env`
+  (`J:\Projects\Servers\helix_server\helix\.env`) says
+  `HELIX_PACKS_DIR=<absolute path>`, and they only go live when you tag, build
+  and switch (`release-helix.ps1` / `deploy-helix.ps1`) - an agent never does
+  that. Nothing else to do: no migration, no Caddy line, and a folder with no
+  packs in it is a healthy server. Publishing is
+  `dart run tool/theme_pack_tool.dart publish --in <pack> --out <that folder>`.
 - Review of every "(pending review)" commit and the DEVIATIONS entries.
 - A sound for the Orbit ringtone.
 - Part B step 5's second bullet: the debug APK on your phone and the Windows

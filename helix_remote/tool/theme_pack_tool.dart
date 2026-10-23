@@ -13,6 +13,8 @@
 ///                                            --seed-file keys/orbit.hex
 /// dart run tool/theme_pack_tool.dart verify  --in build/synthwave \
 ///                                            --key <the publisher key printed by keygen>
+/// dart run tool/theme_pack_tool.dart publish --in build/synthwave \
+///                                            --out /srv/helix/packs
 /// ```
 ///
 /// The app never signs and never holds a private key, which is why the private
@@ -48,6 +50,8 @@ Future<void> main(List<String> args) async {
       await _sign(options);
     case 'verify':
       await _verify(options);
+    case 'publish':
+      await _publish(options);
     case 'help':
     case '--help':
     case '-h':
@@ -80,6 +84,18 @@ Orbit theme packs (orbit/PORT_PLAN.md Part C)
       Runs the app's own gate over the folder. --key is the publisher key the
       build trusts; without a registry, --effects and --patterns are not
       checked and the tool says so.
+
+  publish --in DIR --out DIR [--manifest FILE]
+      Copies a signed pack into the server's pack folder (HELIX_PACKS_DIR) the
+      way the server serves it: OUT/<id>/r<revision>/manifest.json plus
+      OUT/<id>/r<revision>/files/<sha256>, one copy of each file by its hash,
+      so a file in two revisions is stored once. The manifest must be signed,
+      and every file it names must be in DIR and hash to the bytes it claims.
+      The files go in before the manifest, because a revision folder without
+      one is a revision the server does not list, so an interrupted publish
+      leaves nothing half-advertised. A revision that is already published with
+      other bytes is refused - a revision is immutable, so build --revision
+      one higher instead.
 
 Exit code is 0 when the pack is usable and 1 when it is not.
 ''';
@@ -244,6 +260,89 @@ Future<void> _verify(Map<String, String> o) async {
     );
   }
   if (!check.isAllowed) exit(1);
+}
+
+/// Copies a built pack into the folder the server reads (`HELIX_PACKS_DIR`), in
+/// the layout `server/lib/src/modules/ops/pack_host.dart` serves and
+/// `docs/product/THEME_PACK_FORMAT.md` describes.
+Future<void> _publish(Map<String, String> o) async {
+  final dir = o['in'];
+  final dest = o['out'];
+  if (dir == null) {
+    _die('publish needs --in DIR, the folder the pack was built in');
+  }
+  if (dest == null) {
+    _die("publish needs --out DIR, the server's HELIX_PACKS_DIR");
+  }
+  final folder = _folder(dir);
+  final source = File(o['manifest'] ?? '${folder.path}/manifest.json');
+  if (!source.existsSync()) _die('${source.path} does not exist');
+  final manifestBytes = source.readAsBytesSync();
+  final manifest = _readManifest(utf8.decode(manifestBytes));
+  if (manifest.signature == null) {
+    _die(
+      '${source.path} holds no signature; sign it, or every device that '
+      'downloads it will refuse it',
+    );
+  }
+  final delivered = await _filesIn(folder);
+  for (final entry in manifest.files) {
+    final bytes = delivered[entry.path];
+    if (bytes == null) {
+      _die('the manifest names ${entry.path}, which $dir does not hold');
+    }
+    if (bytes.length != entry.bytes) {
+      _die(
+        '${entry.path} is ${bytes.length} bytes, not the ${entry.bytes} '
+        'the manifest says',
+      );
+    }
+    final hex = await _sha256Hex(bytes);
+    if (hex != entry.sha256) {
+      _die(
+        '${entry.path} hashes to $hex, not to the ${entry.sha256} the '
+        'manifest says',
+      );
+    }
+  }
+
+  final pack = '$dest/${manifest.id}/r${manifest.revision}';
+  final published = File('$pack/manifest.json');
+  if (published.existsSync()) {
+    if (!_sameBytes(published.readAsBytesSync(), manifestBytes)) {
+      _die(
+        '$pack already holds a different manifest. A revision is the bytes a '
+        'device already cached, so it is never rewritten: pack again with '
+        '--revision ${manifest.revision + 1}',
+      );
+    }
+    stdout.writeln('$pack/manifest.json is already published, unchanged');
+  }
+  final files = Directory('$pack/files')..createSync(recursive: true);
+  var copied = 0;
+  for (final entry in manifest.files) {
+    final at = File('${files.path}/${entry.sha256}');
+    if (at.existsSync()) continue;
+    at.writeAsBytesSync(delivered[entry.path]!, flush: true);
+    copied++;
+  }
+  if (!published.existsSync()) {
+    published.writeAsBytesSync(manifestBytes, flush: true);
+  }
+  stdout.writeln(
+    'published: ${manifest.id} r${manifest.revision}, '
+    '${manifest.files.length} files ($copied copied, '
+    '${manifest.files.length - copied} already there)',
+  );
+  stdout.writeln('at: $pack');
+}
+
+bool _sameBytes(List<int> a, List<int> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 /// Signs [manifest]'s bytes with the seed in [seedPath] and returns its JSON

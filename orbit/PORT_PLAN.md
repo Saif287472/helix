@@ -749,6 +749,26 @@ reuse that effect.
    with the `helix-feature` process.
    - For now it runs on your PC. A separate file host can come later if
      users grow.
+   - [x] **Done 2026-10-23 (pending your review).** Three public routes in the
+     `ops` module: `GET /v1/packs`, `GET /v1/packs/{pack_id}/revisions/{revision}/manifest`
+     and `…/files/{digest}`. They read a folder named by the new `HELIX_PACKS_DIR`
+     (no table, no migration, nothing to switch on: unset is an empty list and a
+     green `ready`). `server/lib/src/modules/ops/pack_host.dart` is the server's
+     whole knowledge of a pack — it lists the folder, streams a manifest byte for
+     byte, and picks a file by its SHA-256 rather than by the manifest's path, so
+     the route has no path to sanitise and a file shared by two revisions is
+     stored once. It refuses to stream past the format's own caps (64 KiB, 8 MiB)
+     with a 413 and answers 404 for anything a pack could never be named by.
+     Publishing is the folder plus the tool, as you approved: `publish` writes
+     `<id>/r<revision>/manifest.json` and `files/<sha256>`, after checking every
+     file against the signed manifest and refusing to rewrite a revision already
+     published. The list carries no display name on purpose — the name a device
+     shows comes from the signed theme document. Tests: 16 server tests (host
+     without a database, routes on Postgres), protocol 84, api 205.
+   - **Waiting on you:** one line in the production `.env`
+     (`HELIX_PACKS_DIR=<absolute path>`) and a redeploy, before any pack is
+     downloadable; and the `keygen` and trust anchor in step 1's note, which this
+     cannot bypass.
 3. **A download manager in the app:** cache, delete, update, and accounting
    on the Storage page.
 4. **A theme gallery on Appearance:** download, delete and "get more".

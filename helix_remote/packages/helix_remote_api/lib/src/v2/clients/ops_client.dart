@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:helix_remote_api/src/v2/transport/errors.dart';
 import 'package:helix_remote_api/src/v2/transport/transport.dart';
@@ -55,4 +56,46 @@ final class OpsClient {
   /// without its `~`; the page never answers whether the name exists.
   Future<String> sharePage(String helixName) async =>
       (await _t.send(Routes.shareLink, params: {'name': helixName})).text;
+
+  // ------------------------------------------------------------- theme packs
+  // The client asks for bytes and hands them over. It does not read a
+  // manifest, and it must not: `checkOrbitPack` in `helix_remote_domain` is
+  // the one place the format is understood, and it runs on exactly these bytes
+  // (ADR-033). Anything this file knew about a pack would be a second
+  // implementation to drift from the first.
+
+  /// What this server hosts. The names and sizes here are a hint about what to
+  /// fetch, never a fact about a pack: a hostile server can list anything.
+  Future<OrbitPackList> packs() =>
+      _t.call(Routes.packs, OrbitPackList.fromJson);
+
+  /// A pack's manifest, as published and as signed.
+  ///
+  /// [packId] is the slug and [revision] the number from [packs]. Over
+  /// 413 when the server's copy is bigger than the format allows.
+  Future<Uint8List> packManifest(String packId, int revision) async =>
+      (await _t.send(
+        Routes.packManifest,
+        params: {'pack_id': packId, 'revision': '$revision'},
+        maxResponseBytes: maxManifestBytes,
+      )).body;
+
+  /// One file of a pack, by the SHA-256 its manifest gives it, in lowercase
+  /// hex. The caller hashes what comes back and refuses it unless it matches -
+  /// which is the whole point of asking by hash.
+  Future<Uint8List> packFile(
+    String packId,
+    int revision,
+    String digest,
+  ) async => (await _t.send(
+    Routes.packFile,
+    params: {'pack_id': packId, 'revision': '$revision', 'digest': digest},
+    maxResponseBytes: maxFileBytes,
+  )).body;
+
+  /// The pack format's own caps (`OrbitPackLimits` in `helix_remote_domain`,
+  /// `docs/product/THEME_PACK_FORMAT.md`): a larger answer is not a pack this
+  /// app can use, so it is never buffered.
+  static const maxManifestBytes = 64 * 1024;
+  static const maxFileBytes = 8 * 1024 * 1024;
 }

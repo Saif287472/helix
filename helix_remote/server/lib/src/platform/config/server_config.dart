@@ -104,6 +104,7 @@ final class ServerConfig {
     required this.maxInFlightBodyBytes,
     required this.metricsToken,
     required this.storageBudgetBytes,
+    this.packsDirectory,
   });
 
   /// The raw environment, for module config sections.
@@ -128,6 +129,14 @@ final class ServerConfig {
   final String activeJwtKid;
   final BlobConfig blobs;
   final int maxAttachmentBytes;
+
+  /// `HELIX_PACKS_DIR`: the folder of signed theme packs this server hosts,
+  /// read-only (ADR-033). Unset means no packs: `GET /v1/packs` answers an
+  /// empty list and every pack file is a 404, which is a working server with
+  /// nothing to offer, not a broken one. The folder is the operator's, written
+  /// by `tool/theme_pack_tool.dart publish`; the server never parses what is
+  /// in it, and a device checks every byte against the pack's own signature.
+  final String? packsDirectory;
 
   /// Peers whose `X-Forwarded-For` header is believed (Caddy). The client
   /// is the rightmost hop that is not one of them.
@@ -302,6 +311,15 @@ final class ServerConfig {
       min: 1024 * 1024,
     );
     final trustRealIp = flag('HELIX_TRUST_X_REAL_IP');
+
+    // Unset, or set to nothing, means this server hosts no theme packs. A
+    // path of only spaces would never resolve, so it is read as unset rather
+    // than as a folder nobody can reach.
+    final packsRaw = read('HELIX_PACKS_DIR')?.trim();
+    final packsDirectory = packsRaw == null || packsRaw.isEmpty
+        ? null
+        : packsRaw;
+
     final storageBudgetRaw = read('HELIX_STORAGE_BUDGET_BYTES');
     final storageBudgetBytes = storageBudgetRaw == null
         ? null
@@ -332,6 +350,7 @@ final class ServerConfig {
       activeJwtKid: activeKid,
       blobs: blobs,
       maxAttachmentBytes: maxAttachmentBytes,
+      packsDirectory: packsDirectory,
       trustedProxies: {
         ...(read('HELIX_TRUSTED_PROXIES') ?? '127.0.0.1,::1')
             .split(',')

@@ -1,7 +1,7 @@
 # ops module
 
-Health, server info, legal documents, crash telemetry, metrics, app links,
-and the operator settings behind them. Schema `ops` (`settings`: key/text
+Health, server info, legal documents, crash telemetry, metrics, app links, the
+theme-pack folder, and the operator settings behind them. Schema `ops` (`settings`: key/text
 value). Facade: `api.dart` (`OpsApi`; the admin module and, from S6b,
 federation use it).
 
@@ -18,6 +18,9 @@ federation use it).
 | `GET /v1/ops/metrics` | admin, or `HELIX_METRICS_TOKEN` | — |
 | `GET /.well-known/assetlinks.json` | public | `ops.probe` |
 | `GET /open` | public | `ops.probe` |
+| `GET /v1/packs` | public | `packs.list` 60 burst, 1/s per IP |
+| `GET /v1/packs/{pack_id}/revisions/{revision}/manifest` | public | `packs.manifest` 120 burst, 2/s per IP |
+| `GET /v1/packs/{pack_id}/revisions/{revision}/files/{digest}` | public | `packs.file` 60 burst, 1/s per IP |
 
 `metrics` also accepts `HELIX_METRICS_TOKEN` (constant-time compare; that
 token opens nothing else) and refreshes the collected gauges
@@ -86,3 +89,34 @@ honours "Find me by ~name" and blocking. The name comes from
 `location.pathname`, which the browser already has, so the page does not echo
 it. Served at `/u/<name>` and `/u/<name>/` and nowhere deeper, with the same
 headers as `/open`.
+
+## Theme packs
+
+`HELIX_PACKS_DIR` names a folder of packs devices download and judge for
+themselves (`docs/product/THEME_PACK_FORMAT.md`, ADR-033). `pack_host.dart`
+reads it, and that is the server's whole knowledge of a pack: it never parses a
+manifest, so a hostile or broken folder cannot make it approve anything, and a
+device still runs `checkOrbitPack` over the bytes it gets. The layout is what
+`dart run tool/theme_pack_tool.dart publish` writes:
+
+    <root>/<pack id>/r<revision>/manifest.json
+    <root>/<pack id>/r<revision>/files/<sha256 of that file>
+
+- The list is the folder: id, revision, manifest bytes, total bytes, mtime. A
+  revision folder with no manifest is not listed, so an interrupted publish
+  advertises nothing. It carries no display name — the name a device shows comes
+  from the pack's signed theme document, and an unsigned one here could be
+  forged.
+- The manifest route streams the file exactly as published. The file route
+  selects by lowercase-hex SHA-256 rather than by the manifest's path, so there
+  is no path to sanitise, a file in two revisions is stored once, and a client
+  cannot ask for bytes no manifest named. A `{revision}` of `01` is revision 1.
+- Anything that is not a pack slug, an `r<digits>` revision or a 64-hex digest
+  is a 404 before the folder is touched, and every path that is resolved is
+  checked to stay inside it. A manifest over 64 KiB or a file over 8 MiB is 413
+  — the caps the format itself refuses at, so a pack past one was never
+  installable. No folder set: an empty list and 404s, and `ready` stays green.
+- These are public routes, rate-limited per client IP, needing no session, so
+  they give no account away. The pipeline's `no-store` covers them like
+  everything else; a pack revision never changes, so the device's own cache is
+  what avoids a repeat download.

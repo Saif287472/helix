@@ -222,6 +222,10 @@ void main() {
     Routes.assetLinks: (c) => c.ops.assetLinks(),
     Routes.openLink: (c) => c.ops.openPage(),
     Routes.shareLink: (c) => c.ops.sharePage('someone'),
+    // ops: theme packs
+    Routes.packs: (c) => c.ops.packs(),
+    Routes.packManifest: (c) => c.ops.packManifest('synthwave', 1),
+    Routes.packFile: (c) => c.ops.packFile('synthwave', 1, 'ab' * 32),
     // compliance
     Routes.exportData: (c) => c.compliance.export(),
     Routes.deleteAccount: (c) => c.compliance.deleteAccount(),

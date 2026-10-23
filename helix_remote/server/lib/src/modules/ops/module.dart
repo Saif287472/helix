@@ -5,6 +5,7 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
 import 'package:helix_remote_server/src/kernel/crypto.dart';
 import 'package:helix_remote_server/src/modules/ops/open_page.dart';
+import 'package:helix_remote_server/src/modules/ops/pack_host.dart';
 import 'package:helix_remote_server/src/modules/ops/share_page.dart';
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/config/server_config.dart';
@@ -62,6 +63,31 @@ final class OpsModule extends ModuleBase implements ProvidesMaintenance {
     'ops.anomalies',
     120,
     const Duration(hours: 1),
+  );
+
+  /// The pack folder. `HELIX_PACKS_DIR` unset is the same as an empty folder:
+  /// the list is empty and every file is a 404, so there is nothing to switch
+  /// on and no half-configured state to fail in.
+  PackHost get _packs => PackHost(context.config.packsDirectory);
+
+  /// Browsing the gallery is a list plus one manifest per pack, so the two
+  /// first policies are sized for one page opening, and the third for the
+  /// handful of files a pack holds. All three are keyed per client IP by the
+  /// pipeline, like every public route.
+  static const _packListLimit = RateLimitPolicy(
+    'packs.list',
+    capacity: 60,
+    perSecond: 1,
+  );
+  static const _packManifestLimit = RateLimitPolicy(
+    'packs.manifest',
+    capacity: 120,
+    perSecond: 2,
+  );
+  static const _packFileLimit = RateLimitPolicy(
+    'packs.file',
+    capacity: 60,
+    perSecond: 1,
   );
 
   /// Settings are cached per node; a change is announced on this topic and
@@ -129,7 +155,15 @@ CREATE TABLE $s.settings (
         // A trailing slash is the same page: the name is what the browser
         // already has, and nothing below one more segment is this route.
         trailingSlash: true,
-      );
+      )
+      ..add(name, Routes.packs, _packList, rateLimit: _packListLimit)
+      ..add(
+        name,
+        Routes.packManifest,
+        _packManifest,
+        rateLimit: _packManifestLimit,
+      )
+      ..add(name, Routes.packFile, _packFile, rateLimit: _packFileLimit);
   }
 
   @override
@@ -253,6 +287,81 @@ CREATE TABLE $s.settings (
       privacy: HelixLegalDocuments.privacyPolicy,
     ).toJson(),
   );
+
+  // ------------------------------------------------------------- theme packs
+  // Three read-only routes over one folder the operator owns. Nothing here
+  // opens a manifest: the pack format is understood in exactly one place,
+  // `checkOrbitPack` in `helix_remote_domain`, and that runs on a device, on
+  // bytes this server has no say about (ADR-033). So a hacked or broken host
+  // can withhold a pack or serve an older one, and nothing it says here is a
+  // fact a device acts on.
+
+  /// `GET /v1/packs`: what the folder holds - names, sizes and a time, and no
+  /// display name. A name from this list would be unsigned, and the pack's own
+  /// signed theme document already carries the one a person reads.
+  Future<Response> _packList(HelixRequest request) async => jsonResponse(
+    OrbitPackList(
+      packs: [
+        for (final pack in await _packs.list())
+          OrbitPackEntry(
+            id: pack.id,
+            revision: pack.revision,
+            manifestBytes: pack.manifestBytes,
+            totalBytes: pack.totalBytes,
+            updatedAt: pack.updatedAt,
+          ),
+      ],
+    ).toJson(),
+  );
+
+  /// The manifest, as published and as signed: the bytes are handed over
+  /// unchanged, so the device hashes exactly what the signature covers.
+  Future<Response> _packManifest(HelixRequest request) async => _servePack(
+    await _packs.manifest(
+      request.param('pack_id'),
+      _requestedRevision(request),
+    ),
+    contentType: 'application/json',
+  );
+
+  /// One file of a pack, by the SHA-256 the manifest names for it.
+  Future<Response> _packFile(HelixRequest request) async => _servePack(
+    await _packs.file(
+      request.param('pack_id'),
+      _requestedRevision(request),
+      request.param('digest'),
+    ),
+    contentType: 'application/octet-stream',
+  );
+
+  /// A revision is a number in the URL and an `r<number>` folder on disk.
+  /// Anything that is not a number is 0, which no folder can be, so it joins
+  /// every other missing pack as one plain 404.
+  static int _requestedRevision(HelixRequest request) =>
+      int.tryParse(request.param('revision')) ?? 0;
+
+  Future<Response> _servePack(
+    PackRead read, {
+    required String contentType,
+  }) async {
+    switch (read) {
+      case PackHit(:final length, :final open):
+        return Response(
+          200,
+          body: open(),
+          headers: {'content-type': contentType, 'content-length': '$length'},
+        );
+      case PackMiss():
+        throw const ApiError(ErrorCode.notFound, message: 'no such pack');
+      case PackTooBig(:final length, :final cap):
+        // On the operator's disk, but past what the format can describe, so
+        // this is their mistake to see rather than a page that quietly fails.
+        throw ApiError(
+          ErrorCode.payloadTooLarge,
+          message: 'this pack file is $length bytes, over the $cap cap',
+        );
+    }
+  }
 
   /// Opt-in crash reports become one redacted log line; nothing is stored.
   Future<Response> _crash(HelixRequest request) async {

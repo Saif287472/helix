@@ -203,6 +203,16 @@ smaller id survives, the other ends with reason `glare`.
 | `GET /.well-known/assetlinks.json` | — → Android asset links | |
 | `GET /open` | — → HTML landing page for `#HLX-…` links | Also served at `/open/`, and nowhere below it. CSP `frame-ancestors 'none'` and `X-Frame-Options: DENY`. |
 | `GET /u/{name}` | — → HTML landing page for a `/u/<~name>` share link | One static page for any one-segment name (also at `/u/<name>/`); it never says whether the name exists, so it is not a way to list accounts. The app asks `GET /v1/people/by-name/{name}` with a session, which honours "Find me by ~name" and blocking. Same headers as `/open`. |
+| `GET /v1/packs` | — → `OrbitPackList` | The packs in the server's pack folder (`HELIX_PACKS_DIR`), as the folder names and file stats. Unset folder → an empty list, never a 404. Carries no display name: the name a device shows comes from the pack's signed theme document, so this list cannot be the source of a forged one. |
+| `GET /v1/packs/{pack_id}/revisions/{revision}/manifest` | — → the manifest bytes | `manifest.json` exactly as published and signed, `application/json`. The server never parses it — it has no copy of the pack format, so a hostile or broken host cannot make a device accept anything (`checkOrbitPack` decides). `{pack_id}` is a pack slug, `{revision}` digits. |
+| `GET /v1/packs/{pack_id}/revisions/{revision}/files/{digest}` | — → the file bytes | One file of the pack, by its SHA-256 in lowercase hex — 64 hex characters or 404. A hash rather than the manifest's path, so the route has no path to sanitise, the client asks for exactly the bytes the manifest named, and a file published in two revisions is stored once. `application/octet-stream`. |
+
+Pack routes are public, rate-limited per client IP, and answer only within the
+pack format's own caps: a manifest over 64 KiB or a file over 8 MiB is a 413,
+so a mistaken file in the folder cannot turn a gallery browse into a large
+download. Nothing is cached by the pipeline (`cache-control: no-store` goes on
+every response, pack routes included): the device's own pack cache, not an
+intermediary's, is what keeps a person from downloading a theme twice.
 
 ## compliance
 

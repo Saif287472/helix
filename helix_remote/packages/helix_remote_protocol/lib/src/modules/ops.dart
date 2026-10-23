@@ -146,6 +146,75 @@ final class LegalDocuments {
   );
 }
 
+/// `GET /v1/packs`: one pack this server's pack folder holds.
+///
+/// The endpoint is a file host, not a judge: it lists what its folder holds
+/// and streams the bytes, and it knows nothing about the pack format
+/// (ADR-033). So nothing here is a fact about a pack. The signed manifest is
+/// the only source of what a pack is, and a device re-checks every byte
+/// against it (`checkOrbitPack` in `helix_remote_domain`). That is why an
+/// entry carries no display name and no publisher: a name read from this list
+/// is a name a hostile server could invent, while the name in the signed theme
+/// document is one the device verified.
+final class OrbitPackEntry {
+  const OrbitPackEntry({
+    required this.id,
+    required this.revision,
+    required this.manifestBytes,
+    required this.totalBytes,
+    required this.updatedAt,
+  });
+
+  /// The pack's slug, which is also its folder name.
+  final String id;
+
+  /// The revision number, from the folder name. A device that holds one
+  /// revision asks for a larger one; this list is how it learns one exists.
+  final int revision;
+
+  /// The size of the manifest in bytes, so a client can refuse a manifest too
+  /// big to read before reading it.
+  final int manifestBytes;
+
+  /// The bytes of the pack's files together: what a download will cost.
+  final int totalBytes;
+
+  /// When this host last changed the published pack.
+  final DateTime updatedAt;
+
+  JsonMap toJson() => {
+    'id': id,
+    'revision': revision,
+    'manifest_bytes': manifestBytes,
+    'total_bytes': totalBytes,
+    'updated_at': toWireTime(updatedAt),
+  };
+
+  factory OrbitPackEntry.fromJson(JsonReader json) => OrbitPackEntry(
+    id: json.nonEmpty('id'),
+    revision: json.integer('revision'),
+    manifestBytes: json.integer('manifest_bytes'),
+    totalBytes: json.integer('total_bytes'),
+    updatedAt: json.time('updated_at'),
+  );
+}
+
+/// `GET /v1/packs`. An empty list is the honest answer from a server that
+/// hosts no packs, so it is never an error and never a 404.
+final class OrbitPackList {
+  const OrbitPackList({required this.packs});
+
+  /// Every pack this host serves, in no particular order.
+  final List<OrbitPackEntry> packs;
+
+  JsonMap toJson() => {
+    'packs': [for (final p in packs) p.toJson()],
+  };
+
+  factory OrbitPackList.fromJson(JsonReader json) =>
+      OrbitPackList(packs: json.optObjects('packs', OrbitPackEntry.fromJson));
+}
+
 /// `POST /v1/telemetry/crash`: only when the user opted in. Field values are
 /// redacted on the device first and capped by the server.
 final class CrashReport {
