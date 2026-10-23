@@ -40,30 +40,55 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   /// Nothing is texted until the person has checked the number and agreed:
   /// a code goes to it, and the operator may charge for the message.
-  void _confirmCode(BuildContext context, String number) {
-    final c = ref.read(signInControllerProvider.notifier);
-    orbit.showOrbitDialog(
-      context,
-      title: 'Send a code to $number?',
-      text:
-          'Check that this is your number. We will text a 6-digit code to '
-          'it, and your mobile operator may charge you for the message.',
-      actions: [
-        orbit.OrbitDialogAction('Change number', onPressed: c.goBack),
-        orbit.OrbitDialogAction(
-          'Send the code',
-          kind: orbit.OrbitButtonKind.primary,
-          onPressed: c.forgotPassword,
-        ),
-      ],
-    );
+  ///
+  /// Two ways in: the password page's "Forgot password?", where changing the
+  /// number means going back to it, and the controller's own ask after it has
+  /// checked the number and found no password to sign in with, where the page
+  /// is still the number.
+  void _confirmCode(
+    String number, {
+    required VoidCallback onCancel,
+    required Future<bool> Function() onSend,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      orbit.showOrbitDialog(
+        context,
+        title: 'Send a code to $number?',
+        text:
+            'Check that this is your number. We will text a 6-digit code to '
+            'it, and your mobile operator may charge you for the message.',
+        actions: [
+          orbit.OrbitDialogAction('Change number', onPressed: onCancel),
+          orbit.OrbitDialogAction(
+            'Send the code',
+            kind: orbit.OrbitButtonKind.primary,
+            onPressed: onSend,
+          ),
+        ],
+      );
+    });
   }
+
+  void _askBeforeTexting(String number) => _confirmCode(
+    number,
+    onCancel: ref
+        .read(signInControllerProvider.notifier)
+        .cancelCodeConfirmation,
+    onSend: ref.read(signInControllerProvider.notifier).useCodeInstead,
+  );
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(signInControllerProvider);
     final saved = ref.watch(signInSavedAccountsProvider);
     final c = ref.read(signInControllerProvider.notifier);
+    // The number is checked on the server before the next page is chosen, so
+    // the ask comes from the controller and this is the only place that draws.
+    ref.listen(signInControllerProvider, (previous, next) {
+      if (!next.askBeforeCode || (previous?.askBeforeCode ?? false)) return;
+      _askBeforeTexting(next.phoneLabel);
+    });
     return orbit.SignInScreen(
       // A new step is a new screen, so its fields start from the model.
       key: ValueKey(_stepOf(state)),
@@ -77,7 +102,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         onResendCode: c.resendOtp,
         onPasswordChanged: c.updatePassword,
         onSignIn: c.signInWithPassword,
-        onForgotPassword: () => _confirmCode(context, state.phoneLabel),
+        onForgotPassword: () => _confirmCode(
+          state.phoneLabel,
+          onCancel: c.goBack,
+          onSend: c.forgotPassword,
+        ),
         onLinkInstead: c.linkFromAnotherDevice,
         onNameChanged: c.updateDisplayName,
         onNewPasswordChanged: c.updateNewPassword,

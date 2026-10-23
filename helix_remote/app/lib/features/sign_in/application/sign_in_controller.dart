@@ -18,7 +18,7 @@ import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_countries.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show ErrorCode;
+    show AccountStatusResponse, ErrorCode;
 
 /// The Helix Global server. Sign-in opens here and nowhere else unless a
 /// code, a link or the hidden corner says otherwise.
@@ -33,6 +33,19 @@ final kHelixGlobalServer = kGlobalServerUrl;
 /// cannot drift between the Global and the personal-server path.
 final signInControllerProvider =
     NotifierProvider<SignInController, SignInState>(SignInController.new);
+
+/// What a number is on the server, asked before anything is texted (ADR-032).
+///
+/// A provider rather than a direct engine call so the page machine can be
+/// walked with an answer of the tester's choosing. It is `autoDispose`: the
+/// answer describes a moment, not a thing to cache, and a number that was not
+/// registered a minute ago may have been registered since.
+final signInAccountStatusProvider = FutureProvider.family
+    .autoDispose<AccountStatusResponse, String>(
+      (ref, number) async => (await ref.read(
+        runtimeProvider.future,
+      )).engine.account.accountStatus(number),
+    );
 
 final class SignInController extends Notifier<SignInState> {
   String? _challengeId;
@@ -328,11 +341,19 @@ final class SignInController extends Notifier<SignInState> {
 
   // ----------------------------------------------------------- the phone page
 
-  /// Moves to the password: an account with one signs in with the number
-  /// and the password alone, never a code (the owner, 2026-10-21). A wrong
-  /// password and a number with no account get the same answer, so this
-  /// page tells nobody who has an account. "Use a code instead" is the way
-  /// for a new number, an account with no password, or a forgotten one.
+  /// Asks the server what this number is, before anything is texted
+  /// (ADR-032), and opens the page that fits the answer.
+  ///
+  /// A number with an account and a password signs in with the number and the
+  /// password alone, never a code (the owner, 2026-10-21). Every other answer
+  /// goes through a code: a new number is never asked for a password it cannot
+  /// have, and an account with no password cannot get one set by a caller who
+  /// never proved the number - the code is what authorises the new password on
+  /// the page after it.
+  ///
+  /// A server that cannot answer (an older build, no network, a limit) keeps
+  /// the page order this app has always had: the password, with "Use a code
+  /// instead" under it.
   Future<bool> submitPhone() async {
     final number = state.e164;
     if (number == null) return _fail(SignInCopy.badPhoneNumber);
@@ -349,13 +370,44 @@ final class SignInController extends Notifier<SignInState> {
       return true;
     }
 
+    state = state.copyWith(isLoading: true, clearError: true);
+    final AccountStatusResponse status;
+    try {
+      // The server this page signs in to is settled before anything is asked.
+      _chooseServer();
+      status = await ref.read(signInAccountStatusProvider(number).future);
+    } on Object {
+      return _openPasswordPage();
+    }
+    final canUsePassword = status.accountExists && status.hasPassword;
+    if (canUsePassword) return _openPasswordPage();
+    // Everything else ends with a code, and a code is only texted after the
+    // person has read the number back and said yes.
     state = state.copyWith(
-      page: SignInPage.password,
+      isLoading: false,
       password: '',
+      accountExists: status.accountExists,
+      hasPassword: status.hasPassword,
+      askBeforeCode: true,
       clearError: true,
     );
     return true;
   }
+
+  /// The number-and-password page, with nothing left in the field.
+  bool _openPasswordPage() {
+    state = state.copyWith(
+      page: SignInPage.password,
+      password: '',
+      isLoading: false,
+      clearError: true,
+    );
+    return true;
+  }
+
+  /// "Change number" on the ask-first dialog. Nothing was sent; the person
+  /// stays on the number and can correct it and try again.
+  void cancelCodeConfirmation() => state = state.copyWith(askBeforeCode: false);
 
   /// "Use a code instead": texts a code to the number and moves to it. After
   /// the code the person sets a password (a new account, an account without
@@ -363,7 +415,12 @@ final class SignInController extends Notifier<SignInState> {
   Future<bool> useCodeInstead() async {
     final number = state.e164;
     if (number == null) return _fail(SignInCopy.badPhoneNumber);
-    state = state.copyWith(isLoading: true, clearError: true, password: '');
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      password: '',
+      askBeforeCode: false,
+    );
     try {
       final runtime = await _currentRuntime();
       final challenge = await runtime.engine.account.requestPhoneCode(number);
@@ -548,19 +605,24 @@ final class SignInController extends Notifier<SignInState> {
 
   // -------------------------------------------------------------- internals
 
-  /// The runtime for the server this sign-in is on. Sign-in opens on Helix
-  /// Global, so a device that has not chosen another server (a first install,
-  /// or one that just signed out) is pointed at it before anything is asked.
+  /// The runtime for the server this sign-in is on.
+  Future<HelixRuntime> _currentRuntime() {
+    _chooseServer();
+    return ref.read(runtimeProvider.future);
+  }
+
+  /// Points this sign-in at its server. Sign-in opens on Helix Global, so a
+  /// device that has not chosen another server (a first install, or one that
+  /// just signed out) is pointed at it before anything is asked.
   ///
   /// The Global page is Helix Global, always: a personal server a person once
   /// approved (and backed out of) must not keep receiving what they type here.
-  Future<HelixRuntime> _currentRuntime() {
+  void _chooseServer() {
     final current = ref.read(serverUrlProvider);
     final wantGlobal = !state.isAdvanced;
     if (current == null || (wantGlobal && !ServerPolicy.isGlobal(current))) {
       ref.read(accountsProvider.notifier).useServer(kGlobalServerUrl);
     }
-    return ref.read(runtimeProvider.future);
   }
 
   /// "Link from another device instead": shows this device's QR code for a

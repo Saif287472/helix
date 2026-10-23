@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/global_server.dart';
@@ -16,6 +17,8 @@ import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_view.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
+import 'package:helix_remote_protocol/helix_remote_protocol.dart'
+    show AccountStatusResponse;
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 import 'package:orbit_ui/orbit_ui.dart' show OrbitTokens;
 
@@ -31,9 +34,13 @@ void main() {
   Future<ProviderContainer> pumpScreen(
     WidgetTester tester, {
     void Function(WidgetTester)? after,
+    List<Override> extra = const [],
   }) async {
     final container = ProviderContainer(
-      overrides: [runtimeFactoryProvider.overrideWithValue(_unreachable)],
+      overrides: [
+        runtimeFactoryProvider.overrideWithValue(_unreachable),
+        ...extra,
+      ],
     );
     addTearDown(container.dispose);
     await tester.pumpWidget(
@@ -291,6 +298,123 @@ void main() {
     });
   });
 
+  group('the number checked before the next page', () {
+    ProviderContainer asked(AccountStatusResponse status, {Object? refuse}) {
+      FlutterSecureStorage.setMockInitialValues({});
+      final container = ProviderContainer(
+        overrides: [
+          runtimeFactoryProvider.overrideWithValue(_unreachable),
+          signInAccountStatusProvider.overrideWith(
+            (ref, number) => refuse != null
+                ? Future<AccountStatusResponse>.error(refuse)
+                : Future.value(status),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    /// Types the number and presses Next.
+    Future<void> submit(ProviderContainer container) async {
+      final notifier = container.read(signInControllerProvider.notifier);
+      notifier.updateDigits('1711000001');
+      expect(await notifier.submitPhone(), isTrue);
+    }
+
+    test('a number with no account is asked before a code is texted', () async {
+      final container = asked(
+        const AccountStatusResponse(accountExists: false, hasPassword: false),
+      );
+      await submit(container);
+
+      final state = container.read(signInControllerProvider);
+      // It stays on the number and asks first: nothing has been sent.
+      expect(state.page, SignInPage.phone);
+      expect(state.askBeforeCode, isTrue);
+    });
+
+    test('an account with no password comes in by a code, never by a password '
+        'it does not have', () async {
+      final container = asked(
+        const AccountStatusResponse(accountExists: true, hasPassword: false),
+      );
+      await submit(container);
+
+      final state = container.read(signInControllerProvider);
+      expect(state.page, SignInPage.phone);
+      expect(state.askBeforeCode, isTrue);
+      // The code, not the person's word, is what authorises the new password
+      // on the page after it.
+      expect(state.accountExists, isTrue);
+      expect(state.hasPassword, isFalse);
+    });
+
+    test('an account with a password signs in with the number and the '
+        'password, with no code', () async {
+      final container = asked(
+        const AccountStatusResponse(accountExists: true, hasPassword: true),
+      );
+      await submit(container);
+
+      final state = container.read(signInControllerProvider);
+      expect(state.page, SignInPage.password);
+      expect(state.askBeforeCode, isFalse);
+    });
+
+    test('a server that cannot answer keeps the page order the app has '
+        'always had', () async {
+      final container = asked(
+        const AccountStatusResponse(accountExists: false, hasPassword: false),
+        refuse: StateError('no network'),
+      );
+      await submit(container);
+
+      // The password page, with "Use a code instead" under it: an unknown
+      // answer is not a reason to stop somebody at the door.
+      expect(
+        container.read(signInControllerProvider).page,
+        SignInPage.password,
+      );
+    });
+
+    testWidgets('the ask is on screen, and saying no leaves nothing set', (
+      tester,
+    ) async {
+      final container = await pumpScreen(
+        tester,
+        extra: [
+          signInAccountStatusProvider.overrideWith(
+            (ref, number) => Future.value(
+              const AccountStatusResponse(
+                accountExists: false,
+                hasPassword: false,
+              ),
+            ),
+          ),
+        ],
+      );
+
+      final notifier = container.read(signInControllerProvider.notifier);
+      notifier.updateDigits('1711000001');
+      await notifier.submitPhone();
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Send a code to +880 1711000001'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Change number'));
+      await tester.pumpAndSettle();
+      expect(container.read(signInControllerProvider).askBeforeCode, isFalse);
+
+      // Next asks again: the refusal was cleared, not left standing.
+      await notifier.submitPhone();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Send a code to'), findsOneWidget);
+    });
+  });
+
   group('the terms', () {
     test('are required before an account is created on Helix Global', () async {
       final container = _container();
@@ -369,10 +493,12 @@ void main() {
       },
     );
 
-    test('a number goes straight to the password, with no code', () async {
+    test('a number whose server cannot be asked goes straight to the password, '
+        'with no code', () async {
       final notifier = _container().read(signInControllerProvider.notifier);
       notifier.updateDigits('1711000001');
-      // The runtime factory throws if reached: nothing is sent for a code.
+      // The runtime factory throws if reached: the pre-check cannot be made,
+      // and nothing is sent for a code.
       expect(await notifier.submitPhone(), isTrue);
       expect(notifier.state.page, SignInPage.password);
     });

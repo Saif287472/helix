@@ -39,6 +39,7 @@ final class SignInState {
     this.codeType,
     this.accountExists = false,
     this.hasPassword = false,
+    this.askBeforeCode = false,
     this.completed = false,
     this.showPhoneRecoveryPrompt = false,
     this.remember = true,
@@ -86,10 +87,16 @@ final class SignInState {
   final SignInCodeType? codeType;
 
   /// Whether the number already has an account here, and whether that account
-  /// has a password. Both come from the phone verification, which is why the
-  /// code is asked for before the password.
+  /// has a password. The pre-check says it before anything is texted and the
+  /// phone verification says it again with authority (ADR-032); the second one
+  /// is what `completeSetup` acts on.
   final bool accountExists;
   final bool hasPassword;
+
+  /// The number is checked and a password is not the way into it, so the
+  /// screen is asked to get the person's yes before a code is texted. Nothing
+  /// has been sent while this is on, and the page is still the number.
+  final bool askBeforeCode;
 
   /// Set once the device is signed in; the shell's redirect takes over.
   final bool completed;
@@ -157,6 +164,7 @@ final class SignInState {
     SignInCodeType? codeType,
     bool? accountExists,
     bool? hasPassword,
+    bool? askBeforeCode,
     bool? completed,
     bool? showPhoneRecoveryPrompt,
     bool? remember,
@@ -186,6 +194,7 @@ final class SignInState {
     codeType: clearCodeType ? null : codeType ?? this.codeType,
     accountExists: accountExists ?? this.accountExists,
     hasPassword: hasPassword ?? this.hasPassword,
+    askBeforeCode: askBeforeCode ?? this.askBeforeCode,
     completed: completed ?? this.completed,
     showPhoneRecoveryPrompt:
         showPhoneRecoveryPrompt ?? this.showPhoneRecoveryPrompt,
@@ -213,6 +222,7 @@ final class SignInState {
       other.codeType == codeType &&
       other.accountExists == accountExists &&
       other.hasPassword == hasPassword &&
+      other.askBeforeCode == askBeforeCode &&
       other.completed == completed &&
       other.showPhoneRecoveryPrompt == showPhoneRecoveryPrompt &&
       other.remember == remember;
@@ -237,6 +247,7 @@ final class SignInState {
     codeType,
     accountExists,
     hasPassword,
+    askBeforeCode,
     completed,
     showPhoneRecoveryPrompt,
     remember,
