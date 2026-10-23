@@ -38,8 +38,9 @@ where the checking happens.
   The format is specified in `docs/product/THEME_PACK_FORMAT.md`.
 - **The gate is one function, in `packages/helix_remote_domain`.**
   `checkOrbitPack` returns either the parsed manifest or a typed refusal
-  (`OrbitPackFailure`, fourteen of them, each with one line of safe detail).
-  Nothing else in the client may decide whether a pack is usable.
+  (`OrbitPackFailure`, fourteen of them until step 5's fifteenth, each with one
+  line of safe detail). Nothing else in the client may decide whether a pack is
+  usable.
 - **The order of the checks is the security property.** Sizes, path shape and
   manifest shape are read first; then the publisher's signature over the
   canonical manifest bytes; only then are the pack's own files hashed and its
@@ -126,3 +127,29 @@ where the checking happens.
 - **Let the server sign packs with its own account key.** Rejected: that makes
   every operator's personal server a publisher of code-adjacent data to every
   client. One publisher key, pinned in the app, is the design.
+
+## Amendment (2026-10-23): a pack may be a sound
+
+`orbit/PORT_PLAN.md` Part C step 5, ruled by the owner the same day: a ringtone
+arrives as a signed pack rather than through a second download route. So a
+pack's one body file may be audio instead of a theme document.
+
+What that took: an optional `contents` word in the manifest (`theme` or
+`sound`, and absent means `theme`); `theme` became a field a pack may omit;
+`audio` became a fourth file kind; and the gate gained `unknownContent` plus the
+rule that a pack carries exactly one body file, a sound pack being that file and
+nothing else beside it.
+
+What did not change is the part worth recording. `contents` is only written when
+it is not the default, so a theme pack's signed bytes - and the pinned vectors
+above, and every pack already built - are byte for byte what they were before
+ringtones were a thing. The order of the checks is the same, and a sound's bytes
+are still never opened: the gate hashes them, and the app hands them to Android.
+The server took no change at all, because the three pack routes serve a file by
+its digest and never look at what it is.
+
+One consequence is deliberately left open. A `HELIX_PACKS_DIR` holding both kinds
+lists both on one route, since `contents` is inside the signed manifest and the
+endpoint does not read it. Whether a page filters its list - a protocol and
+server change, so the owner's call - or the two kinds go in two folders is the
+remaining decision of step 5.

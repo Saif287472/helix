@@ -37,6 +37,9 @@ const pinnedSignature =
     '+kBFDggpF9oE6BBw==';
 
 final Uint8List themeBytes = Uint8List.fromList(utf8.encode(theme));
+final Uint8List soundBytes = Uint8List.fromList(
+  List<int>.generate(256, (i) => i),
+);
 final Uint8List publisherSeed = Uint8List.fromList(
   List<int>.generate(32, (i) => i),
 );
@@ -452,6 +455,149 @@ void main() {
     });
   });
 
+  group('what a pack is', () {
+    // Part C step 5, on the owner's ruling that a ringtone arrives as a signed
+    // pack: the format has to say which kind of thing a pack is, because a
+    // sound has no theme document to be checked against.
+    test('a manifest that says nothing is a theme pack, and signs exactly the '
+        'bytes it always signed', () {
+      final read = OrbitPackManifest.fromJson(
+        jsonDecode(jsonEncode(sampleManifest().toJson()))
+            as Map<String, Object?>,
+      );
+      expect(read.contents, orbitPackDefaultContents);
+      expect(utf8.decode(read.signingBytes()), pinnedCanonical);
+    });
+
+    test('a manifest that spells out "theme" is the same pack, because the '
+        'default word is never written', () async {
+      // One spelling, so one message: a theme pack in the field always signs
+      // [pinnedCanonical], whatever its publisher typed. A sound pack is the
+      // one that says what it is, and says it inside the signed bytes.
+      final spelled = <String, Object?>{
+        ...sampleManifest().toJson(),
+        'contents': 'theme',
+      };
+      final read = OrbitPackManifest.fromJson(spelled);
+      expect(read.contents, orbitPackDefaultContents);
+      expect(read.toJson().containsKey('contents'), isFalse);
+      expect(utf8.decode(read.signingBytes()), pinnedCanonical);
+      final check = await _check(read, files: {themePath: themeBytes});
+      expect(check.isAllowed, isTrue, reason: check.detail);
+    });
+
+    test(
+      'a sound pack is its one audio file, and the gate allows it',
+      () async {
+        final pack = await _soundPack();
+        expect(
+          utf8.decode(pack.manifest.signingBytes()),
+          contains('"contents":"sound"'),
+        );
+        final check = await _check(pack.manifest, files: pack.files);
+        expect(check.isAllowed, isTrue, reason: check.detail);
+        expect(check.manifest!.contents, 'sound');
+        expect(check.manifest!.theme, isNull);
+        expect(check.manifest!.files.single.kind, 'audio');
+      },
+    );
+
+    test('a theme pack may carry files it does not read', () async {
+      final files = {themePath: themeBytes, 'images/cover.png': soundBytes};
+      final pack = await _pack(files: files);
+      final check = await _check(pack.manifest, files: pack.files);
+      expect(check.isAllowed, isTrue, reason: check.detail);
+    });
+
+    test('a kind of pack this app has no loader for is refused', () async {
+      await _expectRefusal(
+        _check(
+          sampleManifest(contents: 'video'),
+          files: {themePath: themeBytes},
+        ),
+        OrbitPackFailure.unknownContent,
+      );
+    });
+
+    test('and the refused word is never quoted back', () async {
+      final check = await _check(
+        sampleManifest(contents: 'evil\nforged'),
+        files: {themePath: themeBytes},
+      );
+      expect(check.failure, OrbitPackFailure.unknownContent);
+      expect(check.detail, contains('(not an identifier)'));
+      expect(check.detail, isNot(contains('forged')));
+      expect(check.detail, isNot(contains('\n')));
+    });
+
+    test('a theme pack that names no document is not a theme', () async {
+      await _expectRefusal(
+        _check(sampleManifest(theme: null), files: {themePath: themeBytes}),
+        OrbitPackFailure.badManifest,
+      );
+    });
+
+    test('a sound pack that names a document is not a sound', () async {
+      await _expectRefusal(
+        _check(
+          sampleManifest(contents: 'sound'),
+          files: {themePath: themeBytes},
+        ),
+        OrbitPackFailure.badManifest,
+      );
+    });
+
+    test(
+      'a signed theme re-labelled a sound is refused, not re-signed',
+      () async {
+        // The theme pack's own manifest with its word changed: the shape that the
+        // signature vouches for no longer holds, and the gate says so before it
+        // spends an Ed25519 verify on a pack it already knows nothing about.
+        final pack = await _pack();
+        final relabelled = OrbitPackManifest.fromJson({
+          ...pack.manifest.toJson(),
+          'contents': 'sound',
+          'theme': null,
+        });
+        await _expectRefusal(
+          _check(relabelled, signature: pinnedSignature, files: pack.files),
+          OrbitPackFailure.badManifest,
+        );
+      },
+    );
+
+    test('a sound pack of two files is not one sound', () async {
+      final files = {
+        'sounds/chime.m4a': soundBytes,
+        'sounds/deeper.m4a': soundBytes,
+      };
+      final pack = await _pack(
+        id: 'chime',
+        theme: null,
+        contents: 'sound',
+        files: files,
+      );
+      await _expectRefusal(
+        _check(pack.manifest, files: files),
+        OrbitPackFailure.badManifest,
+      );
+    });
+
+    test('a sound pack whose file is not a sound is not one either', () async {
+      final files = {'sounds/chime.png': soundBytes};
+      final pack = await _pack(
+        id: 'chime',
+        theme: null,
+        contents: 'sound',
+        files: files,
+      );
+      await _expectRefusal(
+        _check(pack.manifest, files: files),
+        OrbitPackFailure.badManifest,
+      );
+    });
+  });
+
   group('the slug a publisher builds from', () {
     // `tool/theme_pack_tool.dart build` turns a slug into a folder before any
     // manifest exists, so this predicate is the only thing between `--ids` and
@@ -495,7 +641,8 @@ OrbitPackManifest sampleManifest({
   String id = packId,
   String pub = publisher,
   int revision = 1,
-  String theme = themePath,
+  String contents = orbitPackDefaultContents,
+  String? theme = themePath,
   List<OrbitPackFile> files = const [themeEntry],
   String? signature,
 }) => OrbitPackManifest(
@@ -503,6 +650,7 @@ OrbitPackManifest sampleManifest({
   id: id,
   publisher: pub,
   revision: revision,
+  contents: contents,
   theme: theme,
   files: files,
   signature: signature,
@@ -532,9 +680,10 @@ OrbitPackManifest sampleManifest({
 Future<({OrbitPackManifest manifest, Map<String, List<int>> files})> _pack({
   Map<String, List<int>>? files,
   String id = packId,
-  String theme = themePath,
+  String? theme = themePath,
+  String contents = orbitPackDefaultContents,
 }) async {
-  final delivered = files ?? {theme: themeBytes};
+  final delivered = files ?? {theme!: themeBytes};
   final listed = <OrbitPackFile>[];
   for (final path in delivered.keys.toList()..sort()) {
     listed.add(
@@ -552,12 +701,19 @@ Future<({OrbitPackManifest manifest, Map<String, List<int>> files})> _pack({
       id: id,
       publisher: publisher,
       revision: 1,
+      contents: contents,
       theme: theme,
       files: listed,
     ),
     files: delivered,
   );
 }
+
+/// A sound pack, the way `pack --contents sound` writes one: the folder's one
+/// audio file is the pack, and no theme document is named.
+Future<({OrbitPackManifest manifest, Map<String, List<int>> files})>
+_soundPack({String id = 'chime', String path = 'sounds/chime.m4a'}) =>
+    _pack(id: id, theme: null, contents: 'sound', files: {path: soundBytes});
 
 String _kindOf(String path) {
   final lower = path.toLowerCase();

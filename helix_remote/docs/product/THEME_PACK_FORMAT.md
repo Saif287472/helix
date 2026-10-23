@@ -1,18 +1,19 @@
 # Orbit theme packs: the format
 
-Status: current, steps 1-2 of `orbit/PORT_PLAN.md` Part C (2026-10-23).
+Status: current, steps 1-2 of `orbit/PORT_PLAN.md` Part C, and step 5's change to
+the format (2026-10-23).
 Decided by [ADR-033](../adr/033-theme-packs-are-signed-data.md).
 Implemented by `packages/helix_remote_domain/lib/domain/theme_packs.dart`,
 checked by `packages/helix_remote_domain/test/theme_packs_test.dart`,
 written by `helix_remote/tool/theme_pack_tool.dart`, and served by
 `helix_remote/server/lib/src/modules/ops/pack_host.dart`.
 
-A theme pack is **data**. It carries a theme document in the JSON the built-in
-themes are already written in, and it may only switch on effects this build
-ships. A pack cannot bring code, cannot bring an effect, and cannot be used
-until a publisher this app trusts has signed it. That is what makes it safe to
-serve from a computer that might itself be hacked: the app checks the pack, not
-the server.
+A pack is **data**. It carries a theme document in the JSON the built-in
+themes are already written in, or the one audio file a person chose as their
+ringtone, and a theme pack may only switch on effects this build ships. A pack
+cannot bring code, cannot bring an effect, and cannot be used until a publisher
+this app trusts has signed it. That is what makes it safe to serve from a
+computer that might itself be hacked: the app checks the pack, not the server.
 
 ## What a pack is
 
@@ -46,12 +47,49 @@ synthwave/
 | Field | Rule |
 |---|---|
 | `formatVersion` | must be exactly `1`. Anything else is refused, not guessed at. |
-| `id` | the theme's id: `[a-z0-9][a-z0-9._-]{0,63}`. The theme document's own `id` must equal it. |
+| `id` | the pack's id: `[a-z0-9][a-z0-9._-]{0,63}`. A theme pack's theme document must call itself the same. |
 | `publisher` | whose key must have signed this, same shape as `id`. |
 | `revision` | whole number from 1. The app keeps the highest it has per `id`. |
-| `theme` | the path of the one theme document, and one of `files`. |
+| `contents` | `theme` or `sound`. **Absent means `theme`**, which is every pack written before ringtones existed, so those packs' signed bytes do not change here. Any other word is refused as `unknownContent`. |
+| `theme` | the path of the one theme document, and one of `files`. A theme pack must name it; a sound pack must not have it. |
 | `files[]` | up to 16 entries: `path`, `kind`, `bytes`, `sha256`. |
 | `signature` | base64 of 64 bytes, Ed25519 over the bytes below. |
+
+### A sound pack
+
+The same envelope, saying what it is, with one audio file and no document:
+
+```
+chime/
+  manifest.json
+  sounds/chime.m4a             the ringtone; nothing else in the pack
+```
+
+```json
+{
+  "formatVersion": 1,
+  "id": "chime",
+  "publisher": "agiletechbd",
+  "revision": 1,
+  "contents": "sound",
+  "files": [
+    {
+      "path": "sounds/chime.m4a",
+      "kind": "audio",
+      "bytes": 4096,
+      "sha256": "…"
+    }
+  ],
+  "signature": "…"
+}
+```
+
+A sound pack is **exactly one file**, and that file is the pack: the app plays
+it, and Android's notification channel carries it while the app is not alive
+(the owner's ruling of 2026-10-23, `orbit/PORT_PLAN.md` Part C step 5). Nothing
+inside it is parsed - it is signed, hashed and size-limited like any other file
+and handed to the system. `contents` is in the signed bytes, so a host cannot
+re-word a theme into a sound or back.
 
 ### `files[]`
 
@@ -60,11 +98,12 @@ leading or trailing `/`, no `.` or `..` segment, no empty segment, and each
 segment matching `[A-Za-z0-9][A-Za-z0-9._-]*`, at most 96 characters in total.
 Anything else is refused - the app never builds a filesystem path from a pack.
 
-`kind` is one of three, and the extension must match it:
+`kind` is one of four, and the extension must match it:
 
 | kind | extensions | read by the app today |
 |---|---|---|
 | `theme` | `.json` | yes - it is the theme |
+| `audio` | `.m4a`, `.aac`, `.mp3`, `.ogg`, `.wav` | yes, as a ringtone, but not by this store: the sound step's loader plays it |
 | `font` | `.ttf`, `.otf`, `.woff2` | no (Part C's font step ships the loader) |
 | `image` | `.png`, `.webp` | no |
 
@@ -72,7 +111,10 @@ A `font` or `image` in a pack is signed, hashed and size-limited like any other
 file and simply not read yet. That is deliberate: the format does not change
 when a loader arrives.
 
-Exactly one file is `kind: "theme"`, and it is the one `theme` names.
+`contents` decides which of those files is the pack's body, and there is
+exactly one of it: a theme pack carries one `theme` file, named by `theme`; a
+sound pack carries one `audio` file and nothing else beside it. Any other file
+in a theme pack - a font, an image - is along for the ride and unread.
 
 `sha256` is 64 lowercase hex characters of that file's bytes, and `bytes` is its
 length. Both are compared with what the download delivered.
@@ -92,6 +134,12 @@ signs them, and the app rebuilds them from the manifest it downloaded. Those
 same three strings - the bytes, the key, the signature - are pinned as vectors
 in `packages/helix_remote_domain/test/theme_packs_test.dart`, so the signing
 form cannot change without a test failing.
+
+A pack that is not a theme signs the word that says so: `"contents":"sound"`
+sits in that message beside the id and the file list. `contents` is written only
+when it is not the default, which is what keeps the vector above - and every
+theme pack already signed with it - byte for byte what it was before ringtones
+were a thing.
 
 The signature is `publisher`'s Ed25519 signature. The app's trust anchor is a
 map of publisher id to a 32-byte key, compiled into the release. **Today that
@@ -120,15 +168,17 @@ against the declared one after.
 `checkOrbitPack` is the only place this is decided. Its order is the security
 property: nothing from inside a pack is opened until its signature verifies.
 
-1. **Sizes and shape, from the manifest alone** - `tooLarge`, `unknownFormat`,
-   `badManifest`, `badPath`, `tooManyFiles`.
+1. **What the pack is, then its sizes and shape, from the manifest alone** -
+   `unknownContent`, `tooLarge`, `unknownFormat`, `badManifest`, `badPath`,
+   `tooManyFiles`.
 2. **The publisher and the signature** - `unsigned`, `unknownPublisher`,
    `badSignature`.
 3. **The pack's own files** - `missingFile`, `changedFile` (a file that is not
    the one hashed, a size that is a lie, or something the manifest never
    listed).
 4. **The theme document** - `badTheme`, `themeMismatch`, `unknownEffect`,
-   `unknownPattern`.
+   `unknownPattern`. Only a theme pack gets this far: a sound pack's file is
+   checked as bytes in step 3 and never opened.
 
 Each refusal carries one line of detail: which field, which path, which
 registry name. A pack's own words are quoted only where the format constrains
@@ -164,10 +214,14 @@ checked with the format's own rule (`isOrbitPackName`) before it becomes a
 path, the document's own `id` must still be the slug, and a staged file that is
 a different generation of the same theme is refused rather than overwritten.
 What `build` writes is staging; `publish` is what makes an offer.
+`build` only writes theme packs - a ringtone is not in the theme table, and one
+audio file is a folder a person made themselves.
 `pack` is the same step for one folder that already exists - a pack with a font
 or an image beside its theme, which `build` cannot stage because those files
-are not in the theme table. A folder built without a seed stays unsigned until
-`sign --manifest FILE --seed-file PATH` signs it.
+are not in the theme table, or a sound: `pack --in DIR --id chime
+--contents sound` takes a folder holding exactly one audio file, names no theme
+document, and signs the word that says what it is. A folder built without a seed
+stays unsigned until `sign --manifest FILE --seed-file PATH` signs it.
 `pack` hashes the folder (its own `manifest.json` is never
 listed) and refuses a folder whose single `.json` document calls itself another
 theme. `verify` runs the app's own gate, not a copy of it; `--effects` and
@@ -214,6 +268,12 @@ can serve an older revision, a different pack, or nothing at all - it cannot
 make a device accept anything, because `checkOrbitPack` still runs over the
 bytes on the phone. That is the whole point of a pack being data.
 
+One folder may therefore hold theme packs and sound packs together, and the list
+route says nothing about which kind a row is: `contents` lives inside the signed
+manifest, and the endpoint never opens it. A page that wants to list one kind
+only has to fetch a manifest to learn it, which is the open question of step 5 -
+not a reason to make the server a judge.
+
 ## What the phone does (step 3)
 
 `helix_remote/app/lib/core/theme/orbit_packs.dart` keeps what a person
@@ -256,6 +316,11 @@ Rules that are the device's, not the format's:
   the start-up and theme-library read paths, so a typo in a define cannot stop
   the app starting or leave it with no theme; the pages that manage packs fail
   the action instead, so the typo is noticed rather than shipped silently.
+- **A theme store refuses a pack that is not a theme.** `contents` is the format's
+  business and not this class's: `ThemePackStore` draws themes, so a sound pack is
+  refused before its bytes are fetched on the way in, and skipped on every read of
+  the folder, which is what keeps a ringtone off the themes page and out of the
+  start-up scan. The sound step's own store is the one that plays it.
 - **A pack never takes a built-in theme's name.** The theme library is the
   downloaded packs with the built-ins merged over them, and a download of an id
   that is built in is refused in words, so Orbit and Orbit Night are always the

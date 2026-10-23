@@ -25,9 +25,10 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   packs): built and tested, with only the `keygen` between it and an offer.
   Steps 5 and 6 are now ruled by the owner (2026-10-23): a ringtone arrives as a
   signed pack and Android rings with a channel per ringtone, and the animation
-  runtime is Lottie. What is still owed is a real ringtone sound and the one
-  moment step 6 is for, and step 9 (premium themes) waits for the `keygen` and a
-  Play Billing decision.
+  runtime is Lottie. The pack format half of step 5 is built the same way; its
+  picker waits on a real sound and on one decision about what the offer list
+  says. What is still owed is that sound and the one moment step 6 is for, and
+  step 9 (premium themes) waits for the `keygen` and a Play Billing decision.
 
 ## Done (pending the owner's review)
 
@@ -54,7 +55,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 560c4b2 | Part C step 4: the themes page behind Appearance, in `orbit_ui` and the app |
 | f33b2e2 | Part C step 7: Jungle, Ocean and Metal, from the one theme table |
 | 672c387 | Part C step 8: the theme table becomes packs, and the pipeline proves it |
-| (this) | The owner's rulings on Part C steps 5 and 6, recorded in the plan |
+| 3db988c | The owner's rulings on Part C steps 5 and 6, recorded in the plan |
+| (this) | Part C step 5's format half: a pack may be a sound |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -284,10 +286,12 @@ both change the server, so neither is live until production runs this branch.)
 
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
-`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4, 7 and 8 are built. Steps 5
-and 6 are ruled (sounds as signed packs with a channel per ringtone; Lottie) and
-not built: step 5 waits on a real ringtone file and step 6 on the moment it
-animates. Step 9 waits for the `keygen` and a Play Billing decision.
+`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4, 7 and 8 are built, and so is
+the half of step 5 that the owner's ruling needed from the format: a pack may now
+be a sound. Steps 5's picker and 6 are ruled (sounds as signed packs with a
+channel per ringtone; Lottie) and not built: step 5 waits on a real ringtone file
+and step 6 on the moment it animates. Step 9 waits for the `keygen` and a Play
+Billing decision.
 
 12. Part C step 1, the pack format and the signing tool - **done**
     (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
@@ -384,7 +388,8 @@ animates. Step 9 waits for the `keygen` and a Play Billing decision.
     in a build made with the define, so it is an APK rebuild you control, after
     `keygen`.
 17. Part C step 5, the ringtone picker, is not started; steps 7 and 8 went
-    first, because they were the two with nothing owed on them. **Both are now
+    first, because they were the two with nothing owed on them. Its **format**
+    half is done, and is item 20. **Both are now
     ruled (2026-10-23, you):** the sound arrives **as a signed pack** - which
     means the pack format has to carry a file that is not a theme, and no server
     file changes, because the three pack routes serve a file by its digest and
@@ -447,6 +452,51 @@ animates. Step 9 waits for the `keygen` and a Play Billing decision.
       build with `HELIX_PACK_PUBLISHERS`. Step 7's question is now an argument:
       `--ids` takes any of the nine, so offering six or nine is your call at
       publish time, not a code change.
+20. Part C step 5's format half, a pack may be a sound - **done** (2026-10-23).
+    Your ruling needed one thing from the format before any of the picker could
+    be built: a pack that carries a file which is not a theme.
+    - The manifest gained an optional `contents` word, `theme` or `sound`, and
+      **absent means `theme`**. That is the whole trick: `toJson` writes the
+      field only when it is not the default, so a theme pack's signed bytes - the
+      pinned 253-byte vector and every pack built with it - are unchanged to the
+      byte, and the format did not need a version bump to grow a second kind.
+      `audio` is a fourth file kind (`.m4a`, `.aac`, `.mp3`, `.ogg`, `.wav`),
+      `theme` is a field a pack may omit, and the gate's fifteenth refusal,
+      `unknownContent`, runs in the same first pass as the sizes and the path
+      shape - before the signature, and before a byte of the pack is opened.
+      A sound pack is **exactly one audio file** with nothing beside it, and
+      `contents` is inside the signed message, so a host cannot re-word a theme
+      into a sound or a sound into a theme.
+    - `tool/theme_pack_tool.dart pack --in DIR --id chime --contents sound`
+      writes one, and `build` refuses that flag: a ringtone is not in the theme
+      table, and its folder is one a person made. `sign` keeps the word (a
+      manifest re-signed after dropping it would be a theme pack again), and
+      `verify` and `publish` needed nothing.
+    - The app still draws themes and nothing else. `ThemePackStore.install`
+      refuses a pack that is not one **before** fetching its files, and `_read`
+      skips one it finds in its own folder, so a sound published beside the themes
+      cannot reach the More themes list, the theme library or the start-up scan -
+      and the page says "That pack cannot be used: a kind of pack this app does
+      not know." The sound step's own store is what plays it, in the half that is
+      not built.
+    - No server, protocol, api or engine file changed, so the pending-redeploy
+      list is still exactly the three pack routes, `/u/{name}`,
+      `GET /v1/backups/full/meta` and the `HELIX_PACKS_DIR` line, and the pixel
+      gate has nothing new to score (no screen moved). Tests: 9 new in the
+      domain's "what a pack is" group (53 in that file, pinned vectors included
+      and still green), 3 new in the app's pack file (39). The chain was run by
+      hand with a throwaway key in a temp folder - a sound packed, verified
+      ("usable: chime r1 (sound)"), published by digest, then refused for two
+      files, for a png, and for a theme folder; a real theme document still
+      builds and verifies - and nothing was left in the repo. Docs:
+      `THEME_PACK_FORMAT.md` (the field, the kind, the example, the order),
+      ADR-033's amendment, `helix_remote_domain/MODULE.md`.
+    - **On you, before the picker:** one folder holds both kinds and the list
+      route cannot tell them apart, because `contents` is inside the manifest the
+      endpoint never opens. Either the app fetches a manifest to know (no server
+      change; an offer it will refuse may show for a moment), or the list says
+      what kind each row is (a protocol and server change, so your approval), or
+      sounds get a second `HELIX_PACKS_DIR`. Then the sound itself.
 
 ## Batch 8, what is left
 
@@ -582,6 +632,14 @@ must say so.
   packs in it is a healthy server. Publishing is
   `dart run tool/theme_pack_tool.dart publish --in <pack> --out <that folder>`.
 - Review of every "(pending review)" commit and the DEVIATIONS entries.
+- **Which kind a pack offer is.** One `HELIX_PACKS_DIR` holds theme packs and
+  sound packs together, and `GET /v1/packs` says nothing about which a row is,
+  because `contents` lives inside the signed manifest the endpoint never opens.
+  Three ways out, and the second is a server change, so it is yours: let the app
+  fetch a manifest and refuse what is not its kind (what it does today, no server
+  change, one wrong row may show for a moment); add a `contents` to the list
+  entry (protocol, server, api and app, plus a redeploy); or publish sounds into
+  a second folder and name it with a second env line.
 - A sound for the Orbit ringtone.
 - Part B step 5's second bullet: the debug APK on your phone and the Windows
   run. Nothing was built for you here (AGENTS.md: the owner builds).

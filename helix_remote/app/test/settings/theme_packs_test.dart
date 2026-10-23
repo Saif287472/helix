@@ -332,6 +332,67 @@ void main() {
     });
   });
 
+  group('a pack that is not a theme', () {
+    // Part C step 5: the format carries ringtones too, and this store draws
+    // themes. A sound pack is a real, signable pack that has nothing here to
+    // show for itself - so it must be refused, not read, and never crash the
+    // folder scan that runs at every app start.
+    test(
+      'a hosted sound pack is refused before its bytes are fetched',
+      () async {
+        final store = ThemePackStore(trustedPublishers: trusted);
+        final pack = await signedSoundPack(by: publisherKey);
+        final source = FakePackSource([pack]);
+        await expectLater(
+          store.install(source, 'chime'),
+          throwsA(
+            isA<PackRefused>().having(
+              (e) => e.failure,
+              'failure',
+              OrbitPackFailure.unknownContent,
+            ),
+          ),
+        );
+        expect(source.fetched, isEmpty);
+        expect(await store.installed(), isEmpty);
+        expect(Directory('${await packsRoot()}/chime').existsSync(), isFalse);
+      },
+    );
+
+    test('a sound pack already on the device is not read as a theme', () async {
+      // Written into the folder by hand, because [ThemePackStore.install] no
+      // longer lets one in: an older app, or a person's own copy of the bytes.
+      final pack = await signedSoundPack(by: publisherKey);
+      final root = await packsRoot();
+      Directory('$root/chime/r1/files').createSync(recursive: true);
+      File('$root/chime/r1/manifest.json').writeAsBytesSync(pack.manifestBytes);
+      File(
+        '$root/chime/r1/files/${pack.manifest.files.single.sha256}',
+      ).writeAsBytesSync(pack.files.values.single);
+
+      final store = ThemePackStore(trustedPublishers: trusted);
+      expect(await store.installed(), isEmpty);
+      expect(await store.load('chime'), isNull);
+      expect(await store.themeTokens(), isEmpty);
+      // The bytes stay: this store is not the one that plays them.
+      expect(Directory('$root/chime/r1').existsSync(), isTrue);
+    });
+
+    test('the themes page says the pack is not one it can use', () async {
+      final container = libraryContainer(
+        source: FakePackSource([await signedSoundPack(by: publisherKey)]),
+      );
+      expect(
+        await container.read(themePackActionsProvider).install('chime'),
+        'That pack cannot be used: a kind of pack this app does not know.',
+      );
+      expect(
+        container.read(themeLibraryProvider).containsKey('chime'),
+        isFalse,
+      );
+    });
+  });
+
   group('the anchor', () {
     test('is empty unless the build passes one', () {
       expect(PackTrust.parse(''), isEmpty);
@@ -982,6 +1043,42 @@ Future<HostedPack> signedPack({
       OrbitPackFile(
         path: path,
         kind: 'theme',
+        bytes: bytes.length,
+        sha256: digest,
+      ),
+    ],
+    signature: signed,
+  );
+  final signature64 = base64Encode(await by.sign(build(null).signingBytes()));
+  return HostedPack(
+    manifest: build(signature ? signature64 : null),
+    files: {path: bytes},
+  );
+}
+
+/// A sound pack the publisher signed: one audio file, and no theme document,
+/// because a ringtone is the pack (Part C step 5). The bytes are a count up in
+/// octet - the gate hashes a sound and never opens it, which is the point.
+Future<HostedPack> signedSoundPack({
+  required Ed25519KeyPair by,
+  String id = 'chime',
+  int revision = 1,
+  String publisher = 'helix',
+  bool signature = true,
+}) async {
+  final bytes = Uint8List.fromList(List<int>.generate(512, (i) => i % 256));
+  final path = 'sounds/$id.m4a';
+  final digest = await sha256Hex(bytes);
+  OrbitPackManifest build(String? signed) => OrbitPackManifest(
+    formatVersion: orbitPackFormatVersion,
+    id: id,
+    publisher: publisher,
+    revision: revision,
+    contents: 'sound',
+    files: [
+      OrbitPackFile(
+        path: path,
+        kind: 'audio',
         bytes: bytes.length,
         sha256: digest,
       ),

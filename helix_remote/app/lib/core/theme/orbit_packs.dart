@@ -196,6 +196,16 @@ final class ThemePackStore {
         'it is not the pack this name and revision are for',
       );
     }
+    // And this store draws themes, so a pack that carries a sound stops here,
+    // before its files are paid for in bandwidth. A host that serves both kinds
+    // from one folder lists both, and nothing but this manifest says which one
+    // this is.
+    if (manifest.contents != 'theme') {
+      throw const PackRefused(
+        OrbitPackFailure.unknownContent,
+        'this store draws themes, and this pack is not one',
+      );
+    }
 
     // The caps the gate enforces, checked against the manifest's own promises
     // first: a manifest that lists sixteen 8 MiB files must be refused before
@@ -370,6 +380,10 @@ final class ThemePackStore {
       // the number in its name, so a hand-edited folder that claims another
       // pack's manifest, or another revision, is not a pack.
       if (manifest.id != id || manifest.revision != revision) return null;
+      // A sound pack is a perfectly good pack that this class has no way to
+      // draw: its one file is audio, so `manifest.theme` is null and there are
+      // no tokens to read. The gate would allow it; the theme list must not.
+      if (manifest.contents != 'theme') return null;
       final files = <String, List<int>>{};
       var bytes = manifestBytes.length;
       for (final file in manifest.files) {

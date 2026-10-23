@@ -857,6 +857,45 @@ reuse that effect.
      sound, because a call has to ring when the app is not alive.
    - Still yours: the sound. Nothing here is testable on a phone until one real
      ringtone exists, and a ringtone is a design decision, not a generated tone.
+   - [x] **Step 5's first half, the format, done 2026-10-23 (pending your
+     review).** A pack can now *be* a sound. The manifest gained an optional
+     `contents` word - `theme` or `sound`, and **absent means `theme`**, so every
+     theme pack in the field signs exactly the bytes it signed before: the pinned
+     253-byte vector did not move, and `toJson` writes the field only when it is
+     not the default, which is what makes that true. `audio` became a fourth file
+     kind (`.m4a`, `.aac`, `.mp3`, `.ogg`, `.wav`), `theme` became a field a pack
+     may omit, and the gate gained its fifteenth refusal, `unknownContent`, which
+     runs in the same first pass as the sizes and the path shape - before the
+     signature, and long before a byte is opened. A sound pack is **exactly one
+     audio file** and names no document; `contents` is inside the signed message,
+     so a host cannot re-word a theme into a sound or back.
+     `tool/theme_pack_tool.dart pack --contents sound` writes one, and `build`
+     refuses the flag, because a ringtone is not in the theme table.
+     **The app keeps drawing themes and nothing else:** `ThemePackStore` refuses
+     a pack that is not one before its files are fetched, and skips one it finds
+     in its own folder, which is what keeps a ringtone off the themes page and
+     out of the start-up scan (`app/test/settings/theme_packs_test.dart`, "a pack
+     that is not a theme", proves both and the sentence the page says).
+     **No server, protocol, api or engine file changed** - the three pack routes
+     serve a file by its digest and never look at what it is, so the
+     pending-redeploy list is still the same three routes plus
+     `HELIX_PACKS_DIR`. The whole chain was run by hand with a throwaway key in a
+     temp folder: `pack --contents sound`, `verify` ("usable: chime r1 (sound)"),
+     `publish`, then the three refusals (two files, a png, a theme folder), then
+     `build` + `verify` on a real theme document, which still passes.
+     Tests: 9 new in the domain group "what a pack is" (53 in that file), 3 new
+     in the app's pack file (39). `dart analyze server tool` and `flutter
+     analyze` clean.
+   - **What step 5 still needs, in this order:** the sound's own store and
+     loader beside `ThemePackStore`, the Notifications-page picker in `orbit_ui`
+     with its connector and route, and a notification channel per ringtone wired
+     into `notification_call_ringer.dart`. One decision is yours before the
+     picker: a `HELIX_PACKS_DIR` that holds both kinds lists both on one route,
+     because `contents` is inside the signed manifest the endpoint never opens.
+     Either the app fetches a manifest to tell (no server change, so an offer it
+     refuses may appear for a moment), or the list route says what kind each row
+     is, which is a protocol and server change and needs your approval, or sounds
+     go in a second folder. ADR-033's amendment records this.
 6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
    dependency risk register.
    - **Ruled by the owner (2026-10-23): Lottie.** The dependency and its

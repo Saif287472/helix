@@ -29,15 +29,32 @@ const orbitPackFormatVersion = 1;
 
 /// The file kinds a pack may carry, and the extensions each one takes.
 ///
-/// `theme` is the theme document itself and the only kind this build draws
-/// with. `font` and `image` may sit in a pack ahead of the step that ships
-/// their loader: they are checked like any other file (signed, hashed, size-
-/// limited) and simply not read, which is why the format can name them now.
+/// `theme` is the theme document itself and the only kind the app draws with.
+/// `audio` is a ringtone, which the app plays rather than draws. `font` and
+/// `image` may sit in a pack ahead of the step that ships their loader: they
+/// are checked like any other file (signed, hashed, size-limited) and simply
+/// not read, which is why the format can name them now.
 const orbitPackFileKinds = <String, List<String>>{
   'theme': ['.json'],
+  'audio': ['.m4a', '.aac', '.mp3', '.ogg', '.wav'],
   'font': ['.ttf', '.otf', '.woff2'],
   'image': ['.png', '.webp'],
 };
+
+/// What a pack is, and the file kind its one body must be.
+///
+/// A theme pack's body is its theme document, named by the manifest's `theme`
+/// path. A sound pack has no document at all: its one file *is* the pack, and
+/// the app plays it (Part C step 5, on the owner's ruling that a ringtone
+/// arrives as a signed pack rather than through a second download route).
+///
+/// A manifest without `contents` is a theme pack, which is every pack written
+/// before sounds existed - and because an absent field is not signed, those
+/// packs' bytes do not change here.
+const orbitPackContents = <String, String>{'theme': 'theme', 'sound': 'audio'};
+
+/// The `contents` a manifest has when it does not say.
+const orbitPackDefaultContents = 'theme';
 
 /// How many id and publisher characters a manifest may use.
 const orbitPackNameMaxChars = 64;
@@ -120,6 +137,10 @@ enum OrbitPackFailure {
   /// A theme asking for a chat pattern this build does not draw.
   unknownPattern('a chat pattern this app does not have'),
 
+  /// A `contents` this build has no loader for: it is neither a theme it can
+  /// draw nor a sound it can play.
+  unknownContent('a kind of pack this app does not know'),
+
   /// A manifest with no signature at all.
   unsigned('a pack nobody signed'),
 
@@ -191,7 +212,8 @@ final class OrbitPackManifest {
     required this.id,
     required this.publisher,
     required this.revision,
-    required this.theme,
+    this.contents = orbitPackDefaultContents,
+    this.theme,
     required this.files,
     this.signature,
   });
@@ -204,6 +226,7 @@ final class OrbitPackManifest {
     final id = json['id'];
     final publisher = json['publisher'];
     final revision = json['revision'];
+    final contents = json['contents'];
     final theme = json['theme'];
     final rawFiles = json['files'];
     final rawSignature = json['signature'];
@@ -219,7 +242,14 @@ final class OrbitPackManifest {
     if (revision is! int || revision < 1) {
       throw const FormatException('revision must be a whole number from 1');
     }
-    if (theme is! String) throw const FormatException('theme must be a path');
+    if (contents != null && contents is! String) {
+      throw const FormatException(
+        'contents must be a lowercase word or absent',
+      );
+    }
+    if (theme != null && theme is! String) {
+      throw const FormatException('theme must be a path, or absent');
+    }
     if (rawFiles is! List) throw const FormatException('files must be a list');
     String? signature;
     if (rawSignature != null) {
@@ -240,7 +270,8 @@ final class OrbitPackManifest {
       id: id,
       publisher: publisher,
       revision: revision,
-      theme: theme,
+      contents: contents as String? ?? orbitPackDefaultContents,
+      theme: theme as String?,
       files: packFiles,
       signature: signature,
     );
@@ -251,7 +282,10 @@ final class OrbitPackManifest {
     'id': id,
     'publisher': publisher,
     'revision': revision,
-    'theme': theme,
+    // Absent means a theme pack, and an absent field is not signed: every theme
+    // pack written before sounds existed keeps signing exactly the bytes it did.
+    if (contents != orbitPackDefaultContents) 'contents': contents,
+    if (theme != null) 'theme': theme,
     'files': [for (final f in files) f.toJson()],
     if (signature != null) 'signature': signature,
   };
@@ -273,7 +307,7 @@ final class OrbitPackManifest {
   /// Which format this pack is written for.
   final int formatVersion;
 
-  /// The theme's id, which is also the id the app draws this pack under.
+  /// The pack's id, and the slug the app knows this theme or sound by.
   final String id;
 
   /// Which trusted publisher's key must sign this manifest; see
@@ -284,8 +318,16 @@ final class OrbitPackManifest {
   /// highest revision it has for [id], so a re-download is an upgrade.
   final int revision;
 
-  /// The path of the theme document, which must be one of [files].
-  final String theme;
+  /// What is inside: one of [orbitPackContents]'s keys, defaulting to
+  /// [orbitPackDefaultContents] when the manifest does not say. An unknown
+  /// word is not guessed at; the gate refuses it as
+  /// [OrbitPackFailure.unknownContent].
+  final String contents;
+
+  /// The path of the theme document, which must be one of [files]. Null for a
+  /// pack that is not a theme: a sound pack's one file is the pack itself, so
+  /// there is nothing to name.
+  final String? theme;
 
   final List<OrbitPackFile> files;
 
@@ -397,12 +439,9 @@ Future<OrbitPackCheck> checkOrbitPack({
 
   final delivered = await _checkFiles(manifest, files, limits);
   if (delivered != null) return delivered;
-  final theme = _checkTheme(
-    manifest,
-    files,
-    knownEffectKinds,
-    knownPatternKinds,
-  );
+  final theme = manifest.contents == 'theme'
+      ? _checkTheme(manifest, files, knownEffectKinds, knownPatternKinds)
+      : null;
   if (theme != null) return theme;
   return OrbitPackCheck.allowed(manifest);
 }
@@ -413,21 +452,46 @@ OrbitPackCheck? _checkShape(
   OrbitPackManifest manifest,
   OrbitPackLimits limits,
 ) {
+  // What the pack claims to be decides which file is its body, so it is
+  // settled first: nothing about a pack this build cannot use is worth checking
+  // file by file.
+  final body = orbitPackContents[manifest.contents];
+  if (body == null) {
+    return OrbitPackCheck.refused(
+      OrbitPackFailure.unknownContent,
+      'it calls itself a "${_printable(manifest.contents)}" pack, and this app '
+      'draws themes and plays sounds',
+    );
+  }
+  if (manifest.contents == 'theme') {
+    final path = manifest.theme;
+    if (path == null) {
+      return const OrbitPackCheck.refused(
+        OrbitPackFailure.badManifest,
+        'a theme pack names its theme document',
+      );
+    }
+    if (!_isPath(path, limits.pathChars)) {
+      return const OrbitPackCheck.refused(
+        OrbitPackFailure.badPath,
+        'its theme document is named by a path this app will not open',
+      );
+    }
+  } else if (manifest.theme != null) {
+    return const OrbitPackCheck.refused(
+      OrbitPackFailure.badManifest,
+      'a sound pack has no theme document to name',
+    );
+  }
   if (manifest.files.length > limits.fileCount) {
     return OrbitPackCheck.refused(
       OrbitPackFailure.tooManyFiles,
       '${manifest.files.length} files, a pack may carry ${limits.fileCount}',
     );
   }
-  if (!_isPath(manifest.theme, limits.pathChars)) {
-    return const OrbitPackCheck.refused(
-      OrbitPackFailure.badPath,
-      'its theme document is named by a path this app will not open',
-    );
-  }
   final seen = <String>{};
   var total = 0;
-  var themes = 0;
+  var bodies = 0;
   OrbitPackFile? listedTheme;
   for (final f in manifest.files) {
     if (!_isPath(f.path, limits.pathChars)) {
@@ -455,7 +519,7 @@ OrbitPackCheck? _checkShape(
         'file "${f.path}" is kind "${f.kind}" but not named for one',
       );
     }
-    if (f.kind == 'theme') themes++;
+    if (f.kind == body) bodies++;
     if (f.path == manifest.theme) listedTheme = f;
     if (f.bytes > limits.fileBytes) {
       return OrbitPackCheck.refused(
@@ -471,23 +535,34 @@ OrbitPackCheck? _checkShape(
       );
     }
   }
-  if (themes != 1) {
+  if (bodies != 1) {
     return OrbitPackCheck.refused(
       OrbitPackFailure.badManifest,
-      'a pack carries exactly one theme document, this lists $themes',
+      'a ${manifest.contents} pack carries exactly one $body file, this lists '
+      '$bodies',
     );
   }
-  if (listedTheme == null) {
+  // A sound pack is its one file, so anything beside it - a theme, a font, a
+  // second sound - is not that shape, even inside the file limit.
+  if (manifest.contents == 'sound' && manifest.files.length != 1) {
     return OrbitPackCheck.refused(
       OrbitPackFailure.badManifest,
-      'theme "${manifest.theme}" is not one of the files',
+      'a sound pack is one file, this lists ${manifest.files.length}',
     );
   }
-  if (listedTheme.kind != 'theme') {
-    return OrbitPackCheck.refused(
-      OrbitPackFailure.badManifest,
-      'theme "${manifest.theme}" is listed as kind "${listedTheme.kind}"',
-    );
+  if (manifest.contents == 'theme') {
+    if (listedTheme == null) {
+      return OrbitPackCheck.refused(
+        OrbitPackFailure.badManifest,
+        'theme "${manifest.theme}" is not one of the files',
+      );
+    }
+    if (listedTheme.kind != 'theme') {
+      return OrbitPackCheck.refused(
+        OrbitPackFailure.badManifest,
+        'theme "${manifest.theme}" is listed as kind "${listedTheme.kind}"',
+      );
+    }
   }
   return null;
 }
@@ -539,7 +614,8 @@ Future<OrbitPackCheck?> _checkFiles(
 }
 
 /// The theme document, which is what the app is about to draw with. Null when
-/// the pack is usable.
+/// the pack is usable. Only a theme pack reaches this: a sound pack's one file
+/// is checked by [_checkFiles] and played by the app.
 OrbitPackCheck? _checkTheme(
   OrbitPackManifest manifest,
   Map<String, List<int>> files,
@@ -548,7 +624,7 @@ OrbitPackCheck? _checkTheme(
 ) {
   final Object? doc;
   try {
-    doc = jsonDecode(utf8.decode(files[manifest.theme]!));
+    doc = jsonDecode(utf8.decode(files[manifest.theme!]!));
   } on FormatException catch (e) {
     return OrbitPackCheck.refused(
       OrbitPackFailure.badTheme,

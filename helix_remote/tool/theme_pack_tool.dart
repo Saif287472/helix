@@ -14,6 +14,10 @@
 /// dart run tool/theme_pack_tool.dart pack    --in build/synthwave --id synthwave \
 ///                                            --publisher agiletechbd --revision 1 \
 ///                                            --seed-file keys/orbit.hex
+/// dart run tool/theme_pack_tool.dart pack    --in build/chime --id chime \
+///                                            --contents sound \
+///                                            --publisher agiletechbd --revision 1 \
+///                                            --seed-file keys/orbit.hex
 /// dart run tool/theme_pack_tool.dart sign    --manifest build/synthwave/manifest.json \
 ///                                            --seed-file keys/orbit.hex
 /// dart run tool/theme_pack_tool.dart verify  --in build/synthwave \
@@ -77,11 +81,16 @@ Orbit theme packs (orbit/PORT_PLAN.md Part C)
       private key is never printed.
 
   pack --in DIR --id SLUG --publisher SLUG --revision N
-       [--seed-file PATH] [--out FILE]
+       [--contents theme] [--seed-file PATH] [--out FILE]
       Lists every file under DIR except manifest.json, hashes each one, and
       writes DIR/manifest.json (or --out). The folder must hold exactly one
       .json theme document whose own "id" is --id. With --seed-file the
       manifest is signed in the same step.
+
+      --contents sound builds a ringtone pack instead (Part C step 5): the
+      folder must hold exactly one audio file, that file is the pack, and the
+      manifest names no theme document. The app plays it rather than drawing
+      with it, and signs it exactly the same way.
 
   build --themes DIR --ids SLUG,SLUG --out DIR
         --publisher SLUG --revision N [--seed-file PATH]
@@ -159,10 +168,17 @@ Future<void> _pack(Map<String, String> o) async {
   final id = o['id'];
   final publisher = o['publisher'];
   final revision = int.tryParse(o['revision'] ?? '');
+  final contents = o['contents'] ?? orbitPackDefaultContents;
   if (dir == null) _die('pack needs --in DIR');
   if (id == null) _die('pack needs --id SLUG');
   if (publisher == null) _die('pack needs --publisher SLUG');
   if (revision == null || revision < 1) _die('pack needs --revision N, from 1');
+  // Only a word the app's gate knows, or the pack is built for a refusal.
+  if (!orbitPackContents.containsKey(contents)) {
+    _die(
+      '--contents is ${orbitPackContents.keys.join(' or ')}, not "$contents"',
+    );
+  }
   final folder = _folder(dir);
   final outputPath = o['out'] == null
       ? '${folder.path}/manifest.json'
@@ -173,6 +189,7 @@ Future<void> _pack(Map<String, String> o) async {
     id: id,
     publisher: publisher,
     revision: revision,
+    contents: contents,
     seedPath: o['seed-file'],
   );
 }
@@ -197,6 +214,14 @@ Future<void> _build(Map<String, String> o) async {
     _die('build needs --revision N, from 1');
   }
   if (ids.isEmpty) _die('build needs --ids SLUG,SLUG');
+  // build reads a theme table; a sound is one file a person recorded, so it is
+  // made by the one-command verb that takes a folder as it stands.
+  if (o['contents'] != null) {
+    _die(
+      'build writes theme packs; a sound pack is a folder with one audio '
+      'file made by pack --contents sound',
+    );
+  }
   final source = _folder(themes);
   final root = Directory(out)..createSync(recursive: true);
   for (final id in ids) {
@@ -239,25 +264,34 @@ Future<void> _build(Map<String, String> o) async {
 }
 
 /// The manifest of the pack in [folder]: every file it holds hashed, its one
-/// theme document checked against [id], signed when a seed is given, written to
-/// [outputPath].
+/// body file checked against [contents] and [id], signed when a seed is given,
+/// written to [outputPath].
 Future<void> _manifest(
   Directory folder,
   String outputPath, {
   required String id,
   required String publisher,
   required int revision,
+  String contents = orbitPackDefaultContents,
   String? seedPath,
 }) async {
   final delivered = await _filesIn(folder);
   if (delivered.isEmpty) _die('${folder.path} holds no pack files');
 
-  final themePath = _onlyTheme(delivered, id);
+  // A theme pack is named by its document; a sound pack has nothing to name,
+  // because its one file is the pack. Either way the folder is checked here,
+  // while it is cheap to say "that is not one sound".
+  final themePath = switch (contents) {
+    'theme' => _onlyTheme(delivered, id),
+    'sound' => _onlySound(delivered),
+    _ => _die('--contents is ${orbitPackContents.keys.join(' or ')}'),
+  };
   final manifest = OrbitPackManifest(
     formatVersion: orbitPackFormatVersion,
     id: id,
     publisher: publisher,
     revision: revision,
+    contents: contents,
     theme: themePath,
     files: [
       for (final entry in delivered.entries)
@@ -274,7 +308,7 @@ Future<void> _manifest(
     '${const JsonEncoder.withIndent('  ').convert(signed)}\n',
   );
   stdout.writeln(
-    'pack: ${manifest.id} r${manifest.revision}, '
+    'pack: ${manifest.id} r${manifest.revision} (${manifest.contents}), '
     '${manifest.files.length} files, '
     '${manifest.files.map((f) => f.bytes).fold(0, (a, b) => a + b)} bytes',
   );
@@ -344,13 +378,16 @@ Future<void> _verify(Map<String, String> o) async {
   );
   if (check.isAllowed) {
     stdout.writeln(
-      'usable: ${check.manifest!.id} r${check.manifest!.revision}',
+      'usable: ${check.manifest!.id} r${check.manifest!.revision} '
+      '(${check.manifest!.contents})',
     );
   } else {
     stdout.writeln('refused: ${check.failure!.name} - ${check.detail}');
     stdout.writeln(check.failure!.reason);
   }
-  if (effects == null || patterns == null) {
+  // A sound pack has no theme document, so there were no effects to check and
+  // the note would be about nothing.
+  if (manifest.contents == 'theme' && (effects == null || patterns == null)) {
     stdout.writeln(
       'note: the effect and pattern registries come from orbit_ui, which a '
       'Dart script cannot import, so this run took them from the theme '
@@ -491,6 +528,7 @@ OrbitPackManifest _unsigned(OrbitPackManifest manifest) => OrbitPackManifest(
   id: manifest.id,
   publisher: manifest.publisher,
   revision: manifest.revision,
+  contents: manifest.contents,
   theme: manifest.theme,
   files: manifest.files,
 );
@@ -540,12 +578,32 @@ String _onlyTheme(Map<String, Uint8List> files, String id) {
   return documents.single.key;
 }
 
+/// The one audio file a sound pack is allowed to hold, and nothing else, so the
+/// folder that gets published is exactly the ringtone the manifest signs for.
+/// A sound pack names no document, so this returns null.
+String? _onlySound(Map<String, Uint8List> files) {
+  if (files.length != 1) {
+    _die(
+      'a sound pack is one file; ${files.keys.join(', ')} are in the folder',
+    );
+  }
+  final path = files.keys.single;
+  final kind = _kindOf(path);
+  if (kind != orbitPackContents['sound']) {
+    _die('$path is kind "$kind", and a sound pack is one audio file');
+  }
+  return null;
+}
+
 String _kindOf(String path) {
   final lower = path.toLowerCase();
   for (final entry in orbitPackFileKinds.entries) {
     if (entry.value.any((suffix) => lower.endsWith(suffix))) return entry.key;
   }
-  _die('$path has no extension a pack knows; a theme is .json');
+  _die(
+    '$path has no extension a pack knows; a theme document is .json and a '
+    'sound is an audio file',
+  );
 }
 
 Iterable<String> _effectKindsIn(List<int> themeBytes) {

@@ -9,12 +9,12 @@ v2 wire types live in `helix_remote_protocol`, stored rows in
 
 Shared value types that belong to no other layer. Today that is two files:
 `HelixLegalDocuments` (the versioned terms and privacy text the sign-in page
-shows) and the Orbit theme-pack format, whose gate every downloaded pack passes
-before the app reads a byte of it (`orbit/PORT_PLAN.md` Part C, ADR-033,
-`docs/product/THEME_PACK_FORMAT.md`). The server keeps its own copy of the legal
-text in `helix_remote_protocol` (`lib/src/legal.dart`) so it can serve
-`GET /v1/server/legal`; keep the two texts and versions in step when the
-documents change (`docs/legal/`).
+shows) and the Orbit pack format, whose gate every downloaded pack - a theme or
+a ringtone - passes before the app reads a byte of it
+(`orbit/PORT_PLAN.md` Part C, ADR-033, `docs/product/THEME_PACK_FORMAT.md`). The
+server keeps its own copy of the legal text in `helix_remote_protocol`
+(`lib/src/legal.dart`) so it can serve `GET /v1/server/legal`; keep the two texts
+and versions in step when the documents change (`docs/legal/`).
 
 ## Public surface
 
