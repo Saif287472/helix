@@ -113,11 +113,17 @@ Future<Map<String, OrbitTokens>> loadBuiltInThemes({
 // --------------------------------------------------------- device settings
 
 /// Settings that belong to this device rather than to the account, so they
-/// outlive a sign-out (which wipes the account's database): today only the
-/// theme. Nothing secret is kept here.
+/// outlive a sign-out (which wipes the account's database): the theme and the
+/// ringtone. Nothing secret is kept here.
 abstract interface class DeviceSettingsStore {
   Future<String?> readTheme();
   Future<void> writeTheme(String id);
+
+  /// The sound an incoming call rings with: a sound pack's id, or null for the
+  /// phone's own ringtone. Null is a choice, not a missing value - which is why
+  /// it is not stored as a slug nobody could invent for the phone.
+  Future<String?> readRingtone();
+  Future<void> writeRingtone(String? id);
 }
 
 final deviceSettingsStoreProvider = Provider<DeviceSettingsStore>(
@@ -128,30 +134,67 @@ final deviceSettingsStoreProvider = Provider<DeviceSettingsStore>(
 final class FileDeviceSettingsStore implements DeviceSettingsStore {
   const FileDeviceSettingsStore();
 
+  static const _theme = 'theme';
+  static const _ringtone = 'ringtone';
+
   @override
   Future<String?> readTheme() async {
-    try {
-      final file = await AppPaths.deviceSettingsFile();
-      if (!await file.exists()) return null;
-      final data = jsonDecode(await file.readAsString());
-      final theme = data is Map ? data['theme'] : null;
-      // Any theme id, built in or a pack's. What this device can actually draw
-      // with is [themeLibraryProvider]'s question, and a name it has stops
-      // having falls back to Orbit.
-      return theme is String && isThemeId(theme) ? theme : null;
-    } on Object {
-      // Unreadable or no app folder: the default theme.
-      return null;
-    }
+    final theme = (await _read())[_theme];
+    // Any pack id, built in or a pack's. What this device can actually draw
+    // with is [themeLibraryProvider]'s question, and a name it has stops
+    // having falls back to Orbit.
+    return theme is String && isPackId(theme) ? theme : null;
   }
 
   @override
-  Future<void> writeTheme(String id) async {
+  Future<void> writeTheme(String id) => _write({_theme: id});
+
+  @override
+  Future<String?> readRingtone() async {
+    final id = (await _read())[_ringtone];
+    // The shape is a pack id's; whether this device still holds that pack is
+    // [SoundPackStore]'s question, and one it has stopped holding rings with
+    // the phone's own sound.
+    return id is String && isPackId(id) ? id : null;
+  }
+
+  @override
+  Future<void> writeRingtone(String? id) => _write({_ringtone: id});
+
+  /// One key at a time, keeping the file's others: these are the device's
+  /// choices, so choosing a theme must not forget the ringtone. A null value
+  /// removes its key, which is how "the phone's own ringtone" is stored - as
+  /// nothing, rather than as a word a pack could also be named by.
+  Future<void> _write(Map<String, Object?> change) async {
     try {
+      final data = await _read();
+      change.forEach((key, value) {
+        if (value == null) {
+          data.remove(key);
+        } else {
+          data[key] = value;
+        }
+      });
       final file = await AppPaths.deviceSettingsFile();
-      await file.writeAsString(jsonEncode({'theme': id}), flush: true);
+      await file.writeAsString(jsonEncode(data), flush: true);
     } on FileSystemException {
       // The choice still holds until the app closes.
+    }
+  }
+
+  /// The file, or nothing at all when it is missing, unreadable, or the app
+  /// folder cannot be found. A device setting that cannot be read is the
+  /// default, never a start-up failure.
+  Future<Map<String, Object?>> _read() async {
+    try {
+      final file = await AppPaths.deviceSettingsFile();
+      if (!await file.exists()) return {};
+      final data = jsonDecode(await file.readAsString());
+      return data is Map<String, Object?>
+          ? Map<String, Object?>.from(data)
+          : {};
+    } on Object {
+      return {};
     }
   }
 }

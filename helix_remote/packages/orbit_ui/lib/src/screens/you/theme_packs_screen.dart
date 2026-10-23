@@ -72,6 +72,7 @@ class ThemeGalleryModel {
     this.status = ListStatus.ready,
     this.host = '',
     this.error = '',
+    this.emptyNote = '',
   });
 
   /// Every theme, in the order the app wants them read. The page puts the ones
@@ -87,6 +88,12 @@ class ThemeGalleryModel {
 
   /// What to say when the list did not come in.
   final String error;
+
+  /// What to say when it came in and offered nothing this app could use. The
+  /// page's own words say "nothing is on offer", which is the wrong sentence
+  /// for a server that lists packs nobody signed - so the app puts the right
+  /// one here.
+  final String emptyNote;
 }
 
 /// The page's verbs. Each one hands back the sentence the app wants shown, and
@@ -186,10 +193,12 @@ class ThemeGalleryScreen extends StatelessWidget {
           ],
           ListStatus.ready =>
             onServer.isEmpty
-                ? const [
+                ? [
                     OrbitSectionFoot(
-                      'Nothing is on offer here yet. The themes a server '
-                      'publishes appear on this page.',
+                      model.emptyNote.isEmpty
+                          ? 'Nothing is on offer here yet. The themes a '
+                                'server publishes appear on this page.'
+                          : model.emptyNote,
                       top: 2,
                     ),
                   ]

@@ -19,7 +19,10 @@ and versions in step when the documents change (`docs/legal/`).
 ## Public surface
 
 `lib/models.dart` exports `domain/legal_documents.dart` and
-`domain/theme_packs.dart`.
+`domain/theme_packs.dart`. The pack gate is two calls: `checkOrbitPack` is the
+whole of it, and `checkOrbitPackManifest` the first half - the shape and the
+signature, with no files - for a page that has to know what kind of pack an
+offer is before it pays for the bytes.
 
 ## Who may depend on this
 

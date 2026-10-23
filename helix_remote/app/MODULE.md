@@ -36,7 +36,9 @@ lib/
                                 merged library, the choice, the device setting);
                                 orbit_packs.dart (PackFolder: the packs this
                                 device downloaded, re-checked on every read;
-                                ThemePackStore: the theme ones; and PackTrust,
+                                ThemePackStore: the theme ones; hostedPacks:
+                                the server's offers, each one's kind read from
+                                its own signed manifest; and PackTrust,
                                 the build's publisher anchor)
     sounds/                     orbit_sounds.dart (SoundPackStore: the ringtone
                                 packs this device downloaded, in the same folder
@@ -241,8 +243,9 @@ sentences and state; `presentation/` draws it. Tests replace the gateway with
 a fake from `test/support/a3b_fakes.dart`, so a page's real notifier runs with
 no engine, database or network.
 
-- `features/settings/` the tab and Account, Privacy, Notifications, Chats,
-  Storage, About (+ legal) and Advanced pages. See its `FEATURE.md`.
+- `features/settings/` the tab and Account, Privacy, Notifications (with its
+  Ringtones page), Chats, Storage, About (+ legal) and Advanced pages, and the
+  Appearance page's More themes. See its `FEATURE.md`.
 - `features/devices/` device list, approving a device, security activity, and
   the new device's QR page. See its `FEATURE.md`.
 - `features/backup/` Backup settings, restore (also the post-sign-in step),

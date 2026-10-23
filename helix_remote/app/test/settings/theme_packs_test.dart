@@ -552,7 +552,7 @@ void main() {
         'Synthwave',
       );
       expect(
-        (await container.read(hostedPacksProvider.future)).single.id,
+        (await container.read(hostedPacksProvider.future)).rows.single.id,
         'synthwave',
       );
       // Asking again brings nothing back: a revision is fetched once.
@@ -851,8 +851,13 @@ void main() {
     test(
       'a refused pack is said in the format\'s own words and stays an offer',
       () async {
+        // Its manifest is signed by a publisher this build trusts, so the page
+        // can vouch for the offer; the bytes under it are not what that
+        // manifest names, so the download is refused.
         final container = libraryContainer(
-          source: FakePackSource([await signedPack(by: otherKey)]),
+          source: FakePackSource([
+            await signedPack(by: publisherKey).then((p) => p.servedAs(junk)),
+          ]),
         );
         final said = await container
             .read(themePackPageProvider)
@@ -864,6 +869,32 @@ void main() {
         expect(byId['synthwave']!.busy, isFalse);
       },
     );
+
+    test(
+      'an offer this build cannot check is never listed, and the page says why',
+      () async {
+        // The shipped anchor trusts nobody, so every pack on every server is
+        // this: a page that reads its own folder, and no downloads.
+        final container = libraryContainer(
+          source: FakePackSource([await signedPack(by: otherKey)]),
+        );
+        final model = await gallery(container);
+        expect(model.status, ListStatus.ready);
+        expect(themesById(model.themes).keys, ['orbit', 'night']);
+        expect(model.emptyNote, contains('cannot check'));
+      },
+    );
+
+    test('a sound pack on the server is not offered as a theme', () async {
+      // One folder holds both kinds and the list route says nothing about
+      // which a row is, so the signed manifest decides it here.
+      final container = libraryContainer(
+        source: FakePackSource([await signedSoundPack(by: publisherKey)]),
+      );
+      final model = await gallery(container);
+      expect(themesById(model.themes).keys, ['orbit', 'night']);
+      expect(model.emptyNote, contains('sound'));
+    });
 
     test('a server that cannot be reached still shows this phone\'s themes, '
         'and asks again', () async {

@@ -912,18 +912,48 @@ reuse that effect.
      `app/test/settings/orbit_sounds_test.dart` (the theme file's fixtures moved
      to `test/support/pack_fixtures.dart` so both files share them); full app
      suite 969 green, `flutter analyze` clean.
-   - **What step 5 still needs:** the Notifications-page picker in `orbit_ui`
-     with its connector, route and choice in `device_settings.json`, and a
-     notification channel per ringtone wired into
-     `notification_call_ringer.dart` - the last of it needing Android's system
-     to be able to read the file, which is a new `AppPaths` folder. One
-     decision is still yours before the picker: a `HELIX_PACKS_DIR` that holds
-     both kinds lists both on one route, because `contents` is inside the signed
-     manifest the endpoint never opens. Either the app fetches a manifest to tell
-     (no server change, so an offer it refuses may appear for a moment), or the
-     list route says what kind each row is, which is a protocol and server change
-     and needs your approval, or sounds go in a second folder. ADR-033's
-     amendment records this.
+   - [x] **Step 5's third quarter, the picker, done 2026-10-23 (pending your
+     review).** The Notifications page's ringtone row now shows what a call
+     rings with and opens `Ringtones`
+     (`/settings/notifications/ringtones`). The page puts "On this phone" first -
+     the phone's own ringtone (the default, never Get/Update/Delete, marked "In
+     use" while nothing else is chosen), then the sound packs this device holds,
+     each with Update when the server lists a higher revision and Delete
+     otherwise - then "On <host>" with the offers, each with Get; an action in
+     flight shows a spinner on its own row, the foot says a downloaded ringtone
+     is a signed pack, and the empty state says why when the folder held packs
+     this app could not vouch for. It is a page rather than the prototype's
+     two-choice sheet because a sheet cannot carry a growing list and per-row
+     verbs; there is no prototype screen, so no pixel key, and the preview keeps
+     the prototype's mock "Orbit (default)" so the `notifications` key holds.
+     The choice is a device setting (`readRingtone`/`writeRingtone`), and the
+     phone's own ringtone is the *absent* value, so it survives a sign-out and a
+     theme write merges rather than clobbers it. The row, the route and the page
+     exist only on Android, where a chosen sound can change the channel a call
+     rings through. **The open question is answered app-side for now:**
+     `hostedPacks` reads one manifest per offer (at most `hostedPackProbe = 64`),
+     runs the gate's new manifest-only half - shape, sizes, publisher,
+     signature - and lists the row only if `contents` is the kind the page wants,
+     counting the rest in `PackOffers.unverified` for the page to explain. The
+     domain's gate was split into `checkOrbitPackManifest` and `checkOrbitPack`
+     so that probe runs exactly the same rules. No server, protocol, api or
+     engine file changed, so the pending-redeploy list is unchanged. Tests: 7 in
+     `packages/orbit_ui/test/ringtone_packs_test.dart`, 16 in
+     `app/test/settings/sound_packs_test.dart`, 2 more in the theme page's file
+     for the kind filter, the new page in the 1x/2x rules sweep, and the
+     Notifications row's navigation; app suite 990 green, orbit_ui 229, domain
+     61, `flutter analyze` clean. Deviations are in `DEVIATIONS.md`, "Part C
+     step 5".
+   - **What step 5 still needs:** the copy of the chosen file somewhere
+     Android's system can read it - a new `AppPaths` folder over
+     `getExternalStorageDirectory` - and one notification channel per ringtone
+     wired into `CallNotifications`, `notification_call_ringer.dart` and the
+     background push path that shows the incoming call. Until that lands the
+     choice is stored and listed but a call still rings with the existing
+     channel's sound. And the sound itself: a signed sound pack, which is a
+     design decision, not a generated tone. The offer-kind decision is now the
+     app-side probe (item above); if you would rather settle it at the source,
+     the alternatives are still yours.
 6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
    dependency risk register.
    - **Ruled by the owner (2026-10-23): Lottie.** The dependency and its

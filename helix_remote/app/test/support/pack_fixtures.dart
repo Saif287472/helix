@@ -214,8 +214,10 @@ final class FakePackSource implements PackSource {
   }
 }
 
-/// A host that holds a pack's bytes back until the test opens it: what a
-/// download in flight looks like from the page.
+/// A host that holds a pack's file bytes back until the test opens it: what a
+/// download in flight looks like from the page. The list and manifest routes
+/// answer at once, because a page reads those to decide what to offer before
+/// anything is downloaded.
 final class GatedPackSource implements PackSource {
   GatedPackSource(this.pack);
 
@@ -228,10 +230,8 @@ final class GatedPackSource implements PackSource {
   Future<List<OrbitPackEntry>> list() async => [pack.listed];
 
   @override
-  Future<List<int>> manifest(String id, int revision) async {
-    await _gate.future;
-    return pack.manifestBytes;
-  }
+  Future<List<int>> manifest(String id, int revision) async =>
+      pack.manifestBytes;
 
   @override
   Future<List<int>> file(String id, int revision, String digest) async {

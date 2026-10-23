@@ -212,10 +212,17 @@ void main() {
 
 final class _MemoryDeviceSettings implements DeviceSettingsStore {
   String? theme;
+  String? ringtone;
 
   @override
   Future<String?> readTheme() async => theme;
 
   @override
   Future<void> writeTheme(String id) async => theme = id;
+
+  @override
+  Future<String?> readRingtone() async => ringtone;
+
+  @override
+  Future<void> writeRingtone(String? id) async => ringtone = id;
 }

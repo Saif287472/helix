@@ -32,6 +32,7 @@ import 'package:helix_remote/features/settings/presentation/chats_page.dart';
 import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
+import 'package:helix_remote/features/settings/presentation/ringtones_page.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
 import 'package:helix_remote/features/settings/presentation/theme_packs_page.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_controller.dart';
@@ -54,6 +55,7 @@ void main() {
     'You': () => const OrbitYouConnector(),
     'Appearance': () => const AppearancePage(),
     'More themes': () => const ThemePacksPage(),
+    'Ringtones': () => const RingtonesPage(),
     'Account': () => const AccountPage(),
     'Change password': () => const ChangePasswordPage(),
     'Privacy': () => const PrivacyPage(),
@@ -85,9 +87,9 @@ void main() {
       settingsGateway: FakeSettingsGateway(),
       extra: [engineConfigNameOverride],
     ),
-    // The themes page talks to the server's pack list, which no a3b fake
-    // carries: a host with nothing to offer is what the page is drawn against.
-    if (page == 'More themes')
+    // The pack pages talk to the server's pack list, which no a3b fake
+    // carries: a host with nothing to offer is what they are drawn against.
+    if (page == 'More themes' || page == 'Ringtones')
       packSourceProvider.overrideWithValue(const NoPacksOnOffer()),
   ];
 

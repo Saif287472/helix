@@ -44,6 +44,7 @@ abstract final class RoutePaths {
   static const privacy = '/settings/privacy';
   static const blocked = '/settings/privacy/blocked';
   static const notifications = '/settings/notifications';
+  static const ringtones = '/settings/notifications/ringtones';
   static const chats = '/settings/chats';
   static const storage = '/settings/storage';
   static const about = '/settings/about';

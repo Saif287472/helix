@@ -16,6 +16,8 @@ import 'package:orbit_ui/src/components/you_parts.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
 import 'package:orbit_ui/src/models/view_models.dart';
+import 'package:orbit_ui/src/screens/you/ringtone_packs_screen.dart'
+    show phoneRingtoneLabel;
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
@@ -761,7 +763,7 @@ class NotificationsModel {
     this.sound = true,
     this.vibrate = true,
     this.previews = false,
-    this.phoneRingtone = false,
+    this.ringtone = phoneRingtoneLabel,
     this.muted = const [],
     this.previewName = 'Nadia Rahman',
     this.previewText = 'Sent the photos from Cox’s Bazar 🌊',
@@ -775,7 +777,7 @@ class NotificationsModel {
   final bool mutedLoading;
   final bool mutedFailed;
 
-  /// The ringtone row; hidden until there is an Orbit ringtone to choose.
+  /// The ringtone row; hidden where a call cannot ring with a chosen sound.
   final bool showRingtone;
   final bool messages;
   final bool groups;
@@ -784,8 +786,9 @@ class NotificationsModel {
   final bool vibrate;
   final bool previews;
 
-  /// The phone's own ringtone instead of Orbit's.
-  final bool phoneRingtone;
+  /// What a call rings with, in the words the Ringtones page uses for it: the
+  /// phone's own ringtone, or the sound pack chosen.
+  final String ringtone;
   final List<MutedChatItem> muted;
   final String previewName;
   final String previewText;
@@ -797,15 +800,19 @@ class NotificationsActions {
     this.onChanged,
     this.onOpenSystemSettings,
     this.onUnmute,
+    this.onOpenRingtones,
   });
 
-  /// "messages", "groups", "calls", "sound", "vibrate", "previews" or
-  /// "phoneRingtone", and its new value.
+  /// "messages", "groups", "calls", "sound", "vibrate" or "previews", and its
+  /// new value.
   final void Function(String key, bool value)? onChanged;
   final VoidCallback? onOpenSystemSettings;
 
   /// Unmutes the chat; the page then says "Unmuted".
   final Future<void> Function(String chatId)? onUnmute;
+
+  /// Opens the Ringtones page, which is where the sound is chosen.
+  final VoidCallback? onOpenRingtones;
 }
 
 /// `notifications`: the alerts, sound and lock screen (with a preview of
@@ -834,7 +841,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     'sound': m.sound,
     'vibrate': m.vibrate,
     'previews': m.previews,
-    'phoneRingtone': m.phoneRingtone,
   };
 
   @override
@@ -964,29 +970,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 iconColor: 0,
                 title: 'Ringtone',
                 sub: 'For incoming calls',
-                value: _v['phoneRingtone']!
-                    ? 'Phone’s ringtone'
-                    : 'Orbit (default)',
+                value: m.ringtone,
                 end: OrbitRowEnd.chevron,
-                onTap: () => showOrbitSheet(
-                  context,
-                  title: 'Ringtone',
-                  text: 'More ringtones to download are coming.',
-                  items: [
-                    OrbitMenuItem(
-                      icon: OrbitIcons.musicNote,
-                      label: 'Orbit (default)',
-                      on: !_v['phoneRingtone']!,
-                      onTap: () => _set('phoneRingtone', false),
-                    ),
-                    OrbitMenuItem(
-                      icon: OrbitIcons.deviceMobile,
-                      label: 'Phone’s ringtone',
-                      on: _v['phoneRingtone']!,
-                      onTap: () => _set('phoneRingtone', true),
-                    ),
-                  ],
-                ),
+                onTap: widget.actions.onOpenRingtones,
               ),
           ],
         ),

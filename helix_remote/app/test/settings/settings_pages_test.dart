@@ -9,6 +9,8 @@ import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/profile/application/profile_gateway.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
+import 'package:helix_remote/features/settings/application/sound_packs.dart'
+    show canChooseRingtoneProvider;
 import 'package:helix_remote/features/settings/presentation/about_page.dart';
 import 'package:helix_remote/features/settings/presentation/appearance_page.dart';
 import 'package:helix_remote/features/settings/presentation/account_page.dart';
@@ -114,6 +116,25 @@ void main() {
       await tester.tap(find.text('More themes'));
       await settle(tester);
       expect(find.text('stub:${RoutePaths.themePacks}'), findsOneWidget);
+    });
+
+    youTest('Notifications opens the page of ringtones to get', (tester) async {
+      useTallWindow(tester);
+      await pumpPage(
+        tester,
+        const NotificationsPage(),
+        overrides: [
+          ...a3bOverrides(settingsGateway: FakeSettingsGateway()),
+          // A phone that rings through its notification channels: the row
+          // only exists where a chosen sound can ring.
+          canChooseRingtoneProvider.overrideWithValue(true),
+        ],
+        stubs: [RoutePaths.ringtones],
+      );
+      await settle(tester);
+      await tester.tap(find.text('Ringtone'));
+      await settle(tester);
+      expect(find.text('stub:${RoutePaths.ringtones}'), findsOneWidget);
     });
 
     youTest('Edit profile opens the profile', (tester) async {
@@ -678,8 +699,11 @@ void main() {
       await tester.tap(find.text('Show message previews'));
       await settle(tester);
       expect(settings.read(AppSettings.notificationsPreview), isTrue);
-      // Orbit has no ringtone of its own yet, so there is no choice.
-      expect(find.text('Ringtone'), findsNothing);
+      // A test device is an Android one, and a call there rings with a chosen
+      // sound through its notification channels: the row is here, and says what
+      // the next call rings with.
+      expect(find.text('Ringtone'), findsOneWidget);
+      expect(find.text('Phone’s ringtone'), findsOneWidget);
 
       expect(find.text('Family'), findsOneWidget);
       expect(find.text('Muted'), findsOneWidget);

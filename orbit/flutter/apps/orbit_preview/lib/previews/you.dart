@@ -197,6 +197,8 @@ NotificationsModel _notifications({bool off = false}) {
   final muted = OrbitFakes.chats.where((c) => c.muted).toList();
   return NotificationsModel(
     osOff: off,
+    // The prototype's mock choice, kept so the `notifications` key holds.
+    ringtone: 'Orbit (default)',
     muted: [
       for (final (i, c) in muted.indexed)
         MutedChatItem(

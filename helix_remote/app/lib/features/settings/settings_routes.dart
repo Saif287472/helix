@@ -11,6 +11,7 @@ import 'package:helix_remote/features/settings/presentation/delete_account_page.
 import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
+import 'package:helix_remote/features/settings/presentation/ringtones_page.dart';
 import 'package:helix_remote/features/settings/presentation/storage_page.dart';
 import 'package:helix_remote/features/settings/presentation/theme_packs_page.dart';
 import 'package:helix_remote/shared/route_paths.dart';
@@ -54,6 +55,10 @@ final List<RouteBase> settingsRoutes = [
   GoRoute(
     path: RoutePaths.notifications,
     builder: (context, state) => const NotificationsPage(),
+  ),
+  GoRoute(
+    path: RoutePaths.ringtones,
+    builder: (context, state) => const RingtonesPage(),
   ),
   GoRoute(
     path: RoutePaths.chats,

@@ -1,7 +1,10 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/settings/application/privacy_providers.dart';
 import 'package:helix_remote/features/settings/application/settings_providers.dart';
+import 'package:helix_remote/features/settings/application/sound_packs.dart';
+import 'package:helix_remote/shared/route_paths.dart';
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 /// Connector: Settings > Notifications, drawn by `orbit_ui`'s
@@ -10,8 +13,9 @@ import 'package:orbit_ui/orbit_ui.dart' as orbit;
 /// A notification only ever says that something arrived. Its text is never
 /// sent through the push service, so the message preview switch controls what
 /// this phone reads out of its own database - and is off by default. The
-/// ringtone row stays hidden until Orbit has a ringtone of its own
-/// (DEVIATIONS, Part B batch 8).
+/// ringtone row opens [RingtonesPage] and says what the next call rings with;
+/// it is hidden on a platform that rings a call through the app rather than
+/// through a notification channel, where the page could change nothing.
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 
@@ -25,7 +29,8 @@ class NotificationsPage extends ConsumerWidget {
         osOff: ref.watch(notificationPermissionProvider).value == false,
         mutedLoading: muted.isLoading && !muted.hasValue,
         mutedFailed: muted.hasError && !muted.hasValue,
-        showRingtone: false,
+        showRingtone: ref.watch(canChooseRingtoneProvider),
+        ringtone: ref.watch(ringtoneLabelProvider),
         messages: ref.watch(notifyMessagesProvider).value ?? true,
         groups: ref.watch(notifyGroupsProvider).value ?? true,
         calls: ref.watch(notifyCallsProvider).value ?? true,
@@ -69,6 +74,7 @@ class NotificationsPage extends ConsumerWidget {
             .read(notificationPermissionProvider.notifier)
             .request,
         onUnmute: ref.read(mutedActionsProvider).unmute,
+        onOpenRingtones: () => context.push(RoutePaths.ringtones),
       ),
     );
   }

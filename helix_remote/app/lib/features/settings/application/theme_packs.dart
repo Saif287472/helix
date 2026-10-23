@@ -61,11 +61,19 @@ final installedPacksProvider = FutureProvider<List<InstalledPack>>(
   (ref) => ref.watch(themePackStoreProvider).installed(),
 );
 
-/// The packs this account's server offers, one entry per published revision.
+/// The theme packs this account's server offers: one row per pack id, at the
+/// newest revision, and only where that revision's own signed manifest says it
+/// is a theme (a server folder holds both kinds and its list route says nothing
+/// about which a row is).
+///
 /// An error is `NoServerChosen` on sign-in, which is why the page that lists
 /// them is only reached from Settings.
-final hostedPacksProvider = FutureProvider.autoDispose<List<OrbitPackEntry>>(
-  (ref) => ref.watch(packSourceProvider).list(),
+final hostedPacksProvider = FutureProvider.autoDispose<PackOffers>(
+  (ref) => hostedPacks(
+    ref.watch(packSourceProvider),
+    'theme',
+    ref.watch(packPublishersProvider),
+  ),
 );
 
 final themePackActionsProvider = Provider<ThemePackActions>(
@@ -209,14 +217,12 @@ final themeGalleryProvider = Provider.autoDispose<ThemeGalleryModel>((ref) {
       ref.watch(installedPacksProvider).value ?? const <InstalledPack>[];
   final hosted = ref.watch(hostedPacksProvider);
 
-  // The newest revision the server lists for each pack id.
-  final newest = <String, OrbitPackEntry>{};
-  for (final entry in hosted.value ?? const <OrbitPackEntry>[]) {
-    final best = newest[entry.id];
-    if (best == null || best.revision < entry.revision) {
-      newest[entry.id] = entry;
-    }
-  }
+  // The newest revision the server lists for each pack id, of the kind this
+  // page is about.
+  final newest = {
+    for (final offer in hosted.value?.rows ?? const <PackOffer>[])
+      offer.id: offer.entry,
+  };
 
   // The theme actually on screen: the chosen one, or Orbit when the choice
   // names a pack this device no longer holds (deleting one keeps the choice,
@@ -260,6 +266,11 @@ final themeGalleryProvider = Provider.autoDispose<ThemeGalleryModel>((ref) {
   ];
 
   final failure = hosted.error;
+  final offers = hosted.value;
+  // A server that listed packs this app could not vouch for - unsigned, by a
+  // publisher this build does not trust, or the other kind of pack - is not a
+  // server with nothing on it, and the page must not say it is.
+  final unverified = offers == null ? 0 : offers.unverified;
   return ThemeGalleryModel(
     themes: items,
     status: hosted.isLoading
@@ -269,5 +280,10 @@ final themeGalleryProvider = Provider.autoDispose<ThemeGalleryModel>((ref) {
         : ListStatus.ready,
     host: ref.watch(serverTitleProvider) ?? '',
     error: failure == null ? '' : describeFailure(failure).message,
+    emptyNote: offers != null && offers.rows.isEmpty && unverified > 0
+        ? 'Nothing on offer here is a theme pack this app can use. A server '
+              'folder holds themes and sounds together, and a pack this app '
+              'cannot check is never offered.'
+        : '',
   );
 });

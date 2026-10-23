@@ -1178,6 +1178,64 @@ identical at 1x).
   `onGetMore` wired would move that key, and the prototype side has nothing to
   match it.
 
+## Part C step 5 (the Ringtones page, 2026-10-23)
+
+- **No Orbit ringtone is bundled; the phone's own sound is the default.** The
+  plan's first line says one default ringtone is bundled, and the prototype's
+  sheet offers "Orbit (default)". Nothing the app ships is a sound pack, and the
+  owner's ruling made a ringtone one, so there is no Orbit sound to ring with:
+  the default is the phone's own, the choice for it is the *absent* device
+  setting (`writeRingtone(null)` removes the key), and `phoneRingtoneId` is the
+  empty string rather than an invented slug. A chosen pack that is later deleted
+  keeps the choice - as a deleted theme does - and the phone rings with its own
+  until the pack is downloaded again.
+- **The picker is a page, not the prototype's sheet.** `topics.js` opens a
+  sheet with two fixed choices and "More ringtones to download are coming." A
+  sheet cannot carry a list that grows with the server, a Get/Update/Delete per
+  row and a spinner on the row being fetched, so the Notifications row's chevron
+  opens `Ringtones` (`/settings/notifications/ringtones`) - the same shape as
+  step 4's themes page, and it changes nothing on the Notifications screen
+  itself. There is no prototype screen for it, so there is no pixel key:
+  `screens.json` and the 241 phone keys are unchanged, and the `notifications`
+  key holds because the preview keeps the prototype's mock "Orbit (default)" in
+  its model. The page is tested instead (7 widget tests in
+  `packages/orbit_ui/test/ringtone_packs_test.dart`, 16 app-side provider and
+  page tests, plus the 1x/2x rules sweep on the app side).
+  - **Owner:** if you want this page in the gate, the prototype needs the screen
+    first; then it joins `screens.json` like any other.
+- **No audio preview, and no sound is played by the app.** Hearing a ringtone
+  before choosing it needs an audio player, which is a new dependency and a new
+  register entry, and the app deliberately never decodes audio: on Android the
+  sound is the notification channel's, and on Windows a call rings with the
+  system alert. "Get" therefore downloads and lists a sound; nothing on the page
+  plays it.
+  - **Owner:** say if a preview is wanted. It is a dependency decision, not a
+    page change.
+- **The row only appears where a chosen sound can ring.** It is drawn on
+  Android, where an incoming call rings through `CallNotifications` and a
+  channel's sound is the ringtone; on Windows the call rings through
+  `AlertCallRinger`'s system alert, which a page cannot reach, so the row is
+  hidden and the Notifications screen is exactly what it was there.
+- **The offer's kind is decided in the app, because the server never says it.**
+  One `HELIX_PACKS_DIR` holds both kinds and the list route serves a manifest by
+  digest without opening it, so a row's kind is unsigned. `hostedPacks`
+  (`app/lib/core/theme/orbit_packs.dart`) reads one manifest per offer - at most
+  `hostedPackProbe = 64` - and lists a row only when the manifest's shape, the
+  publisher and the signature pass step 1's gate and `contents` is the kind the
+  page wants. The ones it cannot vouch for are counted in `PackOffers.unverified`
+  and both pages say so, rather than claiming nothing is on offer. No server,
+  protocol, api or engine file changed for any of it.
+  - **Owner:** this is the interim answer to the plan's open question. The
+    alternatives - a `contents` field in the list DTO (protocol and server
+    change) or a second folder - are still yours; the app-side probe is what
+    makes either of them a small change later.
+- **Choosing a ringtone is stored but not heard yet.** This half writes the
+  choice into `device_settings.json`; the wiring that makes a call ring with it
+  - the copy Android's system can read and one notification channel per
+  ringtone - is the next item (5c-2). Until then a downloaded ringtone is
+  listed, chosen and marked "In use", and a call still rings with the sound of
+  the existing incoming-call channel.
+
 ## Part C step 7 (Jungle, Ocean and Metal, 2026-10-23)
 
 - **The three palettes are new work, not a copy.** The plan named the themes and

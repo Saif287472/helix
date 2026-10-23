@@ -598,6 +598,96 @@ void main() {
     });
   });
 
+  group('the manifest on its own', () {
+    // A settings page reads the server's list and one manifest per pack before
+    // it downloads anything, to decide what kind of thing an offer is. That is
+    // this half of the gate: the same checks, in the same order, and no files.
+    test('a sound manifest is allowed with no sound in hand', () async {
+      final pack = await _soundPack();
+      final check = await _manifestCheck(pack.manifest);
+      expect(check.isAllowed, isTrue, reason: check.detail);
+      expect(check.manifest!.contents, 'sound');
+      // The same bytes with no files are not yet a pack: the whole gate is
+      // still the only thing that says a download may be used.
+      final whole = await _check(pack.manifest, files: const {});
+      expect(whole.isAllowed, isFalse);
+    });
+
+    test(
+      'a theme manifest is allowed before its document has arrived',
+      () async {
+        final pack = await _pack();
+        final check = await _manifestCheck(pack.manifest);
+        expect(check.isAllowed, isTrue, reason: check.detail);
+        expect(check.manifest!.contents, orbitPackDefaultContents);
+      },
+    );
+
+    test(
+      'what the whole gate refuses first, it refuses first here too',
+      () async {
+        for (final (manifest, unsigned, signature, publishers, failure) in [
+          (sampleManifest(), true, null, null, OrbitPackFailure.unsigned),
+          (
+            sampleManifest(revision: 2),
+            false,
+            pinnedSignature,
+            null,
+            OrbitPackFailure.badSignature,
+          ),
+          (
+            sampleManifest(),
+            false,
+            pinnedSignature,
+            {'someone-else': publisherKey},
+            OrbitPackFailure.unknownPublisher,
+          ),
+          (
+            sampleManifest(),
+            false,
+            pinnedSignature,
+            {publisher: publisherKey.take(31).toList()},
+            OrbitPackFailure.unknownPublisher,
+          ),
+          (
+            sampleManifest(contents: 'video'),
+            false,
+            null,
+            null,
+            OrbitPackFailure.unknownContent,
+          ),
+          (
+            sampleManifest(theme: null),
+            false,
+            null,
+            null,
+            OrbitPackFailure.badManifest,
+          ),
+        ]) {
+          final check = await _manifestCheck(
+            manifest,
+            unsigned: unsigned,
+            signature: signature,
+            publishers: publishers,
+          );
+          expect(check.failure, failure, reason: check.detail);
+          expect(check.manifest, isNull);
+        }
+      },
+    );
+
+    test(
+      'a manifest over the size cap is refused before it is parsed',
+      () async {
+        final check = await _manifestCheck(
+          sampleManifest(),
+          limits: const OrbitPackLimits(manifestBytes: 64),
+        );
+        expect(check.failure, OrbitPackFailure.tooLarge);
+      },
+    );
+  });
+
   group('the slug a publisher builds from', () {
     // `tool/theme_pack_tool.dart build` turns a slug into a folder before any
     // manifest exists, so this predicate is the only thing between `--ids` and
@@ -750,6 +840,26 @@ Uint8List _manifestBytes(OrbitPackManifest manifest, {String? signature}) {
   if (signature != null) json['signature'] = signature;
   return Uint8List.fromList(utf8.encode(jsonEncode(json)));
 }
+
+/// Runs the gate over [manifest] with only its manifest in hand: the half a
+/// settings page uses to decide what kind of thing an offer is, before it pays
+/// for a download.
+Future<OrbitPackCheck> _manifestCheck(
+  OrbitPackManifest manifest, {
+  String? signature,
+  bool unsigned = false,
+  Map<String, List<int>>? publishers,
+  OrbitPackLimits limits = OrbitPackLimits.standard,
+}) async => checkOrbitPackManifest(
+  manifestBytes: unsigned
+      ? _manifestBytes(manifest)
+      : _manifestBytes(
+          manifest,
+          signature: signature ?? await _signature(manifest),
+        ),
+  trustedPublishers: publishers ?? {publisher: publisherKey},
+  limits: limits,
+);
 
 Future<OrbitPackCheck> _checkBytes({
   required List<int> manifestBytes,

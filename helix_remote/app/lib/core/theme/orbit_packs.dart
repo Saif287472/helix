@@ -642,6 +642,94 @@ final class InstalledPack {
   String get name => tokens.meta.name;
 }
 
+/// One pack the host offers, as its list entry and the kind **its own signed
+/// manifest** says it is.
+@immutable
+final class PackOffer {
+  const PackOffer({required this.entry, required this.contents});
+
+  final OrbitPackEntry entry;
+
+  /// `theme` or `sound`, from the manifest the publisher signed.
+  final String contents;
+
+  String get id => entry.id;
+
+  int get revision => entry.revision;
+}
+
+/// What [hostedPacks] found: the offers this app can vouch for, and how many
+/// rows it could not.
+@immutable
+final class PackOffers {
+  const PackOffers({required this.rows, required this.unverified});
+
+  /// One per pack id, newest revision, in id order.
+  final List<PackOffer> rows;
+
+  /// Rows the host listed that this build would not download: the other kind,
+  /// a signature that does not hold, a publisher it does not trust, a manifest
+  /// it could not read. A page says so when [rows] is empty and this is not,
+  /// because "nothing is on offer" would be the wrong sentence for a host that
+  /// lists ten packs nobody signed.
+  final int unverified;
+}
+
+/// How many offers [hostedPacks] will read manifests for.
+///
+/// A cap, not a design: one small request per pack id is what telling the kinds
+/// apart costs, and a folder a server has filled past this is not this app's
+/// market. What is past it is simply not offered.
+const hostedPackProbe = 64;
+
+/// Every pack [source] offers that this app could use, of the [contents] kind.
+///
+/// The list route says nothing about what a row *is* - `contents` lives inside
+/// the signed manifest, and the endpoint never opens it (that is its whole
+/// design) - so a page that lists one kind reads each offer's manifest and asks
+/// [checkOrbitPackManifest]. That is the only honest way to name a row a sound:
+/// the word comes from the publisher's signature, not from a server's guess, and
+/// a row that cannot be verified is not offered at all rather than offered and
+/// refused after a tap. Nothing here downloads a file, so the cost is one small
+/// read per pack id.
+///
+/// [publishers] is this build's anchor; [hostedPackProbe] bounds the reads.
+Future<PackOffers> hostedPacks(
+  PackSource source,
+  String contents,
+  Map<String, List<int>> publishers,
+) async {
+  final newest = <String, OrbitPackEntry>{};
+  for (final entry in await source.list()) {
+    final best = newest[entry.id];
+    if (best == null || best.revision < entry.revision) {
+      newest[entry.id] = entry;
+    }
+  }
+  final ids = newest.values.map((e) => e.id).toList()..sort();
+  final listed = ids.take(hostedPackProbe).length;
+  final rows = <PackOffer>[];
+  var unverified = 0;
+  for (final id in ids.take(hostedPackProbe)) {
+    final entry = newest[id]!;
+    try {
+      final check = await checkOrbitPackManifest(
+        manifestBytes: await source.manifest(entry.id, entry.revision),
+        trustedPublishers: publishers,
+      );
+      final manifest = check.manifest;
+      if (manifest != null && manifest.contents == contents) {
+        rows.add(PackOffer(entry: entry, contents: contents));
+      } else {
+        unverified++;
+      }
+    } on Object {
+      unverified++; // One pack the host will not answer for is not an offer.
+    }
+  }
+  return PackOffers(rows: rows, unverified: unverified + ids.length - listed);
+}
+
 /// The host lists no pack with this id (or no such revision).
 final class PackNotHosted implements Exception {
   const PackNotHosted(this.id);
@@ -670,9 +758,11 @@ final _slug = RegExp(r'^[a-z0-9][a-z0-9._-]{0,63}$');
 final _hex = RegExp(r'^[0-9a-f]+$');
 final _revisionFolder = RegExp(r'^r([0-9]{1,9})$');
 
-/// Whether [value] is a theme id - the slug a pack is named by, which is also
-/// what `device_settings.json` may hold as the chosen theme.
-bool isThemeId(String value) => _slug.hasMatch(value);
+/// Whether [value] is a pack id - the slug a pack is named by, which is also
+/// what `device_settings.json` may hold as the chosen theme or ringtone. A
+/// sound pack has no other name a person could be shown, so its id is what the
+/// Ringtones page reads.
+bool isPackId(String value) => _slug.hasMatch(value);
 
 bool _isSlug(String value) => _slug.hasMatch(value);
 

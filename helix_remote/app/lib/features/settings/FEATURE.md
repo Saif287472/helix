@@ -12,7 +12,7 @@ several features); every tile and row opens a page registered in
 | Account | masked phone, `~name`, change/set password, export, "Switch account", "Sign out and remove", delete | `SettingsGateway` (`account`, `changePassword`, `exportAccount`, `deleteAccount`), core `signOutProvider`, `accountsProvider` |
 | Accounts | the accounts signed in on this phone, to open, add or remove (asks first) | `accountLinesProvider`, `accountsPageProvider` (`core/engine/runtime_providers.dart`) |
 | Privacy | last seen / online / group-add audiences, found by phone / `~name` (server); read receipts, typing, default disappearing timer, the device's app lock, blocked list | server `people.privacy`, engine `EngineSettings`, `AppSettings`, `PeopleService.watchAll`, `accountsProvider`'s `DeviceLock` |
-| Notifications | alerts for messages / groups / calls, sound, vibrate, previews, OS permission, muted chats (with unmute) | `AppSettings.notify*`, `NotificationPermissionSource`, `ChatsService.watchChats` |
+| Notifications | alerts for messages / groups / calls, sound, vibrate, previews, OS permission, muted chats (with unmute), the ringtone a call rings with | `AppSettings.notify*`, `NotificationPermissionSource`, `ChatsService.watchChats` |
 | Chats | text size, Enter sends, media auto-download per kind | `AppSettings`, `MediaPolicySync` |
 | Storage and data | database and media size, the bar's split by kind, the biggest chats, and freeing one chat's photos and videos or documents (its messages stay) | `StorageUsageProbe`, `SettingsGateway.mediaStorage/biggestChats/freeChatSpace` (engine `MediaService`) |
 | Help and about | version, server, legal documents (ops API, bundled fallback), licences, a line saying problem reports go to the server | `SettingsGateway.serverDetails/legal`, `core/diagnostics/anomaly_log.dart` |
@@ -48,8 +48,8 @@ several features); every tile and row opens a page registered in
 - Freeing space covers photos, videos, video notes, GIFs and documents; voice
   notes stay with their messages. See "Storage: what counts" below.
 - Notification sound/vibrate select an Android channel; calls consult
-  `AppSettings.notifyCalls` in the calls feature (A3a). There is no ringtone
-  row until there is a sound to ship.
+  `AppSettings.notifyCalls` in the calls feature (A3a). The ringtone row opens
+  "Ringtones" below, and is drawn only where a chosen sound can ring.
 - Per-conversation notification overrides live in the chat itself (A2); the
   Notifications page lists what is muted and can unmute.
 
@@ -146,3 +146,30 @@ whose action is running shows a spinner and nothing else. `ThemePackPage` is
 those four verbs over `ThemePackActions` plus the theme choice, and `PackBusy`
 is which row is waiting. The row marked in use is the chosen id - or Orbit, when
 the choice names a pack this device no longer holds.
+
+## Ringtones: the same pack pipeline, for a sound
+
+`application/sound_packs.dart` is that manager's sibling, and holds only what a
+sound's own: `SoundPackStore` reads the same folder through the same gate and
+keeps the `contents: "sound"` packs, a ringtone is named by its signed pack id
+because a sound pack carries no theme document to have a name in, and the choice
+is `ringtoneChoiceProvider` - a device setting (`device_settings.json`'s
+`ringtone` key) the ringer reads when a call arrives, not something a screen
+redraws. `phoneRingtoneId` is the phone's own sound and is stored as *nothing*:
+deleting a chosen pack keeps its choice, as a chosen theme's does, and the phone
+rings with its own sound meanwhile.
+
+`hostedSoundsProvider` reads one manifest per offer, exactly as the themes' does
+(`core/theme/orbit_packs.dart`'s `hostedPacks`), because one server folder holds
+both kinds and the list route says nothing about which a row is. Only the
+publisher's signature decides, and an offer this build cannot check is not
+listed at all - the page says so in `emptyNote` rather than claiming nobody has
+published anything.
+
+`presentation/ringtones_page.dart` (route
+`/settings/notifications/ringtones`, from the Notifications page's Ringtone row,
+which is drawn only where a call rings through a notification channel) is
+`orbit_ui`'s `RingtoneGalleryScreen`: the phone's own sound first, then this
+device's packs, then the host's offers. Nothing here plays a sound - the copy the
+phone's system can read, and the one channel per ringtone that makes a chosen
+sound ring, are the batch after this one.

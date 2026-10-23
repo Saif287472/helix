@@ -362,22 +362,19 @@ final class OrbitPackCheck {
       : 'OrbitPackCheck.refused(${failure!.name}: $detail)';
 }
 
-/// The gate every downloaded pack passes before the app reads a byte of it.
+/// The gate run on a manifest alone: every check [checkOrbitPack] makes before
+/// it opens a file, and nothing after them.
 ///
-/// [manifestBytes] is the manifest exactly as downloaded - the bytes are what
-/// the signature is checked against, so a pack re-serialised on the way is
-/// refused rather than repaired. [files] is every file by path.
-/// [knownEffectKinds] and [knownPatternKinds] are this build's registries
-/// (`orbit_ui`'s `OrbitEffects`), and [trustedPublishers] maps publisher id to
-/// the raw 32-byte Ed25519 key the app ships.
-///
-/// Nothing in a pack is opened until its signature has verified: the checks
-/// before it touch only the manifest's own shape and its declared sizes.
-Future<OrbitPackCheck> checkOrbitPack({
+/// A page that lists what a host offers cannot take a pack's word for what kind
+/// it is, because `contents` lives inside the signed manifest and only the
+/// signature makes it the publisher's own word - so such a page asks for the
+/// manifest and decides from this. The answer is not "usable": only
+/// [checkOrbitPack], with the files in hand, says that. It is "this id and
+/// revision is a pack of `manifest.contents`, by a publisher this build trusts",
+/// which is all an offer row is worth, and it is decided without paying for a
+/// file's bytes.
+Future<OrbitPackCheck> checkOrbitPackManifest({
   required List<int> manifestBytes,
-  required Map<String, List<int>> files,
-  required Set<String> knownEffectKinds,
-  required Set<String> knownPatternKinds,
   required Map<String, List<int>> trustedPublishers,
   OrbitPackLimits limits = OrbitPackLimits.standard,
 }) async {
@@ -436,14 +433,44 @@ Future<OrbitPackCheck> checkOrbitPack({
       'which this pack is not',
     );
   }
+  return OrbitPackCheck.allowed(manifest);
+}
 
-  final delivered = await _checkFiles(manifest, files, limits);
+/// The gate every downloaded pack passes before the app reads a byte of it.
+///
+/// [manifestBytes] is the manifest exactly as downloaded - the bytes are what
+/// the signature is checked against, so a pack re-serialised on the way is
+/// refused rather than repaired. [files] is every file by path.
+/// [knownEffectKinds] and [knownPatternKinds] are this build's registries
+/// (`orbit_ui`'s `OrbitEffects`), and [trustedPublishers] maps publisher id to
+/// the raw 32-byte Ed25519 key the app ships.
+///
+/// Nothing in a pack is opened until its signature has verified: the checks
+/// before it touch only the manifest's own shape and its declared sizes, and
+/// they are [checkOrbitPackManifest]'s answer to a page that asked.
+Future<OrbitPackCheck> checkOrbitPack({
+  required List<int> manifestBytes,
+  required Map<String, List<int>> files,
+  required Set<String> knownEffectKinds,
+  required Set<String> knownPatternKinds,
+  required Map<String, List<int>> trustedPublishers,
+  OrbitPackLimits limits = OrbitPackLimits.standard,
+}) async {
+  final manifest = await checkOrbitPackManifest(
+    manifestBytes: manifestBytes,
+    trustedPublishers: trustedPublishers,
+    limits: limits,
+  );
+  if (!manifest.isAllowed) return manifest;
+  final pack = manifest.manifest!;
+
+  final delivered = await _checkFiles(pack, files, limits);
   if (delivered != null) return delivered;
-  final theme = manifest.contents == 'theme'
-      ? _checkTheme(manifest, files, knownEffectKinds, knownPatternKinds)
+  final theme = pack.contents == 'theme'
+      ? _checkTheme(pack, files, knownEffectKinds, knownPatternKinds)
       : null;
   if (theme != null) return theme;
-  return OrbitPackCheck.allowed(manifest);
+  return manifest;
 }
 
 /// The manifest's own limits and path rules - the checks that run before any

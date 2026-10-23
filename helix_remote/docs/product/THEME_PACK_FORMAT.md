@@ -191,6 +191,23 @@ which is strict about every token and validates the effects against the same
 registry a second time. A pack that passes the gate but fails the parser is
 never drawn, and the chosen theme falls back to Orbit.
 
+### The manifest alone
+
+`checkOrbitPackManifest` runs step 1 and step 2 over a manifest with no files
+beside it, and `checkOrbitPack` is that call followed by steps 3 and 4 - one
+implementation of each rule, so a page cannot be told one thing about a pack and
+a download another.
+
+A settings page needs the half, because the server's list route names neither of
+the two kinds: it serves bytes by digest and never opens a manifest, which is its
+whole design. So a page that must not offer a theme as a ringtone reads each
+offer's manifest and asks the publisher's signature what it is, and gives up on
+a row it cannot vouch for instead of putting it on screen.
+
+What the half-gate does not do is let a pack be *used*: nothing a device holds
+is ever read without the whole gate over it, and an offer is only a promise to
+fetch bytes that will be checked again.
+
 ## Making a pack
 
 ```
