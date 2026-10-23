@@ -15,7 +15,7 @@ import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  /// The eight built-in themes, by the ids the theme table uses.
+  /// The eleven themes in `assets/themes`, by the ids the theme table uses.
   const ids = [
     'orbit',
     'night',
@@ -25,6 +25,9 @@ void main() {
     'arcade',
     'terminal',
     'field',
+    'jungle',
+    'ocean',
+    'metal',
   ];
 
   Future<Map<String, Object?>> loadJson(String id) async {

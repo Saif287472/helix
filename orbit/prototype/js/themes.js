@@ -103,5 +103,44 @@ window.OrbitThemes = [
       "#3A4428",
       "#D9822B"
     ]
+  },
+  {
+    "id": "jungle",
+    "name": "Jungle",
+    "vibe": "Botanical",
+    "dark": false,
+    "icon": "duotone",
+    "swatches": [
+      "#EAF1E6",
+      "#1E7B44",
+      "#D3E9C6",
+      "#B4560F"
+    ]
+  },
+  {
+    "id": "ocean",
+    "name": "Ocean",
+    "vibe": "Deep sea",
+    "dark": true,
+    "icon": "light",
+    "swatches": [
+      "#0A1A22",
+      "#2EB8C9",
+      "#0F3D4A",
+      "#F2A65A"
+    ]
+  },
+  {
+    "id": "metal",
+    "name": "Metal",
+    "vibe": "Industrial",
+    "dark": true,
+    "icon": "bold",
+    "swatches": [
+      "#1A1C1F",
+      "#BAC4CF",
+      "#3A3F46",
+      "#C9A227"
+    ]
   }
 ];

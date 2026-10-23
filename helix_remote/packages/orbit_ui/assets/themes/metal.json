@@ -1,0 +1,572 @@
+{
+ "dark": true,
+ "effects": [
+  {
+   "kind": "cornerClip",
+   "params": {
+    "notch": 7,
+    "radius": "2px",
+    "shadow": "none",
+    "targets": [
+     ".btn.primary",
+     ".xfab"
+    ]
+   }
+  },
+  {
+   "kind": "eyebrowColour",
+   "params": {
+    "targets": [
+     ".eyebrow",
+     ".day span"
+    ],
+    "token": "accent-ink"
+   }
+  }
+ ],
+ "icon": "bold",
+ "id": "metal",
+ "motion": {
+  "curve": [
+   0.2,
+   0.7,
+   0.2,
+   1.0
+  ],
+  "duration": {
+   "page": 0.26,
+   "short": 0.18
+  }
+ },
+ "name": "Metal",
+ "swatches": [
+  "#1A1C1F",
+  "#BAC4CF",
+  "#3A3F46",
+  "#C9A227"
+ ],
+ "tokens": {
+  "colour": {
+   "accent": {
+    "alpha": 1,
+    "hex": "#BAC4CF"
+   },
+   "accent-ink": {
+    "alpha": 1,
+    "hex": "#DCE3EA"
+   },
+   "accent-line": {
+    "alpha": 1,
+    "hex": "#61676E"
+   },
+   "accent-soft": {
+    "alpha": 1,
+    "hex": "#41454B"
+   },
+   "av-0-bg": {
+    "alpha": 1,
+    "hex": "#474B51"
+   },
+   "av-0-ink": {
+    "alpha": 1,
+    "hex": "#BAC4CF"
+   },
+   "av-1-bg": {
+    "alpha": 1,
+    "hex": "#3D454F"
+   },
+   "av-1-ink": {
+    "alpha": 1,
+    "hex": "#A0B6CD"
+   },
+   "av-2-bg": {
+    "alpha": 1,
+    "hex": "#4A442C"
+   },
+   "av-2-ink": {
+    "alpha": 1,
+    "hex": "#D1B047"
+   },
+   "av-3-bg": {
+    "alpha": 1,
+    "hex": "#3A4847"
+   },
+   "av-3-ink": {
+    "alpha": 1,
+    "hex": "#8CBFAA"
+   },
+   "av-4-bg": {
+    "alpha": 1,
+    "hex": "#4A3E42"
+   },
+   "av-4-ink": {
+    "alpha": 1,
+    "hex": "#D5A4A4"
+   },
+   "av-5-bg": {
+    "alpha": 1,
+    "hex": "#413F4F"
+   },
+   "av-5-ink": {
+    "alpha": 1,
+    "hex": "#B7A8D1"
+   },
+   "av-6-bg": {
+    "alpha": 1,
+    "hex": "#414740"
+   },
+   "av-6-ink": {
+    "alpha": 1,
+    "hex": "#ABBA8F"
+   },
+   "av-7-bg": {
+    "alpha": 1,
+    "hex": "#3C4249"
+   },
+   "av-7-ink": {
+    "alpha": 1,
+    "hex": "#A4B1BC"
+   },
+   "bg": {
+    "alpha": 1,
+    "hex": "#1A1C1F"
+   },
+   "call-bottom": {
+    "alpha": 1,
+    "hex": "#4A5058"
+   },
+   "call-glass": {
+    "alpha": 0.14,
+    "hex": "#EEF1F5"
+   },
+   "call-glass-2": {
+    "alpha": 0.22,
+    "hex": "#EEF1F5"
+   },
+   "call-line": {
+    "alpha": 0.26,
+    "hex": "#EEF1F5"
+   },
+   "call-live": {
+    "alpha": 1,
+    "hex": "#B9F6D4"
+   },
+   "call-mid": {
+    "alpha": 1,
+    "hex": "#22262C"
+   },
+   "call-muted": {
+    "alpha": 0.9,
+    "hex": "#EEF1F5"
+   },
+   "call-text": {
+    "alpha": 1,
+    "hex": "#EEF1F5"
+   },
+   "call-top": {
+    "alpha": 1,
+    "hex": "#3A4048"
+   },
+   "chat-bg": {
+    "alpha": 1,
+    "hex": "#191B1E"
+   },
+   "chat-dot": {
+    "alpha": 1,
+    "hex": "#343639"
+   },
+   "control-line": {
+    "alpha": 1,
+    "hex": "#64676B"
+   },
+   "cyan": {
+    "alpha": 1,
+    "hex": "#C9A227"
+   },
+   "cyan-ink": {
+    "alpha": 1,
+    "hex": "#E3C455"
+   },
+   "danger": {
+    "alpha": 1,
+    "hex": "#FF7D6A"
+   },
+   "danger-line": {
+    "alpha": 1,
+    "hex": "#7D433E"
+   },
+   "danger-soft": {
+    "alpha": 1,
+    "hex": "#493334"
+   },
+   "danger-zone-bg": {
+    "alpha": 1,
+    "hex": "#2F2C30"
+   },
+   "danger-zone-line": {
+    "alpha": 1,
+    "hex": "#493334"
+   },
+   "dock-bg": {
+    "alpha": 0.96,
+    "hex": "#26292E"
+   },
+   "field": {
+    "alpha": 1,
+    "hex": "#31353C"
+   },
+   "gesture": {
+    "alpha": 0.4,
+    "hex": "#E8EAEE"
+   },
+   "glass-accent": {
+    "alpha": 1,
+    "hex": "#DCE3EA"
+   },
+   "glass-bg": {
+    "alpha": 0.92,
+    "hex": "#26292E"
+   },
+   "glass-ink": {
+    "alpha": 1,
+    "hex": "#E8EAEE"
+   },
+   "hover": {
+    "alpha": 0.05,
+    "hex": "#E8EAEE"
+   },
+   "in": {
+    "alpha": 1,
+    "hex": "#2E3238"
+   },
+   "in-ink": {
+    "alpha": 1,
+    "hex": "#E8EAEE"
+   },
+   "in-line": {
+    "alpha": 1,
+    "hex": "#444A52"
+   },
+   "in-meta": {
+    "alpha": 1,
+    "hex": "#B4BAC2"
+   },
+   "ink": {
+    "alpha": 1,
+    "hex": "#E8EAEE"
+   },
+   "ink-2": {
+    "alpha": 1,
+    "hex": "#C6CBD2"
+   },
+   "ink-3": {
+    "alpha": 1,
+    "hex": "#9EA5AE"
+   },
+   "ink-4": {
+    "alpha": 1,
+    "hex": "#6E757F"
+   },
+   "inverse": {
+    "alpha": 1,
+    "hex": "#E8EAEE"
+   },
+   "inverse-accent": {
+    "alpha": 1,
+    "hex": "#62676D"
+   },
+   "line": {
+    "alpha": 1,
+    "hex": "#414449"
+   },
+   "line-2": {
+    "alpha": 1,
+    "hex": "#373A3F"
+   },
+   "map-bg": {
+    "alpha": 1,
+    "hex": "#32353B"
+   },
+   "map-line": {
+    "alpha": 1,
+    "hex": "#414449"
+   },
+   "mark": {
+    "alpha": 0.38,
+    "hex": "#FFD600"
+   },
+   "media-ph": {
+    "alpha": 1,
+    "hex": "#414449"
+   },
+   "notice-bg": {
+    "alpha": 0.88,
+    "hex": "#26292E"
+   },
+   "on-accent": {
+    "alpha": 1,
+    "hex": "#1A1C1F"
+   },
+   "on-brand": {
+    "alpha": 1,
+    "hex": "#EEF1F5"
+   },
+   "on-inverse": {
+    "alpha": 1,
+    "hex": "#1A1C1F"
+   },
+   "out": {
+    "alpha": 1,
+    "hex": "#3A3F46"
+   },
+   "out-ink": {
+    "alpha": 1,
+    "hex": "#EDF0F4"
+   },
+   "out-line": {
+    "alpha": 1,
+    "hex": "#565C65"
+   },
+   "out-meta": {
+    "alpha": 1,
+    "hex": "#B9C0C9"
+   },
+   "pressed": {
+    "alpha": 1,
+    "hex": "#36383D"
+   },
+   "read": {
+    "alpha": 1,
+    "hex": "#9FC6E8"
+   },
+   "scrim": {
+    "alpha": 0.55,
+    "hex": "#000000"
+   },
+   "success": {
+    "alpha": 1,
+    "hex": "#5BD98A"
+   },
+   "success-line": {
+    "alpha": 1,
+    "hex": "#3B6F53"
+   },
+   "success-soft": {
+    "alpha": 1,
+    "hex": "#2E453D"
+   },
+   "surface": {
+    "alpha": 1,
+    "hex": "#26292E"
+   },
+   "switch-knob": {
+    "alpha": 1,
+    "hex": "#D8DBDF"
+   },
+   "switch-off": {
+    "alpha": 1,
+    "hex": "#56595E"
+   },
+   "tint": {
+    "alpha": 0.07,
+    "hex": "#E8EAEE"
+   },
+   "tint-out": {
+    "alpha": 0.08,
+    "hex": "#EDF0F4"
+   },
+   "warning": {
+    "alpha": 1,
+    "hex": "#E8B33C"
+   },
+   "warning-line": {
+    "alpha": 1,
+    "hex": "#746034"
+   },
+   "warning-soft": {
+    "alpha": 1,
+    "hex": "#453F30"
+   },
+   "wave-idle": {
+    "alpha": 1,
+    "hex": "#6A6F76"
+   },
+   "wave-out-idle": {
+    "alpha": 1,
+    "hex": "#737981"
+   }
+  },
+  "em": {
+   "display-tracking": 0.06,
+   "wordmark-tracking": 0.04
+  },
+  "fontStack": {
+   "font": {
+    "families": [
+     "Exo 2",
+     "ui-sans-serif",
+     "system-ui",
+     "sans-serif"
+    ]
+   },
+   "font-display": {
+    "families": [
+     "Exo 2",
+     "ui-sans-serif",
+     "system-ui",
+     "sans-serif"
+    ]
+   },
+   "mono": {
+    "families": [
+     "Share Tech Mono",
+     "ui-monospace",
+     "monospace"
+    ]
+   }
+  },
+  "gradient": {
+   "wordmark-gradient": {
+    "angle": 100.0,
+    "stops": [
+     {
+      "at": 0.0,
+      "colour": {
+       "alpha": 1,
+       "hex": "#D7DEE6"
+      }
+     },
+     {
+      "at": 0.48,
+      "colour": {
+       "alpha": 1,
+       "hex": "#9AA6B4"
+      }
+     },
+     {
+      "at": 1.0,
+      "colour": {
+       "alpha": 1,
+       "hex": "#C9A227"
+      }
+     }
+    ]
+   }
+  },
+  "gradientRef": {
+   "brand-gradient": {
+    "angle": 150.0,
+    "stops": [
+     {
+      "at": 0.0,
+      "token": "call-top"
+     },
+     {
+      "at": 0.55,
+      "token": "call-mid"
+     },
+     {
+      "at": 1.0,
+      "token": "call-bottom"
+     }
+    ]
+   }
+  },
+  "lengthPct": {
+   "avatar-r": 15.0
+  },
+  "lengthPx": {
+   "bubble-cut": 3.0,
+   "bubble-r": 6.0,
+   "r-lg": 9.0,
+   "r-md": 7.0,
+   "r-pill": 5.0,
+   "r-sm": 5.0,
+   "r-xl": 12.0,
+   "r-xs": 3.0
+  },
+  "pattern": {
+   "chat-pattern": {
+    "kind": "scanlines",
+    "params": {
+     "a": 0.03,
+     "colour": "#DDE3EA",
+     "period": 4,
+     "thickness": 1
+    }
+   }
+  },
+  "patternSize": {
+   "chat-pattern-size": {
+    "auto": true
+   }
+  },
+  "shadow": {
+   "glow": [
+    {
+     "blur": 12.0,
+     "colour": {
+      "alpha": 0.2,
+      "hex": "#C8D4E2"
+     },
+     "dx": 0.0,
+     "dy": 0.0,
+     "spread": 0.0
+    }
+   ],
+   "shadow-card": [
+    {
+     "blur": 2.0,
+     "colour": {
+      "alpha": 0.35,
+      "hex": "#000000"
+     },
+     "dx": 0.0,
+     "dy": 1.0,
+     "spread": 0.0
+    }
+   ],
+   "shadow-float": [
+    {
+     "blur": 34.0,
+     "colour": {
+      "alpha": 0.65,
+      "hex": "#000000"
+     },
+     "dx": 0.0,
+     "dy": 14.0,
+     "spread": -10.0
+    },
+    {
+     "blur": 6.0,
+     "colour": {
+      "alpha": 0.35,
+      "hex": "#000000"
+     },
+     "dx": 0.0,
+     "dy": 2.0,
+     "spread": 0.0
+    }
+   ],
+   "shadow-sheet": [
+    {
+     "blur": 40.0,
+     "colour": {
+      "alpha": 0.55,
+      "hex": "#000000"
+     },
+     "dx": 0.0,
+     "dy": -10.0,
+     "spread": 0.0
+    }
+   ]
+  },
+  "transform": {
+   "display-transform": "uppercase"
+  },
+  "weight": {
+   "display-weight": 700
+  }
+ },
+ "vibe": "Industrial"
+}

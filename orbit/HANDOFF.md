@@ -20,9 +20,10 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   owner approved first ("after this, also start part C step 2. i will approve
   the plan", 2026-10-23). Step 4 (the themes page) was built on the owner's two
   answers of 2026-10-23: a new page behind Appearance, and the publisher anchor
-  staying a build-time define. Nothing further in Part C is approved: step 5
+  staying a build-time define. Step 7 (three new themes) needed nothing from
+  anyone and is built the same way. Nothing further in Part C is approved: step 5
   (the ringtone picker) and step 6 (the animation runtime) wait for a sound and
-  for a dependency ruling.
+  for a dependency ruling, and steps 8 and 9 wait for the `keygen`.
 
 ## Done (pending the owner's review)
 
@@ -46,7 +47,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 66ad91b | Part C step 1: the pack format, the one gate and the signing tool (ADR-033) |
 | fc0536e | Part C step 2: the server serves a pack folder, and `publish` fills it |
 | d8fc536 | Part C step 3: the pack store, the trust anchor and the theme library |
-| (this) | Part C step 4: the themes page behind Appearance, in `orbit_ui` and the app |
+| 560c4b2 | Part C step 4: the themes page behind Appearance, in `orbit_ui` and the app |
+| (this) | Part C step 7: Jungle, Ocean and Metal, from the one theme table |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -276,8 +278,9 @@ both change the server, so neither is live until production runs this branch.)
 
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
-`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3 and 4 are built; step 5 (the
-ringtone picker) is not.
+`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4 and 7 are built. Step 5 (the
+ringtone picker) needs a sound and step 6 (the animation runtime) needs a
+dependency ruling; steps 8 and 9 need the `keygen`.
 
 12. Part C step 1, the pack format and the signing tool - **done**
     (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
@@ -373,11 +376,32 @@ ringtone picker) is not.
     chose to keep it. Consequence, unchanged: a pack becomes downloadable only
     in a build made with the define, so it is an APK rebuild you control, after
     `keygen`.
-17. Part C step 5, the ringtone picker, is next in the plan and not started. It
+17. Part C step 5, the ringtone picker, is not started; step 7 went first,
+    because it was the only step with nothing owed on it. Step 5
     needs a sound of its own (the one outstanding item on you from Part B) and,
     on Android, a notification channel per ringtone or the app playing the sound
     itself; `notification_call_ringer.dart` is today's ringer. Step 6 (the
     animation runtime) also waits on a dependency ruling - Lottie or Rive.
+18. Part C step 7, Jungle, Ocean and Metal - **done** (2026-10-23). Three records
+    in `THEMES` in `prototype/tools/themes.py`, and the generator's own outputs:
+    `css/themes.css`, `js/themes.js` and `assets/themes/{jungle,ocean,metal}.json`
+    all come from that table, so nothing was retyped and the eight themes that
+    were there are unchanged to the byte. The contrast report is 11 themes, 0
+    failures. Each stays inside what the port already draws: families the
+    prototype loads and the preview bundles, existing pattern kinds (Jungle's
+    green grain, Ocean's contours as waves, Metal's scanlines as brushed steel)
+    and existing effect kinds (Ocean's wordmark glow, Metal's notched corners and
+    chrome eyebrows). No new font, no new asset, no dependency.
+    - **On you:** the app still draws only Orbit and Orbit Night, so these three
+      are seen in the prototype and the preview until packs ship. Step 8's list
+      names six themes - say whether Jungle, Ocean and Metal join it or become
+      built-in. Their palettes are the port's first draft: `DEVIATIONS.md`
+      records that, and a change to one is a change to the specification.
+    - The pixel gate moved where the plan expected it to: Appearance draws one
+      card per theme, so `appearance` was re-shot on all three devices and each
+      pair got closer (phone 5.57 to 4.22, window-l 3.85 to 3.40, window-m 4.56
+      to 4.42). The reference files carry the new numbers with a note; the other
+      240 phone keys and the other window keys re-scored within the margin.
 
 ## Batch 8, what is left
 

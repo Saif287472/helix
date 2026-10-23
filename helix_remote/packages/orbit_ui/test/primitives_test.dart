@@ -21,6 +21,9 @@ void main() {
       'bloom',
       'terminal',
       'field',
+      'jungle',
+      'ocean',
+      'metal',
     ]) {
       themes[id] = OrbitTokens.fromThemeJson(
         jsonDecode(File('assets/themes/$id.json').readAsStringSync())

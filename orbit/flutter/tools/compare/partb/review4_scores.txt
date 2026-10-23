@@ -1,4 +1,8 @@
 total keys: 241
+# One line has been re-taken since Review 4: appearance, 5.57 -> 4.22 on
+# 2026-10-23, because Part C step 7 grew the theme table from eight themes to
+# eleven and this page draws one card per theme, so both sides of the pair
+# changed together. The rest are Review 4's numbers.
 signin total >16: 1.62%
 signin-phone-error total >16: 2.05%
 signin-offline total >16: 2.22%
@@ -232,7 +236,7 @@ backup-failed total >16: 5.66%
 backup-never total >16: 5.37%
 account total >16: 4.10%
 account-nopass total >16: 4.13%
-appearance total >16: 5.57%
+appearance total >16: 4.22%
 startup total >16: 0.43%
 state-kit total >16: 0.98%
 kit-primitives total >16: 2.04%

@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
-/// The theme gallery is Review 2's first deliverable: all eight themes, built
+/// The theme gallery is Review 2's first deliverable: all eleven themes, built
 /// only from their JSON.
 ///
 /// If a theme needed a constant somewhere to render, these fail - which is the
-/// point. There is no per-theme constant in this package, and all eight cards
+/// point. There is no per-theme constant in this package, and all eleven cards
 /// are drawn by one widget.
 ///
 /// The themes are read in [setUpAll], with plain file reads. Reading them
@@ -26,6 +26,9 @@ void main() {
     'arcade',
     'terminal',
     'field',
+    'jungle',
+    'ocean',
+    'metal',
   ];
   final themes = <String, OrbitTokens>{};
 
@@ -60,7 +63,7 @@ void main() {
     }
   });
 
-  testWidgets('the gallery lists all eight', (tester) async {
+  testWidgets('the gallery lists all eleven', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: OrbitTheme.of(themes['orbit']!),
@@ -81,8 +84,8 @@ void main() {
     expect(all.last.meta.dark, isTrue);
     // Light and dark, and not one accent repeated: if every card drew the
     // same thing, "themes are data" would be a claim rather than a fact.
-    expect(all.map((t) => t.accent).toSet().length, 8);
+    expect(all.map((t) => t.accent).toSet().length, all.length);
     expect(all.map((t) => t.bubbleR).toSet().length, greaterThan(1));
-    expect(all.map((t) => t.meta.vibe).toSet().length, 8);
+    expect(all.map((t) => t.meta.vibe).toSet().length, all.length);
   });
 }

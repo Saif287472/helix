@@ -1177,3 +1177,29 @@ identical at 1x).
   byte-for-byte what it was. In the app the row is there. A re-shoot with
   `onGetMore` wired would move that key, and the prototype side has nothing to
   match it.
+
+## Part C step 7 (Jungle, Ocean and Metal, 2026-10-23)
+
+- **The three palettes are new work, not a copy.** The plan named the themes and
+  Metal's brief ("brushed steel and chrome, industrial"); nothing in the
+  prototype had them, so their colours, shapes and type pairings are the port's
+  first draft, held to the same rules as the eight that came before: one accent
+  plus at most one secondary, every family already loaded by the prototype and
+  bundled by the preview app, every pattern and effect kind already drawn, and
+  the generator's contrast check at 0 failures. They are now the specification
+  for themselves - `THEMES` in `tools/themes.py` generates both sides - so a
+  change to one is a change to the prototype, and should be the owner's.
+- **`appearance` was re-shot on all three devices, and its reference numbers
+  moved down.** The page draws one card per theme in the generated registry, so
+  eight themes to eleven changes both sides of the pair: phone 5.57% to 4.22%,
+  window-l 3.85% to 3.40%, window-m 4.56% to 4.42%. `partb/review4_scores.txt`
+  and `partb/window_scores.txt` carry the new numbers with a note, per
+  `score_all.py`'s rule that a deliberate change updates the reference rather
+  than being excused. Nothing else moved: the 241 phone keys and both window
+  sets re-scored with no key over the 0.25 margin.
+- **The app offers none of the three.** `builtInThemeIds` is still Orbit and
+  Night, so a person sees Jungle, Ocean and Metal only in the preview and in the
+  prototype until step 8 ships the pack pipeline - the same state the six
+  aesthetic themes are already in.
+  - **Owner:** step 8's list names six themes. Say whether Jungle, Ocean and
+    Metal join it as packs or become built-in themes the app ships.

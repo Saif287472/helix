@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:orbit_ui/orbit_ui.dart';
 
-/// The eight built-in themes, loaded from their JSON files.
+/// The eleven themes in `orbit_ui`'s assets, loaded from their JSON files.
 ///
 /// This is the whole of Part A's theme loading: the app asks for a theme by id
 /// and gets tokens back, and nothing anywhere knows what "Orbit" looks like.
@@ -28,6 +28,9 @@ final class OrbitThemeLibrary {
     'arcade',
     'terminal',
     'field',
+    'jungle',
+    'ocean',
+    'metal',
   ];
 
   /// Loads every theme, or throws naming the first that would not load.
@@ -56,7 +59,7 @@ final class OrbitThemeLibrary {
   final Map<String, OrbitTokens> _byId;
 
   /// The themes, in [ids] order: Orbit first, then Night, Bloom, Mochi, Papyrus,
-  /// Arcade, Terminal, Field.
+  /// Arcade, Terminal, Field, Jungle, Ocean, Metal.
   final List<OrbitTokens> themes;
 
   /// The theme [id], or throws listing the ids it does have.

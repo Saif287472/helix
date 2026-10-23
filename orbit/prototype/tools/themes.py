@@ -90,11 +90,11 @@ def svg_url(svg):
 # free parameter.
 #
 #   none       no pattern: the chat background is --chat-bg.
-#   grain      tiled fractal noise (bloom's, papyrus's).
+#   grain      tiled fractal noise (bloom's, papyrus's, jungle's).
 #   hearts     tiled marks (mochi's).
 #   neon-grid  one 1px rule each way per cell (arcade's).
-#   scanlines  a repeating line, period built in, no tile (terminal's).
-#   contours   five stroked curves (field's).
+#   scanlines  a repeating line, period built in, no tile (terminal's, metal's).
+#   contours   five stroked curves (field's, ocean's).
 #
 # The viewer's own "Dot grid" and "Orbit lines" (body.bg-dots) are NOT here:
 # they are preview affordances, not theme data, so no theme can select them.
@@ -150,7 +150,7 @@ def pattern_size_css(p):
 
 
 # ---------------------------------------------------------- theme effects
-# Decorative behaviour, as data. Six of the eight themes switch on effects the
+# Decorative behaviour, as data. Eight of the eleven themes switch on effects the
 # token table cannot express: a blinking cursor, ornaments beside a date, a
 # stripe down the edge of a bubble, a glow, a notched corner. Until now all of
 # that lived in a raw CSS string per theme, which meant the Flutter port had to
@@ -161,20 +161,20 @@ def pattern_size_css(p):
 # the record back to the exact CSS the prototype had. The app ships the effect
 # *types*; a pack carries only their settings.
 #
-#   wordmarkGlow   a drop shadow on the wordmark          arcade, terminal
+#   wordmarkGlow   a drop shadow on the wordmark          arcade, terminal, ocean
 #   bubbleGlow     a shadow on each kind of bubble        arcade
 #   bubbleStripe   a coloured stripe down a bubble edge   field
 #   cursor         a blinking glyph after the wordmark    terminal
 #   ornament       a glyph beside a date or a group       mochi, papyrus, terminal, field
 #   cardRing       an inset double rule on a card         papyrus
-#   cornerClip     a notched corner, square radii         arcade
+#   cornerClip     a notched corner, square radii         arcade, metal
 #   wordmarkItalic italic wordmark                        bloom
 #   dayLabel       a different face and size for dates    bloom
 #   bubbleWeight   a bolder bubble                        mochi
 #   dockBorder     a border on the dock                   mochi
 #   pagePattern    the chat pattern behind a page         papyrus
 #   baseFontSize   the theme's own root size              papyrus
-#   eyebrowColour  the colour of eyebrows and dates       arcade
+#   eyebrowColour  the colour of eyebrows and dates       arcade, metal
 #
 # A colour is either what the CSS says today (`lit`) or a token it reads
 # (`tok`). Nothing is re-tinted here: a colour that ought to become a token is a
@@ -326,8 +326,8 @@ def effects_css(t):
 #
 # The prototype keeps these three in `css/tokens.css` as one global set:
 # `--dur: 180ms`, `--dur-page: 260ms` and
-# `--ease: cubic-bezier(0.2, 0.7, 0.2, 1)`. All eight themes share them,
-# because that is the design as it stands: eight themes, one timing. They are
+# `--ease: cubic-bezier(0.2, 0.7, 0.2, 1)`. All eleven themes share them,
+# because that is the design as it stands: eleven themes, one timing. They are
 # theme data here so that a pack (Part C) can ship its own, and nothing in the
 # prototype may change to make room.
 #
@@ -371,7 +371,7 @@ def json_motion(t):
     """A theme's motion record, as the JSON the Flutter port reads.
 
     A theme overrides the shared `MOTION` with a `motion=` key. None of the
-    eight do, and that is deliberate: inventing a timing difference between
+    eleven do, and that is deliberate: inventing a timing difference between
     themes would be a design change, and the plan approves none.
     """
     m = t.get('motion', MOTION)
@@ -576,6 +576,55 @@ THEMES = [
                  'out': dict(edge='right', width=3, colour=tok('accent'))}},
              {'kind': 'ornament', 'theme': 'field', 'params': dict(
                  target='group', pseudo='before', glyph='▸ ', colour=tok('accent'))},
+         ),),
+
+    dict(id='jungle', name='Jungle', vibe='Botanical', dark=False, icon='duotone',
+         bg='#EAF1E6', surface='#F8FBF4', field='#DFEAD8', ink='#132A18', ink2='#2F4A34', ink3='#4C6A52', ink4='#86A08A', chat_bg='#E4EEDF',
+         accent='#1E7B44', accent_ink='#155C32', on_accent='#FFFFFF', read='#1B6B3B', second='#B4560F', second_ink='#8A400A',
+         out='#D3E9C6', out_line='#B7D9A6', out_ink='#132A18', out_meta='#4C6A52', inb='#FBFDF8', in_line='#D9E6D3', in_meta='#4C6A52',
+         success='#0F6B39', warning='#96601A', danger='#B03A2E',
+         call=('#14532D', '#0E7A4B', '#093D24'), on_brand='#FFFFFF', call_live='#BBF0CC', wordmark=('#1E7B44', '#B4560F', '#0E7A4B'),
+         hues=['#1E7B44', '#B4560F', '#0E7490', '#7A6B12', '#9A3F6E', '#3F6E8A', '#6B4A8A', '#5E6E52'],
+         font='"DM Sans", ui-sans-serif, system-ui, sans-serif', display='"Fraunces", Georgia, serif', mono='"DM Mono", ui-monospace, monospace',
+         display_weight=560, display_tracking='-0.01em', wordmark_tracking='-0.02em', transform='none',
+         radii=dict(xs=8, sm=12, md=16, lg=20, xl=26, pill=999), avatar='30%', bubble=16, cut=6,
+         pattern=('grain', dict(r=0.1, g=0.24, b=0.13, a=0.07, size=(160, 160))), glow='0 0 0 transparent',
+         effects=()),
+
+    dict(id='ocean', name='Ocean', vibe='Deep sea', dark=True, icon='light',
+         bg='#0A1A22', surface='#112A34', field='#183A46', ink='#E2F2F7', ink2='#BEDAE4', ink3='#8FBAC8', ink4='#5E8C9C', chat_bg='#0D2028',
+         accent='#2EB8C9', accent_ink='#6FD3E8', on_accent='#04222A', read='#7FDCF0', second='#F2A65A', second_ink='#FFD1A3',
+         out='#0F3D4A', out_line='#1B5A6B', out_ink='#D9F2F8', out_meta='#8FC4D4', inb='#16313C', in_line='#235061', in_meta='#9CC3D2',
+         success='#3DD68C', warning='#F2B544', danger='#FF6B6B',
+         call=('#0B4A5A', '#0A3A6B', '#072840'), on_brand='#EAF7FB', call_live='#7CE0B6', wordmark=('#2EB8C9', '#6FD3E8', '#F2A65A'),
+         hues=['#2EB8C9', '#F2A65A', '#7C8FE8', '#3DD68C', '#E86F9A', '#8FD14F', '#5AD1C0', '#9BB4C4'],
+         font='"Barlow", ui-sans-serif, system-ui, sans-serif', display='"Rajdhani", "Barlow", sans-serif', mono='"JetBrains Mono", ui-monospace, monospace',
+         display_weight=700, display_tracking='0.04em', wordmark_tracking='0.02em', transform='uppercase',
+         radii=dict(xs=8, sm=12, md=16, lg=20, xl=26, pill=999), avatar='50%', bubble=14, cut=8,
+         pattern=('contours', dict(stroke='#1B5A6B', width=1.4, size=(220, 220))), glow='0 0 16px rgba(46, 184, 201, 0.28)',
+         effects=(
+    {'kind': 'wordmarkGlow', 'theme': 'ocean', 'params': dict(
+                 dx=0, dy=0, blur=10, colour=lit('#2EB8C9', 0.35))},
+         ),),
+
+    dict(id='metal', name='Metal', vibe='Industrial', dark=True, icon='bold',
+         bg='#1A1C1F', surface='#26292E', field='#31353C', ink='#E8EAEE', ink2='#C6CBD2', ink3='#9EA5AE', ink4='#6E757F', chat_bg='#191B1E',
+         accent='#BAC4CF', accent_ink='#DCE3EA', on_accent='#1A1C1F', read='#9FC6E8', second='#C9A227', second_ink='#E3C455',
+         out='#3A3F46', out_line='#565C65', out_ink='#EDF0F4', out_meta='#B9C0C9', inb='#2E3238', in_line='#444A52', in_meta='#B4BAC2',
+         success='#5BD98A', warning='#E8B33C', danger='#FF6A55',
+         call=('#3A4048', '#22262C', '#4A5058'), on_brand='#EEF1F5', call_live='#B9F6D4', wordmark=('#D7DEE6', '#9AA6B4', '#C9A227'),
+         hues=['#BAC4CF', '#8FA9C4', '#C9A227', '#7FB8A0', '#C98A8A', '#A28FC4', '#9FB07F', '#8A9AA8'],
+         font='"Exo 2", ui-sans-serif, system-ui, sans-serif', display='"Exo 2", ui-sans-serif, system-ui, sans-serif', mono='"Share Tech Mono", ui-monospace, monospace',
+         display_weight=700, display_tracking='0.06em', wordmark_tracking='0.04em', transform='uppercase',
+         radii=dict(xs=3, sm=5, md=7, lg=9, xl=12, pill=5), avatar='15%', bubble=6, cut=3,
+         pattern=('scanlines', dict(colour='#DDE3EA', a=0.03, thickness=1, period=4)),
+         glow='0 0 12px rgba(200, 212, 226, 0.20)',
+         effects=(
+    {'kind': 'cornerClip', 'theme': 'metal', 'params': dict(
+                 notch=7, radius='2px', shadow='none',
+                 targets=['.btn.primary', '.xfab'])},
+             {'kind': 'eyebrowColour', 'theme': 'metal', 'params': dict(
+                 targets=['.eyebrow', '.day span'], token='accent-ink')},
          ),),
 ]
 

@@ -15,7 +15,12 @@ total keys: 42
 # and 4.59 - so nothing in the port moved, and message-info's 5.07 here is the
 # owner's edit, not a layout regression. Re-check these three if tokens.css
 # is ever committed or reverted.
-appearance.window-l total >16: 3.85%
+#
+# Both appearance lines were re-shot on 2026-10-23 for Part C step 7: the
+# theme table grew from eight themes to eleven, and the prototype's Appearance
+# page draws one card per theme, so both sides of this key changed together.
+# The new numbers are better than the old, not worse.
+appearance.window-l total >16: 3.40%
 archived.window-l total >16: 1.05%
 backup.window-l total >16: 3.84%
 call-active.window-l total >16: 0.44%
@@ -42,7 +47,7 @@ restore.window-l total >16: 0.97%
 settings.window-l total >16: 1.80%
 shared.window-l total >16: 4.43%
 signin.window-l total >16: 0.55%
-appearance.window-m total >16: 4.56%
+appearance.window-m total >16: 4.42%
 call-active.window-m total >16: 0.65%
 call-detail.window-m total >16: 3.42%
 calls.window-m total >16: 2.65%

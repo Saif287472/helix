@@ -6,10 +6,10 @@ import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 /// Every built-in theme, shown side by side.
 ///
 /// This is the Review 2 artefact for the theme layer: it proves that a theme
-/// really is data, because all eight cards are built from eight JSON files with
-/// no per-theme constant anywhere in this file. It shows what a theme *is* -
-/// its colours, its shapes, its type, its chat pattern, its glow and its
-/// effects - rather than a screen, which is Phase 4's job.
+/// really is data, because all eleven cards are built from eleven JSON files
+/// with no per-theme constant anywhere in this file. It shows what a theme
+/// *is* - its colours, its shapes, its type, its chat pattern, its glow and
+/// its effects - rather than a screen, which is Phase 4's job.
 ///
 /// The pattern and glow on each card are drawn here, in miniature, because a
 /// theme's character is mostly those two and they cannot be seen in a swatch.

@@ -100,7 +100,7 @@ rework:
 |---|---|---|
 | `OrbitTokens` (`ThemeExtension`) loaded from the theme JSON | derive | Replaces `HelixThemes.light()`. `themes.py` writes the JSON |
 | Built into the app: Orbit and Orbit Night, with their fonts | derive | For offline use, first launch, and when a download fails |
-| The other six themes: Bloom, Mochi, Papyrus, Arcade, Terminal, Field | engine | The first downloadable packs, which test the pipeline (Part C). The preview app loads all eight from local JSON |
+| The other nine themes: Bloom, Mochi, Papyrus, Arcade, Terminal, Field, and step 7's Jungle, Ocean and Metal | engine | The six are step 8's first downloadable packs, which test the pipeline (Part C); whether the three new ones join them is on the owner. The preview app loads all eleven from local JSON |
 | The effect registry, with each effect's parameters | derive | Fixed in the app; themes refer to effects by name |
 | Motion tokens and reduce motion | derive | Part of the theme JSON. Reduce motion reads `MediaQuery.disableAnimations` |
 | The chosen theme, kept on the device | local | New setting. Default Orbit. No day/night switching. When a chosen pack is missing or fails its checks, the app falls back to Orbit |

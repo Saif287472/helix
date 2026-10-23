@@ -103,10 +103,10 @@ panel still works for trying variations, and Reset returns to them.
 
 ## Themes
 
-There are eight themes. Pick one under You > Appearance, or in the Tweaks
+There are eleven themes. Pick one under You > Appearance, or in the Tweaks
 panel:
-- **Light:** Orbit, Bloom, Mochi, Papyrus
-- **Dark:** Orbit Night, Arcade, Terminal, Field
+- **Light:** Orbit, Bloom, Mochi, Papyrus, Jungle
+- **Dark:** Orbit Night, Arcade, Terminal, Field, Ocean, Metal
 
 Each changes colours, fonts, shapes, the chat pattern, icon weight and small
 effects. Layout and the "Orbit" title stay the same.
@@ -129,7 +129,7 @@ table in `js/app.js` says where each screen opens.
 | File | What it is | Becomes in Flutter |
 |---|---|---|
 | `css/tokens.css` | The Orbit theme's tokens and every semantic role | `helix_remote_ui` tokens and `ThemeData` |
-| `css/themes.css` | GENERATED: all eight themes' tokens and effects | one `ThemeExtension` per theme |
+| `css/themes.css` | GENERATED: all eleven themes' tokens and effects | one `ThemeExtension` per theme |
 | `tools/themes.py` | The theme table, generator and contrast check | the source for the Dart theme table |
 | `css/components.css` | Avatar, chat row, dock, rows, sheets, dialogs, snackbar | `helix_remote_ui` widgets |
 | `css/screens.css` | Bubbles, composer, timeline, call screen | `helix_remote_ui` chat and call widgets |
