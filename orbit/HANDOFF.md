@@ -23,9 +23,11 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   staying a build-time define. Step 7 (three new themes) needed nothing from
   anyone and is built the same way, and so is step 8 (the theme table becomes
   packs): built and tested, with only the `keygen` between it and an offer.
-  Nothing further in Part C is approved: step 5 (the ringtone picker) and step 6
-  (the animation runtime) wait for a sound and for a dependency ruling, and step
-  9 (premium themes) for the `keygen` and a Play Billing decision.
+  Steps 5 and 6 are now ruled by the owner (2026-10-23): a ringtone arrives as a
+  signed pack and Android rings with a channel per ringtone, and the animation
+  runtime is Lottie. What is still owed is a real ringtone sound and the one
+  moment step 6 is for, and step 9 (premium themes) waits for the `keygen` and a
+  Play Billing decision.
 
 ## Done (pending the owner's review)
 
@@ -51,7 +53,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | d8fc536 | Part C step 3: the pack store, the trust anchor and the theme library |
 | 560c4b2 | Part C step 4: the themes page behind Appearance, in `orbit_ui` and the app |
 | f33b2e2 | Part C step 7: Jungle, Ocean and Metal, from the one theme table |
-| (this) | Part C step 8: the theme table becomes packs, and the pipeline proves it |
+| 672c387 | Part C step 8: the theme table becomes packs, and the pipeline proves it |
+| (this) | The owner's rulings on Part C steps 5 and 6, recorded in the plan |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -281,10 +284,10 @@ both change the server, so neither is live until production runs this branch.)
 
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
-`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4, 7 and 8 are built. Step 5
-(the ringtone picker) needs a sound and step 6 (the animation runtime) needs a
-dependency ruling; step 8 is built and only waits for the `keygen` to be
-published, and step 9 waits for the same key and a Play Billing decision.
+`PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4, 7 and 8 are built. Steps 5
+and 6 are ruled (sounds as signed packs with a channel per ringtone; Lottie) and
+not built: step 5 waits on a real ringtone file and step 6 on the moment it
+animates. Step 9 waits for the `keygen` and a Play Billing decision.
 
 12. Part C step 1, the pack format and the signing tool - **done**
     (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
@@ -381,11 +384,17 @@ published, and step 9 waits for the same key and a Play Billing decision.
     in a build made with the define, so it is an APK rebuild you control, after
     `keygen`.
 17. Part C step 5, the ringtone picker, is not started; steps 7 and 8 went
-    first, because they were the two with nothing owed on them. Step 5
-    needs a sound of its own (the one outstanding item on you from Part B) and,
-    on Android, a notification channel per ringtone or the app playing the sound
-    itself; `notification_call_ringer.dart` is today's ringer. Step 6 (the
-    animation runtime) also waits on a dependency ruling - Lottie or Rive.
+    first, because they were the two with nothing owed on them. **Both are now
+    ruled (2026-10-23, you):** the sound arrives **as a signed pack** - which
+    means the pack format has to carry a file that is not a theme, and no server
+    file changes, because the three pack routes serve a file by its digest and
+    never look at what it is - and Android rings with **a channel per
+    ringtone**, not with the app playing it, because a call must ring when the
+    app is not alive. `notification_call_ringer.dart` is today's ringer. What is
+    still owed on step 5 is the sound itself: a ringtone is a design decision,
+    not a generated tone. Step 6 is ruled **Lottie**; its dependency and its
+    `DEPENDENCY_RISK_REGISTER.md` entry come with the first animation that
+    ships, and which moment animates is still yours to name.
 18. Part C step 7, Jungle, Ocean and Metal - **done** (2026-10-23). Three records
     in `THEMES` in `prototype/tools/themes.py`, and the generator's own outputs:
     `css/themes.css`, `js/themes.js` and `assets/themes/{jungle,ocean,metal}.json`

@@ -848,8 +848,23 @@ reuse that effect.
      created. A custom ringtone needs a channel per ringtone, or the app
      playing the sound itself. Today's ringer is
      `features/calls/application/platform/notification_call_ringer.dart`.
+   - **Ruled by the owner (2026-10-23):** a ringtone arrives **as a signed
+     pack**, so it rides steps 1, 2, 3 and 8's pipeline rather than a second
+     download route - which means the pack format must carry a file that is not
+     a theme, and no server file changes for any of it (the three pack routes
+     serve a file by its digest and never look at what it is). And Android rings
+     with **a notification channel per ringtone**, not with the app playing the
+     sound, because a call has to ring when the app is not alive.
+   - Still yours: the sound. Nothing here is testable on a phone until one real
+     ringtone exists, and a ringtone is a design decision, not a generated tone.
 6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
    dependency risk register.
+   - **Ruled by the owner (2026-10-23): Lottie.** The dependency and its
+     register entry come with the first animation that ships, not before it -
+     an unused dependency is a liability with no screen. What animates is still
+     the rule's question: nothing in the prototype has a decorative animation,
+     so step 6 needs you to name the one moment it is for (or say it stays
+     parked).
 7. **New themes:**
    - Jungle and Ocean.
    - Metal: brushed steel and chrome, industrial.
