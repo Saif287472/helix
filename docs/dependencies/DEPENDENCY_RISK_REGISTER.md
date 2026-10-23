@@ -140,3 +140,22 @@ It ships font files, vendored verbatim, which are dependencies in their own righ
   added only together with its licence.
 
 Owner: client-team.
+
+
+## Theme packs: the domain package's first dependency (2026-10-23)
+
+Orbit Part C step 1 (`orbit/PORT_PLAN.md`, ADR-033) added one hosted dependency
+and one internal edge:
+
+| Package | Version | Declared by | Why | Risk | Owner | Remediation |
+|---|---:|---|---|---|---|---|
+| `cryptography` | `2.9.0` | `packages/helix_remote_domain` (**new**), `helix_remote_crypto` (already), `tool` (**new**) | A pack's manifest is checked with Ed25519 and its files hashed with SHA-256 before the app opens anything. | The package decides whether a downloaded theme is drawn on every device, so a verification bug is a shipping bug. It is the same resolved version `helix_remote_crypto` already used for the protocol's X3DH and Sender Keys, so nothing new entered the build and `helix_remote/pubspec.lock` did not change; `flutter pub get --enforce-lockfile` still resolves. | client-team | Confined to one file (`lib/domain/theme_packs.dart`) and to `tool/theme_pack_tool.dart`. Signing vectors are pinned in `packages/helix_remote_domain/test/theme_packs_test.dart` (the canonical bytes, the key and the signature), and the gate's refusal cases are tested there. A wrong signature, an unknown publisher or an unsigned pack is refused, never degraded. |
+
+`tool/pubspec.yaml` also gained a path dependency on `helix_remote_domain`, so
+`dart run tool/theme_pack_tool.dart verify` checks a pack with the same code the
+app runs rather than a second implementation that can drift from it. `tool/`
+is not shipped, and no package depends on it.
+
+The trust anchor is empty in this change: `checkOrbitPack` refuses every
+publisher until the owner generates a key with `keygen` and adds the public half
+to the app. No pack can be accepted by a build that has no key in it.

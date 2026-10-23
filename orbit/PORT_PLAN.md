@@ -723,6 +723,28 @@ reuse that effect.
    - Before using a pack, the app checks its signature, size limits and
      format. Font, audio and animation files are a known attack route, so
      this holds even if the server is hacked.
+   - [x] **Done 2026-10-23 (pending your review).** A pack is a folder with
+     `manifest.json` and the theme document: publisher, revision, every file by
+     path, kind, size and SHA-256, and one Ed25519 signature over the manifest
+     without that field (keys in code-unit order, no spaces, UTF-8). The format,
+     the limits and the fourteen refusals are specified in
+     `helix_remote/docs/product/THEME_PACK_FORMAT.md`, and the gate is one function,
+     `checkOrbitPack` in `packages/helix_remote_domain` - sizes and manifest shape,
+     then the publisher and the signature, and only then the pack's own files and
+     its theme document, so an unsigned pack is never opened by a parser. The
+     publisher keys and this build's effect and pattern names are arguments, so
+     `orbit_ui` stays the one registry and the release build stays the trust
+     anchor. `tool/theme_pack_tool.dart` is `keygen`, `pack`, `sign` and `verify`,
+     reads the private key from a file and never prints it. ADR-033 and its plan
+     section 12 row; the domain package's first hosted dependency (`cryptography`,
+     at the version the crypto package already used, so the lockfile did not move)
+     is in `docs/dependencies/DEPENDENCY_RISK_REGISTER.md`. Tests: domain 44,
+     including the pinned signing vectors.
+   - **Waiting on you:** the anchor ships **empty**, so every pack is refused as
+     `unknownPublisher` until you run `keygen`, keep the seed file somewhere that
+     is not this machine's ordinary backups, and paste the publisher key into the
+     app's trust anchor, which step 3 adds with the download page. Until then
+     the format and the tool are the whole of it, and nothing is downloadable.
 2. **A server endpoint on Helix Global** that lists and serves packs, built
    with the `helix-feature` process.
    - For now it runs on your PC. A separate file host can come later if

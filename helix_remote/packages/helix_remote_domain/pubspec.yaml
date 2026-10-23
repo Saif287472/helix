@@ -8,6 +8,12 @@ environment:
 
 resolution: workspace
 
+dependencies:
+  # Only theme-pack signatures and file hashes are checked here (ADR-033); the
+  # same version `helix_remote_crypto` already declared, so the lockfile is
+  # unchanged.
+  cryptography: ^2.9.0
+
 dev_dependencies:
   helix_remote_architecture_rules:
     path: ../helix_remote_architecture_rules

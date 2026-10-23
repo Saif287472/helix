@@ -1,7 +1,8 @@
-# Orbit Part B: where it stands (handoff, 2026-10-23)
+# Orbit: where it stands (handoff, 2026-10-23)
 
 For picking the port up on another machine or in a cloud session. The plan
-of record is `PORT_PLAN.md` (Part B); what each screen needs is in
+of record is `PORT_PLAN.md` (Part B is done bar the owner's step 6; Part C,
+downloadable theme packs, has started); what each screen needs is in
 `contracts/`; every difference from the prototype is in `DEVIATIONS.md`;
 the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 
@@ -13,6 +14,9 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   commits, reviewed after the fact. Nobody but the owner pushes.
 - One commit per batch, marked "(pending review)" in the message and in
   `PORT_PLAN.md`'s progress notes.
+- Part C step 1 (the pack format, the gate and the signing tool) is the same
+  way, and it is the last commit in this handoff. Step 2 is the server
+  endpoint, which an agent does not start without the owner's go-ahead.
 
 ## Done (pending the owner's review)
 
@@ -32,7 +36,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | 90447a7 | Part B step 3: the app is called Orbit, on the Orbit mark |
 | a1c5792 | Part B step 4: the app draws only Orbit; `helix_remote_ui` is the console's kit (ADR-031) |
 | 5452757 | The operator's whole number, and the privacy text that says why |
-| (this) | Part B step 5: the full gate, format fixes and the matrix path |
+| c1a24bf | Part B step 5: the full gate, format fixes and the matrix path |
+| (this) | Part C step 1: the pack format, the one gate and the signing tool (ADR-033) |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -260,6 +265,38 @@ both change the server, so neither is live until production runs this branch.)
     of Part B is yours:
     the APK on the phone, the Windows run, and the merge.
 
+## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
+
+`PORT_PLAN.md` Part C is the plan. Step 1 is built; steps 2 to 4 are not.
+
+12. Part C step 1, the pack format and the signing tool - **done**
+    (2026-10-23, ADR-033). A pack is a folder: `manifest.json` plus the files
+    it lists, and the manifest's theme is the same JSON the built-in themes
+    are, so `OrbitTokens.fromThemeJson` did not change. One gate,
+    `checkOrbitPack` in `packages/helix_remote_domain/lib/domain/theme_packs.dart`,
+    holds the whole format: size and count limits, path rules, per-file
+    sha256, the Ed25519 signature, and the theme document. **The order of the
+    checks is the security property** - nothing of an unverified pack is
+    parsed or opened, so a hostile server can reach no parser. The gate takes
+    the effect and pattern registries and the trusted publisher keys as
+    arguments: `orbit_ui` stays the one registry of what can be drawn, and the
+    release build stays the one trust anchor. The gate refuses a pack naming
+    an effect this build does not ship, which is what keeps a pack from
+    bringing code. `tool/theme_pack_tool.dart` does `keygen`, `pack`, `sign`
+    and `verify` against the same gate. Tests: domain 44, including pinned
+    signing vectors (a canonical-bytes golden, a public key and a signature)
+    so the signing form cannot drift. No server change, no migration, no
+    route, no new `.env` line. Docs: `docs/product/THEME_PACK_FORMAT.md`,
+    ADR-033, its section 12 row, and the dependency register entry for the
+    domain package's first hosted dependency (`cryptography`, the version the
+    lockfile already had - it did not move).
+13. Part C step 2, the server endpoint - **not started**. It changes the
+    server, so it waits for the owner's go-ahead (and, now given: build the
+    plan first, then implement it once approved).
+14. Part C step 3, the download manager, and step 4, the gallery - not started.
+    Step 3 also adds the page where the owner's publisher key would go, which
+    is what makes a pack usable at all (the anchor ships empty).
+
 ## Batch 8, what is left
 
 `contracts/you.md` is the spec. Already done in 49a75a4:
@@ -375,11 +412,12 @@ must say so.
 
 ## Waiting on the owner
 
-- Another agent is working in this same tree: the identity module has
-  uncommitted ADR-032 password-reset code (protocol routes, api client, server,
-  REST_V2.md, identity tests) and `dart analyze server tool` fails on it while
-  it is mid-edit. It is NOT part of any Part B commit - the gate numbers below
-  are what this branch's own suites give.
+- **A publisher key, before any pack is usable.** The trust anchor ships
+  **empty**, so `checkOrbitPack` refuses every pack as `unknownPublisher`.
+  Run `dart run tool/theme_pack_tool.dart keygen --seed-file <somewhere
+  private>` from `helix_remote/`, keep the seed file off ordinary backups,
+  and paste the public key it prints into the app's anchor (Part C step 3
+  adds the page; until then it is a one-line constant in `core/theme/`).
 - Review of every "(pending review)" commit and the DEVIATIONS entries.
 - A sound for the Orbit ringtone.
 - Part B step 5's second bullet: the debug APK on your phone and the Windows
@@ -389,6 +427,10 @@ must say so.
 
 Decided and done since the last hand-off:
 
+- The other agent's ADR-032 work is committed (`f856177`, `ed3317d`,
+  `57b4805`): the account-status route and the sign-in page that asks it. It
+  is not part of any Part B or Part C batch, and `dart analyze server tool` is
+  clean with it in the tree.
 - The operator sees the whole phone number (ADR-030, re-confirmed by the owner
   on 2026-10-23). The admin rule "only the last four phone digits are ever
   handled" has been rewritten as "the whole number is read in one file, and its

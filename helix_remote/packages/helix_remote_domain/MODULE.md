@@ -7,23 +7,36 @@ v2 wire types live in `helix_remote_protocol`, stored rows in
 
 ## Purpose
 
-Shared value types that belong to no other layer. Today that is one file:
+Shared value types that belong to no other layer. Today that is two files:
 `HelixLegalDocuments` (the versioned terms and privacy text the sign-in page
-shows). The server keeps its own copy in `helix_remote_protocol`
-(`lib/src/legal.dart`) so it can serve `GET /v1/server/legal`; keep the two
-texts and versions in step when the documents change
-(`docs/legal/`).
+shows) and the Orbit theme-pack format, whose gate every downloaded pack passes
+before the app reads a byte of it (`orbit/PORT_PLAN.md` Part C, ADR-033,
+`docs/product/THEME_PACK_FORMAT.md`). The server keeps its own copy of the legal
+text in `helix_remote_protocol` (`lib/src/legal.dart`) so it can serve
+`GET /v1/server/legal`; keep the two texts and versions in step when the
+documents change (`docs/legal/`).
 
 ## Public surface
 
-`lib/models.dart` exports `domain/legal_documents.dart`.
+`lib/models.dart` exports `domain/legal_documents.dart` and
+`domain/theme_packs.dart`.
 
 ## Who may depend on this
 
-The app (sign-in legal sheet). It may grow again if a type is needed by both
-the engine and the UI and by no wire format; folding it into
-`helix_remote_protocol` is the alternative if it never does.
+The app (the sign-in legal sheet, and a theme-pack download) and
+`tool/theme_pack_tool.dart`, which writes and signs the packs the app checks.
+It may grow again if a type is needed by both the engine and the UI and by no
+wire format; folding it into `helix_remote_protocol` is the alternative if it
+never does.
 
 ## What this may depend on
 
-Nothing. No dependencies at all, not even `meta`.
+No Helix package and no platform. The pack gate is handed this build's effect
+registry and its trusted publisher keys as arguments rather than importing them
+from `orbit_ui` or the app: that keeps the registry the design system's, the
+trust anchor the release build's, and this package testable on its own.
+
+One hosted dependency, added for the pack format: `cryptography` (Ed25519 and
+SHA-256 at the version `helix_remote_crypto` already declared, so the lockfile
+did not move). `helix_remote_crypto`'s own `ed25519Verify` is not usable here -
+the package graph lets crypto depend on domain, never the other way round.
