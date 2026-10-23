@@ -274,10 +274,12 @@ manifest, and the endpoint never opens it. A page that wants to list one kind
 only has to fetch a manifest to learn it, which is the open question of step 5 -
 not a reason to make the server a judge.
 
-## What the phone does (step 3)
+## What the phone does (steps 3 and 5)
 
 `helix_remote/app/lib/core/theme/orbit_packs.dart` keeps what a person
-downloads, in the server's own layout under the app's `packs` folder:
+downloads - the one `PackFolder` both kinds go through - and
+`helix_remote/app/lib/core/sounds/orbit_sounds.dart` is the ringtone half of it,
+in the server's own layout under the app's `packs` folder:
 
 ```
 packs/<pack id>/r<revision>/manifest.json
@@ -316,11 +318,19 @@ Rules that are the device's, not the format's:
   the start-up and theme-library read paths, so a typo in a define cannot stop
   the app starting or leave it with no theme; the pages that manage packs fail
   the action instead, so the typo is noticed rather than shipped silently.
-- **A theme store refuses a pack that is not a theme.** `contents` is the format's
-  business and not this class's: `ThemePackStore` draws themes, so a sound pack is
-  refused before its bytes are fetched on the way in, and skipped on every read of
-  the folder, which is what keeps a ringtone off the themes page and out of the
-  start-up scan. The sound step's own store is the one that plays it.
+- **One folder, two stores, one code path.** `PackFolder` is the whole device
+  half of the format - staging, caps, gate, re-check on every read - and is
+  parameterised by the two things that differ between a theme and a ringtone:
+  the `contents` word a pack must carry, and how its bytes become something the
+  app can use. `ThemePackStore` asks for `theme` and decodes a pack into the
+  tokens it draws with; `SoundPackStore` asks for `sound` and decodes one into
+  the file it hands to the system to play. Each refuses the other's kind before
+  a byte of it is fetched on the way in, and skips it on every read of the
+  folder, which is what keeps a ringtone off the themes page - and a theme out
+  of the picker - without either store knowing the other exists. A theme's
+  document must parse as this build's 111 tokens to be offered at all; a sound
+  is hashed and size-limited and never opened, so a ringtone is named on screen
+  by its signed pack id, the only identifier a sound pack carries.
 - **A pack never takes a built-in theme's name.** The theme library is the
   downloaded packs with the built-ins merged over them, and a download of an id
   that is built in is refused in words, so Orbit and Orbit Night are always the
@@ -342,6 +352,9 @@ Rules that are the device's, not the format's:
 
 `app/test/settings/theme_packs_test.dart` pins all of this, including that an
 unsigned, untrusted, swapped, over-cap or effect-asking pack writes nothing;
+`app/test/settings/orbit_sounds_test.dart` pins the same rules for a sound pack
+in the same folder - a theme refused as the wrong kind with nothing fetched, a
+ringtone's file kept by digest, and each store listing only its own kind;
 `packages/orbit_ui/test/theme_packs_test.dart` pins the page's four verbs, its
 two groups, its waiting row and its "nothing is on offer" note.
 

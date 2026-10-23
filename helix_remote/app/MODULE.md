@@ -34,9 +34,14 @@ lib/
     security/                   AppLock + gate, AppSettings
     theme/                      orbit_app_theme.dart (the built-in themes, the
                                 merged library, the choice, the device setting);
-                                orbit_packs.dart (ThemePackStore: the packs this
-                                device downloaded, re-checked on every read, and
-                                PackTrust, the build's publisher anchor)
+                                orbit_packs.dart (PackFolder: the packs this
+                                device downloaded, re-checked on every read;
+                                ThemePackStore: the theme ones; and PackTrust,
+                                the build's publisher anchor)
+    sounds/                     orbit_sounds.dart (SoundPackStore: the ringtone
+                                packs this device downloaded, in the same folder
+                                and through the same gate, read only by the page
+                                that plays them)
     notifications/              local notifications (wake-ups only);
                                 MessageAlerts (which messages alert, shared
                                 with the push isolate) and RunningAppAlerts

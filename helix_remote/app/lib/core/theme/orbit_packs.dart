@@ -74,23 +74,44 @@ abstract final class PackTrust {
   }
 }
 
-/// Where the packs a person downloads are kept, and what the app will draw
-/// with them.
+/// Where the packs a person downloads are kept, whatever they turn out to be.
+///
+/// [T] is what this app makes of one: [OrbitTokens] for a theme, a sound file
+/// for a ringtone. The two kinds share this class because they share every rule
+/// that matters - the folder layout, the size caps, the staging a download goes
+/// through before it may replace anything, the gate that runs on **every** read
+/// and not only on download - and a second copy of those would be a second place
+/// for the security-relevant part to drift. What differs is two arguments:
+/// [contents], the word a pack's manifest must carry for this folder to keep it,
+/// and [decode], what this app makes of a pack the gate has already passed.
 ///
 /// The folder is the server's own layout: `manifest.json` in
 /// `packs/<id>/r<revision>` beside a `files` folder of SHA-256 names, so a pack
 /// is one folder a device can hold and re-check, and a file two revisions share
 /// is stored once. Nothing here knows the format: `checkOrbitPack` in
-/// `helix_remote_domain` is the one gate, and it runs over **every** pack on
-/// **every** read, not only when one is downloaded. A pack folder that was
-/// edited afterwards, or that a newer app no longer trusts the publisher of, is
-/// therefore not a theme.
+/// `helix_remote_domain` is the one gate. A pack folder that was edited
+/// afterwards, or that a newer app no longer trusts the publisher of, is
+/// therefore not a pack - and a pack of the other [contents] is not this app's
+/// business either, so one folder can hold both kinds.
 ///
 /// The store never opens a path a pack named: files are written and read by
 /// their SHA-256, which is what [PackSource] asks the host for too.
-final class ThemePackStore {
-  const ThemePackStore({Map<String, List<int>>? trustedPublishers})
-    : _publishers = trustedPublishers;
+final class PackFolder<T> {
+  PackFolder({
+    required this.contents,
+    required this.decode,
+    Map<String, List<int>>? trustedPublishers,
+  }) : _publishers = trustedPublishers;
+
+  /// The `contents` a pack must declare to live in this store's folder:
+  /// `theme` or `sound`, the two words [orbitPackContents] knows.
+  final String contents;
+
+  /// What this app makes of a pack that passed the gate. Null for one that
+  /// passed every check and is still no use here - a theme document whose
+  /// tokens this build cannot parse, for instance - which is read as "this
+  /// device holds no such pack" and leaves its bytes alone.
+  final T? Function(PackBytes pack) decode;
 
   /// null means this build's anchor ([PackTrust]).
   final Map<String, List<int>>? _publishers;
@@ -99,17 +120,17 @@ final class ThemePackStore {
 
   // ------------------------------------------------------------------ reads
 
-  /// Every pack on this device the app can draw with: one entry per id, the
-  /// newest revision that passes the gate, in id order.
+  /// Every pack of [contents] on this device that this app can use: one entry
+  /// per id, the newest revision that passes the gate, in id order.
   ///
   /// A pack that fails is left on disk and simply not offered - a full-height
-  /// read error, a theme document this build cannot parse, or a key a later app
-  /// stopped trusting must not destroy what someone downloaded.
-  Future<List<InstalledPack>> installed() async {
+  /// read error, a file that no longer hashes, or a key a later app stopped
+  /// trusting must not destroy what someone downloaded.
+  Future<List<PackOf<T>>> stored() async {
     final publishers = _publishers ?? PackTrust.forThisBuildOrNone();
     final root = await AppPaths.packsDirectory();
     if (!await root.exists()) return const [];
-    final packs = <InstalledPack>[];
+    final packs = <PackOf<T>>[];
     for (final folder in root.listSync()) {
       if (folder is! Directory) continue;
       final id = p.basename(folder.path);
@@ -121,8 +142,8 @@ final class ThemePackStore {
     return packs;
   }
 
-  /// The installed pack [id], or null when the device has none it can draw with.
-  Future<InstalledPack?> load(String id) async {
+  /// The installed pack [id], or null when the device has none this app can use.
+  Future<PackOf<T>?> load(String id) async {
     if (!_isSlug(id)) return null;
     final folder = Directory(
       p.join((await AppPaths.packsDirectory()).path, id),
@@ -135,22 +156,16 @@ final class ThemePackStore {
     );
   }
 
-  /// The themes packs add to the built-ins, by id. What [main] seeds the theme
-  /// library with, so a downloaded theme is on screen from the first frame.
-  Future<Map<String, OrbitTokens>> themeTokens() async => {
-    for (final pack in await installed()) pack.id: pack.tokens,
-  };
-
   // ---------------------------------------------------------------- changes
 
-  /// Downloads pack [id] and puts it where the app can draw with it.
+  /// Downloads pack [id] and puts it where this app can use it.
   ///
   /// [revision] asks for a specific one; without it the newest the host lists.
   /// Every byte is fetched and gate-checked **before** anything is moved into
-  /// place, so a pack that turns out to be unsigned, tampered with or drawn in
-  /// an effect this app does not ship leaves the theme on screen untouched.
-  /// Revisiting an id replaces it, and the revisions older than the new one go:
-  /// the app draws an id by its newest revision, so the others are only bytes.
+  /// place, so a pack that turns out to be unsigned, tampered with, or of the
+  /// other [contents] leaves what is on screen untouched. Revisiting an id
+  /// replaces it, and the revisions older than the new one go: an app uses an id
+  /// by its newest revision, so the others are only bytes.
   ///
   /// Returns [PackChange.alreadyCurrent] when this device already holds a
   /// revision at least as new, so the caller can say "up to date" rather than
@@ -196,14 +211,13 @@ final class ThemePackStore {
         'it is not the pack this name and revision are for',
       );
     }
-    // And this store draws themes, so a pack that carries a sound stops here,
-    // before its files are paid for in bandwidth. A host that serves both kinds
-    // from one folder lists both, and nothing but this manifest says which one
-    // this is.
-    if (manifest.contents != 'theme') {
-      throw const PackRefused(
+    // And this folder is one kind's, so the other kind stops here, before its
+    // files are paid for in bandwidth. A host that serves both kinds from one
+    // folder lists both, and nothing but this manifest says which one this is.
+    if (manifest.contents != contents) {
+      throw PackRefused(
         OrbitPackFailure.unknownContent,
-        'this store draws themes, and this pack is not one',
+        'this keeps $contents packs, and this pack is not one',
       );
     }
 
@@ -329,13 +343,13 @@ final class ThemePackStore {
     return best;
   }
 
-  /// The newest revision in one pack's folder that this device can draw with.
-  Future<InstalledPack?> _newestOf(
+  /// The newest revision in one pack's folder that this app can use.
+  Future<PackOf<T>?> _newestOf(
     String folder, {
     required String id,
     required Map<String, List<int>> publishers,
   }) async {
-    InstalledPack? newest;
+    PackOf<T>? newest;
     for (final revision in Directory(folder).listSync()) {
       if (revision is! Directory) continue;
       final number = _revisionOf(p.basename(revision.path));
@@ -352,9 +366,9 @@ final class ThemePackStore {
     return newest;
   }
 
-  /// One pack folder, gate-checked. Null when it is not a theme this device can
-  /// draw with, for any of the reasons [installed] documents.
-  Future<InstalledPack?> _read(
+  /// One pack folder, gate-checked. Null when it is not a pack this app can use,
+  /// for any of the reasons [stored] documents.
+  Future<PackOf<T>?> _read(
     String folder, {
     required String id,
     required int revision,
@@ -376,14 +390,14 @@ final class ThemePackStore {
       } on FormatException {
         return null;
       }
-      // The folder is how the app finds a theme and the revision it offers is
+      // The folder is how the app finds a pack and the revision it offers is
       // the number in its name, so a hand-edited folder that claims another
       // pack's manifest, or another revision, is not a pack.
       if (manifest.id != id || manifest.revision != revision) return null;
-      // A sound pack is a perfectly good pack that this class has no way to
-      // draw: its one file is audio, so `manifest.theme` is null and there are
-      // no tokens to read. The gate would allow it; the theme list must not.
-      if (manifest.contents != 'theme') return null;
+      // One folder, two kinds: the themes store is not the one that plays a
+      // ringtone and the ringtones store is not the one that draws a theme. The
+      // gate would allow either; this list must not.
+      if (manifest.contents != contents) return null;
       final files = <String, List<int>>{};
       var bytes = manifestBytes.length;
       for (final file in manifest.files) {
@@ -400,26 +414,22 @@ final class ThemePackStore {
         publishers: publishers,
       );
       if (!check.isAllowed) return null;
-      final OrbitTokens tokens;
-      try {
-        // The gate reads the theme document for its id, its effects and its
-        // pattern; drawing with it needs every one of its 111 tokens, which is
-        // this parse's job. A document half-right is a theme nobody designed.
-        tokens = OrbitTokens.fromThemeJson(
-          jsonDecode(utf8.decode(files[manifest.theme]!))
-              as Map<String, Object?>,
-        );
-      } on FormatException {
-        return null;
-      }
-      return InstalledPack(
+      final pack = PackBytes(
         id: id,
         revision: revision,
-        tokens: tokens,
+        manifest: manifest,
+        folder: folder,
+        files: files,
         bytes: bytes,
       );
+      final value = decode(pack);
+      // A pack the gate allowed but this app cannot use is not a pack on screen
+      // today: the theme document is not the 111 tokens the gate read, or the
+      // sound is not a file this platform can point a ringtone at.
+      if (value == null) return null;
+      return PackOf(pack: pack, value: value);
     } on FileSystemException {
-      return null; // A file that cannot be read is not a theme today.
+      return null; // A file that cannot be read is not a pack today.
     }
   }
 
@@ -459,6 +469,115 @@ final class ThemePackStore {
   }
 }
 
+/// One pack this device holds, as its folder and the bytes the gate hashed.
+@immutable
+final class PackBytes {
+  const PackBytes({
+    required this.id,
+    required this.revision,
+    required this.manifest,
+    required this.folder,
+    required this.files,
+    required this.bytes,
+  });
+
+  final String id;
+  final int revision;
+
+  /// The manifest that passed the gate, so its paths, kinds and digests are the
+  /// publisher's own words and not a folder's guess at them.
+  final OrbitPackManifest manifest;
+
+  /// `packs/<id>/r<revision>`, which is where [stored] read it from.
+  final String folder;
+
+  /// Every file's bytes, under the path its manifest names it by.
+  final Map<String, List<int>> files;
+
+  /// The manifest and the files together.
+  final int bytes;
+
+  /// Where one of this pack's files is kept: by its digest, never by the path
+  /// the pack wrote, which is the one thing a pack must not be trusted with.
+  File fileAt(OrbitPackFile file) => File(p.join(folder, 'files', file.sha256));
+}
+
+/// A pack this app can use: [pack] is what the folder held, [value] what
+/// [PackFolder.decode] made of it.
+@immutable
+final class PackOf<T> {
+  const PackOf({required this.pack, required this.value});
+
+  final PackBytes pack;
+  final T value;
+
+  String get id => pack.id;
+
+  int get revision => pack.revision;
+
+  int get bytes => pack.bytes;
+}
+
+/// The themes a person downloads, in the device's pack folder, and what the app
+/// draws with them.
+///
+/// The rules are [PackFolder]'s and `checkOrbitPack`'s; what is here is the one
+/// thing that is a theme's own: a pack's document has to be readable as this
+/// build's tokens before the app offers it on Appearance.
+final class ThemePackStore {
+  ThemePackStore({Map<String, List<int>>? trustedPublishers})
+    : _packs = PackFolder(
+        contents: 'theme',
+        decode: _pack,
+        trustedPublishers: trustedPublishers,
+      );
+
+  final PackFolder<InstalledPack> _packs;
+
+  /// The themes packs add to the built-ins, by id. What [main] seeds the theme
+  /// library with, so a downloaded theme is on screen from the first frame.
+  Future<Map<String, OrbitTokens>> themeTokens() async => {
+    for (final pack in await installed()) pack.id: pack.tokens,
+  };
+
+  /// Every pack on this device the app can draw with: one entry per id, the
+  /// newest revision that passes the gate, in id order.
+  Future<List<InstalledPack>> installed() async => [
+    for (final pack in await _packs.stored()) pack.value,
+  ];
+
+  /// The installed pack [id], or null when the device has none it can draw with.
+  Future<InstalledPack?> load(String id) async =>
+      (await _packs.load(id))?.value;
+
+  Future<PackChange> install(PackSource source, String id, {int? revision}) =>
+      _packs.install(source, id, revision: revision);
+
+  Future<bool> remove(String id) => _packs.remove(id);
+
+  /// The gate read this document for its id, its effects and its pattern;
+  /// drawing with it needs every one of its 111 tokens, which is this parse's
+  /// job. A document half-right is a theme nobody designed, so it is no theme
+  /// at all here, and null is how a folder says so.
+  static InstalledPack? _pack(PackBytes pack) {
+    final OrbitTokens tokens;
+    try {
+      tokens = OrbitTokens.fromThemeJson(
+        jsonDecode(utf8.decode(pack.files[pack.manifest.theme!]!))
+            as Map<String, Object?>,
+      );
+    } on FormatException {
+      return null;
+    }
+    return InstalledPack(
+      id: pack.id,
+      revision: pack.revision,
+      tokens: tokens,
+      bytes: pack.bytes,
+    );
+  }
+}
+
 /// The publisher keys this build draws packs from: [PackTrust]'s define, or
 /// whatever a test says it trusts.
 final packPublishersProvider = Provider<Map<String, List<int>>>(
@@ -470,9 +589,9 @@ final themePackStoreProvider = Provider<ThemePackStore>(
   (ref) => ThemePackStore(trustedPublishers: ref.watch(packPublishersProvider)),
 );
 
-/// What [ThemePackStore.install] did.
+/// What [PackFolder.install] did.
 enum PackChange {
-  /// The pack is on this device now, and the app can draw with it.
+  /// The pack is on this device now, and this app can use it.
   installed,
 
   /// This device already held a revision at least as new, so nothing was

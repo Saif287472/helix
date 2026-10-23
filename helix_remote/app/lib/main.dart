@@ -89,7 +89,7 @@ Future<void> main(List<String> args) async {
 /// ships.
 Future<Map<String, OrbitTokens>> _installedPackThemes() async {
   try {
-    return await const ThemePackStore().themeTokens();
+    return await ThemePackStore().themeTokens();
   } on Object {
     return const {};
   }

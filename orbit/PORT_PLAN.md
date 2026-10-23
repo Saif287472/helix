@@ -886,16 +886,44 @@ reuse that effect.
      Tests: 9 new in the domain group "what a pack is" (53 in that file), 3 new
      in the app's pack file (39). `dart analyze server tool` and `flutter
      analyze` clean.
-   - **What step 5 still needs, in this order:** the sound's own store and
-     loader beside `ThemePackStore`, the Notifications-page picker in `orbit_ui`
-     with its connector and route, and a notification channel per ringtone wired
-     into `notification_call_ringer.dart`. One decision is yours before the
-     picker: a `HELIX_PACKS_DIR` that holds both kinds lists both on one route,
-     because `contents` is inside the signed manifest the endpoint never opens.
-     Either the app fetches a manifest to tell (no server change, so an offer it
-     refuses may appear for a moment), or the list route says what kind each row
-     is, which is a protocol and server change and needs your approval, or sounds
-     go in a second folder. ADR-033's amendment records this.
+   - [x] **Step 5's second half, the device's sound store, done 2026-10-23
+     (pending your review).** The app can now hold a ringtone. Everything the
+     format needs on a phone - staging folder, size caps, the gate, the
+     re-check on every read, downgrade refusal, older revisions deleted - was
+     lifted out of `ThemePackStore` into one `PackFolder<T>`, parameterised by
+     the two things that genuinely differ between a theme and a sound: the
+     `contents` word a pack must carry, and how its bytes become something the
+     app can use. `ThemePackStore` asks for `theme` and decodes a document into
+     `OrbitTokens`; the new `SoundPackStore`
+     (`app/lib/core/sounds/orbit_sounds.dart`) asks for `sound` and decodes one
+     into the file it hands over to be played, kept by digest and named by its
+     suffix. **Security-critical code was moved, not copied:** there is one
+     implementation of the download and one of the gate call, so a second pack
+     kind could not drift from the first. The 39 theme tests pass unchanged
+     against it, which is the check that the refactor kept the rules.
+     Each store refuses the other's kind from the manifest, before a file is
+     fetched - asserted by the fake host recording nothing it was asked for -
+     and skips it on every read, so one folder holds both kinds and neither
+     page ever sees the other's. A sound pack carries no display-name document,
+     so a ringtone is named by its signed pack id; its bytes are hashed and
+     size-capped and never opened. **No server, protocol, api, engine or domain
+     file changed**, so the pending-redeploy list is still the same three routes
+     plus `HELIX_PACKS_DIR`. Tests: 12 new in
+     `app/test/settings/orbit_sounds_test.dart` (the theme file's fixtures moved
+     to `test/support/pack_fixtures.dart` so both files share them); full app
+     suite 969 green, `flutter analyze` clean.
+   - **What step 5 still needs:** the Notifications-page picker in `orbit_ui`
+     with its connector, route and choice in `device_settings.json`, and a
+     notification channel per ringtone wired into
+     `notification_call_ringer.dart` - the last of it needing Android's system
+     to be able to read the file, which is a new `AppPaths` folder. One
+     decision is still yours before the picker: a `HELIX_PACKS_DIR` that holds
+     both kinds lists both on one route, because `contents` is inside the signed
+     manifest the endpoint never opens. Either the app fetches a manifest to tell
+     (no server change, so an offer it refuses may appear for a moment), or the
+     list route says what kind each row is, which is a protocol and server change
+     and needs your approval, or sounds go in a second folder. ADR-033's
+     amendment records this.
 6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
    dependency risk register.
    - **Ruled by the owner (2026-10-23): Lottie.** The dependency and its

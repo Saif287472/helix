@@ -25,8 +25,9 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   packs): built and tested, with only the `keygen` between it and an offer.
   Steps 5 and 6 are now ruled by the owner (2026-10-23): a ringtone arrives as a
   signed pack and Android rings with a channel per ringtone, and the animation
-  runtime is Lottie. The pack format half of step 5 is built the same way; its
-  picker waits on a real sound and on one decision about what the offer list
+  runtime is Lottie. Step 5's first two parts are built the same way - the pack
+  format that carries a sound, and the device that holds one; its picker waits
+  on a real sound and on one decision about what the offer list
   says. What is still owed is that sound and the one moment step 6 is for, and
   step 9 (premium themes) waits for the `keygen` and a Play Billing decision.
 
@@ -56,7 +57,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | f33b2e2 | Part C step 7: Jungle, Ocean and Metal, from the one theme table |
 | 672c387 | Part C step 8: the theme table becomes packs, and the pipeline proves it |
 | 3db988c | The owner's rulings on Part C steps 5 and 6, recorded in the plan |
-| (this) | Part C step 5's format half: a pack may be a sound |
+| e43d865 | Part C step 5's format half: a pack may be a sound |
+| (this) | Part C step 5's device half: one pack folder, and a store for sounds |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -287,8 +289,8 @@ both change the server, so neither is live until production runs this branch.)
 ## Part C, downloadable theme packs (owner: "you continue to part C", 2026-10-23)
 
 `PORT_PLAN.md` Part C is the plan. Steps 1, 2, 3, 4, 7 and 8 are built, and so is
-the half of step 5 that the owner's ruling needed from the format: a pack may now
-be a sound. Steps 5's picker and 6 are ruled (sounds as signed packs with a
+the first two quarters of step 5: a pack may be a sound, and this device can hold
+one. Steps 5's picker and 6 are ruled (sounds as signed packs with a
 channel per ringtone; Lottie) and not built: step 5 waits on a real ringtone file
 and step 6 on the moment it animates. Step 9 waits for the `keygen` and a Play
 Billing decision.
@@ -387,9 +389,9 @@ Billing decision.
     chose to keep it. Consequence, unchanged: a pack becomes downloadable only
     in a build made with the define, so it is an APK rebuild you control, after
     `keygen`.
-17. Part C step 5, the ringtone picker, is not started; steps 7 and 8 went
-    first, because they were the two with nothing owed on them. Its **format**
-    half is done, and is item 20. **Both are now
+17. Part C step 5, the ringtone picker, is half built: its **format** is item 20
+    and the device's **sound store** is item 21. The picker itself, its route and
+    the channel per ringtone are not. **Both are now
     ruled (2026-10-23, you):** the sound arrives **as a signed pack** - which
     means the pack format has to carry a file that is not a theme, and no server
     file changes, because the three pack routes serve a file by its digest and
@@ -477,8 +479,7 @@ Billing decision.
       skips one it finds in its own folder, so a sound published beside the themes
       cannot reach the More themes list, the theme library or the start-up scan -
       and the page says "That pack cannot be used: a kind of pack this app does
-      not know." The sound step's own store is what plays it, in the half that is
-      not built.
+      not know." The sound step's own store is what plays it, and is item 21.
     - No server, protocol, api or engine file changed, so the pending-redeploy
       list is still exactly the three pack routes, `/u/{name}`,
       `GET /v1/backups/full/meta` and the `HELIX_PACKS_DIR` line, and the pixel
@@ -497,6 +498,46 @@ Billing decision.
       change; an offer it will refuse may show for a moment), or the list says
       what kind each row is (a protocol and server change, so your approval), or
       sounds get a second `HELIX_PACKS_DIR`. Then the sound itself.
+21. Part C step 5's device half, a store for sounds - **done** (2026-10-23).
+    The app can now hold a ringtone, and one folder holds both kinds.
+    - `ThemePackStore`'s mechanics - the staging folder, the size caps, the one
+      call to `checkOrbitPack`, the re-check on every read, the downgrade
+      refusal, the older revisions deleted after a new one lands - were lifted
+      into a single `PackFolder<T>` in `core/theme/orbit_packs.dart`,
+      parameterised by the two things that actually differ between a theme and a
+      sound: the `contents` word a pack must carry, and how its bytes become
+      something the app can use. `ThemePackStore` asks for `theme` and decodes a
+      document into `OrbitTokens`; the new `SoundPackStore`
+      (`core/sounds/orbit_sounds.dart`) asks for `sound` and decodes one into the
+      `InstalledSound` a page can play - the file it is kept as, by digest, plus
+      its suffix.
+    - **Moved, not copied.** This is the security-critical path, so there is
+      deliberately one implementation of it: a second pack kind cannot drift
+      from the first, and a rule fixed in the folder is fixed for both. The 39
+      theme tests pass unchanged against the refactor, which is the check that
+      the rules did not move.
+    - Each store refuses the other's kind from the manifest, before a file is
+      fetched (the fake host asserts it recorded nothing it was asked for), and
+      skips it on every read of the folder - so a ringtone never reaches the
+      More themes list or the start-up scan, and a theme never reaches the
+      picker, with neither store knowing the other exists. A theme's document
+      must parse as this build's 111 tokens to be offered at all; a sound's bytes
+      are hashed, size-capped and never opened, and a ringtone is named on screen
+      by its signed pack id, because a sound pack carries no display-name
+      document.
+    - No server, protocol, api, engine or domain file changed, so nothing joined
+      the pending-redeploy list and no pixel key moved (no screen exists yet).
+      Tests: 12 new in `app/test/settings/orbit_sounds_test.dart`; the theme
+      pack file's fixtures moved to `test/support/pack_fixtures.dart` so both
+      kinds are built by the same helpers. App suite 969 green, `flutter
+      analyze` clean. Docs: `THEME_PACK_FORMAT.md` "What the phone does", the
+      app's `MODULE.md` (`sounds/`).
+    - **Still owed on step 5:** the picker in `orbit_ui` and its connector, the
+      choice in `device_settings.json` ("Phone default" as an *absent* value, not
+      a slug), the copy of the file somewhere Android's system can read it (a new
+      `AppPaths` folder over `getExternalStorageDirectory`), and one notification
+      channel per ringtone wired into `notification_call_ringer.dart`. Plus the
+      sound itself, and the offer-kind decision in item 20.
 
 ## Batch 8, what is left
 
