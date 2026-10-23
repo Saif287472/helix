@@ -102,8 +102,12 @@ identifiers into a ticket or chat without checking it first.
   `HELIX_LOG_KEEP_DAYS` days (default 14); copy-and-truncate tools do not
   work on Windows. (`platform/observability/log.dart`, `bin/server.dart`.)
 - **Access log.** Every request logs event `http` with `request_id`, `method`,
-  `route` (the template, not the URL), `status` and `ms`. It carries no client
-  address, no query string and no body.
+  `route` (the template, not the URL), `status` and `ms`; a request with a body
+  also has `bytes`, its declared size. It carries no client address, no query
+  string and no body. The clock starts before the handler reads the body, so
+  `ms` includes a slow client's upload: a large `ms` with a large `bytes` is
+  the link, not the server (a 67 KB phone-book discovery is ~150-700 ms on a
+  phone, while a slow one shows thousands with the same `bytes`).
 - **Request ids.** Every response has `x-request-id`. A client may send its own
   (8 to 64 characters of `A-Za-z0-9_-`); otherwise the server makes a UUIDv7.
   Use it to follow one request through the logs.

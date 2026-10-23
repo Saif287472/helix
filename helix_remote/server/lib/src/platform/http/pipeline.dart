@@ -115,12 +115,17 @@ final class HttpPipeline {
       'route': routeTemplate,
       'status': '${status ~/ 100}xx',
     });
+    // The clock starts before the handler reads the body, so `ms` includes the
+    // client's upload; the declared size says whether a slow line was a big
+    // upload (a phone book, an image) or the server's own work.
+    final bytes = request.contentLength;
     log.info('http', {
       'request_id': requestId,
       'method': request.method,
       'route': routeTemplate,
       'status': status,
       'ms': watch.elapsedMilliseconds,
+      if (bytes != null && bytes > 0) 'bytes': bytes,
     });
     return response.change(
       headers: {

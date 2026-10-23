@@ -340,5 +340,27 @@ void main() {
       expect(line, contains('/v1/keys/{account}'));
       expect(line, isNot(contains('0192a4f0-0000-7000-8000-00000000000b')));
     });
+
+    test('an upload access line says how many bytes it carried', () async {
+      final handler = build(
+        (r) => r.add('keys', Routes.setSignedPrekey, (req) => Response.ok('')),
+      );
+      const auth = {'authorization': 'Bearer good'};
+      await call(
+        handler,
+        'PUT',
+        '/v1/keys/signed-prekey',
+        headers: auth,
+        body: 'x',
+      );
+      expect(sink.lines.last, contains('"bytes":1'));
+
+      await call(handler, 'PUT', '/v1/keys/signed-prekey', headers: auth);
+      expect(
+        sink.lines.last,
+        isNot(contains('"bytes"')),
+        reason: 'a request without a body adds nothing to the line',
+      );
+    });
   });
 }
