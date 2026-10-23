@@ -164,7 +164,12 @@ Fakes for tests: `test/support/people_fakes.dart`.
   address-book change), never on a day when the last sync showed less budget
   left than it spent, and the daily limit being hit is remembered until the next
   UTC day. The log is in the encrypted database (`app.phonebook_sync`). A person
-  can always press "Refresh contacts".
+  can always press "Refresh contacts". The address-book change feed is followed
+  only while the read permission is granted: the platform refuses to open it
+  otherwise, and until 2026-10-23 that refusal was reported as a crash
+  (`PlatformException(permission_denied)` from `flutter_contacts`). A feed that
+  fails while followed (permission taken away) is stopped, and the next resume
+  or hourly check re-reads the permission.
 - **Matching names:** the engine stores the phone-book name with each match.
   Known limit: a contact deleted from the phone keeps its stored name until the
   person is renamed or rematched (the engine has no "unmatch").

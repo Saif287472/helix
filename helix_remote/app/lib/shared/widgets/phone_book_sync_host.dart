@@ -41,13 +41,11 @@ class _PhoneBookSyncHostState extends ConsumerState<PhoneBookSyncHost>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tick = Timer.periodic(PhoneBookSyncHost.tick, (_) => _sync());
-    _changes = ref.read(contactsAccessProvider).changes.listen((_) {
-      _settle?.cancel();
-      _settle = Timer(
-        PhoneBookSyncHost.settle,
-        () => _sync(addressBookChanged: true),
-      );
-    });
+    ref.listenManual(
+      contactsPermissionProvider,
+      (previous, next) => _watch(next.value),
+      fireImmediately: true,
+    );
     // On the first frame the engine is usually still opening the database,
     // so the start-up sync is the moment the device becomes signed in (a
     // fresh sign-in or registration is that moment too).
@@ -60,12 +58,40 @@ class _PhoneBookSyncHostState extends ConsumerState<PhoneBookSyncHost>
     WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
   }
 
+  /// Follows the address book only while the phone allows reading it: the
+  /// platform's change feed refuses to open without the permission (it then
+  /// reports an error nobody asked for, which used to read as a crash).
+  void _watch(ContactsPermission? permission) {
+    if (permission == ContactsPermission.granted) {
+      _changes ??= ref.read(contactsAccessProvider).changes.listen(
+        (_) {
+          _settle?.cancel();
+          _settle = Timer(
+            PhoneBookSyncHost.settle,
+            () => _sync(addressBookChanged: true),
+          );
+        },
+        // Access can be taken away while the app runs. Stop following it;
+        // the next resume or hourly check asks again.
+        onError: (Object _) => _unwatch(),
+      );
+    } else {
+      _unwatch();
+    }
+  }
+
+  void _unwatch() {
+    _settle?.cancel();
+    _settle = null;
+    _changes?.cancel();
+    _changes = null;
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
-    _settle?.cancel();
-    _changes?.cancel();
+    _unwatch();
     super.dispose();
   }
 

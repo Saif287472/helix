@@ -1,12 +1,15 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/people/application/people_gateway.dart';
 import 'package:helix_remote/features/people/application/phone_book_sync.dart';
+import 'package:helix_remote/shared/widgets/phone_book_sync_host.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException, NetworkException;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show PhoneBookSyncResult;
@@ -315,6 +318,108 @@ void main() {
         container.read(phoneBookSyncProvider).status,
         PhoneBookStatus.synced,
       );
+    });
+  });
+
+  group('the address-book feed (PhoneBookSyncHost)', () {
+    late FakePeopleGateway gateway;
+    late FakeContactsAccess access;
+    late DateTime now;
+    late ProviderContainer container;
+
+    setUp(() {
+      gateway = FakePeopleGateway();
+      access = FakeContactsAccess(state: ContactsPermission.granted);
+      now = DateTime.utc(2026, 10, 3, 8);
+      container = ProviderContainer(
+        overrides: [
+          peopleGatewayProvider.overrideWith((ref) async => gateway),
+          contactsAccessProvider.overrideWithValue(access),
+          clockProvider.overrideWithValue(() => now),
+          authStateProvider.overrideWith(
+            (ref) => Stream.value(AppAuthState.ready),
+          ),
+        ],
+      );
+    });
+    tearDown(() => container.dispose());
+
+    int syncs() => gateway.calls.where((c) => c == 'syncPhoneBook').length;
+
+    Future<void> pumpHost(WidgetTester tester) async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const PhoneBookSyncHost(child: SizedBox()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    // The host keeps an hourly timer; unmounting cancels it for the test.
+    Future<void> unmount(WidgetTester tester) =>
+        tester.pumpWidget(const SizedBox());
+
+    testWidgets('the feed is not opened without the permission', (
+      tester,
+    ) async {
+      access
+        ..state = ContactsPermission.denied
+        ..refuseChanges = true;
+      await pumpHost(tester);
+      expect(access.changesOpened, 0);
+      expect(access.watchingChanges, isFalse);
+      expect(tester.takeException(), isNull);
+      expect(syncs(), 0);
+      await unmount(tester);
+    });
+
+    testWidgets('a granted feed is followed, and an edit syncs after a pause', (
+      tester,
+    ) async {
+      await pumpHost(tester);
+      expect(access.changesOpened, 1);
+      expect(access.watchingChanges, isTrue);
+      expect(syncs(), 1);
+
+      now = now.add(const Duration(hours: 2));
+      access.touch();
+      await tester.pump(const Duration(seconds: 1));
+      expect(syncs(), 1, reason: 'a burst of edits waits to be one sync');
+      await tester.pump(PhoneBookSyncHost.settle);
+      await tester.pump();
+      expect(syncs(), 2);
+      await unmount(tester);
+    });
+
+    testWidgets('a feed that refuses to open is not a crash', (tester) async {
+      access.refuseChanges = true;
+      await pumpHost(tester);
+      expect(access.changesOpened, 1);
+      expect(tester.takeException(), isNull);
+      await unmount(tester);
+    });
+
+    testWidgets('following starts on a grant and stops on a revoke', (
+      tester,
+    ) async {
+      access.state = ContactsPermission.notAsked;
+      await pumpHost(tester);
+      expect(access.changesOpened, 0);
+
+      await container.read(contactsPermissionProvider.notifier).request();
+      await tester.pump();
+      expect(access.changesOpened, 1);
+      expect(access.watchingChanges, isTrue);
+
+      // Taken away in the system settings; the app comes back to ask again.
+      access.state = ContactsPermission.denied;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(access.watchingChanges, isFalse);
+      await unmount(tester);
     });
   });
 }

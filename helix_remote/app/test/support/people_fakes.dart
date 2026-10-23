@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +78,17 @@ final class FakeContactsAccess implements ContactsAccess {
   /// A write the phone refuses (a read-only account).
   bool refuseWrites = false;
 
+  /// How often the change feed was asked for. The platform only answers
+  /// while the read permission stands, and an error is what it sends when
+  /// the permission is gone.
+  int changesOpened = 0;
+
+  /// Makes [changes] fail the way the phone's feed does without permission.
+  bool refuseChanges = false;
+
+  /// Whether the app is following the feed.
+  bool get watchingChanges => _changes.hasListener;
+
   /// What [saveName] was last asked: the contact (null = create), the number
   /// and the name.
   ({String? id, String number, String name})? lastWrite;
@@ -136,7 +148,18 @@ final class FakeContactsAccess implements ContactsAccess {
   }
 
   @override
-  Stream<void> get changes => _changes.stream;
+  Stream<void> get changes {
+    changesOpened++;
+    if (refuseChanges) {
+      return Stream<void>.error(
+        PlatformException(
+          code: 'permission_denied',
+          message: 'Contacts permission is required',
+        ),
+      );
+    }
+    return _changes.stream;
+  }
 }
 
 /// Records the hand-overs to other features.
