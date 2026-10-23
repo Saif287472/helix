@@ -55,10 +55,10 @@ abstract final class CallNotifications {
   static AndroidNotificationChannel _forRingtone(CallRingtone ringtone) =>
       AndroidNotificationChannel(
         ringtone.channelId,
-        'Incoming calls: ${ringtone.id}',
+        'Incoming calls: ${ringtone.name}',
         description:
             'Rings for incoming Helix calls with the '
-            '${ringtone.id} ringtone.',
+            '${ringtone.name} ringtone.',
         importance: Importance.max,
         playSound: true,
         sound: UriAndroidNotificationSound(ringtone.uri),
@@ -121,7 +121,7 @@ abstract final class CallNotifications {
   }
 
   /// Deletes the channel that rang ringtone [id], for a pack that was removed:
-  /// Android would otherwise keep an `Incoming calls: <id>` entry in its
+  /// Android would otherwise keep an `Incoming calls: <name>` entry in its
   /// settings that no notification can ever use again.
   static Future<void> forgetRingtone(String id) async {
     if (!Platform.isAndroid) return;

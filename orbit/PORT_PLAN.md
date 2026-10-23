@@ -970,11 +970,29 @@ reuse that effect.
      and 1 more in `sound_packs_test.dart` for a re-download that cannot be set
      up; app suite 1005 green, `flutter analyze` clean. Deviations are in
      `DEVIATIONS.md`, "Part C step 5".
-   - **What step 5 still needs:** the sound itself - a signed sound pack, which
-     is a design decision, not a generated tone. A new APK is needed to hear the
-     wiring on a phone. The offer-kind decision is now the app-side probe (item
-     above); if you would rather settle it at the source, the alternatives are
-     still yours.
+   - [x] **The Helix Local ringtones, built into the app, done 2026-10-23
+     (pending your review).** At the owner's request, the ringtones in
+     `helix_local/app/assets/sounds/` are now Orbit's. `BuiltInRingtones` in
+     `core/sounds/orbit_ringtones.dart` lists ten distinct sounds bundled under
+     `app/assets/ringtones/` (Local's twelve names hold one file three times -
+     `Helix_Default`, `Classic_Call`, `Soft_Whisper`), shown between the
+     phone's own sound and any downloaded pack. They are built-ins like Orbit
+     and Orbit Night, not packs: choosing one copies its asset bytes into the
+     same external folder (`Ringtones.publishBuiltIn`), and `Ringtones.chosen`
+     needs no signature check for it because the build signed the bytes. A
+     pack id that names one is never listed over it. Local's nine large tracks
+     stay out (2.7-9.7 MB each; Local unbundled them for size), and the page
+     still cannot play a sound - no audio dependency. The server is untouched,
+     so the pending-redeploy list is unchanged. Tests: 5 new in
+     `ringtone_channel_test.dart`, 3 in `sound_packs_test.dart` and 1 in
+     `orbit_ui`'s ringtone page; app suite 1013 green, orbit_ui 230,
+     `flutter analyze` clean.
+   - **What step 5 still needs:** a *published* sound pack, if the owner wants
+     ringtones beyond the ten built-in ones - the pack format and the phone are
+     ready, and the file is a design decision, not a generated tone. A new APK
+     is needed to hear any of it. The offer-kind decision is now the app-side
+     probe (item above); if you would rather settle it at the source, the
+     alternatives are still yours.
 6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
    dependency risk register.
    - **Ruled by the owner (2026-10-23): Lottie.** The dependency and its

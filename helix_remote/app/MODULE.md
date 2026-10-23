@@ -43,11 +43,13 @@ lib/
     sounds/                     orbit_sounds.dart (SoundPackStore: the ringtone
                                 packs this device downloaded, in the same folder
                                 and through the same gate); orbit_ringtones.dart
-                                (the chosen sound as Android's system needs it:
-                                the copy in external files, its provider URI,
-                                the channel id, and the per-call gate check;
-                                provider-free, because the FCM isolate rings
-                                through it too)
+                                (BuiltInRingtones, the ten sounds bundled under
+                                assets/ringtones/ and their names; and the
+                                chosen sound as Android's system needs it: the
+                                copy in external files, its provider URI, the
+                                channel id, and the per-call gate check for a
+                                pack - provider-free, because the FCM isolate
+                                rings through it too)
     notifications/              local notifications (wake-ups only);
                                 MessageAlerts (which messages alert, shared
                                 with the push isolate) and RunningAppAlerts

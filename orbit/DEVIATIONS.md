@@ -1265,6 +1265,27 @@ identical at 1x).
   pack or a missing copy is the phone's own ringtone. The check runs in the FCM
   isolate too, which is why the helper is provider-free.
 
+## The Helix Local ringtones, built in (2026-10-23)
+
+- **The owner's own ringtones are built-ins, not packs.** On 2026-10-23 the
+  owner asked for the ringtones in `helix_local/app/assets/sounds/` to become
+  Orbit's. Ten distinct sounds are copied into `app/assets/ringtones/` and
+  listed by `BuiltInRingtones`: Local's twelve names include one file three
+  times (`Helix_Default`, `Classic_Call` and `Soft_Whisper` are byte-identical),
+  so that sound is listed once as Helix Default. They arrive with the APK, the
+  way Orbit and Orbit Night arrive as built-in themes - this does not undo the
+  ruling that a *downloadable* ringtone is a signed pack, it is the same line
+  the themes already draw. A pack can never shadow one: `BuiltInRingtones.byId`
+  is asked before the pack folder, so a pack signed under `orbit.<name>` is not
+  listed over the app's own sound.
+- **The nine large Local tracks are left out.** Local unbundled them in Phase
+  10 for their size (`helix_local/docs/performance/DEFERRED_AUDIO_ASSETS.md`):
+  they are 2.7-9.7 MB each and would add about 51 MB to the app. The bundled
+  ten add 3.1 MB.
+- **The page does not play a sound.** There is no audio dependency in the app,
+  and adding one is a dependency-register change. A built-in ringtone is heard
+  on a call, not on the Ringtones page - the same as a downloaded one today.
+
 ## Part C step 7 (Jungle, Ocean and Metal, 2026-10-23)
 
 - **The three palettes are new work, not a copy.** The plan named the themes and

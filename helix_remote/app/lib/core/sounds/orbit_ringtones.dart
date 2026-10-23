@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/sounds/orbit_sounds.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart'
@@ -13,12 +14,17 @@ import 'package:path/path.dart' as p;
 final class CallRingtone {
   const CallRingtone({
     required this.id,
+    required this.name,
     required this.channelId,
     required this.uri,
   });
 
-  /// The pack's signed id, which is also the name the ringtone has on screen.
+  /// The id of the ringtone: a built-in one, or a pack's signed id.
   final String id;
+
+  /// What Android's settings call it: a built-in's name, or the pack's id,
+  /// which is the only name a pack carries.
+  final String name;
 
   /// The channel that rings this ringtone. Android fixes a channel's sound when
   /// the channel is created, so the id carries the pack id and the audio kind;
@@ -30,6 +36,108 @@ final class CallRingtone {
   final String uri;
 }
 
+/// A ringtone that ships inside the app, the way Orbit and Orbit Night ship as
+/// built-in themes: no pack, no signature to check, nothing to download and
+/// nothing to delete.
+///
+/// The sounds are the owner's ringtones from Helix Local, copied into
+/// `assets/ringtones/`. Local lists `Helix_Default`, `Classic_Call` and
+/// `Soft_Whisper` as three names, but in Local they are one file byte for byte,
+/// so this app lists that sound once.
+final class BuiltInRingtone {
+  const BuiltInRingtone({
+    required this.id,
+    required this.name,
+    required this.asset,
+  });
+
+  /// The device setting's value for this ringtone. It starts with `orbit.`,
+  /// and a pack of the same id is shadowed rather than rung: a downloaded pack
+  /// must not take a name this build already gives a sound.
+  final String id;
+
+  /// The name the Ringtones page and the Notifications row show.
+  final String name;
+
+  /// Where the sound lives in this build.
+  final String asset;
+
+  /// The audio kind, which both the copy's name and the channel's id carry.
+  String get suffix => p.extension(asset);
+}
+
+/// The ringtones this build carries, in the order the Ringtones page lists
+/// them: the owner's own set, from Helix Local.
+///
+/// They are sounds, not packs, because they come with the app itself - the
+/// store's signature on the APK is what vouches for them, exactly as it does
+/// for the built-in themes. Local's nine large tracks are not here: Local
+/// unbundled them in Phase 10 for their size (`DEFERRED_AUDIO_ASSETS.md`), and
+/// the app should not be larger than the app they came from.
+abstract final class BuiltInRingtones {
+  static const all = <BuiltInRingtone>[
+    BuiltInRingtone(
+      id: 'orbit.helix-default',
+      name: 'Helix Default',
+      asset: 'assets/ringtones/Helix_Default.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.crystal-chime',
+      name: 'Crystal Chime',
+      asset: 'assets/ringtones/Crystal_Chime.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.echo-drop',
+      name: 'Echo Drop',
+      asset: 'assets/ringtones/Echo_Drop.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.gentle-notify',
+      name: 'Gentle Notify',
+      asset: 'assets/ringtones/Gentle_Notify.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.modern-ring',
+      name: 'Modern Ring',
+      asset: 'assets/ringtones/Modern_Ring.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.morning-light',
+      name: 'Morning Light',
+      asset: 'assets/ringtones/Morning_Light.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.silver-bell',
+      name: 'Silver Bell',
+      asset: 'assets/ringtones/Silver_Bell.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.soft-pulse',
+      name: 'Soft Pulse',
+      asset: 'assets/ringtones/Soft_Pulse.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.twilight-ring',
+      name: 'Twilight Ring',
+      asset: 'assets/ringtones/Twilight_Ring.mp3',
+    ),
+    BuiltInRingtone(
+      id: 'orbit.velvet-tone',
+      name: 'Velvet Tone',
+      asset: 'assets/ringtones/Velvet_Tone.mp3',
+    ),
+  ];
+
+  /// The built-in ringtone [id] names, or null when it names a pack (or
+  /// nothing).
+  static BuiltInRingtone? byId(String id) {
+    for (final ringtone in all) {
+      if (ringtone.id == id) return ringtone;
+    }
+    return null;
+  }
+}
+
 /// The ringtone chosen on this device, made reachable to the phone.
 ///
 /// The pack folder is the app's private data, which Android's notification
@@ -37,7 +145,8 @@ final class CallRingtone {
 /// external files folder and the system reads it through a provider scoped to
 /// that folder alone (`AndroidManifest.xml`, `res/xml/helix_remote_ringtones.xml`).
 /// The copy is made when the choice is made, never when a call arrives: a call
-/// cannot wait for a download.
+/// cannot wait for a download. A built-in ringtone's bytes are read from this
+/// build's assets instead of a pack folder, and the copy is the same.
 ///
 /// Provider-free on purpose: the FCM isolate (`push_background.dart`) has no
 /// Riverpod container, and it is the path a call rings through when the app is
@@ -67,16 +176,38 @@ abstract final class Ringtones {
   /// through a channel) or once the copy is in place. False is a device whose
   /// external storage cannot be written; the page then keeps the phone's own
   /// ringtone, so what a call rings with is what the page says.
-  static Future<bool> publish(InstalledSound sound) async {
+  static Future<bool> publish(InstalledSound sound) =>
+      _publish(sound.id, sound.suffix, sound.file.copy);
+
+  /// Writes the copy of [ringtone], one of the sounds this build carries. The
+  /// same contract as [publish]: the copy replaces the previous choice's, and
+  /// false means the choice must not stand.
+  static Future<bool> publishBuiltIn(BuiltInRingtone ringtone) =>
+      _publish(ringtone.id, ringtone.suffix, (path) async {
+        final data = await rootBundle.load(ringtone.asset);
+        await File(path).writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      });
+
+  /// [write] puts the sound's bytes at the path it is handed, which is a
+  /// temporary file in the ringtones folder - never the copy itself, so a call
+  /// cannot read half a ringtone.
+  static Future<bool> _publish(
+    String id,
+    String suffix,
+    Future<void> Function(String path) write,
+  ) async {
     if (!AppPaths.isAndroid()) return true;
     try {
       final dir = await AppPaths.ringtoneDirectory();
       if (dir == null) return false;
-      final name = '${sound.id}${sound.suffix}';
+      final name = '$id$suffix';
       final target = File(p.join(dir.path, name));
       final temp = File('${target.path}.part');
       try {
-        await sound.file.copy(temp.path);
+        await write(temp.path);
         // A rename in one folder is atomic, so a call never reads half a file.
         await temp.rename(target.path);
       } on Object {
@@ -115,9 +246,11 @@ abstract final class Ringtones {
   /// choice, or a chosen pack this device no longer holds or cannot have
   /// copied).
   ///
-  /// The pack is gate-checked again here, on every call, exactly as every other
-  /// read of the folder is: a manifest edited after its download is not a
-  /// ringtone. [publishers] is the build's anchor; a test passes its own.
+  /// A chosen pack is gate-checked again here, on every call, exactly as every
+  /// other read of the folder is: a manifest edited after its download is not
+  /// a ringtone. A built-in ringtone needs no check - its bytes were signed
+  /// into this build - but its copy must exist like any other. [publishers] is
+  /// the build's anchor; a test passes its own.
   static Future<CallRingtone?> chosen({
     Map<String, List<int>>? publishers,
   }) async {
@@ -125,18 +258,22 @@ abstract final class Ringtones {
     try {
       final id = await const FileDeviceSettingsStore().readRingtone();
       if (id == null) return null;
-      final sound = await SoundPackStore(
-        trustedPublishers: publishers ?? PackTrust.forThisBuildOrNone(),
-      ).load(id);
-      if (sound == null) return null;
+      final builtIn = BuiltInRingtones.byId(id);
+      final suffix = builtIn != null
+          ? builtIn.suffix
+          : (await SoundPackStore(
+              trustedPublishers: publishers ?? PackTrust.forThisBuildOrNone(),
+            ).load(id))?.suffix;
+      if (suffix == null) return null;
       final dir = await AppPaths.ringtoneDirectory(create: false);
       if (dir == null) return null;
-      final copy = File(p.join(dir.path, '${sound.id}${sound.suffix}'));
+      final copy = File(p.join(dir.path, '$id$suffix'));
       if (!await copy.exists()) return null;
       return CallRingtone(
-        id: sound.id,
-        channelId: channelId(sound.id, sound.suffix),
-        uri: uri(sound.id, sound.suffix),
+        id: id,
+        name: builtIn?.name ?? id,
+        channelId: channelId(id, suffix),
+        uri: uri(id, suffix),
       );
     } on Object {
       // A file the app cannot read is a call that rings with the phone's own

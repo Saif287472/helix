@@ -6,13 +6,16 @@ import 'package:helix_remote/core/theme/orbit_packs.dart';
 
 /// The ringtones this device has downloaded.
 ///
-/// Same folder, same gate, same rules as a theme pack - because a ringtone
-/// arrives as a signed pack too (`orbit/PORT_PLAN.md` Part C step 5, the owner's
-/// ruling). What differs is only what the app makes of a pack once the gate has
-/// passed: a theme becomes [OrbitTokens] to draw with, a sound becomes the one
-/// file a phone can ring with, and neither store reads the other's packs. A
-/// server folder that holds both kinds therefore lists both, and a device shows
-/// each on its own page.
+/// Same folder, same gate, same rules as a theme pack - because a downloadable
+/// ringtone arrives as a signed pack too (`orbit/PORT_PLAN.md` Part C step 5,
+/// the owner's ruling). What differs is only what the app makes of a pack once
+/// the gate has passed: a theme becomes [OrbitTokens] to draw with, a sound
+/// becomes the one file a phone can ring with, and neither store reads the
+/// other's packs. A server folder that holds both kinds therefore lists both,
+/// and a device shows each on its own page.
+///
+/// The sounds that ship with the build are not packs and never come through
+/// here: [BuiltInRingtones] in `orbit_ringtones.dart` is where those live.
 ///
 /// Nothing here plays a sound. The ringer that does is
 /// `features/calls/application/platform/notification_call_ringer.dart`, and

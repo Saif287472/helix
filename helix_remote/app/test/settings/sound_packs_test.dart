@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/core/theme/orbit_packs.dart';
 import 'package:helix_remote/features/settings/application/about_providers.dart'
@@ -258,7 +259,8 @@ void main() {
         var model = await gallery(container);
         var byId = rowsById(model.ringtones);
         expect(model.host, 'My server');
-        expect(byId.keys, ['', 'chime']);
+        expect(byId.keys.first, phoneRingtoneId);
+        expect(byId.keys.last, 'chime');
         expect(byId[phoneRingtoneId]!.phone, isTrue);
         expect(byId[phoneRingtoneId]!.inUse, isTrue);
         expect(byId['chime']!.place, ThemePackPlace.onTheServer);
@@ -327,7 +329,7 @@ void main() {
       );
       final model = await gallery(container);
       expect(model.status, ListStatus.ready);
-      expect(rowsById(model.ringtones).keys, [phoneRingtoneId]);
+      expect(rowsById(model.ringtones).length, BuiltInRingtones.all.length + 1);
       expect(model.emptyNote, contains('cannot check'));
     });
 
@@ -336,7 +338,7 @@ void main() {
         source: FakePackSource([await signedPack(by: publisherKey)]),
       );
       final model = await gallery(container);
-      expect(rowsById(model.ringtones).keys, [phoneRingtoneId]);
+      expect(rowsById(model.ringtones).length, BuiltInRingtones.all.length + 1);
       expect(model.emptyNote, contains('sound pack'));
     });
 
@@ -351,7 +353,10 @@ void main() {
         expect(source.listCalls, 1);
         expect(model.status, ListStatus.failed);
         expect(model.error, 'That did not work. Try again.');
-        expect(rowsById(model.ringtones).keys, [phoneRingtoneId]);
+        expect(
+          rowsById(model.ringtones).length,
+          BuiltInRingtones.all.length + 1,
+        );
 
         page.retry();
         model = await gallery(container);
@@ -359,6 +364,59 @@ void main() {
         expect(model.status, ListStatus.failed);
       },
     );
+  });
+
+  group('the sounds this build carries', () {
+    test(
+      'they sit after the phone\'s own, before anything downloaded',
+      () async {
+        final container = soundContainer(
+          source: FakePackSource([await signedSoundPack(by: publisherKey)]),
+        );
+        await container.read(soundPackActionsProvider).install('chime');
+
+        final rows = (await gallery(container)).ringtones;
+        expect(rows.first.id, phoneRingtoneId);
+        expect(
+          rows.skip(1).take(BuiltInRingtones.all.length).map((row) => row.id),
+          BuiltInRingtones.all.map((ringtone) => ringtone.id),
+        );
+        expect(rows.last.id, 'chime');
+        expect(rows[1].name, 'Helix Default');
+        expect(rows[1].builtIn, isTrue);
+        expect(rows[1].inUse, isFalse);
+      },
+    );
+
+    test('choosing one names it on the Notifications row', () async {
+      final container = soundContainer(source: FakePackSource([]));
+      expect(
+        await container.read(ringtonePageProvider).use('orbit.velvet-tone'),
+        'Velvet Tone ringtone on',
+      );
+      expect(container.read(ringtoneChoiceProvider).value, 'orbit.velvet-tone');
+      expect(container.read(ringtoneLabelProvider), 'Velvet Tone');
+
+      final byId = rowsById((await gallery(container)).ringtones);
+      expect(byId['orbit.velvet-tone']!.inUse, isTrue);
+      expect(byId[phoneRingtoneId]!.inUse, isFalse);
+    });
+
+    test('a pack cannot take a built-in sound\'s name', () async {
+      final container = soundContainer(
+        source: FakePackSource([
+          await signedSoundPack(by: publisherKey, id: 'orbit.helix-default'),
+        ]),
+      );
+      expect(
+        (await container.read(hostedSoundsProvider.future)).rows.single.id,
+        'orbit.helix-default',
+      );
+      final named = rowsById((await gallery(container)).ringtones);
+      expect(named.length, BuiltInRingtones.all.length + 1);
+      expect(named['orbit.helix-default']!.name, 'Helix Default');
+      expect(named['orbit.helix-default']!.builtIn, isTrue);
+    });
   });
 
   group('the Notifications row', () {
@@ -378,8 +436,8 @@ void main() {
     test('a device with no sound packs still has a ringtone row', () async {
       final container = soundContainer(source: OfflinePackSource());
       final model = await gallery(container);
-      expect(model.ringtones.single.phone, isTrue);
-      expect(model.ringtones.single.inUse, isTrue);
+      expect(model.ringtones.first.phone, isTrue);
+      expect(model.ringtones.first.inUse, isTrue);
     });
   });
 }

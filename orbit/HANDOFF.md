@@ -28,9 +28,10 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
   runtime is Lottie. Step 5 is built end to end on the device - the pack format
   that carries a sound, the device that holds one, the Ringtones page that
   chooses one, and the copy Android's system rings with on a channel of its own.
-  What is still owed is the sound itself, the one moment step 6 is for, and
-  step 9 (premium themes), which waits for the `keygen` and a Play Billing
-  decision.
+  The owner's own sounds from Helix Local now ship as ten built-in ringtones, so
+  a phone can ring without any pack at all; what is still owed is a *published*
+  sound pack if more are wanted, the one moment step 6 is for, and step 9
+  (premium themes), which waits for the `keygen` and a Play Billing decision.
 
 ## Done (pending the owner's review)
 
@@ -61,7 +62,8 @@ the approved backend items are in `GAPS.md`. Read `../AGENTS.md` first.
 | e43d865 | Part C step 5's format half: a pack may be a sound |
 | be5f6b0 | Part C step 5's device half: one pack folder, and a store for sounds |
 | a1316cf | Part C step 5's picker: the Ringtones page, its route and the choice |
-| (this) | Part C step 5's second half: the copy Android rings with, a channel per ringtone |
+| 472b8c9 | Part C step 5's second half: the copy Android rings with, a channel per ringtone |
+| (this) | The Helix Local ringtones, built into the app |
 
 ## The shorter plan (owner, 2026-10-21)
 
@@ -639,6 +641,39 @@ Step 9 waits for the `keygen` and a Play Billing decision.
       is still the missing half of step 5: with one published and a build
       carrying the publisher anchor, a call rings with it.
 
+24. The Helix Local ringtones, built into the app - **done** (2026-10-23).
+    - Asked for by the owner: "there was some of my favorite ringtones in helix
+      local codebase ... set them as orbit ringtones." Ten distinct sounds are
+      copied from `helix_local/app/assets/sounds/` into
+      `app/assets/ringtones/` (3.1 MB): Helix Default, Crystal Chime, Echo
+      Drop, Gentle Notify, Modern Ring, Morning Light, Silver Bell, Soft Pulse,
+      Twilight Ring, Velvet Tone. Local's twelve names include one file three
+      times - `Helix_Default`, `Classic_Call` and `Soft_Whisper` hash the same -
+      so it is listed once. Local's nine large tracks (2.7-9.7 MB each) stay
+      out, as Local itself unbundled them in Phase 10.
+    - `BuiltInRingtones` in `core/sounds/orbit_ringtones.dart` is the list: an
+      `orbit.<slug>` id, Local's label as the name, and the asset path.
+      `Ringtones.publishBuiltIn` copies the asset bytes into the same external
+      folder a pack is copied to, and `Ringtones.chosen` resolves a built-in
+      before the pack folder, so it needs no signature check (the build signed
+      the bytes) but still needs the copy. `RingtoneChoice.choose` accepts a
+      built-in id, the page's `use` publishes it and reverts on failure, and
+      the Notifications row shows its name. A pack signed under a built-in's
+      id is never listed over it.
+    - `RingtoneGalleryItem` gained `builtIn`: on this phone, choosable, and
+      never Get/Update/Delete. The page's order is the phone's own sound, the
+      built-ins, the downloaded packs, then the offers.
+    - No server, protocol, api, engine or domain file changed; the
+      pending-redeploy list is unchanged, and no pixel key moved (the Ringtones
+      page has none). Tests: 5 new in `ringtone_channel_test.dart`, 3 in
+      `sound_packs_test.dart`, 1 in `orbit_ui`; app suite 1013 green, orbit_ui
+      230, `flutter analyze` clean. Docs: `DEVIATIONS.md` "The
+      Helix Local ringtones, built in", the settings `FEATURE.md`, the app's
+      `MODULE.md`, `PORT_PLAN.md` step 5.
+    - **On you:** a new APK to hear them (the assets ship inside it). The page
+      still cannot preview a sound - there is no audio dependency - so it is
+      heard on a call.
+
 ## Batch 8, what is left
 
 `contracts/you.md` is the spec. Already done in 49a75a4:
@@ -782,10 +817,10 @@ must say so.
   manifest read per offer, bounded at 64, and no server change); add a `contents`
   to the list entry (protocol, server, api and app, plus a redeploy); or publish
   sounds into a second folder and name it with a second env line.
-- A real ringtone: a signed sound pack to publish, so the Ringtones page has
-  something to list beyond the phone's own. Until then the page, its choice,
-  the copy and the per-ringtone channel run against fakes; a new APK is needed
-  to hear any of it on the phone.
+- A *downloaded* ringtone, if you want sounds beyond the ten built into the
+  app: a signed sound pack to publish. The page, its choice, the copy and the
+  per-ringtone channel all work today on the built-ins (your Helix Local set,
+  item 24); a new APK is needed to hear them on the phone.
 - Part B step 5's second bullet: the debug APK on your phone and the Windows
   run. Nothing was built for you here (AGENTS.md: the owner builds).
 - S1's `/u/<~name>` page and E6's `GET /v1/backups/full/meta` are code in this

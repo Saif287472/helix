@@ -275,6 +275,47 @@ void main() {
     expect(find.textContaining('Nothing is on offer here yet'), findsNothing);
   });
 
+  testWidgets('a sound this build carries is chosen, never deleted', (
+    tester,
+  ) async {
+    final used = <String>[];
+    await show(
+      tester,
+      RingtoneGalleryScreen(
+        model: const RingtoneGalleryModel(
+          ringtones: [
+            RingtoneGalleryItem(
+              id: '',
+              name: 'Phone’s ringtone',
+              place: ThemePackPlace.onThisPhone,
+              phone: true,
+            ),
+            RingtoneGalleryItem(
+              id: 'orbit.silver-bell',
+              name: 'Silver Bell',
+              place: ThemePackPlace.onThisPhone,
+              builtIn: true,
+            ),
+          ],
+        ),
+        actions: RingtoneGalleryActions(
+          onUse: (id) async {
+            used.add(id);
+            return null;
+          },
+        ),
+      ),
+    );
+    expect(find.text('Silver Bell'), findsOneWidget);
+    // It came with the app, so there is nothing to download, update or delete.
+    expect(find.byTooltip('Delete Silver Bell'), findsNothing);
+    expect(find.text('Get'), findsNothing);
+
+    await tester.tap(find.text('Silver Bell'));
+    await tester.pump();
+    expect(used, ['orbit.silver-bell']);
+  });
+
   testWidgets('Notifications says what a call rings with, and opens the page', (
     tester,
   ) async {

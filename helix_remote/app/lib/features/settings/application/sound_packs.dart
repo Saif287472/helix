@@ -69,9 +69,11 @@ final class RingtoneChoice extends AsyncNotifier<String?> {
 
   /// Rings with [id] from now on, or with the phone's own ringtone for
   /// [phoneRingtoneId]. A pack this device cannot ring with is refused the
-  /// choice, exactly as a theme page refuses a theme it cannot draw.
+  /// choice, exactly as a theme page refuses a theme it cannot draw; a sound
+  /// this build carries needs no such check.
   Future<void> choose(String id) async {
     if (id != phoneRingtoneId &&
+        BuiltInRingtones.byId(id) == null &&
         await ref.read(soundPackStoreProvider).load(id) == null) {
       return;
     }
@@ -84,12 +86,15 @@ final class RingtoneChoice extends AsyncNotifier<String?> {
 }
 
 /// What the next incoming call rings with, in the one line Settings >
-/// Notifications shows: the chosen pack, or the phone's own ringtone when
+/// Notifications shows: the chosen sound, or the phone's own ringtone when
 /// nothing was chosen - or when the chosen pack is no longer on this phone,
-/// since a deleted pack keeps its choice but cannot be rung.
+/// since a deleted pack keeps its choice but cannot be rung. A built-in
+/// ringtone has a name and is always here.
 final ringtoneLabelProvider = Provider<String>((ref) {
   final chosen = ref.watch(ringtoneChoiceProvider).value;
   if (chosen == null) return phoneRingtoneLabel;
+  final builtIn = BuiltInRingtones.byId(chosen);
+  if (builtIn != null) return builtIn.name;
   final held = ref.watch(installedSoundsProvider).value;
   // Still reading the folder: the row says nothing rather than the wrong thing
   // about a ringtone it has not seen yet.
@@ -123,8 +128,11 @@ final class SoundPackActions {
       if (sound == null) return 'That sound cannot be used on this phone.';
       // A re-download of the chosen ringtone (or its update) restores the copy
       // Android's system rings with; any other sound waits until it is chosen.
-      if (await _ref.read(deviceSettingsStoreProvider).readRingtone() ==
-          sound.id) {
+      // A pack whose id names a built-in never gets there: the built-in owns
+      // the copy, and the page does not list such a pack to begin with.
+      if (BuiltInRingtones.byId(sound.id) == null &&
+          await _ref.read(deviceSettingsStoreProvider).readRingtone() ==
+              sound.id) {
         if (!await Ringtones.publish(sound)) {
           // The page must not say a ringtone is in use that a call cannot ring.
           await _ref
@@ -190,14 +198,23 @@ final class RingtonePage {
       _busy(id, () => _ref.read(soundPackActionsProvider).remove(id));
 
   /// Rings with [id] - or with the phone's own sound for [phoneRingtoneId] -
-  /// from now on. Only a sound this device holds gets there; the page lists
-  /// what it holds.
+  /// from now on. Only a sound this device holds (a built-in, or a downloaded
+  /// pack) gets there; the page lists what it holds.
   Future<String?> use(String id) async {
     final choice = _ref.read(ringtoneChoiceProvider.notifier);
     if (id == phoneRingtoneId) {
       await choice.choose(id);
       await Ringtones.forget();
       return '$phoneRingtoneLabel on';
+    }
+    final builtIn = BuiltInRingtones.byId(id);
+    if (builtIn != null) {
+      await choice.choose(id);
+      if (!await Ringtones.publishBuiltIn(builtIn)) {
+        await choice.choose(phoneRingtoneId);
+        return 'That ringtone could not be set up on this phone.';
+      }
+      return '${builtIn.name} ringtone on';
     }
     final sound = await _ref.read(soundPackStoreProvider).load(id);
     if (sound == null) return 'That ringtone is not on this phone.';
@@ -220,12 +237,13 @@ final class RingtonePage {
       _ref.read(packBusyProvider.notifier).around(id, work);
 }
 
-/// Everything the Ringtones page draws: the phone's own sound, then the packs
-/// this device holds, then the ones its server will hand over.
+/// Everything the Ringtones page draws: the phone's own sound, the sounds this
+/// build carries, the packs this device holds, then the ones its server will
+/// hand over.
 ///
-/// A downloaded sound is named by its pack id - the only name a sound pack
-/// carries, because it has no theme document and a name in the server's list
-/// would be unsigned.
+/// A built-in sound is named in this build; a downloaded one is named by its
+/// pack id - the only name a sound pack carries, because it has no theme
+/// document and a name in the server's list would be unsigned.
 final ringtoneGalleryProvider = Provider.autoDispose<RingtoneGalleryModel>((
   ref,
 ) {
@@ -241,10 +259,15 @@ final ringtoneGalleryProvider = Provider.autoDispose<RingtoneGalleryModel>((
   };
   final held = {for (final sound in installed) sound.id};
 
-  // The sound a call actually rings with: the chosen pack when this device
-  // still holds it, else the phone's own (deleting a ringtone keeps the choice,
-  // so a re-download brings it back, but today it rings with the default).
-  final ringing = chosen != null && held.contains(chosen) ? chosen : null;
+  // The sound a call actually rings with: a built-in one, or the chosen pack
+  // when this device still holds it, else the phone's own (deleting a ringtone
+  // keeps the choice, so a re-download brings it back, but today it rings with
+  // the default).
+  final chosenBuiltIn = chosen == null ? null : BuiltInRingtones.byId(chosen);
+  final ringing =
+      chosen != null && (chosenBuiltIn != null || held.contains(chosen))
+      ? chosen
+      : null;
 
   final items = <RingtoneGalleryItem>[
     RingtoneGalleryItem(
@@ -255,20 +278,32 @@ final ringtoneGalleryProvider = Provider.autoDispose<RingtoneGalleryModel>((
       phone: true,
       inUse: ringing == null,
     ),
-    for (final sound in installed)
+    // The sounds this build carries: no download, no update, no delete.
+    for (final ringtone in BuiltInRingtones.all)
       RingtoneGalleryItem(
-        id: sound.id,
-        name: sound.id,
+        id: ringtone.id,
+        name: ringtone.name,
         place: ThemePackPlace.onThisPhone,
-        detail: formatBytes(sound.bytes),
-        inUse: ringing == sound.id,
-        updateAvailable:
-            (offers[sound.id]?.revision ?? sound.revision) > sound.revision,
-        busy: busy == sound.id,
+        builtIn: true,
+        inUse: ringing == ringtone.id,
       ),
+    for (final sound in installed)
+      // A pack cannot take a name this build already gives a sound.
+      if (BuiltInRingtones.byId(sound.id) == null)
+        RingtoneGalleryItem(
+          id: sound.id,
+          name: sound.id,
+          place: ThemePackPlace.onThisPhone,
+          detail: formatBytes(sound.bytes),
+          inUse: ringing == sound.id,
+          updateAvailable:
+              (offers[sound.id]?.revision ?? sound.revision) > sound.revision,
+          busy: busy == sound.id,
+        ),
     for (final id in offers.keys.toList()..sort())
-      // This device already holds it, so it belongs to the group above.
-      if (!held.contains(id))
+      // This device already holds it, so it belongs to the group above; and a
+      // built-in sound's id is never downloaded over the app's own.
+      if (!held.contains(id) && BuiltInRingtones.byId(id) == null)
         RingtoneGalleryItem(
           id: id,
           name: id,

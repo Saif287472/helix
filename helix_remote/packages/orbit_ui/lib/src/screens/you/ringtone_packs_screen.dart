@@ -27,9 +27,10 @@ const phoneRingtoneId = '';
 /// so the two can never say different things about the same choice.
 const phoneRingtoneLabel = 'Phone’s ringtone';
 
-/// One ringtone on the page. A sound pack carries no display name - its one
-/// file is the pack, and only a theme document has words - so a downloaded one
-/// is named by its id, which is the publisher's own signed slug, not a name the
+/// One ringtone on the page. A sound this build carries has a name of its own,
+/// like a built-in theme. A sound pack carries no display name - its one file
+/// is the pack, and only a theme document has words - so a downloaded one is
+/// named by its id, which is the publisher's own signed slug, not a name the
 /// server made up in a list.
 class RingtoneGalleryItem {
   const RingtoneGalleryItem({
@@ -38,6 +39,7 @@ class RingtoneGalleryItem {
     this.place = ThemePackPlace.onTheServer,
     this.detail = '',
     this.phone = false,
+    this.builtIn = false,
     this.inUse = false,
     this.updateAvailable = false,
     this.busy = false,
@@ -56,6 +58,11 @@ class RingtoneGalleryItem {
   /// The phone's own ringtone: this device has it whatever else it has, so it
   /// is never downloaded, never updated and never deleted.
   final bool phone;
+
+  /// A sound this build carries, like a built-in theme: it is on this phone
+  /// (and can be chosen) but it comes with the app, so it is never downloaded,
+  /// updated or deleted.
+  final bool builtIn;
 
   /// What a call rings with right now.
   final bool inUse;
@@ -118,11 +125,11 @@ class RingtoneGalleryActions {
   final VoidCallback? onRetry;
 }
 
-/// `Ringtones` (Settings > Notifications > Ringtone): what this phone can ring
-/// with, and what its server will hand over. Built in `orbit/PORT_PLAN.md` Part
-/// C step 5 from that plan's words, because the prototype has no such screen -
-/// its Notifications row opens a two-choice sheet that ends at "More ringtones
-/// to download are coming."
+/// `Ringtones` (Settings > Notifications > Ringtone): the phone's own sound,
+/// the sounds this build carries, and what its server will hand over. Built in
+/// `orbit/PORT_PLAN.md` Part C step 5 from that plan's words, because the
+/// prototype has no such screen - its Notifications row opens a two-choice
+/// sheet that ends at "More ringtones to download are coming."
 ///
 /// A sound is played by the phone, not by Orbit: it is the sound of the
 /// notification channel a call arrives on, which is why there is one row per
@@ -171,7 +178,8 @@ class RingtoneGalleryScreen extends StatelessWidget {
           const OrbitSectionFoot(
             'A downloaded ringtone is a signed pack: the publisher’s signature, '
             'the size of the file and its own hash. One that fails a check is '
-            'never played, and the phone’s own ringtone is always there.',
+            'never played, and the phone’s own ringtone is always there. The '
+            'sounds Orbit itself comes with are part of the app.',
           ),
         OrbitGroupTitle(
           model.host.isEmpty ? 'On the server' : 'On ${model.host}',
@@ -248,7 +256,7 @@ class RingtoneGalleryScreen extends StatelessWidget {
           height: 38,
           onPressed: () => _run(context, actions.onUpdate, item),
         ),
-        _ when item.phone => null,
+        _ when item.phone || item.builtIn => null,
         _ => OrbitIconButton(
           icon: OrbitIcons.trashSimple,
           tooltip: 'Delete ${item.name}',

@@ -94,6 +94,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
+    - assets/ringtones/
 
 hooks:
   user_defines:

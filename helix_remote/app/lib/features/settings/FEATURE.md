@@ -169,11 +169,17 @@ published anything.
 `presentation/ringtones_page.dart` (route
 `/settings/notifications/ringtones`, from the Notifications page's Ringtone row,
 which is drawn only where a call rings through a notification channel) is
-`orbit_ui`'s `RingtoneGalleryScreen`: the phone's own sound first, then this
-device's packs, then the host's offers.
+`orbit_ui`'s `RingtoneGalleryScreen`: the phone's own sound first, then the
+sounds this build carries, then this device's packs, then the host's offers.
+The built-ins are `BuiltInRingtones` in `core/sounds/orbit_ringtones.dart` -
+the owner's ten distinct ringtones from Helix Local, bundled in
+`app/assets/ringtones/` and named in the build. They are like the built-in
+themes: nothing to download, update or delete, and a pack signed under one of
+their ids is not listed over them.
 
 Choosing one is what makes it a ringtone. `core/sounds/orbit_ringtones.dart`
-writes one copy of the pack's file into the app's external files folder
+writes one copy of the sound's file - the pack's, or a built-in's asset bytes
+through `publishBuiltIn` - into the app's external files folder
 (`AppPaths.ringtoneDirectory`, over `getExternalStorageDirectory`), and
 `CallNotifications` rings it on a channel of its own, whose id carries the pack
 id and the audio kind and whose sound is the copy's `content://` address. Android

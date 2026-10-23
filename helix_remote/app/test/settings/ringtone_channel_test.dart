@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
@@ -20,6 +21,8 @@ import '../support/pack_fixtures.dart';
 /// the phone. What they exercise is the code that runs there, against folders
 /// a test can see.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late Directory tmp;
   late Directory external;
 
@@ -222,6 +225,7 @@ void main() {
         final ringtone = await Ringtones.chosen(publishers: trusted);
         expect(ringtone, isNotNull);
         expect(ringtone!.id, 'chime');
+        expect(ringtone.name, 'chime');
         expect(ringtone.channelId, Ringtones.channelId('chime', '.m4a'));
         expect(ringtone.uri, Ringtones.uri('chime', '.m4a'));
       },
@@ -273,5 +277,79 @@ void main() {
         );
       },
     );
+  });
+
+  group('the sounds this build carries', () {
+    test('every one loads, and no id or name is used twice', () async {
+      final ids = <String>{};
+      final names = <String>{};
+      for (final ringtone in BuiltInRingtones.all) {
+        expect(ids.add(ringtone.id), isTrue, reason: '${ringtone.id} twice');
+        expect(
+          names.add(ringtone.name),
+          isTrue,
+          reason: '${ringtone.name} twice',
+        );
+        expect(ringtone.suffix, '.mp3');
+        final data = await rootBundle.load(ringtone.asset);
+        expect(
+          data.lengthInBytes,
+          greaterThan(16 * 1024),
+          reason: '${ringtone.asset} is missing or empty',
+        );
+      }
+      // The owner's set from Helix Local, with its three names for one file
+      // (Helix Default, Classic Call, Soft Whisper) listed once.
+      expect(BuiltInRingtones.all.length, 10);
+    });
+
+    test('a built-in is copied from the build and rings', () async {
+      final ringtone = BuiltInRingtones.byId('orbit.crystal-chime')!;
+      expect(await Ringtones.publishBuiltIn(ringtone), isTrue);
+
+      final copy = copyOf(ringtone.id, '.mp3');
+      expect(await copy.exists(), isTrue);
+      expect(File('${copy.path}.part').existsSync(), isFalse);
+      final asset = await rootBundle.load(ringtone.asset);
+      expect(
+        await copy.readAsBytes(),
+        asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes),
+      );
+
+      await const FileDeviceSettingsStore().writeRingtone(ringtone.id);
+      final chosen = await Ringtones.chosen(publishers: trusted);
+      expect(chosen, isNotNull);
+      expect(chosen!.id, 'orbit.crystal-chime');
+      // The system's own settings name it as the page does, not by its id.
+      expect(chosen.name, 'Crystal Chime');
+      expect(
+        chosen.channelId,
+        Ringtones.channelId('orbit.crystal-chime', '.mp3'),
+      );
+      expect(chosen.uri, Ringtones.uri('orbit.crystal-chime', '.mp3'));
+    });
+
+    test('a built-in replaces the copy a pack left behind', () async {
+      final sound = await installSound('chime');
+      await Ringtones.publish(sound);
+      final ringtone = BuiltInRingtones.byId('orbit.echo-drop')!;
+
+      expect(await Ringtones.publishBuiltIn(ringtone), isTrue);
+      expect(copyOf('chime', '.m4a').existsSync(), isFalse);
+      expect(copyOf(ringtone.id, '.mp3').existsSync(), isTrue);
+    });
+
+    test('a built-in choice with no copy is the phone\'s own sound', () async {
+      await const FileDeviceSettingsStore().writeRingtone('orbit.velvet-tone');
+      expect(await Ringtones.chosen(publishers: trusted), isNull);
+    });
+
+    test('off Android a built-in is not copied', () async {
+      final ringtone = BuiltInRingtones.all.first;
+      AppPaths.isAndroid = () => false;
+
+      expect(await Ringtones.publishBuiltIn(ringtone), isTrue);
+      expect(copyOf(ringtone.id, '.mp3').existsSync(), isFalse);
+    });
   });
 }
