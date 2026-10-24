@@ -6,8 +6,12 @@ import 'package:helix_remote_server/src/modules/backup/module.dart';
 import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
+import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/db/postgres_db.dart';
+import 'package:helix_remote_server/src/platform/db/schema_names.dart';
 import 'package:helix_remote_server/src/platform/ephemeral/ephemeral_store.dart';
+import 'package:helix_remote_server/src/platform/http/idempotency.dart';
+import 'package:helix_remote_server/src/platform/platform_migrations.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:test/test.dart';
 
@@ -149,6 +153,126 @@ void main() {
     );
   });
 
+  group('idempotency claims', skip: databaseTestSkipReason, () {
+    late PostgresDb db;
+    late SchemaNames schemas;
+
+    setUp(() async {
+      db = await openTestDb();
+      schemas = SchemaNames(prefix: randomPrefix());
+      await MigrationRunner(db, schemas).run([platformMigrations]);
+    });
+
+    tearDown(() async {
+      await db.close();
+      await dropSchemas(schemas.prefix);
+    });
+
+    PostgresIdempotencyStore store({
+      Map<String, List<int>> keys = const {
+        'k1': [7, 7],
+      },
+      Duration lease = const Duration(seconds: 30),
+    }) => PostgresIdempotencyStore(
+      db,
+      schemas.platform,
+      IdempotencySealer(keys, 'k1'),
+      lease: lease,
+    );
+
+    Future<String> stateOf(String key) async {
+      final row = await db.queryOne(
+        'SELECT state FROM ${schemas.platform}.idempotency WHERE key = @k:text',
+        {'k': key},
+      );
+      return row?.string('state') ?? 'gone';
+    }
+
+    test(
+      'one claim runs, a second waits, and the answer replays with its headers',
+      () async {
+        final s = store();
+        expect(await s.claim('device:d1', 'k', 'h1'), isA<ClaimTaken>());
+        expect(
+          await s.claim('device:d1', 'k', 'h1'),
+          isA<ClaimInProgress>(),
+          reason: 'the holder has not answered yet',
+        );
+        expect(
+          await s.claim('device:d1', 'k', 'h2'),
+          isA<ClaimConflict>(),
+          reason: 'another body under one key is a mistake, not a retry',
+        );
+        expect(await stateOf('k'), 'pending');
+
+        await s.record(
+          'device:d1',
+          'k',
+          const StoredResponse(
+            requestHash: 'h1',
+            status: 201,
+            body: '{"id":"x"}',
+            headers: {'location': '/v1/things/x'},
+          ),
+        );
+        final claim = await s.claim('device:d1', 'k', 'h1');
+        expect(claim, isA<ClaimStored>());
+        final stored = (claim as ClaimStored).response;
+        expect(stored.status, 201);
+        expect(stored.body, '{"id":"x"}');
+        expect(stored.headers, {'location': '/v1/things/x'});
+        expect(await stateOf('k'), 'done');
+
+        // A 5xx answer is released, so the retry may act again.
+        expect(await s.claim('device:d2', 'other', 'h1'), isA<ClaimTaken>());
+        await s.release('device:d2', 'other', 'h1');
+        expect(await stateOf('other'), 'gone');
+        expect(await s.claim('device:d2', 'other', 'h1'), isA<ClaimTaken>());
+      },
+    );
+
+    test('a claim nobody answers is taken over after its lease', () async {
+      final s = store(lease: const Duration(milliseconds: 60));
+      expect(await s.claim('device:d1', 'k', 'h1'), isA<ClaimTaken>());
+      expect(await s.claim('device:d1', 'k', 'h1'), isA<ClaimInProgress>());
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(
+        await s.claim('device:d1', 'k', 'h1'),
+        isA<ClaimTaken>(),
+        reason: 'the node that held it is gone; the key is not burned',
+      );
+      expect(await s.claim('device:d1', 'k', 'h1'), isA<ClaimInProgress>());
+    });
+
+    test('an answer this build cannot open is claimed, not replayed', () async {
+      final s = store();
+      expect(await s.claim('device:d1', 'k', 'h1'), isA<ClaimTaken>());
+      await s.record(
+        'device:d1',
+        'k',
+        const StoredResponse(
+          requestHash: 'h1',
+          status: 200,
+          body: '{"a":1}',
+          headers: {},
+        ),
+      );
+      // The JWT key was rotated away: the row is unreadable, so the request
+      // runs again - once, with a claim of its own.
+      final rotated = store(
+        keys: const {
+          'k2': [8, 8],
+        },
+      );
+      expect(await rotated.claim('device:d1', 'k', 'h1'), isA<ClaimTaken>());
+      expect(await stateOf('k'), 'pending');
+      expect(
+        await rotated.claim('device:d1', 'k', 'h1'),
+        isA<ClaimInProgress>(),
+      );
+    });
+  });
+
   group('server', skip: databaseTestSkipReason, () {
     late Harness h;
     const metricsToken = 'metrics-token-for-tests-0123456789abcdef';
@@ -185,8 +309,21 @@ void main() {
           'SELECT response FROM ${h.env.prefix}platform.idempotency',
         );
         final stored = row!.string('response');
-        expect(stored, startsWith('e1:'));
+        expect(stored, startsWith('e2:'));
         expect(stored, isNot(contains('accepted_at')));
+        expect(
+          stored,
+          isNot(contains('content-type')),
+          reason: 'the replayed headers are sealed with the body',
+        );
+        final state = await h.env.platform.db.queryOne(
+          'SELECT state FROM ${h.env.prefix}platform.idempotency',
+        );
+        expect(
+          state!.string('state'),
+          'done',
+          reason: 'the answer replaced the claim',
+        );
         final again = await h.api.call(
           Routes.sendMessage,
           bearer: alice.bearer,

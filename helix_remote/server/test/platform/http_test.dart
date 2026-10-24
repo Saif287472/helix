@@ -29,6 +29,35 @@ final class _FakeAuth implements Authenticator {
       null;
 }
 
+/// The store when writing the answer fails - the database that goes down
+/// right after the handler committed (AUD-11a-2).
+final class _RecordFails implements IdempotencyStore {
+  _RecordFails(this._inner);
+
+  final IdempotencyStore _inner;
+
+  @override
+  Future<IdempotencyClaim> claim(
+    String principal,
+    String key,
+    String requestHash,
+  ) => _inner.claim(principal, key, requestHash);
+
+  @override
+  Future<void> record(
+    String principal,
+    String key,
+    StoredResponse response,
+  ) async => throw StateError('the answer could not be written');
+
+  @override
+  Future<void> release(String principal, String key, String requestHash) =>
+      _inner.release(principal, key, requestHash);
+
+  @override
+  Future<int> sweep() => _inner.sweep();
+}
+
 void main() {
   late MemorySink sink;
   late InMemoryRateLimiter limiter;
@@ -38,6 +67,7 @@ void main() {
     void Function(RouteRegistry r) register, {
     Future<bool> Function()? maintenance,
     BodyBudget? bodyBudget,
+    IdempotencyStore? idempotency,
   }) {
     sink = MemorySink();
     limiter = InMemoryRateLimiter();
@@ -53,7 +83,7 @@ void main() {
       registry.build(
         authenticator: _FakeAuth(),
         rateLimiter: limiter,
-        idempotency: InMemoryIdempotencyStore(),
+        idempotency: idempotency ?? InMemoryIdempotencyStore(),
         bodyBudget: bodyBudget,
       ),
     );
@@ -363,6 +393,204 @@ void main() {
         expect((await errorOf(conflict))['code'], 'idempotency_conflict');
       },
     );
+
+    test(
+      'two requests with one key at the same time: one runs, one is told to wait',
+      () async {
+        final entered = Completer<void>();
+        final mayFinish = Completer<void>();
+        sendCalls = 0;
+        final handler = build(
+          (r) => r.add('messaging', Routes.sendMessage, (req) async {
+            sendCalls++;
+            entered.complete();
+            await mayFinish.future;
+            return jsonResponse({'call': sendCalls});
+          }),
+        );
+        final headers = {
+          'authorization': 'Bearer good',
+          'idempotency-key': 'k1',
+        };
+        final first = call(
+          handler,
+          'POST',
+          '/v1/messages',
+          headers: headers,
+          body: '{"a":1}',
+        );
+        await entered.future;
+        final duplicate = await call(
+          handler,
+          'POST',
+          '/v1/messages',
+          headers: headers,
+          body: '{"a":1}',
+        );
+        expect(duplicate.statusCode, 503);
+        expect((await errorOf(duplicate))['code'], 'unavailable');
+        expect(duplicate.headers['retry-after'], isNotNull);
+        expect(sendCalls, 1, reason: 'the duplicate never reached the handler');
+        mayFinish.complete();
+        expect(await (await first).readAsString(), '{"call":1}');
+        final after = await call(
+          handler,
+          'POST',
+          '/v1/messages',
+          headers: headers,
+          body: '{"a":1}',
+        );
+        expect(after.headers['idempotent-replay'], 'true');
+        expect(await after.readAsString(), '{"call":1}');
+        expect(sendCalls, 1);
+      },
+    );
+
+    test(
+      'a retry whose answer could not be written does not run the handler again',
+      () async {
+        sendCalls = 0;
+        final handler = build(
+          (r) => r.add('messaging', Routes.sendMessage, (req) {
+            sendCalls++;
+            return jsonResponse({'call': sendCalls});
+          }),
+          idempotency: _RecordFails(InMemoryIdempotencyStore()),
+        );
+        final headers = {
+          'authorization': 'Bearer good',
+          'idempotency-key': 'k1',
+        };
+        final lost = await call(
+          handler,
+          'POST',
+          '/v1/messages',
+          headers: headers,
+          body: '{"a":1}',
+        );
+        expect(lost.statusCode, 500);
+        final retry = await call(
+          handler,
+          'POST',
+          '/v1/messages',
+          headers: headers,
+          body: '{"a":1}',
+        );
+        expect(retry.statusCode, 503);
+        expect(
+          sendCalls,
+          1,
+          reason: 'the first request committed: a second run would be twice',
+        );
+      },
+    );
+
+    test(
+      'a request that failed gives the key back, so its retry runs',
+      () async {
+        sendCalls = 0;
+        final handler = build(
+          (r) => r.add('messaging', Routes.sendMessage, (req) {
+            sendCalls++;
+            throw const ApiError(ErrorCode.conflict);
+          }),
+        );
+        final headers = {
+          'authorization': 'Bearer good',
+          'idempotency-key': 'k1',
+        };
+        expect(
+          (await call(
+            handler,
+            'POST',
+            '/v1/messages',
+            headers: headers,
+            body: '{"a":1}',
+          )).statusCode,
+          409,
+        );
+        expect(
+          (await call(
+            handler,
+            'POST',
+            '/v1/messages',
+            headers: headers,
+            body: '{"a":1}',
+          )).statusCode,
+          409,
+        );
+        expect(
+          sendCalls,
+          2,
+          reason: 'a failed request committed nothing, so a retry may act',
+        );
+      },
+    );
+
+    test('a replay keeps every header the first answer carried', () async {
+      sendCalls = 0;
+      final handler = build(
+        (r) => r.add('messaging', Routes.sendMessage, (req) {
+          sendCalls++;
+          return Response(
+            429,
+            body: jsonEncode({
+              'error': {'code': 'rate_limited'},
+            }),
+            headers: {'retry-after': '7', 'x-helix-limit': '20'},
+          );
+        }),
+      );
+      final headers = {'authorization': 'Bearer good', 'idempotency-key': 'k1'};
+      await call(
+        handler,
+        'POST',
+        '/v1/messages',
+        headers: headers,
+        body: '{"a":1}',
+      );
+      final replay = await call(
+        handler,
+        'POST',
+        '/v1/messages',
+        headers: headers,
+        body: '{"a":1}',
+      );
+      expect(sendCalls, 1);
+      expect(replay.statusCode, 429);
+      expect(replay.headers['retry-after'], '7');
+      expect(replay.headers['x-helix-limit'], '20');
+      expect(replay.headers['idempotent-replay'], 'true');
+    });
+
+    test('a replay of a 204 stays a 204 with no content type', () async {
+      final handler = build(
+        (r) => r.add(
+          'messaging',
+          Routes.sendMessage,
+          (req) => Response(204, headers: {'x-helix-offset': '12'}),
+        ),
+      );
+      final headers = {'authorization': 'Bearer good', 'idempotency-key': 'k1'};
+      await call(
+        handler,
+        'POST',
+        '/v1/messages',
+        headers: headers,
+        body: '{"a":1}',
+      );
+      final replay = await call(
+        handler,
+        'POST',
+        '/v1/messages',
+        headers: headers,
+        body: '{"a":1}',
+      );
+      expect(replay.statusCode, 204);
+      expect(replay.headers['content-type'], isNull);
+      expect(replay.headers['x-helix-offset'], '12');
+      expect(await replay.readAsString(), isEmpty);
+    });
 
     test(
       'unexpected errors are 500s that leak nothing; the log has the type only',

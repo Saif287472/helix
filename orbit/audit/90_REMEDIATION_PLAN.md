@@ -545,12 +545,13 @@ variable named. `federation_test.dart` — an oversize response is refused and n
 identity fetch precedes signature verification. Protocol tests — every string
 and list field has a limit.
 
-**Rollout:** platform migration 4 adds `state` and `headers` to
-`platform.idempotency` (expand; the stale-`pending` sweeper is a job). Config
-validation turns a bad `HELIX_S3_ENDPOINT` into a start-up failure: **check the
-production `.env` before deploying**, because the node will refuse to start
-with the value that today silently fails per request. Wire: none; a replay
-simply carries more headers.
+**Rollout:** platform migration 4 adds `state` and `taken_at` to
+`platform.idempotency` (expand-only; the headers ride inside the sealed answer,
+so they need no column, and a stale claim is retaken by the next request rather
+than by a sweeper job). Config validation turns a bad `HELIX_S3_ENDPOINT` into a
+start-up failure: **check the production `.env` before deploying**, because the
+node will refuse to start with the value that today silently fails per request.
+Wire: none; a replay simply carries more headers.
 
 **Landing log (in progress):**
 - S1 (AUD-1a-1) — `BodyBudget` takes `idleGap` (10 s) and `deadline` (30 s) and
@@ -603,6 +604,44 @@ simply carries more headers.
   **Owner-facing:** the validation makes a malformed endpoint a start-up
   failure — check the production `.env` before deploying. Helix Global uses
   `HELIX_BLOB_STORE=local`, so today's node is not affected.
+- S3 (AUD-1a-3, AUD-1a-4, AUD-11a-2) — `IdempotencyStore` is
+  `claim`/`record`/`release` instead of `find`/`save`, and `_idempotent` claims
+  the key before the handler runs: one `INSERT … ON CONFLICT DO UPDATE …
+  RETURNING` takes the key or says why not, and the answer only ever comes from
+  the holder (`record` updates a `pending` row carrying that request's hash).
+  A duplicate that overlaps the first gets `unavailable` (503, retryable,
+  `Retry-After: 2`) and the transport waits it out and then replays; a
+  concurrent different-body key still gets `idempotency_conflict`; a handler
+  that throws or answers 5xx gives the claim back, because a failed request
+  committed nothing and its retry must be free to act. `state` says claim or
+  answer, `taken_at` is the lease (15 min, `idempotencyClaimLease`): a node that
+  dies with a claim cannot burn the key past it, and the same statement takes
+  over an answer past the 24-hour retention, which is what `find` already
+  treated as gone — so no new sweeper. AUD-11a-2 closes with the claim: the
+  answer is written after the commit and a failed write leaves the key claimed,
+  so a retry waits or replays instead of running the mutation a second time.
+  AUD-1a-4: the headers are stored with the body inside the envelope (new `e2:`
+  format, one seal over both, the AAD unchanged), an `e1:` row from before the
+  deploy still opens so an in-flight request replays rather than repeats, and a
+  replay that cannot be opened is re-claimed by its exact contents rather than
+  answered twice. A 204 replay no longer grows a `content-type`.
+  Tests: `http_test.dart` — "two requests with one key at the same time: one
+  runs, one is told to wait", "a retry whose answer could not be written does
+  not run the handler again", "a request that failed gives the key back, so its
+  retry runs", "a replay keeps every header the first answer carried", "a replay
+  of a 204 stays a 204 with no content type"; `hardening_test.dart` — the `e2`
+  envelope opens with its headers and the `e1` row of the previous release still
+  opens; `hardening_db_test.dart` — the claim states against Postgres, the lease
+  takeover, and a row this build cannot open being claimed not replayed. The
+  lease is passed in **milliseconds**: the first draft used `inSeconds`, and a
+  60 ms test lease became 0 seconds, so every duplicate stole its own claim —
+  the test caught it before the docs did.
+  **Owner-facing:** platform migration 4 (`idempotency_claim`) runs at start-up
+  or with `bin/migrate.dart`; it is expand-only and safe to deploy in any order
+  (an old node reads a `pending` row as "no answer yet" and re-runs, exactly as
+  today). No `.env` line, no wire change: a replay carries more headers and a
+  concurrent duplicate is the only new answer, and it is a retryable one the
+  client already handles.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**

@@ -19,11 +19,17 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 - **Bytes** are unpadded base64url. **Times** are epoch milliseconds (UTC).
 - **Errors:** `{"error": {"code", "message"?, "details"?, "retry_after_s"?}}`
   with the HTTP status of the code (`errors.dart`). Clients branch on `code`.
-- **Idempotency:** every mutating request may carry `Idempotency-Key`; the
-  server stores the result for 24 hours per principal and replays it (same key
-  with a different body: `idempotency_conflict`). Stored results are
-  encrypted at rest (some carry a secret once, such as an invite link).
-  Message sends are also idempotent by their `id`, per sending device.
+- **Idempotency:** every mutating request may carry `Idempotency-Key`. The
+  server claims the key *before* the handler runs, so two requests with one key
+  never both act: while the first is still running the second is answered
+  `unavailable` (503, retryable, `Retry-After: 2`). The result — status,
+  headers and body — is stored for 24 hours per principal and replayed to a
+  retry (same key with a different body: `idempotency_conflict`). A request
+  that failed gives the key back, so its retry may run, and a claim left by a
+  node that died is taken over after 15 minutes instead of burning the key.
+  Stored results are encrypted at rest, the headers with the body (some carry a
+  secret exactly once, such as an invite link). Message sends are also
+  idempotent by their `id`, per sending device.
 - **Bodies:** credentials (and, for S2S, the signature headers' shape and
   clock skew) are checked before the body is read. Each route has a size
   limit (`payload_too_large`); a node that is already buffering its limit of

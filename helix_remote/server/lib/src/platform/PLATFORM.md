@@ -18,7 +18,7 @@ one Postgres database.
 | Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide; a job may declare its worst case (`PeriodicJob.timeout`, else the scheduler's 5 minutes) and is leased for that plus 30 s, so a run that uses its whole timeout is never claimed twice | same |
 | Object storage | `blobs/object_storage.dart` | local directory; `list(prefix)` walks it (the media orphan sweep); `append` is serialized per key and returns the file's own length | S3-compatible (SigV4; `list` is ListObjectsV2); every request is bounded (10 s for the headers, then 10 s between two body chunks), a range read asks for a range, and `ping` shares one probe between callers for 5 s |
 | Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |
-| HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart`, `websocket_limits.dart` | shelf; auth and route limit before the body, per-node body budget whose read is bounded (10 s between two chunks, 30 s in total, then `request_timeout` 408 and the reservation returned), sealed idempotency rows, WebSocket message cap | same |
+| HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart`, `websocket_limits.dart` | shelf; auth and route limit before the body, per-node body budget whose read is bounded (10 s between two chunks, 30 s in total, then `request_timeout` 408 and the reservation returned), idempotency claimed before the handler runs (a duplicate is `unavailable`, a lost claim is retaken after 15 min) and answered once with the sealed status, headers and body, WebSocket message cap | same |
 | Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction (ring buffer + live `lines` stream for the admin console), Prometheus text; `HELIX_LOG_FILE` rotates itself daily (UTC) and keeps `HELIX_LOG_KEEP_DAYS` | scrape per node |
 | Start-up | `startup.dart` | `retryStartup` (an unreachable database is retried for a minute) and `watchStopFile` (`HELIX_STOP_FILE`, how the Windows task stops the server) | same |
 | Modules | `module.dart` | `HelixModule`, `ModuleBase`, `HealthRegistry`; capability interfaces `ProvidesAuthentication`, `ProvidesMaintenance`, `ProvidesAccountExport` | — |
@@ -41,6 +41,10 @@ one Postgres database.
   not a full `http(s)://host` URL is the case that proved it).
 - SQL interpolates only `SchemaNames` (validated identifiers). Values are
   always named parameters with explicit types (`@id:uuid`).
+- An `Idempotency-Key` is claimed before its handler runs and answered once:
+  a concurrent duplicate gets `unavailable` with a `Retry-After` rather than a
+  second side effect, a handler that failed or answered 5xx gives the claim
+  back, and only the holder of a claim may write its answer.
 - Public routes need a rate limit (`RouteRegistry.add` refuses otherwise),
   and every route must be in the protocol catalog.
 - Logs carry ids and counts; secrets are masked by name and by shape

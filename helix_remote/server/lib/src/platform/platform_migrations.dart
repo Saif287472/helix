@@ -9,8 +9,28 @@ const platformMigrations = MigrationSet(
     Migration(1, 'platform_baseline', _baseline),
     Migration(2, 'rate_bucket_full_at', _rateBucketFullAt),
     Migration(3, 'jobs_dedupe_live', _jobsDedupeLive),
+    Migration(4, 'idempotency_claim', _idempotencyClaim),
   ],
 );
+
+/// A key is now claimed *before* its handler runs, so a concurrent duplicate
+/// is turned away instead of acting twice (AUD-1a-3) and a retry whose answer
+/// was lost waits or replays instead of repeating the side effect
+/// (AUD-11a-2). `state` says whether a row is a claim or an answer;
+/// `taken_at` is when the claim was taken, so a handler that died with its
+/// node cannot burn the key past the lease.
+///
+/// Expand-only, and the default is what every existing row already is: a
+/// finished answer. A node still running the old code keeps writing `done`
+/// rows it can replay, and one claim row it reads is a status it never
+/// answers - so a rolling deploy, or a rollback, costs at most the claim
+/// state and never a stored answer or a crash.
+String _idempotencyClaim(String s) =>
+    '''
+ALTER TABLE $s.idempotency
+  ADD COLUMN state text NOT NULL DEFAULT 'done' CHECK (state IN ('pending', 'done')),
+  ADD COLUMN taken_at timestamptz;
+''';
 
 /// Dedupe is a lock on the *pending* job with that key, not on the key
 /// forever: a job that ran out of attempts stays as a `dead` row for the

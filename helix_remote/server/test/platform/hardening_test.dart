@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:cryptography/cryptography.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/config/server_config.dart';
@@ -407,49 +409,100 @@ void main() {
   group('idempotency sealing (#16)', () {
     final keys = {'k1': List.filled(32, 7), 'k2': List.filled(32, 8)};
 
-    test('bodies open only for the same request, under a known key', () async {
-      final sealer = IdempotencySealer(keys, 'k1');
-      final sealed = await sealer.seal(
-        '{"secret":"HLX-INV-abc"}',
-        principal: 'device:d1',
-        key: 'key-1',
-        requestHash: 'h1',
+    Future<String> legacySeal(String body, List<int> jwtKey) async {
+      // What the release before the headers were kept wrote: the body alone,
+      // under the same derived key and the same associated data.
+      final secret = SecretKey(
+        crypto.Hmac(
+          crypto.sha256,
+          jwtKey,
+        ).convert(utf8.encode('helix.v2.idempotency')).bytes,
       );
-      expect(sealed, isNot(contains('HLX-INV')));
-      expect(
-        await sealer.open(
+      final box = await AesGcm.with256bits().encrypt(
+        utf8.encode(body),
+        secretKey: secret,
+        aad: utf8.encode('device:d1\nkey-1\nh1'),
+      );
+      return [
+        'e1',
+        encodeBytes(utf8.encode('k1')),
+        encodeBytes(box.concatenation()),
+      ].join(':');
+    }
+
+    test(
+      'a response opens only for the same request, under a known key',
+      () async {
+        final sealer = IdempotencySealer(keys, 'k1');
+        final sealed = await sealer.seal(
+          '{"secret":"HLX-INV-abc"}',
+          headers: const {
+            'x-token': 'once-only',
+            'Content-Type': 'application/json',
+          },
+          principal: 'device:d1',
+          key: 'key-1',
+          requestHash: 'h1',
+        );
+        expect(sealed, isNot(contains('HLX-INV')));
+        expect(sealed, isNot(contains('once-only')));
+        final opened = await sealer.open(
           sealed,
           principal: 'device:d1',
           key: 'key-1',
           requestHash: 'h1',
-        ),
-        '{"secret":"HLX-INV-abc"}',
-      );
-      expect(
-        await sealer.open(
-          sealed,
-          principal: 'device:d2',
-          key: 'key-1',
-          requestHash: 'h1',
-        ),
-        isNull,
-      );
-      // Rotation: a newer active key still opens rows sealed under k1.
-      expect(
-        await IdempotencySealer(
+        );
+        expect(opened, isNotNull);
+        final (body, headers) = opened!;
+        expect(body, '{"secret":"HLX-INV-abc"}');
+        expect(
+          headers,
+          {'x-token': 'once-only', 'content-type': 'application/json'},
+          reason: 'headers come back as the replay needs them, lower-cased',
+        );
+        expect(
+          await sealer.open(
+            sealed,
+            principal: 'device:d2',
+            key: 'key-1',
+            requestHash: 'h1',
+          ),
+          isNull,
+        );
+        // Rotation: a newer active key still opens rows sealed under k1.
+        expect(
+          await IdempotencySealer(keys, 'k2').open(
+            sealed,
+            principal: 'device:d1',
+            key: 'key-1',
+            requestHash: 'h1',
+          ),
+          isNotNull,
+        );
+        expect(
+          await IdempotencySealer({'k2': keys['k2']!}, 'k2').open(
+            sealed,
+            principal: 'device:d1',
+            key: 'key-1',
+            requestHash: 'h1',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'a row sealed without headers still opens, so an in-flight request replays',
+      () async {
+        final sealed = await legacySeal('{"a":1}', keys['k1']!);
+        final opened = await IdempotencySealer(
           keys,
-          'k2',
-        ).open(sealed, principal: 'device:d1', key: 'key-1', requestHash: 'h1'),
-        isNotNull,
-      );
-      expect(
-        await IdempotencySealer(
-          {'k2': keys['k2']!},
-          'k2',
-        ).open(sealed, principal: 'device:d1', key: 'key-1', requestHash: 'h1'),
-        isNull,
-      );
-    });
+          'k1',
+        ).open(sealed, principal: 'device:d1', key: 'key-1', requestHash: 'h1');
+        expect(opened?.$1, '{"a":1}');
+        expect(opened?.$2, isEmpty);
+      },
+    );
   });
 
   group('config (D1, D2)', () {

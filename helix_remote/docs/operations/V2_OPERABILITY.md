@@ -552,7 +552,7 @@ two nodes on one database.)
 | Event bus | `LISTEN/NOTIFY` on channel `helix_bus` (messages up to 7.9 KB, hints only) | Wake-ups, device revocation, "connected elsewhere", settings changes reach every node. A missed hint only delays work until the next poll or reconnect. |
 | Ephemeral store | UNLOGGED `platform.ephemeral` | Sign-in challenges, link polls, WebSocket routes (`rt:route:<device>` = `<node>\|<connection>`, 75 s) and the node heartbeat that makes a route mean reachability (`rt:node:<node>`, 20 s), presence, federation replay memory. |
 | Rate limits | UNLOGGED `platform.rate_buckets` | One bucket per key across nodes. |
-| Idempotency | `platform.idempotency` (24 h) | A retry answered by another node replays the stored result. |
+| Idempotency | `platform.idempotency` (24 h) | A key is claimed before its handler runs, so a retry answered by another node replays the stored result and a duplicate reaching a live node waits. A claim left by a crashed node is retaken after 15 minutes. |
 | Jobs and periodic jobs | `platform.jobs`, `platform.periodic_jobs` | One node runs each job; each periodic job runs once per interval cluster-wide. |
 | Operator settings | `ops.settings` (30 s cache plus bus) | Maintenance, flags, federation switch, server name. |
 | Migrations | `platform.schema_migrations` plus an advisory lock | One node migrates. |

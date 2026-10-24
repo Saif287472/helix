@@ -466,33 +466,62 @@ Future<Response> _idempotent(
       message: 'idempotency key too long',
     );
   }
-  final stored = await store.find(principal, key);
-  if (stored != null) {
-    if (stored.requestHash != requestHash) {
-      throw const ApiError(ErrorCode.idempotencyConflict);
-    }
-    return Response(
-      stored.status,
-      body: stored.body,
+  final claim = await store.claim(principal, key, requestHash);
+  if (claim case ClaimStored(:final response)) return _replay(response);
+  if (claim case ClaimConflict()) {
+    throw const ApiError(ErrorCode.idempotencyConflict);
+  }
+  if (claim case ClaimInProgress()) {
+    // The first request is still running, and its answer is the one this
+    // client wants: say "busy, retry shortly" rather than act twice. The
+    // transport waits out a `Retry-After` this short by itself.
+    throw const ApiError(
+      ErrorCode.unavailable,
+      message: 'another request with this idempotency key is still running',
+      retryAfter: Duration(seconds: 2),
+    );
+  }
+  // ClaimTaken: the handler runs here and nowhere else for this key.
+  final Response response;
+  try {
+    response = await run();
+  } on Object {
+    // A thrown error means the handler committed nothing (its transaction
+    // rolls back), so the claim is worth nothing: give it up, or a client
+    // that retries after a `conflict` would wait out the lease for the same
+    // answer.
+    await store.release(principal, key, requestHash);
+    rethrow;
+  }
+  if (response.statusCode >= 500) {
+    // A 5xx means the handler committed nothing, so the claim is worth
+    // nothing: drop it and let the retry run, as before the record existed.
+    await store.release(principal, key, requestHash);
+    return response;
+  }
+  final body = await response.readAsString();
+  await store.record(
+    principal,
+    key,
+    StoredResponse(
+      requestHash: requestHash,
+      status: response.statusCode,
+      body: body,
       headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'idempotent-replay': 'true',
+        for (final e in response.headers.entries) e.key.toLowerCase(): e.value,
       },
-    );
+    ),
+  );
+  return Response(response.statusCode, body: body, headers: response.headers);
+}
+
+/// The stored answer as the client saw it first time, plus the one header
+/// saying this request never reached the handler.
+Response _replay(StoredResponse stored) {
+  final headers = {...stored.headers, 'idempotent-replay': 'true'};
+  if (stored.body.isNotEmpty && !headers.containsKey('content-type')) {
+    // A row stored before headers were kept: the body is still JSON.
+    headers['content-type'] = 'application/json; charset=utf-8';
   }
-  final response = await run();
-  if (response.statusCode < 500) {
-    final body = await response.readAsString();
-    await store.save(
-      principal,
-      key,
-      StoredResponse(
-        requestHash: requestHash,
-        status: response.statusCode,
-        body: body,
-      ),
-    );
-    return Response(response.statusCode, body: body, headers: response.headers);
-  }
-  return response;
+  return Response(stored.status, body: stored.body, headers: headers);
 }
