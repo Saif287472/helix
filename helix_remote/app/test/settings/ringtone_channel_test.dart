@@ -87,12 +87,12 @@ void main() {
   group('the provider the system reads a copy through', () {
     String manifest() =>
         File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
-    String rules() => File(
-      'android/app/src/main/res/xml/helix_remote_ringtones.xml',
+    String provider() => File(
+      'android/app/src/main/kotlin/com/helix/remote/RingtoneProvider.kt',
     ).readAsStringSync();
 
-    test('is the app\'s FileProvider, under the authority Dart builds', () {
-      final provider = RegExp(r'<provider\b[\s\S]*?</provider>')
+    test('is the app\'s own provider, under the authority Dart builds', () {
+      final block = RegExp(r'<provider\b[\s\S]*?(?:/>|</provider>)')
           .allMatches(manifest())
           .map((match) => match.group(0)!)
           .firstWhere(
@@ -100,36 +100,21 @@ void main() {
                 block.contains('android:authorities="${Ringtones.authority}"'),
             orElse: () => fail('no provider under ${Ringtones.authority}'),
           );
-      expect(
-        provider,
-        contains('android:name="androidx.core.content.FileProvider"'),
-      );
-      // The system opens the URI without a per-URI grant, so it must be
-      // exported; the path rules below are what keep that to the copies.
-      expect(provider, contains('android:exported="true"'));
-      expect(provider, contains('android:grantUriPermissions="true"'));
-      expect(provider, contains('@xml/helix_remote_ringtones'));
+      expect(block, contains('android:name=".RingtoneProvider"'));
+      // The system opens the URI without a per-URI grant, so the provider
+      // must be exported - and that is exactly why it cannot be androidx's
+      // FileProvider, which refuses to start when exported (2026-10-23).
+      expect(block, contains('android:exported="true"'));
+      expect(block, isNot(contains('androidx.core.content.FileProvider')));
     });
 
     test('serves the ringtone copies and nothing else of the app', () {
-      final text = rules();
-      final served = RegExp(r'<external-files-path\b').allMatches(text);
-      expect(served.length, 1);
-      expect(text, contains('name="ringtones"'));
-      expect(text, contains('path="ringtones/"'));
-      for (final tag in const [
-        'root-path',
-        'files-path',
-        'cache-path',
-        'external-path',
-        'external-cache-path',
-      ]) {
-        expect(
-          RegExp('<$tag\\b').hasMatch(text),
-          isFalse,
-          reason: '<$tag> would serve more than the ringtone copies',
-        );
-      }
+      final source = provider();
+      expect(source, contains('getExternalFilesDir("ringtones")'));
+      // One file name directly inside that folder: no nesting, no traversal,
+      // and nothing that escapes it through a link.
+      expect(source, contains('uri.pathSegments'));
+      expect(source, contains('canonicalFile'));
     });
   });
 

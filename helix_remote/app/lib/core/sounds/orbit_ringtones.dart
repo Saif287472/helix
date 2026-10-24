@@ -143,7 +143,7 @@ abstract final class BuiltInRingtones {
 /// The pack folder is the app's private data, which Android's notification
 /// service cannot open, so choosing a ringtone writes one copy into the app's
 /// external files folder and the system reads it through a provider scoped to
-/// that folder alone (`AndroidManifest.xml`, `res/xml/helix_remote_ringtones.xml`).
+/// that folder alone (`AndroidManifest.xml`, `RingtoneProvider.kt`).
 /// The copy is made when the choice is made, never when a call arrives: a call
 /// cannot wait for a download. A built-in ringtone's bytes are read from this
 /// build's assets instead of a pack folder, and the copy is the same.

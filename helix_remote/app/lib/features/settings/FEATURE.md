@@ -185,8 +185,9 @@ through `publishBuiltIn` - into the app's external files folder
 id and the audio kind and whose sound is the copy's `content://` address. Android
 fixes a channel's sound when the channel is made, which is why there is one
 channel per ringtone rather than one for all; the provider declared in
-`AndroidManifest.xml` (`res/xml/helix_remote_ringtones.xml`) serves exactly that
-folder, because the system reads a channel's sound with its own process.
+`AndroidManifest.xml` (`RingtoneProvider.kt`, read-only and exported) serves
+exactly that folder, because the system reads a channel's sound with its own
+process.
 Deleting a pack deletes its copy and its channel; choosing the phone's own sound
 deletes every copy. A copy that cannot be written reverts the choice to the
 phone's own sound, so the page never says "in use" for a sound a call cannot
