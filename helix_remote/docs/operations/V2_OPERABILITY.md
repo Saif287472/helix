@@ -320,6 +320,7 @@ kind = '...'`) for that.
   | `people.by_name` / `people.reports` | 30 per minute / 20 per hour |
   | `people.reads` / `people.read_targets` (presence and profiles of other accounts) | 120 per minute / 2,000 distinct accounts per day |
   | `people.block` (per device) | 60 at once, 2 per second (the block notice is live-only, so this bounds frames into other people's sockets, not storage) |
+  | `people.contacts` (per device) | 12 per hour (an upload stores only the difference, so this bounds a phone book that really changed: up to 5,000 row writes) |
   | `compliance.export` / `compliance.delete` | 5 per day / 5 per hour |
   | `federation.*` | identity 120, keys 600, signals 1200, messages 3000 per minute (keys per target: 30) |
 

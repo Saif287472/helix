@@ -113,7 +113,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `DELETE /v1/people/blocks/{account}` | — → 204 | |
 | `GET /v1/people/privacy` | — → `PrivacySettings` | |
 | `PUT /v1/people/privacy` | `PrivacySettings` → 204 | Turning `discoverable_by_phone` off deletes the server's discovery entry for the account. Turning it back on needs `phone_number` (the account's own number, E.164; checked against the verified number, `invalid_field` otherwise); other changes while it stays on need none. Never returned by `GET`. |
-| `PUT /v1/people/contacts` | `SetContactsRequest` → 204 | Replace-all; used only for "contacts" audiences. |
+| `PUT /v1/people/contacts` | `SetContactsRequest` → 204 | The list the account holds, not a patch: the server stores the difference, so posting an unchanged phone book writes nothing. 12 uploads per hour per device (`people.contacts`). Used only for "contacts" audiences. |
 | `POST /v1/people/reports` | `ReportRequest` → `ReportResponse` | No message content. |
 
 ## groups

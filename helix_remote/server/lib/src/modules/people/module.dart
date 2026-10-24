@@ -72,6 +72,16 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
     perSecond: 2,
   );
 
+  /// Contact-list uploads per device. The handler only writes the difference,
+  /// so a sync of an unchanged phone book costs nothing; when the list really
+  /// does change, one call is a rewrite of up to 5,000 rows, and this is what
+  /// bounds how often one client can ask the node for that (AUD-4a-3).
+  static final contactsPerDevice = RateLimitPolicy.per(
+    'people.contacts',
+    12,
+    const Duration(hours: 1),
+  );
+
   /// Resolved and dismissed reports are deleted this long after they were
   /// closed (review C-02; the operator's choice). Open reports stay until
   /// the operator handles them.
@@ -198,7 +208,13 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       )
       ..add(name, Routes.privacy, _privacy, allowSuspended: true)
       ..add(name, Routes.setPrivacy, _setPrivacy, allowSuspended: true)
-      ..add(name, Routes.setContacts, _setContacts, maxBodyBytes: 512 * 1024)
+      ..add(
+        name,
+        Routes.setContacts,
+        _setContacts,
+        maxBodyBytes: 512 * 1024,
+        rateLimit: contactsPerDevice,
+      )
       ..add(name, Routes.report, _report);
   }
 
@@ -630,13 +646,27 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       );
     }
     await context.db.tx((tx) async {
-      await tx.execute('DELETE FROM $s.contacts WHERE account_id = @a:uuid', {
-        'a': q.device.accountId,
-      });
-      if (ids.isNotEmpty) {
+      // Diff, never replace: an unchanged list writes nothing. The read is
+      // inside the transaction so two uploads racing still converge on the
+      // last one, which is what the delete-all/insert-all did (AUD-4a-3).
+      final stored = await tx.query(
+        'SELECT contact FROM $s.contacts WHERE account_id = @a:uuid',
+        {'a': q.device.accountId},
+      );
+      final known = {for (final row in stored) row.string('contact')};
+      final gone = known.difference(ids).toList();
+      final fresh = ids.difference(known).toList();
+      if (gone.isNotEmpty) {
         await tx.execute(
-          'INSERT INTO $s.contacts (account_id, contact) SELECT @a:uuid, c FROM unnest(@ids:_uuid) AS c',
-          {'a': q.device.accountId, 'ids': ids.toList()},
+          'DELETE FROM $s.contacts WHERE account_id = @a:uuid AND contact = ANY(@gone:_uuid)',
+          {'a': q.device.accountId, 'gone': gone},
+        );
+      }
+      if (fresh.isNotEmpty) {
+        await tx.execute(
+          'INSERT INTO $s.contacts (account_id, contact) SELECT @a:uuid, c FROM unnest(@ids:_uuid) AS c '
+          'ON CONFLICT (account_id, contact) DO NOTHING',
+          {'a': q.device.accountId, 'ids': fresh},
         );
       }
     });

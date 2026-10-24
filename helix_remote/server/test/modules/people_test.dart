@@ -352,6 +352,81 @@ void main() {
       );
     });
 
+    Future<Map<String, int>> contactRows(TestDevice who) async {
+      final rows = await h.env.platform.db.query(
+        'SELECT contact, xmin::text::bigint AS x '
+        'FROM ${h.env.platform.schemas.of('people')}.contacts '
+        'WHERE account_id = @a:uuid ORDER BY contact',
+        {'a': who.accountId},
+      );
+      return {for (final r in rows) r.string('contact'): r.integer('x')};
+    }
+
+    test('an unchanged contact list writes no row', () async {
+      Future<void> upload(TestDevice who, List<String> accounts) async {
+        expect(
+          (await h.api.call(
+            Routes.setContacts,
+            bearer: who.bearer,
+            body: SetContactsRequest(accounts: accounts).toJson(),
+          )).status,
+          204,
+        );
+      }
+
+      final carol = Uuid.v7();
+      final dave = Uuid.v7();
+      await upload(bob, [alice.accountId, carol]);
+      final before = await contactRows(bob);
+      expect(before.keys, hasLength(2));
+
+      await upload(bob, [alice.accountId, carol]);
+      expect(
+        await contactRows(bob),
+        before,
+        reason: 'the same list, in any order, is a no-op',
+      );
+
+      await upload(bob, [alice.accountId, dave]);
+      final after = await contactRows(bob);
+      expect(after.keys.toSet(), {alice.accountId, dave}.toSet());
+      expect(
+        after[alice.accountId],
+        before[alice.accountId],
+        reason: 'the contact that stayed is not rewritten',
+      );
+      expect(
+        after[dave],
+        isNot(before[carol]),
+        reason: 'the one that replaced carol is a fresh row',
+      );
+    });
+
+    test('contact uploads are limited per device', () async {
+      Future<TestResponse> upload(TestDevice who) => h.api.call(
+        Routes.setContacts,
+        bearer: who.bearer,
+        body: SetContactsRequest(accounts: [alice.accountId]).toJson(),
+      );
+      expect((await upload(bob)).status, 204);
+      // Spend bob's upload budget (12 an hour) in one write. The bucket
+      // refills that slowly, so the refusal below is not a race.
+      await h.env.platform.db.execute(
+        'INSERT INTO ${h.env.platform.schemas.platform}.rate_buckets '
+        '(key, tokens, updated_at, allowed) VALUES (@k:text, 0, now(), true) '
+        'ON CONFLICT (key) DO UPDATE SET tokens = 0, updated_at = now()',
+        {'k': '${PeopleModule.contactsPerDevice.name}:device:${bob.id}'},
+      );
+      final over = await upload(bob);
+      expect(over.errorCode, 'rate_limited');
+      expect(int.parse(over.headers['retry-after']!), greaterThan(0));
+      expect(
+        (await upload(alice)).status,
+        204,
+        reason: 'another device has its own budget',
+      );
+    });
+
     test('presence follows audiences: everyone, contacts, nobody', () async {
       final socket = await TestSocket.connect(h.server.baseUri, bob.bearer);
       await socket.hello();

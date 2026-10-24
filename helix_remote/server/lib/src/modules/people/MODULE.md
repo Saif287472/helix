@@ -14,8 +14,11 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   (`PeopleApi.displayNames`, ADR-030); it is in the account's export and is
   purged with the account.
 - **Privacy:** `privacy`, defaults `everyone`. The `contacts` audience
-  means the account's uploaded `contacts` list (phone-book matches,
-  replace-all, at most 5,000 entries).
+  means the account's uploaded `contacts` list (phone-book matches, at most
+  5,000 entries). `PUT /v1/people/contacts` stores only the difference, so an
+  unchanged phone book writes no row at all; `people.contacts` (12 an hour,
+  per device) bounds what is left, which is a list that really did change
+  (AUD-4a-3).
 - **Blocks:** `blocks`. Installed as messaging's `BlockPolicy`, so sends
   and calls from a blocked account reach nobody. Blocks are not secret:
   blocking and unblocking tell the blocked account's **online** devices with
