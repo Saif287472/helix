@@ -361,7 +361,8 @@ void main() {
       await tapText(tester, 'Done');
       // Gone from the screen, and no screen in the console holds it.
       expect(find.textContaining('HLX-REC'), findsNothing);
-      await h.openOps(tester, 'Audit');
+      await h.dismissSheet(tester);
+      await h.openAudit(tester);
       expect(find.textContaining('HLX-REC'), findsNothing);
       expect(find.text('account.recovery_code'), findsOneWidget);
     });
@@ -411,20 +412,20 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('an account opens as its own page', (tester) async {
+    testWidgets('an account opens as a sheet over the list', (tester) async {
       await openPhone(tester);
       await tester.tap(find.text('alice'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Account'), findsOneWidget);
+      expect(find.byType(BottomSheet), findsOneWidget);
       expect(find.text('Alice Pixel'), findsOneWidget);
 
-      await tester.pageBack();
-      await tester.pumpAndSettle();
+      await h.dismissSheet(tester);
+      expect(find.byType(BottomSheet), findsNothing);
       expect(find.text('Users & Devices'), findsOneWidget);
     });
 
-    testWidgets('banning from the page returns to a list without her', (
+    testWidgets('banning from the sheet returns to a list without her', (
       tester,
     ) async {
       await openPhone(tester);

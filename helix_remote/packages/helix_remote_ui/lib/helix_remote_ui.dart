@@ -256,6 +256,9 @@ abstract final class HelixConsoleColors {
 
   /// Metric tile accents that carry no status meaning.
   static const violet = Color(0xFF8B5CF6);
+
+  /// [text] at 7 %: the shadow under a card that sits above the page.
+  static const cardShadow = Color(0x120F172A);
 }
 
 /// Severity colours for status affordances — message delivery state, group

@@ -30,12 +30,14 @@ void main() {
 
   Future<void> openLogs(WidgetTester tester) async {
     await h.startSignedIn(tester);
-    await h.openOps(tester, 'Logs');
+    await h.openLogSheet(tester);
   }
 
   testWidgets('shows the recent lines', (tester) async {
     await openLogs(tester);
 
+    // It comes up over Configuration, not as a place of its own.
+    expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.textContaining('server_started'), findsOneWidget);
     expect(find.textContaining('slow_request'), findsOneWidget);
     expect(find.textContaining('unhandled_error'), findsOneWidget);

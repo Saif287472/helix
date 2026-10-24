@@ -9,34 +9,10 @@ import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
-/// One account on its own page (a phone): the details and what an operator
-/// can do to it. Pops with true when the account was banned or deleted, so
-/// the list reloads.
-class AccountDetailScreen extends StatelessWidget {
-  const AccountDetailScreen({
-    super.key,
-    required this.adminContext,
-    required this.accountId,
-  });
-
-  final AdminContext adminContext;
-  final String accountId;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
-      body: AccountDetailView(
-        adminContext: adminContext,
-        accountId: accountId,
-        onRemoved: () => Navigator.of(context).pop(true),
-      ),
-    );
-  }
-}
-
-/// The account's details, devices and actions, without a page around it, so
-/// it can fill a page or the right-hand pane of a wide window.
+/// One account: its identity, devices and the actions an operator can take.
+/// Shown in a sheet over the list that opened it; [onRemoved] fires when the
+/// account was banned or deleted, with the line for the operator, who by then
+/// is looking at the page underneath and not at this sheet.
 class AccountDetailView extends StatefulWidget {
   const AccountDetailView({
     super.key,
@@ -49,7 +25,7 @@ class AccountDetailView extends StatefulWidget {
   final String accountId;
 
   /// The account was banned or deleted here.
-  final VoidCallback onRemoved;
+  final void Function(String outcome) onRemoved;
 
   @override
   State<AccountDetailView> createState() => _AccountDetailViewState();
@@ -108,8 +84,7 @@ class _AccountDetailViewState extends State<AccountDetailView> {
     final problem = await _controller.ban(reason: reason.text);
     if (!mounted) return;
     if (problem == null) {
-      showMessage(context, 'Account banned and deleted.');
-      widget.onRemoved();
+      widget.onRemoved('Account banned and deleted.');
     } else {
       showMessage(context, problem);
     }
@@ -130,8 +105,7 @@ class _AccountDetailViewState extends State<AccountDetailView> {
     final problem = await _controller.deleteAccount();
     if (!mounted) return;
     if (problem == null) {
-      showMessage(context, 'Account deleted.');
-      widget.onRemoved();
+      widget.onRemoved('Account deleted.');
     } else {
       showMessage(context, problem);
     }

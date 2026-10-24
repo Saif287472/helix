@@ -181,12 +181,22 @@ void main() {
       await h.goTo(tester, 'Reports');
     }
 
-    testWidgets('shows the open reports first', (tester) async {
+    testWidgets('shows the open reports first, each worked on in a sheet', (
+      tester,
+    ) async {
       await openReports(tester);
 
       expect(find.text('Spam'), findsOneWidget);
-      expect(find.text('sends me spam every day'), findsOneWidget);
       expect(find.text('Abuse'), findsNothing);
+      // The queue is a list of tiles: what a report says and how to work it
+      // are inside it, not on the row.
+      expect(find.text('sends me spam every day'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Resolve'), findsNothing);
+
+      await h.openReportSheet(tester, 'Spam');
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.text('sends me spam every day'), findsOneWidget);
+      expect(find.text('OPEN'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Resolve'), findsOneWidget);
     });
 
@@ -201,14 +211,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Spam'), findsOneWidget);
       expect(find.text('Impersonation'), findsOneWidget);
-      // Only an open report offers actions.
-      expect(find.widgetWithText(FilledButton, 'Resolve'), findsOneWidget);
+      // A report that was already worked shows how it ended; an open one
+      // shows only that it leads somewhere.
+      expect(find.text('RESOLVED'), findsOneWidget);
+      expect(find.text('DISMISSED'), findsOneWidget);
+      expect(find.text('OPEN'), findsNothing);
     });
 
     testWidgets('resolving removes it from the open queue', (tester) async {
       await openReports(tester);
+      await h.openReportSheet(tester, 'Spam');
       await tapText(tester, 'Resolve');
 
+      expect(find.byType(BottomSheet), findsNothing);
       expect(find.text('Report resolved.'), findsOneWidget);
       expect(find.text('No open reports'), findsOneWidget);
       expect(h.server.bodies['PUT /v1/admin/reports/rep-1']!.single, {
@@ -218,6 +233,7 @@ void main() {
 
     testWidgets('dismissing sends dismissed', (tester) async {
       await openReports(tester);
+      await h.openReportSheet(tester, 'Spam');
       await tapText(tester, 'Dismiss');
 
       expect(find.text('Report dismissed.'), findsOneWidget);
@@ -231,15 +247,19 @@ void main() {
     ) async {
       await openReports(tester);
       h.server.fail('PUT /v1/admin/reports/{}', ErrorCode.notFound);
+      await h.openReportSheet(tester, 'Spam');
       await tapText(tester, 'Resolve');
 
       expect(find.text('Report resolved.'), findsNothing);
+      // The sheet stays open, and the reason is where the operator is looking.
+      expect(find.byType(BottomSheet), findsOneWidget);
       expect(find.text('That item no longer exists.'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Resolve'), findsOneWidget);
     });
 
     testWidgets('a report can open the reported account', (tester) async {
       await openReports(tester);
+      await h.openReportSheet(tester, 'Spam');
       await tapText(tester, 'Open account');
 
       expect(find.text('•••• 1234'), findsOneWidget);
@@ -285,7 +305,7 @@ void main() {
 
     Future<void> openAudit(WidgetTester tester) async {
       await h.startSignedIn(tester);
-      await h.openOps(tester, 'Audit');
+      await h.openAudit(tester);
     }
 
     testWidgets('shows newest first with targets and details', (tester) async {
@@ -328,7 +348,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await h.openOps(tester, 'Audit');
+      await h.dismissSheet(tester);
+      await h.openAudit(tester);
 
       expect(find.text('account.suspend'), findsOneWidget);
     });

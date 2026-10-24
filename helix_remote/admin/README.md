@@ -18,7 +18,7 @@ and the server side of this API
 [`../docs/operations/V2_SERVER_HANDOFF.md`](../docs/operations/V2_SERVER_HANDOFF.md),
 "Operator console", is the operator guide: server address (https only, plain
 http for this machine), first-run setup or `HELIX_ADMIN_PASSWORD`, sign-in and
-lockout, the 12-hour session, what each screen does.
+lockout, the 7-day session, what each screen does.
 
 For development, from `helix_remote/admin`: `flutter run -d windows` (or on a
 connected phone). **Agents do not build APKs (`flutter build apk`) unless the
@@ -31,19 +31,24 @@ user asks;** say whether a new APK is needed instead (see `AGENTS.md`).
 | Sign-in / setup | server address, first-run admin password (12 to 256 characters, typed twice) or sign-in; lockout and `Retry-After` wording; session notices | `setupStatus`, `setup`, `signIn` |
 | Lock screen | the device's own screen lock, when App lock is on | (local) |
 | Overview | server facts, health, maintenance mode, federation switch, feature flags, activity numbers (open sockets, requests, 5xx share, dead jobs, undelivered messages, crash reports) | `config`, `updateConfig`, `featureFlags`, `setFeatureFlag`, `ops.ready`, `metrics` |
-| Accounts | paged list, search by Helix name or last 4 digits, status filter; detail with devices; suspend or resume, ban, delete (type `DELETE`), revoke device, recovery code (shown once) | `accounts`, `account`, `suspend`, `unsuspend`, `ban`, `deleteAccount`, `revokeDevice`, `createRecoveryCode` |
+| Accounts | paged list, search by Helix name or last 4 digits, status filter; one account opens as a sheet with its devices; suspend or resume, ban, delete (type `DELETE`), revoke device, recovery code (shown once) | `accounts`, `account`, `suspend`, `unsuspend`, `ban`, `deleteAccount`, `revokeDevice`, `createRecoveryCode` |
 | Invites | only when the server registers by invite; create (code shown once), cancel | `invites`, `createInvite`, `cancelInvite` |
-| Reports | open, resolved, dismissed; resolve or dismiss; open the reported account. The Reports item wears how many are open (`50+` when the console has only seen a page). | `reports`, `resolveReport` |
-| System > Audit | newest first, "Load more" paging | `audit` |
-| System > Logs | recent lines, filter, copy, "Follow live" over the admin WebSocket (polls where a socket is impossible) | `logs`, `logStream` |
-| System > Config | server name, its properties and session, change admin password, App lock, maintenance, feature flags, purge dead jobs, sign out | `updateConfig`, `changePassword`, `purge` |
+| Reports | open, resolved, dismissed; the queue is a list of tiles, and one report opens as a sheet with its note and its actions — resolve or dismiss, or open the reported account in a sheet of its own. The Reports item wears how many are open (`50+` when the console has only seen a page). | `reports`, `resolveReport` |
+| Configuration | one page, top down: a hero card (name, version and sign-up pills, Edit name); a health card (the server's own readiness checks as a meter, then maintenance mode and purge); four quick-access tiles - Network & Sync (federation), Logs & Activity (the live log as a sheet over this page, the audit trail as its own page), Features (flags), Security (App lock, admin password); a grouped list of the facts an operator copies (address, Node ID, attachment limit, signed-in until); a red danger zone with sign out | `updateConfig`, `changePassword`, `purge` |
+| Configuration > Audit | newest first, "Load more" paging | `audit` |
+| Configuration > Logs | recent lines, filter, copy, "Follow live" over the admin WebSocket (polls where a socket is impossible) | `logs`, `logStream` |
 
-The places come in two groups. Overview, Accounts, Invites and Reports are
-what an operator works through; Audit, Logs and Config are the server's own
-system. On a window 700 dp or wider all of them are pills in the header; on a
-phone the first group is the pill dock at the bottom (the same shape the app's
-Orbit tabs use) and the second sits behind the gear in the header, in a drawer
-that also says when the session ends and offers sign out.
+Overview, Accounts, Invites and Reports are what an operator works through;
+Configuration is where the server itself is read and set, and where sign-out
+lives. On a window 700 dp or wider every place is a pill in the header; on a
+phone the first four are the pill dock at the bottom (the same shape the app's
+Orbit tabs use) and Configuration is behind the gear in the header. An account,
+a report and the live log open as sheets over the page that called them, so
+nothing about them is a place of its own; a sheet is a route like a page, so
+ending the session closes it with everything else above the shell. A sheet has
+its own messenger (`widgets/console_sheet.dart`): it covers the bottom of the
+page behind it, where that page would otherwise show what a refused action
+said.
 
 ## Layout
 
@@ -55,7 +60,7 @@ lib/src/api/
   server_address.dart               address parsing; http only for this machine
   error_text.dart                   ApiException/NetworkException -> operator wording
 lib/src/session/
-  admin_session_controller.dart     setup, sign-in, saved session, 12 h expiry, device lock;
+  admin_session_controller.dart     setup, sign-in, saved session, 7 day expiry, device lock;
                                     hands feature controllers an AdminContext
   admin_session_scope.dart          InheritedNotifier for the session
 lib/src/services/                   TokenVault (secure storage), AdminSettings (prefs),
@@ -63,6 +68,7 @@ lib/src/services/                   TokenVault (secure storage), AdminSettings (
 lib/src/features/<feature>/         <feature>_controller.dart (a ChangeNotifier) + screens
   common/feature_controller.dart    FeatureController, PagedController (cursor paging)
 lib/src/widgets/                    dialogs (reason, typed confirm, show-once code),
+                                    console_sheet (a view over the page that called it),
                                     PasswordField, PagedListView
 ```
 

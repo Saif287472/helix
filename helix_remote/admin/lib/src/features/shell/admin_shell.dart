@@ -1,69 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:helix_admin/src/features/accounts/accounts_screen.dart';
-import 'package:helix_admin/src/features/common/format.dart';
 import 'package:helix_admin/src/features/dashboard/dashboard_screen.dart';
 import 'package:helix_admin/src/features/dashboard/server_controller.dart';
 import 'package:helix_admin/src/features/invites/invites_screen.dart';
-import 'package:helix_admin/src/features/ops/ops_screen.dart';
 import 'package:helix_admin/src/features/reports/reports_screen.dart';
+import 'package:helix_admin/src/features/settings/settings_screen.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
-import 'package:helix_admin/src/session/admin_session_scope.dart';
 import 'package:helix_admin/src/widgets/console_kit.dart';
-import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
-/// Which half of the navigation a place belongs to: the phone's dock has
-/// room for the operate places, the system ones live behind the gear.
-enum AdminGroup { operate, system }
-
-/// The console's places, split in two. The operate group is what an operator
-/// does to the server's people day after day; the system group is what they
-/// read or set rarely. Invites exist only on servers that register people by
-/// invite code; Helix Global signs people up by phone number.
+/// The console's places. Everything before Configuration is what an operator
+/// does to the server's people day after day; Configuration is where the
+/// server itself is read and set, and where sign-out lives. Invites exist
+/// only on servers that register people by invite code; Helix Global signs
+/// people up by phone number.
 enum AdminPlace {
-  overview(
-    'Overview',
-    'Overview',
-    Icons.dashboard_outlined,
-    Icons.dashboard,
-    AdminGroup.operate,
-  ),
-  accounts(
-    'Users & Devices',
-    'Users',
-    Icons.people_outline,
-    Icons.people,
-    AdminGroup.operate,
-  ),
+  overview('Overview', 'Overview', Icons.dashboard_outlined, Icons.dashboard),
+  accounts('Users & Devices', 'Users', Icons.people_outline, Icons.people),
   invites(
     'Invites',
     'Invites',
     Icons.local_activity_outlined,
     Icons.local_activity,
-    AdminGroup.operate,
   ),
-  reports(
-    'Reports',
-    'Reports',
-    Icons.shield_outlined,
-    Icons.shield,
-    AdminGroup.operate,
-  ),
-  system(
-    'System',
-    'System',
-    Icons.settings_outlined,
-    Icons.settings,
-    AdminGroup.system,
-  );
+  reports('Reports', 'Reports', Icons.shield_outlined, Icons.shield),
+  config('Configuration', 'Config', Icons.settings_outlined, Icons.settings);
 
-  const AdminPlace(
-    this.title,
-    this.shortTitle,
-    this.icon,
-    this.selectedIcon,
-    this.group,
-  );
+  const AdminPlace(this.title, this.shortTitle, this.icon, this.selectedIcon);
 
   /// The name on the wide window's pill and for screen readers.
   final String title;
@@ -72,12 +35,11 @@ enum AdminPlace {
   final String shortTitle;
   final IconData icon;
   final IconData selectedIcon;
-  final AdminGroup group;
 }
 
-/// Navigation and the per-session [ServerController]: the operate places on a
-/// pill dock with the system places behind a gear in a drawer on a phone, and
-/// all five places as pills in the header on a wide window.
+/// Navigation and the per-session [ServerController]: the places an operator
+/// works in on a pill dock with Configuration behind a gear in the header on
+/// a phone, and every place as a pill in the header on a wide window.
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key, required this.adminContext});
 
@@ -88,20 +50,15 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
-  /// Below this width the places move to a bottom bar and the system group
-  /// to a drawer.
+  /// Below this width the places move to a bottom bar and Configuration
+  /// behind the header gear.
   static const _mobile = 700.0;
 
   /// The widest a screen's content grows on a big window.
   static const _contentWidth = 1100.0;
 
   late final ServerController _server;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   AdminPlace _place = AdminPlace.overview;
-
-  /// Where inside the system place the operator is; the phone's drawer rows
-  /// choose it, the segmented bar on the screen changes it.
-  OpsTab _opsTab = OpsTab.audit;
 
   @override
   void initState() {
@@ -137,27 +94,7 @@ class _AdminShellState extends State<AdminShell> {
     return ready.ready ? HelixConsoleColors.ok : HelixConsoleColors.warn;
   }
 
-  /// The drawer's one line about the session, in the same words the
-  /// configuration screen uses for it.
-  String get _sessionLine {
-    final expires = AdminSessionScope.of(context).sessionExpiresAt;
-    if (expires == null) return 'Signed in on this device';
-    if (!expires.isAfter(widget.adminContext.now())) {
-      return 'This session has ended';
-    }
-    return 'Signed in until ${formatTime(expires)}';
-  }
-
   void _goTo(AdminPlace place) => setState(() => _place = place);
-
-  /// A drawer row: close the drawer and open the system place on that tab.
-  void _openSystem(OpsTab tab) {
-    _scaffoldKey.currentState?.closeEndDrawer();
-    setState(() {
-      _place = AdminPlace.system;
-      _opsTab = tab;
-    });
-  }
 
   Widget _screen() {
     final ctx = widget.adminContext;
@@ -169,17 +106,12 @@ class _AdminShellState extends State<AdminShell> {
         adminContext: ctx,
         onOpenCount: _server.reportOpenReports,
       ),
-      AdminPlace.system => OpsScreen(
-        adminContext: ctx,
-        server: _server,
-        tab: _opsTab,
-        onTabChanged: (tab) => setState(() => _opsTab = tab),
-      ),
+      AdminPlace.config => ConfigView(server: _server, adminContext: ctx),
     };
   }
 
   /// The phone's place switcher: the Orbit dock shape, the console's colours.
-  /// The system group is not here: a gear in the header opens it as a drawer.
+  /// Configuration is not here: a gear in the header opens the place.
   Widget _dock(Iterable<AdminPlace> places, AdminPlace selected) => ConsoleDock(
     items: [
       for (final p in places)
@@ -196,50 +128,6 @@ class _AdminShellState extends State<AdminShell> {
     ],
   );
 
-  /// The phone's system drawer: what the dock has no room for, the session,
-  /// and the way out.
-  Widget _drawer(bool inSystemPlace) => ConsoleDrawer(
-    title: _serverName,
-    subtitle: _sessionLine,
-    groups: [
-      ConsoleDrawerGroup(
-        label: 'System activity',
-        rows: [
-          ConsoleDrawerRow(
-            icon: Icons.history,
-            label: 'Audit trail',
-            subtitle: 'What this console has done',
-            selected: inSystemPlace && _opsTab == OpsTab.audit,
-            onTap: () => _openSystem(OpsTab.audit),
-          ),
-          ConsoleDrawerRow(
-            icon: Icons.terminal,
-            label: 'Live log',
-            subtitle: 'What the server is saying now',
-            selected: inSystemPlace && _opsTab == OpsTab.logs,
-            onTap: () => _openSystem(OpsTab.logs),
-          ),
-        ],
-      ),
-      ConsoleDrawerGroup(
-        label: 'Environment setup',
-        rows: [
-          ConsoleDrawerRow(
-            icon: Icons.build_outlined,
-            label: 'Configuration',
-            subtitle: 'Server settings and this sign-in session',
-            selected: inSystemPlace && _opsTab == OpsTab.config,
-            onTap: () => _openSystem(OpsTab.config),
-          ),
-        ],
-      ),
-    ],
-    onSignOut: () {
-      _scaffoldKey.currentState?.closeEndDrawer();
-      confirmAndSignOut(context);
-    },
-  );
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -251,7 +139,6 @@ class _AdminShellState extends State<AdminShell> {
           builder: (context, constraints) {
             final mobile = constraints.maxWidth < _mobile;
             return Scaffold(
-              key: _scaffoldKey,
               appBar: AppBar(
                 automaticallyImplyLeading: false,
                 titleSpacing: 16,
@@ -306,10 +193,13 @@ class _AdminShellState extends State<AdminShell> {
                 actions: [
                   if (mobile)
                     IconButton(
-                      tooltip: 'System and configuration options',
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: () =>
-                          _scaffoldKey.currentState?.openEndDrawer(),
+                      tooltip: AdminPlace.config.title,
+                      icon: Icon(
+                        place == AdminPlace.config
+                            ? AdminPlace.config.selectedIcon
+                            : AdminPlace.config.icon,
+                      ),
+                      onPressed: () => _goTo(AdminPlace.config),
                     ),
                 ],
               ),
@@ -319,8 +209,8 @@ class _AdminShellState extends State<AdminShell> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
                         // Centred when it fits, swipeable when it does not:
-                        // the operate places and a large text size are wider
-                        // than a 360 dp phone.
+                        // the places and a large text size are wider than a
+                        // 360 dp phone.
                         child: LayoutBuilder(
                           builder: (context, constraints) =>
                               SingleChildScrollView(
@@ -334,7 +224,7 @@ class _AdminShellState extends State<AdminShell> {
                                     children: [
                                       _dock(
                                         places.where(
-                                          (p) => p.group == AdminGroup.operate,
+                                          (p) => p != AdminPlace.config,
                                         ),
                                         place,
                                       ),
@@ -346,7 +236,6 @@ class _AdminShellState extends State<AdminShell> {
                       ),
                     )
                   : null,
-              endDrawer: mobile ? _drawer(place == AdminPlace.system) : null,
               body: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(

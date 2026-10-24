@@ -71,7 +71,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   /// Audit rows older than this are deleted daily (the operator's choice).
   static const auditRetention = Duration(days: 365);
 
-  static const sessionLifetime = Duration(hours: 12);
+  static const sessionLifetime = Duration(days: 7);
   static const audience = 'helix.admin';
   static const tokenType = 'admin';
 

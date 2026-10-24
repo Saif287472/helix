@@ -36,6 +36,20 @@ enum _AuditKind {
   }
 }
 
+/// The audit trail on a page of its own, opened from Configuration.
+class AuditPage extends StatelessWidget {
+  const AuditPage({super.key, required this.adminContext, this.pageSize});
+
+  final AdminContext adminContext;
+  final int? pageSize;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Audit trail')),
+    body: AuditScreen(adminContext: adminContext, pageSize: pageSize),
+  );
+}
+
 /// The administrative audit trail, newest first. Every action in this
 /// console writes a row; codes, tokens and passwords are never in it.
 class AuditScreen extends StatefulWidget {

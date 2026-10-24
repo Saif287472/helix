@@ -41,7 +41,7 @@ hash with its parameters, lockout counters, `tokens_valid_after`) and
   Quiet unlocked addresses are purged after two days
   (`admin.purge_sign_in_failures`).
 - **Tokens:** `HmacJwt` with audience `helix.admin`, type `admin`,
-  `sub` = admin id, valid for 12 hours, on the server's JWT key ring. The
+  `sub` = admin id, valid for 7 days, on the server's JWT key ring. The
   audience and type keep device and admin tokens apart in both
   directions. Changing the password sets `tokens_valid_after`, which ends
   every other session, and returns a new one.

@@ -120,12 +120,12 @@ void main() {
       );
       final session = await api.admin.setup(password);
       expect(session.token, isNotEmpty);
-      // The token lasts 12 hours.
+      // The token lasts 7 days.
       expect(
         session.expiresAt.difference(DateTime.now()),
         allOf(
-          greaterThan(const Duration(hours: 11, minutes: 55)),
-          lessThan(const Duration(hours: 12, minutes: 5)),
+          greaterThan(const Duration(days: 6, hours: 23, minutes: 55)),
+          lessThan(const Duration(days: 7, minutes: 5)),
         ),
       );
       expect((await api.admin.config()).serverName, isNotEmpty);

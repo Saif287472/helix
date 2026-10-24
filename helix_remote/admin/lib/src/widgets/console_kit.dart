@@ -6,6 +6,26 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 /// accent, status dots and pills, and the segmented bar. Colours come from
 /// [HelixConsoleColors]; nothing here knows about the server.
 
+/// The shadow a card that sits above the page carries: the same one
+/// [ConsoleDock] draws around its tabs, so lifted surfaces agree.
+const consoleCardShadow = [
+  BoxShadow(
+    color: HelixConsoleColors.cardShadow,
+    blurRadius: 16,
+    offset: Offset(0, 4),
+  ),
+];
+
+/// The hairline between two rows of a grouped list, starting after the icons:
+/// [ConsoleValueRow] indents its row 20 px and its tile is 32 wide with a 12 px
+/// gap.
+const consoleListDivider = Divider(
+  height: 1,
+  thickness: 1,
+  indent: 64,
+  color: HelixConsoleColors.border,
+);
+
 /// A white, bordered card.
 class ConsoleCard extends StatelessWidget {
   const ConsoleCard({
@@ -15,6 +35,7 @@ class ConsoleCard extends StatelessWidget {
     this.color = HelixConsoleColors.surface,
     this.borderColor = HelixConsoleColors.border,
     this.radius = 16,
+    this.elevated = false,
     this.onTap,
   });
 
@@ -23,6 +44,10 @@ class ConsoleCard extends StatelessWidget {
   final Color color;
   final Color borderColor;
   final double radius;
+
+  /// Whether the card is lifted off the page with [consoleCardShadow]. A card
+  /// that holds a page's main actions gets it; a row inside a list does not.
+  final bool elevated;
   final VoidCallback? onTap;
 
   @override
@@ -31,7 +56,10 @@ class ConsoleCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius),
       side: BorderSide(color: borderColor),
     );
-    return Material(
+    // The shadow a lifted card carries is drawn by the box behind it: Material
+    // only knows how to cast one from its own elevation, and that one is the
+    // theme's, not [consoleCardShadow].
+    final card = Material(
       color: color,
       shape: shape,
       clipBehavior: Clip.antiAlias,
@@ -43,7 +71,44 @@ class ConsoleCard extends StatelessWidget {
               child: Padding(padding: padding, child: child),
             ),
     );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: elevated ? consoleCardShadow : const [],
+      ),
+      child: card,
+    );
   }
+}
+
+/// A glyph on a soft square of its own colour: the left hand of a settings
+/// row or a quick-access tile. Decorative - the words beside it say what it is.
+class ConsoleIconTile extends StatelessWidget {
+  const ConsoleIconTile({
+    super.key,
+    required this.icon,
+    required this.accent,
+    this.size = 36,
+  });
+
+  final IconData icon;
+
+  /// The glyph's colour; its background is the same colour, washed out.
+  final Color accent;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(size * 0.28),
+      ),
+      child: Icon(icon, size: size * 0.5, color: accent),
+    ),
+  );
 }
 
 /// The big title at the top of a place ("Dashboard").
@@ -631,221 +696,6 @@ class ConsoleCount extends StatelessWidget {
   );
 }
 
-/// One labelled block of [ConsoleDrawerRow]s in a [ConsoleDrawer].
-class ConsoleDrawerGroup extends StatelessWidget {
-  const ConsoleDrawerGroup({
-    super.key,
-    required this.label,
-    required this.rows,
-  });
-
-  final String label;
-  final List<ConsoleDrawerRow> rows;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
-        child: ConsoleCardLabel(label),
-      ),
-      for (final (i, row) in rows.indexed) ...[
-        if (i > 0) const _DrawerHairline(),
-        row,
-      ],
-    ],
-  );
-}
-
-/// One destination in a [ConsoleDrawer]: a glyph, its words, and what waits
-/// there. At least 56 px tall, so it clears the 48 px rule with room left.
-class ConsoleDrawerRow extends StatelessWidget {
-  const ConsoleDrawerRow({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.subtitle,
-    this.selected = false,
-    this.badge = 0,
-    this.badgeMore = false,
-    this.tone,
-  });
-
-  final IconData icon;
-  final String label;
-  final String? subtitle;
-  final VoidCallback onTap;
-  final bool selected;
-
-  /// Open reports waiting behind this row; zero shows nothing.
-  final int badge;
-  final bool badgeMore;
-
-  /// The colour of the glyph and the words, for a row that is not a plain
-  /// destination - signing out is red.
-  final ConsoleTone? tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink =
-        tone?.text ??
-        (selected ? HelixConsoleColors.accent : HelixConsoleColors.textBody);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: badge > 0
-          ? '$label, ${consoleCount(badge, more: badgeMore)} open'
-          : label,
-      hint: subtitle,
-      excludeSemantics: true,
-      child: Material(
-        color: selected ? HelixConsoleColors.accentSurface : Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 56),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(icon, size: 22, color: ink),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: ink,
-                          ),
-                        ),
-                        if (subtitle != null)
-                          Text(
-                            subtitle!,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              height: 1.3,
-                              color: HelixConsoleColors.textMuted,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (badge > 0) ...[
-                    const SizedBox(width: 8),
-                    ConsoleCount(badge, more: badgeMore),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The phone's system drawer: the places an operator reaches for rarely, with
-/// the session at the top and the way out at the bottom. It slides in from the
-/// right (`Scaffold.endDrawer`), 85% of the window wide and no wider than
-/// 420 px, and holds flat hairline rows rather than cards.
-class ConsoleDrawer extends StatelessWidget {
-  const ConsoleDrawer({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.groups,
-    this.onSignOut,
-  });
-
-  /// The server this console is signed in to.
-  final String title;
-
-  /// The session, in words: when it ends.
-  final String subtitle;
-
-  final List<ConsoleDrawerGroup> groups;
-  final VoidCallback? onSignOut;
-
-  @override
-  Widget build(BuildContext context) {
-    final wanted = MediaQuery.sizeOf(context).width * 0.85;
-    return Drawer(
-      width: wanted > 420 ? 420.0 : wanted,
-      backgroundColor: HelixConsoleColors.surface,
-      semanticLabel: 'System and configuration',
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: HelixConsoleColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.4,
-                      color: HelixConsoleColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const _DrawerHairline(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 12),
-                children: groups,
-              ),
-            ),
-            if (onSignOut != null) ...[
-              const _DrawerHairline(),
-              ConsoleDrawerRow(
-                icon: Icons.logout,
-                label: 'Sign out',
-                subtitle: 'Ends every admin session on this server',
-                tone: ConsoleTone.danger,
-                onTap: onSignOut!,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The 1 px line between drawer rows and blocks: a hairline, not a card.
-class _DrawerHairline extends StatelessWidget {
-  const _DrawerHairline();
-
-  @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Container(height: 1, color: HelixConsoleColors.border),
-  );
-}
-
 /// A number with its label: one tile in the dashboard grid.
 class ConsoleMetricTile extends StatelessWidget {
   const ConsoleMetricTile({
@@ -1105,24 +955,161 @@ class ConsoleProperty extends StatelessWidget {
           ),
         ),
         if (copyable)
-          IconButton(
-            tooltip: 'Copy $label',
-            icon: const Icon(
-              Icons.copy,
-              size: 18,
-              color: HelixConsoleColors.textMuted,
-            ),
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              await Clipboard.setData(ClipboardData(text: value));
-              messenger
-                ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(content: Text('$label copied.')));
-            },
-          )
+          ConsoleCopyButton(label: label, value: value)
         else
           const SizedBox(width: 8),
       ],
+    ),
+  );
+}
+
+/// The copy action on a value the operator pastes somewhere else. It says its
+/// own label in the tooltip and answers with a snackbar, so a copied address
+/// needs no dialog.
+class ConsoleCopyButton extends StatelessWidget {
+  const ConsoleCopyButton({
+    super.key,
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: 'Copy $label',
+    icon: const Icon(Icons.copy, size: 18, color: HelixConsoleColors.textMuted),
+    onPressed: () async {
+      final messenger = ScaffoldMessenger.of(context);
+      await Clipboard.setData(ClipboardData(text: value));
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('$label copied.')));
+    },
+  );
+}
+
+/// One row of a grouped list: an icon, its label, the value on the right and
+/// an action - copy for a value the operator pastes elsewhere, a chevron when
+/// the row opens something. A row that only states a value has neither.
+class ConsoleValueRow extends StatelessWidget {
+  const ConsoleValueRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.accent,
+    this.copyValue,
+    this.onTap,
+    this.mono = false,
+    this.trailing,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color accent;
+
+  /// When set, the row carries a copy button for this text; [value] is what
+  /// the operator reads, which may be friendlier than what is copied.
+  final String? copyValue;
+
+  /// The row is a button when given, and shows a chevron.
+  final VoidCallback? onTap;
+
+  /// Values the operator compares by eye (an address, an id) are monospaced.
+  final bool mono;
+
+  /// A control instead of the chevron (a switch to flip). It keeps the row's
+  /// label in the same place, so a list of mixed rows still lines up.
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final pressed = onTap;
+    // A switch is announced with the words of its row, like a setting row.
+    Widget body = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          ConsoleIconTile(icon: icon, accent: accent, size: 32),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: HelixConsoleColors.text,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: 13,
+                fontFamily: mono ? 'monospace' : null,
+                color: HelixConsoleColors.textMuted,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          if (trailing != null)
+            trailing!
+          else if (copyValue != null)
+            ConsoleCopyButton(label: label, value: copyValue!)
+          else if (pressed != null)
+            const Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: HelixConsoleColors.textFaint,
+            )
+          else
+            const SizedBox(width: 20),
+        ],
+      ),
+    );
+    if (trailing is Switch) body = MergeSemantics(child: body);
+    return Semantics(
+      container: true,
+      button: pressed != null,
+      child: pressed == null ? body : InkWell(onTap: pressed, child: body),
+    );
+  }
+}
+
+/// How many of a set of checks pass, as a thin bar the operator reads at a
+/// glance before reading any of them: the health card's headline.
+class ConsoleMeter extends StatelessWidget {
+  const ConsoleMeter({
+    super.key,
+    required this.passed,
+    required this.total,
+    required this.color,
+  });
+
+  final int passed;
+  final int total;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: LinearProgressIndicator(
+        value: total == 0 ? 0 : passed / total,
+        minHeight: 6,
+        backgroundColor: HelixConsoleColors.sunken,
+        color: color,
+      ),
     ),
   );
 }
@@ -1264,6 +1251,25 @@ abstract final class ConsoleButtons {
     textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
   );
 
+  /// [outlined] shaped as a pill: the quick action on a card ("Edit name",
+  /// "Show log"). An action that only this card can regret gets [pillTone].
+  static final ButtonStyle pill = OutlinedButton.styleFrom(
+    foregroundColor: HelixConsoleColors.accent,
+    side: const BorderSide(color: HelixConsoleColors.accentBorder),
+    shape: const StadiumBorder(),
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+  );
+
+  static final ButtonStyle pillFilled = FilledButton.styleFrom(
+    backgroundColor: HelixConsoleColors.accent,
+    foregroundColor: HelixConsoleColors.surface,
+    elevation: 0,
+    shape: const StadiumBorder(),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+  );
+
   static ButtonStyle outlinedTone(Color color, Color edge) =>
       OutlinedButton.styleFrom(
         foregroundColor: color,
@@ -1277,6 +1283,27 @@ abstract final class ConsoleButtons {
     foregroundColor: HelixConsoleColors.surface,
     elevation: 0,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+  );
+
+  /// [pill] in a tone of the operator's own, for a pill that removes rather
+  /// than opens (purging dead jobs).
+  static ButtonStyle pillTone(Color color, Color edge) =>
+      OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(color: edge),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+      );
+
+  /// [pillFilled] in a tone: the danger zone's sign-out.
+  static ButtonStyle pillFilledTone(Color color) => FilledButton.styleFrom(
+    backgroundColor: color,
+    foregroundColor: HelixConsoleColors.surface,
+    elevation: 0,
+    shape: const StadiumBorder(),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
     textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
   );
 }

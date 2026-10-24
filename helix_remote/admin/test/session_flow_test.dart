@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 import 'support/fake_admin_server.dart';
@@ -227,7 +226,7 @@ void main() {
       tester,
     ) async {
       h.saveSession();
-      h.clock.advance(const Duration(hours: 13));
+      h.clock.advance(const Duration(days: 7, hours: 1));
       await h.pumpApp(tester);
 
       expect(find.textContaining('session expired'), findsOneWidget);
@@ -261,15 +260,15 @@ void main() {
   });
 
   group('while signed in', () {
-    testWidgets('the session ends after 12 hours', (tester) async {
+    testWidgets('the session ends at its expiry', (tester) async {
       await h.startSignedIn(tester);
       expect(find.text('Overview'), findsWidgets);
 
-      h.clock.advance(const Duration(hours: 12, minutes: 1));
-      await tester.pump(const Duration(hours: 12, minutes: 1));
+      h.clock.advance(const Duration(days: 7, minutes: 1));
+      await tester.pump(const Duration(days: 7, minutes: 1));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('expired after 12 hours'), findsOneWidget);
+      expect(find.textContaining('session expired'), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Server address'), findsOneWidget);
       expect(h.vault.stored, isNull);
     });
@@ -288,7 +287,7 @@ void main() {
       expect(h.vault.stored, isNull);
     });
 
-    testWidgets('an open account page does not stay over the sign-in form', (
+    testWidgets('an open account sheet does not stay over the sign-in form', (
       tester,
     ) async {
       h.server.accounts = [
@@ -301,8 +300,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('DEVICES'), findsOneWidget);
 
+      // The next call from inside the sheet is the one the server turns down.
       h.server.expireAllTokens();
-      await tester.tap(find.widgetWithText(ConsoleChip, 'Active'));
+      await tapText(tester, 'Recovery code');
+      await tapText(tester, 'Create code');
       await tester.pumpAndSettle();
 
       expect(find.text('DEVICES'), findsNothing);
@@ -310,9 +311,14 @@ void main() {
     });
 
     Future<void> signOut(WidgetTester tester) async {
-      await h.openOps(tester, 'Config');
+      await h.goTo(tester, 'Configuration');
       final button = find.widgetWithText(FilledButton, 'Sign out');
-      await tester.ensureVisible(button);
+      // The sign-out card is below the fold, so it has to be scrolled to.
+      await tester.dragUntilVisible(
+        button,
+        find.byType(ListView).first,
+        const Offset(0, -200),
+      );
       await tester.tap(button);
       await tester.pumpAndSettle();
       await tester.tap(

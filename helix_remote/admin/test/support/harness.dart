@@ -149,7 +149,7 @@ final class AdminHarness {
     await pumpApp(tester);
   }
 
-  /// Starts it signed in on a phone: the dock and the system drawer, not the
+  /// Starts it signed in on a phone: the dock and the header gear, not the
   /// header pills.
   Future<void> startPhone(
     WidgetTester tester, {
@@ -165,7 +165,7 @@ final class AdminHarness {
   }
 
   /// Opens a place from the header (the test window is wide): `Overview`,
-  /// `Users & Devices`, `Invites`, `Reports` or `System`. The pill bar
+  /// `Users & Devices`, `Invites`, `Reports` or `Configuration`. The pill bar
   /// scrolls when the places do not fit, and the test font is much wider
   /// than the shipped one, so a later place can be off the edge.
   Future<void> goTo(WidgetTester tester, String place) async {
@@ -178,23 +178,58 @@ final class AdminHarness {
     await tester.pumpAndSettle();
   }
 
-  /// Opens the System place and one of its sub-tabs: `Audit`, `Logs` or
-  /// `Config`.
-  Future<void> openOps(WidgetTester tester, String tab) async {
-    await goTo(tester, 'System');
-    await tester.tap(find.text(tab).first);
+  /// Opens the live log, which comes up as a sheet over Configuration.
+  Future<void> openLogSheet(WidgetTester tester) async {
+    await goTo(tester, 'Configuration');
+    await tapRowAction(tester, 'Show log');
+  }
+
+  /// Opens the audit trail, the one system view that is a page of its own.
+  Future<void> openAudit(WidgetTester tester) async {
+    await goTo(tester, 'Configuration');
+    await tapRowAction(tester, 'Open audit');
+  }
+
+  /// Taps a button inside a Configuration card, bringing it on screen first.
+  /// The page is a lazy list: a card below the fold is not built yet, and one
+  /// partly built can still sit under the bottom edge.
+  Future<void> tapRowAction(WidgetTester tester, String label) async {
+    final button = find.text(label);
+    await tester.dragUntilVisible(
+      button,
+      find.byType(ListView).first,
+      const Offset(0, -150),
+    );
+    await tester.ensureVisible(button);
+    // The scroll only lands on the next frame, and a tap measures the old one.
+    await tester.pumpAndSettle();
+    await tester.tap(button);
     await tester.pumpAndSettle();
   }
 
-  /// Opens the phone's system drawer from the gear in the header. The window
-  /// has to be narrow enough for the dock layout, as `pumpApp` is not.
-  Future<void> openSystemDrawer(WidgetTester tester) async {
+  /// Opens Configuration from the gear in the phone header. The window has to
+  /// be narrow enough for the dock layout, as `pumpApp` is not.
+  Future<void> openConfigWithGear(WidgetTester tester) async {
     await tester.tap(
       find.descendant(
         of: find.byType(AppBar),
         matching: find.byIcon(Icons.settings_outlined),
       ),
     );
+    await tester.pumpAndSettle();
+  }
+
+  /// Closes an open sheet by tapping the dark area above it.
+  Future<void> dismissSheet(WidgetTester tester) async {
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens one report from the queue, by the category on its tile. The report
+  /// in full, and the ways to work it, come up in a sheet over the queue. When
+  /// several reports share a category it opens the first of them.
+  Future<void> openReportSheet(WidgetTester tester, String category) async {
+    await tester.tap(find.text(category).first);
     await tester.pumpAndSettle();
   }
 }

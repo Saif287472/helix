@@ -97,13 +97,14 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
   /// Ends every admin session, as an expiry or a password change would.
   void expireAllTokens() => validTokens.clear();
 
-  /// Sessions held by the console are valid for 12 hours from [_now].
+  /// Sessions held by the console are valid for 7 days from [_now], the
+  /// server's `AdminModule.sessionLifetime`.
   AdminSession issue() {
     final token = 'token-${++_tokens}';
     validTokens.add(token);
     return AdminSession(
       token: token,
-      expiresAt: _now().add(const Duration(hours: 12)),
+      expiresAt: _now().add(const Duration(days: 7)),
     );
   }
 

@@ -61,7 +61,7 @@ void main() {
     'Users & Devices',
     'Invites',
     'Reports',
-    'System',
+    'Configuration',
   ]) {
     testWidgets(place, (tester) async {
       await h.startSignedIn(tester);
@@ -70,19 +70,30 @@ void main() {
     });
   }
 
-  for (final tab in const ['Audit', 'Logs', 'Config']) {
-    testWidgets('System > $tab', (tester) async {
-      await h.startSignedIn(tester);
-      await h.openOps(tester, tab);
-      await check(tester);
-    });
-  }
+  testWidgets('Configuration > the live log sheet', (tester) async {
+    await h.startSignedIn(tester);
+    await h.openLogSheet(tester);
+    await check(tester);
+  });
 
-  testWidgets('an account page', (tester) async {
+  testWidgets('Configuration > the audit trail page', (tester) async {
+    await h.startSignedIn(tester);
+    await h.openAudit(tester);
+    await check(tester);
+  });
+
+  testWidgets('an account sheet', (tester) async {
     await h.startSignedIn(tester);
     await h.goTo(tester, 'Users & Devices');
     await tester.tap(find.text('alice'));
     await tester.pumpAndSettle();
+    await check(tester);
+  });
+
+  testWidgets('a report sheet', (tester) async {
+    await h.startSignedIn(tester);
+    await h.goTo(tester, 'Reports');
+    await h.openReportSheet(tester, 'Spam');
     await check(tester);
   });
 
@@ -116,7 +127,7 @@ void main() {
         findsOneWidget,
       );
     }
-    // The system places are not in the dock: the gear opens them as a drawer.
+    // Configuration is not in the dock: the gear in the header opens it.
     expect(
       find.descendant(
         of: find.byType(ConsoleDock),
@@ -137,35 +148,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the phone drawer holds the system places and sign-out', (
-    tester,
-  ) async {
+  testWidgets('the phone gear opens Configuration, and Configuration opens '
+      'the log', (tester) async {
     await phone(tester);
-    await h.openSystemDrawer(tester);
+    await h.openConfigWithGear(tester);
 
-    expect(find.byType(ConsoleDrawer), findsOneWidget);
-    for (final row in const ['Audit trail', 'Live log', 'Configuration']) {
-      expect(find.text(row), findsOneWidget);
-    }
-    expect(find.textContaining('Signed in until'), findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('Configuration'), findsWidgets);
+    // The Logs & Activity tile is below the fold on a phone; bringing its
+    // audit row in builds the whole tile.
+    await tester.dragUntilVisible(
+      find.text('Audit trail'),
+      find.byType(ListView).first,
+      const Offset(0, -150),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Live log'), findsOneWidget);
+    expect(find.text('Audit trail'), findsOneWidget);
     await check(tester);
 
-    await tester.tap(find.text('Live log'));
-    await tester.pumpAndSettle();
-    expect(find.byType(ConsoleDrawer), findsNothing);
+    await h.tapRowAction(tester, 'Show log');
     expect(find.text('Live Server Console'), findsOneWidget);
-    expect(find.text('Operations & System'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a narrow phone shows the dock, then the drawer, with room', (
+  testWidgets('a narrow phone shows the dock, then Configuration, with room', (
     tester,
   ) async {
     await h.startPhone(tester, size: const Size(320, 640));
     expect(tester.takeException(), isNull);
 
-    await h.openSystemDrawer(tester);
+    await h.openConfigWithGear(tester);
     expect(tester.takeException(), isNull);
   });
 

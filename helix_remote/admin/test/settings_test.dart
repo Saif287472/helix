@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 import 'support/harness.dart';
@@ -11,7 +12,7 @@ void main() {
 
   Future<void> openSettings(WidgetTester tester) async {
     await h.startSignedIn(tester);
-    await h.openOps(tester, 'Config');
+    await h.goTo(tester, 'Configuration');
   }
 
   Future<void> openPasswordDialog(WidgetTester tester) async {
@@ -59,6 +60,66 @@ void main() {
     expect(find.text('2.0.0-test'), findsOneWidget);
     expect(find.text('10 MiB'), findsOneWidget);
     expect(find.text('Invite code'), findsOneWidget);
+  });
+
+  group('the page', () {
+    testWidgets('the four groups are tiles, each with its own switches', (
+      tester,
+    ) async {
+      await openSettings(tester);
+
+      for (final tile in const [
+        'Network & Sync',
+        'Logs & Activity',
+        'Features',
+        'Security',
+      ]) {
+        expect(find.text(tile), findsOneWidget);
+      }
+    });
+
+    testWidgets('copies a value the operator pastes elsewhere', (
+      tester,
+    ) async {
+      final copied = recordClipboard(tester);
+      await openSettings(tester);
+
+      await tester.tap(find.byTooltip('Copy Node ID'));
+      await tester.pumpAndSettle();
+
+      expect(copied, ['node-1']);
+      expect(find.text('Node ID copied.'), findsOneWidget);
+    });
+  });
+
+  group('health', () {
+    testWidgets('counts the readiness checks the server passed', (
+      tester,
+    ) async {
+      await openSettings(tester);
+
+      expect(find.text('Operational'), findsOneWidget);
+      expect(find.text('3 of 3 readiness checks passed'), findsOneWidget);
+      expect(find.byType(ConsoleMeter), findsOneWidget);
+    });
+
+    testWidgets('a failing check is said, and maintenance is its own state', (
+      tester,
+    ) async {
+      h.server.ready = const ReadyResponse(
+        ready: false,
+        checks: {'database': false, 'event_bus': true, 'storage': true},
+      );
+      await openSettings(tester);
+      expect(find.text('Checks failing'), findsOneWidget);
+      expect(find.text('2 of 3 readiness checks passed'), findsOneWidget);
+
+      await flip(tester, 'Server maintenance mode');
+      await tapText(tester, 'Turn on');
+
+      expect(find.text('Maintenance mode'), findsOneWidget);
+      expect(find.text('Operational'), findsNothing);
+    });
   });
 
   group('server name', () {

@@ -171,7 +171,7 @@ final class DeviceSessionAuth implements AuthProvider {
   Future<void> close() => _signedOut.close();
 }
 
-/// Admin console tokens (`helix.admin` audience, 12 hours). There is no
+/// Admin console tokens (`helix.admin` audience, 7 days). There is no
 /// refresh: when the token expires or is refused the operator signs in
 /// again. `AdminClient` stores the session it gets from setup, sign-in and
 /// password changes here.

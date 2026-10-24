@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// The admin session kept between runs: which server it belongs to, the
-/// bearer token and when it expires (12 hours after sign-in).
+/// bearer token and when the server says it expires.
 final class StoredSession {
   const StoredSession({required this.serverUrl, required this.session});
 

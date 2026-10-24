@@ -263,7 +263,7 @@ tokens never open each other's routes.
 |---|---|---|
 | `GET /v1/admin/setup` | — → `AdminSetupStatus` | Public. |
 | `POST /v1/admin/setup` | `AdminPasswordRequest` → 201 `AdminSession` | Public, only before setup (`already_exists` after). 5 per hour per IP. |
-| `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Per IP, 5 failures lock that address (15 min, doubling to 24 h); 100 failures from anywhere since the last success lock sign-in for 15 min. Attempts are counted before the password is checked (`password_locked`). 12-hour token. |
+| `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Per IP, 5 failures lock that address (15 min, doubling to 24 h); 100 failures from anywhere since the last success lock sign-in for 15 min. Attempts are counted before the password is checked (`password_locked`). 7-day token. |
 | `DELETE /v1/admin/sessions` | → 204 | Signs the operator out everywhere: every admin token issued until now stops working, and open log streams close with 4001. |
 | `PUT /v1/admin/password` | `ChangeAdminPasswordRequest` → `AdminSession` | Ends every other admin session. |
 | `GET /v1/admin/accounts` | — → `Page<AdminAccount>` | `status`, `q` (Helix name prefix or last 4 digits). Each account carries `display_name` and the full `phone_number` once its app has reported them (ADR-030; the number only with `HELIX_PHONE_KEY`), else the last 4 digits. |

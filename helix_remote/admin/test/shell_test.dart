@@ -40,6 +40,7 @@ void main() {
   ) async {
     await h.startSignedIn(tester);
     await h.goTo(tester, 'Reports');
+    await h.openReportSheet(tester, 'Spam');
     await tapText(tester, 'Resolve');
 
     expect(find.text('Report resolved.'), findsOneWidget);

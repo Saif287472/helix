@@ -36,7 +36,7 @@ final class AdminPasswordRequest {
       AdminPasswordRequest(password: json.string('password'));
 }
 
-/// The 12-hour admin token.
+/// The admin token, valid for 7 days.
 final class AdminSession {
   const AdminSession({required this.token, required this.expiresAt});
 

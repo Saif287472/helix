@@ -4,14 +4,15 @@ import 'package:helix_admin/src/features/accounts/accounts_controller.dart';
 import 'package:helix_admin/src/features/common/format.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
 import 'package:helix_admin/src/widgets/console_kit.dart';
+import 'package:helix_admin/src/widgets/console_sheet.dart';
+import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_admin/src/widgets/paged_list.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Users & Devices: search by Helix name or the last four digits, filter by
-/// status, open one for its devices and actions. On a wide window the list
-/// and the open account sit side by side; on a phone an account opens as its
-/// own page.
+/// status, open one for its devices and actions. An account opens over the
+/// list in a sheet, on a phone and on a wide window alike.
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key, required this.adminContext, this.pageSize});
 
@@ -23,12 +24,8 @@ class AccountsScreen extends StatefulWidget {
 }
 
 class _AccountsScreenState extends State<AccountsScreen> {
-  /// From this width the open account shows beside the list.
-  static const _split = 900.0;
-
   late final AccountsController _accounts;
   final _search = TextEditingController();
-  String? _selected;
 
   @override
   void initState() {
@@ -46,83 +43,39 @@ class _AccountsScreenState extends State<AccountsScreen> {
     super.dispose();
   }
 
-  Future<void> _open(AdminAccount account, {required bool split}) async {
-    if (split) {
-      setState(() => _selected = account.accountId);
-      return;
-    }
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => AccountDetailScreen(
-          adminContext: widget.adminContext,
-          accountId: account.accountId,
-        ),
+  Future<void> _open(AdminAccount account) async {
+    final outcome = await showConsoleSheet<String>(
+      context: context,
+      heightFactor: 0.85,
+      child: AccountDetailView(
+        adminContext: widget.adminContext,
+        accountId: account.accountId,
+        onRemoved: (outcome) => Navigator.of(context).pop(outcome),
       ),
     );
-    if (changed ?? false) await _accounts.refresh();
-  }
-
-  Widget _list({required bool split}) {
-    // The empty-state wording depends on the filter, so it follows the
-    // controller.
-    return ListenableBuilder(
-      listenable: _accounts,
-      builder: (context, _) => _pagedList(split: split),
-    );
-  }
-
-  Widget _pagedList({required bool split}) {
-    return PagedListView<AdminAccount>(
-      controller: _accounts,
-      emptyIcon: Icons.search_off,
-      emptyTitle: 'No accounts found',
-      emptyMessage: _accounts.query.isEmpty && _accounts.status == null
-          ? 'Accounts appear here when people sign up.'
-          : 'Try another search or filter.',
-      header: _Header(accounts: _accounts, search: _search),
-      itemBuilder: (context, account) => AccountTile(
-        account: account,
-        selected: split && account.accountId == _selected,
-        onTap: () => _open(account, split: split),
-      ),
-    );
+    if (outcome == null || !mounted) return;
+    // The account is gone: the list says what was done to it and reloads.
+    showMessage(context, outcome);
+    await _accounts.refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final split = constraints.maxWidth >= _split;
-        if (!split) return _list(split: false);
-        return Row(
-          children: [
-            Expanded(flex: 6, child: _list(split: true)),
-            Expanded(
-              flex: 5,
-              child: _selected == null
-                  ? const Padding(
-                      padding: EdgeInsets.fromLTRB(0, 16, 16, 16),
-                      child: ConsoleEmpty(
-                        icon: Icons.touch_app_outlined,
-                        title: 'Select a user',
-                        message:
-                            'Pick someone from the list to inspect their '
-                            'identity and devices, and to act on the account.',
-                      ),
-                    )
-                  : AccountDetailView(
-                      key: ValueKey(_selected),
-                      adminContext: widget.adminContext,
-                      accountId: _selected!,
-                      onRemoved: () {
-                        setState(() => _selected = null);
-                        _accounts.refresh();
-                      },
-                    ),
-            ),
-          ],
-        );
-      },
+    // The empty-state wording depends on the filter, so it follows the
+    // controller.
+    return ListenableBuilder(
+      listenable: _accounts,
+      builder: (context, _) => PagedListView<AdminAccount>(
+        controller: _accounts,
+        emptyIcon: Icons.search_off,
+        emptyTitle: 'No accounts found',
+        emptyMessage: _accounts.query.isEmpty && _accounts.status == null
+            ? 'Accounts appear here when people sign up.'
+            : 'Try another search or filter.',
+        header: _Header(accounts: _accounts, search: _search),
+        itemBuilder: (context, account) =>
+            AccountTile(account: account, onTap: () => _open(account)),
+      ),
     );
   }
 }
@@ -232,16 +185,10 @@ class AccountAvatar extends StatelessWidget {
 
 /// One card of the account list.
 class AccountTile extends StatelessWidget {
-  const AccountTile({
-    super.key,
-    required this.account,
-    required this.onTap,
-    this.selected = false,
-  });
+  const AccountTile({super.key, required this.account, required this.onTap});
 
   final AdminAccount account;
   final VoidCallback onTap;
-  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -251,16 +198,9 @@ class AccountTile extends StatelessWidget {
         : '${account.activeDevices} devices';
     return Semantics(
       button: true,
-      selected: selected,
       child: ConsoleCard(
         radius: 12,
         padding: const EdgeInsets.all(14),
-        color: selected
-            ? HelixConsoleColors.accentSurface
-            : HelixConsoleColors.surface,
-        borderColor: selected
-            ? HelixConsoleColors.accent
-            : HelixConsoleColors.border,
         onTap: onTap,
         child: Row(
           children: [

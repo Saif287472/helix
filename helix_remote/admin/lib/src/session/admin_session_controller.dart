@@ -31,8 +31,8 @@ final class AdminContext {
   final DateTime Function() now;
 }
 
-/// The admin session: first-run setup, sign-in, the saved token, the 12-hour
-/// expiry and the device lock.
+/// The admin session: first-run setup, sign-in, the saved token, the expiry
+/// the server issued and the device lock.
 ///
 /// The password is held only for the duration of a call. The token is kept in
 /// the `TokenVault` (secure storage) and in the `HelixAdminApi`; it is never
@@ -319,7 +319,7 @@ final class AdminSessionController extends ChangeNotifier {
     final left = expiresAt.difference(services.now());
     _expiryTimer = Timer(
       left.isNegative ? Duration.zero : left,
-      () => _end('Your admin session expired after 12 hours. Sign in again.'),
+      () => _end('Your admin session expired. Sign in again.'),
     );
   }
 

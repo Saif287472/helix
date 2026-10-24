@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:helix_admin/src/api/error_text.dart';
+import 'package:helix_admin/src/features/audit/audit_screen.dart';
 import 'package:helix_admin/src/features/common/format.dart';
 import 'package:helix_admin/src/features/dashboard/server_controller.dart';
+import 'package:helix_admin/src/features/logs/logs_screen.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
 import 'package:helix_admin/src/session/admin_session_scope.dart';
 import 'package:helix_admin/src/widgets/console_kit.dart';
+import 'package:helix_admin/src/widgets/console_sheet.dart';
 import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_admin/src/widgets/password_field.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -17,12 +20,29 @@ const flagLabels = {
   'group_calls': 'Group calls',
 };
 
-/// System > Config: the server's name and properties, federation, the
-/// admin password and App lock, maintenance, feature flags and sign-out.
+/// Configuration: the server as one page - who it is, how it is doing, the
+/// four groups of switches and actions, the facts an operator copies, and the
+/// way out. Changes save at once and are written to the audit trail.
 class ConfigView extends StatelessWidget {
-  const ConfigView({super.key, required this.server});
+  const ConfigView({
+    super.key,
+    required this.server,
+    required this.adminContext,
+  });
 
   final ServerController server;
+  final AdminContext adminContext;
+
+  /// The log opens over this page; the audit trail is long enough to want a
+  /// page of its own.
+  void _showLog(BuildContext context) => showConsoleSheet(
+    context: context,
+    child: LogsScreen(adminContext: adminContext),
+  );
+
+  void _openAudit(BuildContext context) => Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => AuditPage(adminContext: adminContext)),
+  );
 
   Future<void> _rename(BuildContext context) async {
     final current = server.config?.serverName ?? '';
@@ -124,317 +144,523 @@ class ConfigView extends StatelessWidget {
     );
   }
 
+  /// The health the server reported about itself: how many of its readiness
+  /// checks passed, and the words that say what that means. Maintenance is a
+  /// switch the operator put on on purpose, not a check that failed.
+  static ({String words, String note, int passed, int total, ConsoleTone tone})
+  _health(ServerController server) {
+    final ready = server.ready;
+    if (ready == null) {
+      return (
+        words: 'Not checked',
+        note: 'The server has not answered a readiness check.',
+        passed: 0,
+        total: 0,
+        tone: ConsoleTone.neutral,
+      );
+    }
+    final checks = ready.checks;
+    final passed = checks.values.where((ok) => ok).length;
+    final note = '$passed of ${checks.length} readiness checks passed';
+    if (server.config?.maintenance ?? false) {
+      return (
+        words: 'Maintenance mode',
+        note: note,
+        passed: passed,
+        total: checks.length,
+        tone: ConsoleTone.warn,
+      );
+    }
+    return passed == checks.length
+        ? (
+            words: 'Operational',
+            note: note,
+            passed: passed,
+            total: checks.length,
+            tone: ConsoleTone.ok,
+          )
+        : (
+            words: 'Checks failing',
+            note: note,
+            passed: passed,
+            total: checks.length,
+            tone: ConsoleTone.danger,
+          );
+  }
+
+  /// Sign-up in the words the operator uses, for the hero's pill.
+  static String _registrationWords(AdminConfig? config) =>
+      switch (config?.registration) {
+        RegistrationMode.phone => 'Phone number',
+        RegistrationMode.invite => 'Invite code',
+        RegistrationMode.closed => 'Sign-up closed',
+        _ => 'Sign-up unknown',
+      };
+
+  /// The name, the version and how people sign up - the one place a server is
+  /// introduced, so it is the first card and the only one that lifts.
+  Widget _hero(BuildContext context, AdminConfig? config) => ConsoleCard(
+    elevated: true,
+    radius: 24,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const ConsoleIconTile(
+              icon: Icons.dns_outlined,
+              accent: HelixConsoleColors.accent,
+              size: 48,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    config == null || config.serverName.isEmpty
+                        ? 'Not set'
+                        : config.serverName,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                      color: HelixConsoleColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  const Text(
+                    'Public node identity shown to people who sign up',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: HelixConsoleColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ConsolePill(label: config?.version ?? 'Not available'),
+                  ConsolePill(label: _registrationWords(config)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton(
+              onPressed: config == null || server.isBusy('name')
+                  ? null
+                  : () => _rename(context),
+              style: ConsoleButtons.pill,
+              child: const Text('Edit name'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// The meter the operator reads before any of the checks behind it, and the
+  /// two things they do about it: pause the server, or clear what expired.
+  Widget _healthCard(BuildContext context) {
+    final config = server.config;
+    final health = _health(server);
+    return ConsoleCard(
+      elevated: true,
+      radius: 24,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const ConsoleCardLabel('Server health'),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              ConsoleDot(color: health.tone.dot),
+              const SizedBox(width: 10),
+              Text(
+                health.words,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: health.tone.text,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            health.note,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: HelixConsoleColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ConsoleMeter(
+            passed: health.passed,
+            total: health.total,
+            color: health.tone.dot,
+          ),
+          const SizedBox(height: 8),
+          ConsoleSettingRow(
+            title: 'Server maintenance mode',
+            subtitle:
+                'Apps get 503 Service Unavailable while it is on. '
+                'This console keeps working',
+            trailing: Switch(
+              value: config?.maintenance ?? false,
+              onChanged: config == null || server.isBusy('maintenance')
+                  ? null
+                  : (on) => _maintenance(context, on),
+            ),
+          ),
+          const Divider(height: 28),
+          ConsoleSettingRow(
+            title: 'Purge dead jobs',
+            subtitle:
+                'Clears failed background jobs and expired sign-in '
+                'rows. Nothing a person can see is removed',
+            trailing: OutlinedButton(
+              onPressed: server.isBusy('purge') ? null : () => _purge(context),
+              style: ConsoleButtons.pillTone(
+                HelixConsoleColors.danger,
+                HelixConsoleColors.dangerBorder,
+              ),
+              child: server.isBusy('purge')
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Purge'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The four groups a fix usually needs, two by two on a wide window and
+  /// stacked on a phone. Each tile holds its own switches and actions: the
+  /// grid is the screen, not a way out of it.
+  Widget _quickAccess(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final tiles = <Widget>[
+        _tile(
+          icon: Icons.public,
+          accent: HelixConsoleColors.accent,
+          title: 'Network & Sync',
+          subtitle: 'Other Helix servers',
+          body: _networkTile(context),
+        ),
+        _tile(
+          icon: Icons.article_outlined,
+          accent: HelixConsoleColors.violet,
+          title: 'Logs & Activity',
+          subtitle: 'What the server and this console did',
+          body: _activityTile(context),
+        ),
+        _tile(
+          icon: Icons.tune,
+          accent: HelixConsoleColors.onOk,
+          title: 'Features',
+          subtitle: 'Server-wide switches',
+          body: _featureTile(context),
+        ),
+        _tile(
+          icon: Icons.lock_outline,
+          accent: HelixConsoleColors.onWarn,
+          title: 'Security',
+          subtitle: 'This device and the admin password',
+          body: _securityTile(context),
+        ),
+      ];
+      if (constraints.maxWidth < 560) {
+        return Column(
+          children: [
+            for (var i = 0; i < tiles.length; i++) ...[
+              if (i > 0) const SizedBox(height: 14),
+              tiles[i],
+            ],
+          ],
+        );
+      }
+      final width = (constraints.maxWidth - 14) / 2;
+      return Wrap(
+        spacing: 14,
+        runSpacing: 14,
+        children: [
+          for (final tile in tiles) SizedBox(width: width, child: tile),
+        ],
+      );
+    },
+  );
+
+  Widget _tile({
+    required IconData icon,
+    required Color accent,
+    required String title,
+    required String subtitle,
+    required Widget body,
+  }) => ConsoleCard(
+    radius: 20,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            ConsoleIconTile(icon: icon, accent: accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: HelixConsoleColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: HelixConsoleColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        body,
+      ],
+    ),
+  );
+
+  Widget _networkTile(BuildContext context) {
+    final config = server.config;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConsoleSettingRow(
+          title: 'Worldwide Network Mode',
+          subtitle: 'Talk to other Helix servers (federation)',
+          trailing: Switch(
+            value: config?.federationEnabled ?? false,
+            onChanged: config == null || server.isBusy('federation')
+                ? null
+                : (on) => _federation(context, on),
+          ),
+        ),
+        if (config?.federationDomain != null)
+          ConsoleProperty(
+            label: 'Federation domain',
+            value: config!.federationDomain!,
+          ),
+      ],
+    );
+  }
+
+  Widget _activityTile(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ConsoleSettingRow(
+        title: 'Live log',
+        subtitle: 'What the server is saying now',
+        trailing: OutlinedButton(
+          onPressed: () => _showLog(context),
+          style: ConsoleButtons.pill,
+          child: const Text('Show log'),
+        ),
+      ),
+      const Divider(height: 28),
+      ConsoleSettingRow(
+        title: 'Audit trail',
+        subtitle: 'What this console has done on the server',
+        trailing: OutlinedButton(
+          onPressed: () => _openAudit(context),
+          style: ConsoleButtons.pill,
+          child: const Text('Open audit'),
+        ),
+      ),
+    ],
+  );
+
+  Widget _featureTile(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (server.flagsNote != null) ConsoleBanner(message: server.flagsNote!),
+      if (server.flags.isEmpty && server.flagsNote == null)
+        const Text(
+          'This server has no feature flags.',
+          style: TextStyle(fontSize: 13, color: HelixConsoleColors.textMuted),
+        ),
+      for (final entry in server.flags.entries) ...[
+        ConsoleSettingRow(
+          title: flagLabels[entry.key] ?? entry.key,
+          subtitle: entry.key,
+          trailing: Switch(
+            value: entry.value,
+            onChanged: server.isBusy('flag:${entry.key}')
+                ? null
+                : (on) async {
+                    final problem = await server.setFlag(entry.key, on);
+                    if (context.mounted && problem != null) {
+                      showMessage(context, problem);
+                    }
+                  },
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    ],
+  );
+
+  Widget _securityTile(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ConsoleSettingRow(
+        title: 'Device biometric / PIN lock',
+        subtitle:
+            "Ask for this device's screen lock when the console "
+            'opens',
+        trailing: Switch(
+          value: AdminSessionScope.read(context).appLockEnabled,
+          onChanged: (on) => _appLock(context, on),
+        ),
+      ),
+      const Divider(height: 28),
+      ConsoleSettingRow(
+        title: 'Admin password',
+        subtitle: 'Changing it signs out every other admin session',
+        trailing: OutlinedButton(
+          onPressed: () => _changePassword(context),
+          style: ConsoleButtons.pill,
+          child: const Text('Change password'),
+        ),
+      ),
+    ],
+  );
+
+  /// The facts an operator copies somewhere else, in one list. The version and
+  /// how people sign up are the hero's, so they are not repeated here.
+  Widget _facts(AdminSessionController session, AdminConfig? config) =>
+      ConsoleCard(
+        radius: 24,
+        padding: const EdgeInsets.fromLTRB(0, 18, 0, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: ConsoleCardLabel('This server'),
+            ),
+            ConsoleValueRow(
+              label: 'Public server address',
+              value: session.serverAddress?.text ?? 'Not available',
+              icon: Icons.link,
+              accent: HelixConsoleColors.accent,
+              mono: true,
+              copyValue: session.serverAddress?.text,
+            ),
+            consoleListDivider,
+            ConsoleValueRow(
+              label: 'Node ID',
+              value: config?.nodeId ?? 'Not available',
+              icon: Icons.fingerprint,
+              accent: HelixConsoleColors.violet,
+              mono: true,
+              copyValue: config?.nodeId,
+            ),
+            consoleListDivider,
+            ConsoleValueRow(
+              label: 'Attachment limit',
+              value: config == null
+                  ? 'Not available'
+                  : formatBytes(config.maxAttachmentBytes),
+              icon: Icons.attach_file,
+              accent: HelixConsoleColors.onOk,
+            ),
+            if (session.sessionExpiresAt case final expires?) ...[
+              consoleListDivider,
+              ConsoleValueRow(
+                label: 'Signed in until',
+                value: formatTime(expires),
+                icon: Icons.schedule,
+                accent: HelixConsoleColors.onWarn,
+              ),
+            ],
+          ],
+        ),
+      );
+
+  /// The one card that ends the session, so it is the last thing on the page
+  /// and the only red one.
+  Widget _dangerZone(BuildContext context) => ConsoleCard(
+    radius: 24,
+    color: HelixConsoleColors.dangerSurface,
+    borderColor: HelixConsoleColors.dangerBorder,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const ConsoleCardLabel('Danger zone', color: HelixConsoleColors.danger),
+        const SizedBox(height: 14),
+        ConsoleSettingRow(
+          title: 'Sign out of this server',
+          titleColor: HelixConsoleColors.onDanger,
+          subtitleColor: HelixConsoleColors.danger,
+          subtitle:
+              'Ends every admin session on the server and clears '
+              'it from this device. You will need the admin '
+              'password to sign back in',
+          trailing: FilledButton(
+            onPressed: () => confirmAndSignOut(context),
+            style: ConsoleButtons.pillFilledTone(HelixConsoleColors.danger),
+            child: const Text('Sign out'),
+          ),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final session = AdminSessionScope.of(context);
     return ListenableBuilder(
       listenable: server,
-      builder: (context, _) {
-        final config = server.config;
-        final expires = session.sessionExpiresAt;
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ConsoleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel('Server node identity'),
-                  const SizedBox(height: 14),
-                  ConsoleSettingRow(
-                    title: config == null || config.serverName.isEmpty
-                        ? 'Not set'
-                        : config.serverName,
-                    subtitle:
-                        'Public node identity shown to people who sign up',
-                    trailing: OutlinedButton(
-                      onPressed: config == null || server.isBusy('name')
-                          ? null
-                          : () => _rename(context),
-                      style: ConsoleButtons.outlined,
-                      child: const Text('Edit name'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConsoleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel('Server configuration properties'),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Address, version and limits as this server reports them',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: HelixConsoleColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Properties(
-                    items: [
-                      ConsoleProperty(
-                        label: 'Public server address',
-                        value: session.serverAddress?.text ?? 'Not available',
-                      ),
-                      ConsoleProperty(
-                        label: 'Node ID',
-                        value: config?.nodeId ?? 'Not available',
-                        copyable: config != null,
-                      ),
-                      ConsoleProperty(
-                        label: 'Version',
-                        value: config?.version ?? 'Not available',
-                      ),
-                      ConsoleProperty(
-                        label: 'Sign-up',
-                        mono: false,
-                        value: switch (config?.registration) {
-                          RegistrationMode.phone => 'Phone number',
-                          RegistrationMode.invite => 'Invite code',
-                          RegistrationMode.closed => 'Closed',
-                          _ => 'Not available',
-                        },
-                      ),
-                      ConsoleProperty(
-                        label: 'Attachment limit',
-                        mono: false,
-                        value: config == null
-                            ? 'Not available'
-                            : formatBytes(config.maxAttachmentBytes),
-                      ),
-                      if (expires != null)
-                        ConsoleProperty(
-                          label: 'Signed in until',
-                          mono: false,
-                          value: formatTime(expires),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConsoleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel('Worldwide mode & peer network'),
-                  const SizedBox(height: 14),
-                  ConsoleSettingRow(
-                    title: 'Worldwide Network Mode',
-                    subtitle: 'Talk to other Helix servers (federation)',
-                    trailing: Switch(
-                      value: config?.federationEnabled ?? false,
-                      onChanged: config == null || server.isBusy('federation')
-                          ? null
-                          : (on) => _federation(context, on),
-                    ),
-                  ),
-                  if (config?.federationDomain != null) ...[
-                    const SizedBox(height: 14),
-                    ConsoleProperty(
-                      label: 'Federation domain',
-                      value: config!.federationDomain!,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConsoleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel('Local security & app lock'),
-                  const SizedBox(height: 14),
-                  ConsoleSettingRow(
-                    title: 'Device biometric / PIN lock',
-                    subtitle:
-                        "Ask for this device's screen lock when the console "
-                        'opens',
-                    trailing: Switch(
-                      value: session.appLockEnabled,
-                      onChanged: (on) => _appLock(context, on),
-                    ),
-                  ),
-                  const Divider(height: 28),
-                  ConsoleSettingRow(
-                    title: 'Admin password',
-                    subtitle: 'Changing it signs out every other admin session',
-                    trailing: OutlinedButton(
-                      onPressed: () => _changePassword(context),
-                      style: ConsoleButtons.outlined,
-                      child: const Text('Change password'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConsoleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel('Node maintenance & clean-up'),
-                  const SizedBox(height: 14),
-                  ConsoleSettingRow(
-                    title: 'Server maintenance mode',
-                    subtitle:
-                        'Apps get 503 Service Unavailable while it is on. '
-                        'This console keeps working',
-                    trailing: Switch(
-                      value: config?.maintenance ?? false,
-                      onChanged: config == null || server.isBusy('maintenance')
-                          ? null
-                          : (on) => _maintenance(context, on),
-                    ),
-                  ),
-                  const Divider(height: 28),
-                  ConsoleSettingRow(
-                    title: 'Purge dead jobs',
-                    subtitle:
-                        'Clears failed background jobs and expired sign-in '
-                        'rows. Nothing a person can see is removed',
-                    trailing: OutlinedButton(
-                      onPressed: server.isBusy('purge')
-                          ? null
-                          : () => _purge(context),
-                      style: ConsoleButtons.outlinedTone(
-                        HelixConsoleColors.danger,
-                        HelixConsoleColors.dangerBorder,
-                      ),
-                      child: server.isBusy('purge')
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Purge'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConsoleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel('Feature flags'),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Server-owned switches. Changes take effect immediately.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: HelixConsoleColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (server.flagsNote != null)
-                    ConsoleBanner(message: server.flagsNote!),
-                  if (server.flags.isEmpty && server.flagsNote == null)
-                    const Text(
-                      'This server has no feature flags.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: HelixConsoleColors.textMuted,
-                      ),
-                    ),
-                  for (final entry in server.flags.entries) ...[
-                    ConsoleSettingRow(
-                      title: flagLabels[entry.key] ?? entry.key,
-                      subtitle: entry.key,
-                      trailing: Switch(
-                        value: entry.value,
-                        onChanged: server.isBusy('flag:${entry.key}')
-                            ? null
-                            : (on) async {
-                                final problem = await server.setFlag(
-                                  entry.key,
-                                  on,
-                                );
-                                if (context.mounted && problem != null) {
-                                  showMessage(context, problem);
-                                }
-                              },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConsoleCard(
-              color: HelixConsoleColors.dangerSurface,
-              borderColor: HelixConsoleColors.dangerBorder,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConsoleCardLabel(
-                    'Admin session control',
-                    color: HelixConsoleColors.danger,
-                  ),
-                  const SizedBox(height: 14),
-                  ConsoleSettingRow(
-                    title: 'Sign out of this server',
-                    titleColor: HelixConsoleColors.onDanger,
-                    subtitleColor: HelixConsoleColors.danger,
-                    subtitle:
-                        'Ends every admin session on the server and clears '
-                        'it from this device. You will need the admin '
-                        'password to sign back in',
-                    trailing: FilledButton(
-                      onPressed: () => confirmAndSignOut(context),
-                      style: ConsoleButtons.filledTone(
-                        HelixConsoleColors.danger,
-                      ),
-                      child: const Text('Sign out'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        );
-      },
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        children: [
+          const ConsoleTitle('Configuration'),
+          const SizedBox(height: 18),
+          _hero(context, server.config),
+          const SizedBox(height: 16),
+          _healthCard(context),
+          const SizedBox(height: 16),
+          _quickAccess(context),
+          const SizedBox(height: 16),
+          _facts(session, server.config),
+          const SizedBox(height: 16),
+          _dangerZone(context),
+        ],
+      ),
     );
   }
-}
-
-/// Two columns of property boxes on a wide card, one on a phone.
-class _Properties extends StatelessWidget {
-  const _Properties({required this.items});
-
-  final List<Widget> items;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      if (constraints.maxWidth < 520) {
-        return Column(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(height: 10),
-              items[i],
-            ],
-          ],
-        );
-      }
-      final width = (constraints.maxWidth - 12) / 2;
-      return Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          for (final item in items) SizedBox(width: width, child: item),
-        ],
-      );
-    },
-  );
 }
 
 class _RenameDialog extends StatefulWidget {
