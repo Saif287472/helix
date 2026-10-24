@@ -240,7 +240,9 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   (1 h), `messaging.expire` (10 min; it purges `sends` and queues
   `messaging.expire_batch`, which does the mailbox deleting a batch at a
   time), `calls.expire` (5 min),
-  `identity.purge_expired` (6 h), `identity.revoke_inactive` (6 h, only with
+  `identity.purge_expired` (6 h; expired refresh tokens, spent phone
+  challenges, and invites and recovery codes nobody can use again),
+  `identity.revoke_inactive` (6 h, only with
   `HELIX_DEVICE_INACTIVE_DAYS`), `media.expire` (30 min),
   `media.sweep_orphans` (7 days), `people.purge_reports` (1 day),
   `people.purge_discovery` (1 day, leaves only today's and yesterday's
@@ -291,7 +293,11 @@ WHERE id = '<job id>' AND status = 'dead';
 identity rows, and returns counts by kind (`dead_jobs` and the identity
 counts). It is audited as `purge`. There is no way to purge only some kinds
 through the API; use SQL (`DELETE FROM platform.jobs WHERE status = 'dead' AND
-kind = '...'`) for that.
+kind = '...'`) for that. Pressing it is no longer what keeps the identity
+tables small: `identity.purge_expired` runs the invite and recovery-code
+deletes every six hours by itself. What the button still does on its own is the
+harsher refresh-token and phone-challenge windows and the dead jobs, which no
+periodic job touches.
 
 ## Rate limits
 
@@ -652,6 +658,10 @@ millions of users; this section is about two nodes on one host.
 - **`calls.call_metrics`:** 90 days. **`messaging.sends`:** 7 days.
   **`platform.idempotency`:** 24 hours.
 - **Dead jobs:** kept until purged.
+- **`identity.invites` and `identity.recovery_codes`:** `identity.purge_expired`
+  (6 h) drops an invite 30 days past its expiry when nobody redeemed it, and a
+  recovery code 1 day past its expiry or its use. A redeemed invite stays: it is
+  the record of who joined through it, one row per account.
 - **Reports** survive account deletion by design (ids only).
 - Check sizes with
   `SELECT schemaname, relname, pg_size_pretty(pg_total_relation_size(relid))

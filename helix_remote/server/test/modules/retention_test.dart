@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/identity/module.dart';
 import 'package:helix_remote_server/src/modules/media/module.dart';
 import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/modules/people/module.dart';
@@ -282,6 +283,90 @@ void main() {
         reason: 'today and the day before are what the sweep keeps',
       );
     });
+
+    test(
+      'a dead invite or spent recovery code goes without the purge button',
+      () async {
+        // These two deletes lived only in the operator's purge, so on a public
+        // server every self-issued invite (7-day life, minted 3 an hour per
+        // address) and every recovery code that was never used stayed for
+        // ever. The windows are the operator's own: 30 days past an
+        // unredeemed invite's expiry, 1 day past a code's expiry or its use.
+        const day = 86400;
+        final db = h.env.platform.db;
+        final identity = h.env.platform.schemas.of('identity');
+        Future<void> invite(String id, int expiresFromNow) => db.execute(
+          'INSERT INTO $identity.invites (id, code_hash, issuer, expires_at) '
+          "VALUES (@id:uuid, decode(md5(@c:text), 'hex'), 'self', "
+          'now() + make_interval(secs => @e:int8))',
+          {'id': id, 'c': 'invite-$id', 'e': expiresFromNow},
+        );
+        Future<void> redeemedInvite(String id, String by) => db.execute(
+          'INSERT INTO $identity.invites (id, code_hash, issuer, expires_at, '
+          "redeemed_at, redeemed_by) VALUES (@id:uuid, "
+          "decode(md5(@c:text), 'hex'), 'self', "
+          'now() - make_interval(secs => @e:int8), now(), @r:uuid)',
+          {'id': id, 'c': 'invite-$id', 'e': 40 * day, 'r': by},
+        );
+        Future<void> code(
+          String id, {
+          required int expiresFromNow,
+          required int usedSecondsAgo,
+        }) => db.execute(
+          'INSERT INTO $identity.recovery_codes (id, account_id, code_hash, '
+          "expires_at, used_at) VALUES (@id:uuid, @a:uuid, "
+          "decode(md5(@c:text), 'hex'), "
+          'now() + make_interval(secs => @e:int8), '
+          'now() - make_interval(secs => @u:int8))',
+          {
+            'id': id,
+            'a': alice.accountId,
+            'c': 'code-$id',
+            'e': expiresFromNow,
+            'u': usedSecondsAgo,
+          },
+        );
+        final deadInvite = Uuid.v7();
+        final openInvite = Uuid.v7();
+        final takenInvite = Uuid.v7();
+        final spentCode = Uuid.v7();
+        final freshCode = Uuid.v7();
+        await invite(deadInvite, -40 * day);
+        await invite(openInvite, day);
+        await redeemedInvite(takenInvite, Uuid.v7());
+        await code(spentCode, expiresFromNow: day, usedSecondsAgo: 2 * day);
+        await code(freshCode, expiresFromNow: day, usedSecondsAgo: 60);
+
+        final module = h.server.modules.whereType<IdentityModule>().single;
+        await module.periodic
+            .singleWhere((j) => j.name == 'identity.purge_expired')
+            .run();
+
+        Future<Set<String>> left(String table, List<String> ids) async {
+          final marks = [
+            for (var i = 0; i < ids.length; i++) '@i$i:uuid',
+          ].join(', ');
+          final rows = await db.query(
+            'SELECT id FROM $identity.$table WHERE id IN ($marks)',
+            {for (var i = 0; i < ids.length; i++) 'i$i': ids[i]},
+          );
+          return {for (final r in rows) r.string('id')};
+        }
+
+        expect(
+          await left('invites', [deadInvite, openInvite, takenInvite]),
+          {openInvite, takenInvite},
+          reason:
+              'an invite nobody redeemed is gone 30 days past its expiry, '
+              'while a redeemed one is the record of who joined and stays',
+        );
+        expect(
+          await left('recovery_codes', [spentCode, freshCode]),
+          {freshCode},
+          reason: 'the code used two days ago is dead weight',
+        );
+      },
+    );
 
     test('an expiry batch deletes exactly the rows it picked', () async {
       // The batch used to pick rows by `ctid`, which is unique only inside one

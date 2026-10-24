@@ -36,6 +36,13 @@ import.
   same keyed form, never the salted hash.
 - **Bearer secrets** (verification, sign-in, link, poll and refresh tokens,
   invite and recovery codes) are stored only as SHA-256 hashes.
+- **Dead rows:** `identity.purge_expired` (6 h) deletes refresh tokens 7 days
+  past their expiry, phone challenges 2 days past creation, an invite 30 days
+  past its expiry when nobody redeemed it, and a recovery code 1 day past its
+  expiry or its use (the last two were reachable only from the operator's
+  purge button, so a public server accumulated every self-issued invite for
+  ever). The operator's purge (`data/admin_store.dart`) counts the same four
+  kinds and runs its own harsher token and challenge windows.
 - **Revoking a device:** sets `tokens_valid_after`, revokes its refresh
   tokens and deletes its push token, inside one transaction with the
   `onDeviceRevoked` hooks (keys purge prekeys). It also publishes

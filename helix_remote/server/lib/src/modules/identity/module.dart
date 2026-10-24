@@ -117,6 +117,7 @@ final class IdentityModule extends ModuleBase
     PeriodicJob('identity.purge_expired', const Duration(hours: 6), () async {
       await _credentials.purgeExpiredRefresh(context.db);
       await _credentials.purgeChallenges(context.db);
+      await _adminStore.purgeExpiredCodes(context.db);
     }),
     if (_ctx.config.inactiveDeviceDays > 0)
       PeriodicJob(

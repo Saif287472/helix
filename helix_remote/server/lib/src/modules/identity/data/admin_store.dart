@@ -162,6 +162,11 @@ final class AdminStore {
       ) ==
       1;
 
+  /// Everything an operator's purge removes, counted for the audit row. The
+  /// identity periodic job runs [purgeExpiredCodes] by itself every six hours,
+  /// so a dead invite or recovery code goes without anyone pressing this
+  /// button; the token and challenge deletes here stay the operator's harsher
+  /// version of the job's own sweeps.
   Future<Map<String, int>> purgeExpired(SqlSession db) async => {
     'refresh_tokens': await db.execute(
       "DELETE FROM $s.refresh_tokens WHERE expires_at < now() - interval '1 day' "
@@ -170,6 +175,14 @@ final class AdminStore {
     'phone_challenges': await db.execute(
       "DELETE FROM $s.phone_challenges WHERE expires_at < now() - interval '1 day'",
     ),
+    ...await purgeExpiredCodes(db),
+  };
+
+  /// Invite and recovery-code rows that can never be used again. Both are
+  /// hashed, so this is table bloat rather than a secret left behind: an
+  /// invite minted by `POST /v1/auth/invites/self` (7-day life) used to stay
+  /// for ever unless an operator pressed purge.
+  Future<Map<String, int>> purgeExpiredCodes(SqlSession db) async => {
     'invites': await db.execute(
       "DELETE FROM $s.invites WHERE redeemed_at IS NULL AND expires_at < now() - interval '30 days'",
     ),
