@@ -1085,6 +1085,49 @@ update to be protected.
   Left open: a `session_reset` duty op that gives up is still not re-derived —
   narrower than it looks, since the next undecryptable envelope from that sender
   asks again — and the sender still cannot answer for an action (AUD-12i-1).
+- S4 (AUD-12e-1) — `GroupsService.create` wrapped the POST in `on Object`, which
+  treats a refusal and a silence alike and forgets the group key for both. A
+  silence is not an answer: the server may have committed the group this device
+  named, and this device held the only copy of its first key — the members had
+  not been sent it and no other device can seal the state — so the group
+  existed, nameless, unrenameable and unrecoverable, and the user's retry made a
+  second one. `GroupsService._postCreate` splits them: an `ApiException` still
+  forgets the key (no group, no use for it); anything else reads the group back
+  by the id chosen and, if the server has it, the call finishes as though the
+  answer had arrived — the roster is applied and the follow-up key share runs,
+  which is the half that left the members staring at an empty title. Only the
+  server's `not_found` justifies the forget; if the read-back itself fails the
+  key stays where a group that exists can still use it, and the caller gets the
+  create's own error and trace (`Error.throwWithStackTrace`).
+  Two parts of the sketch deliberately not done. "Treat a retry that meets
+  `alreadyExists` the same way": the id is minted inside `create`, so an engine
+  retry never reuses it and the duplicate the finding describes comes from the
+  *user* retrying the button — which the read-back removes by making the first
+  call succeed. "Give `rekey` an explicit empty-state path (mint a key when the
+  blob will not open and the title is empty)": refused, because those three
+  facts also describe a device that simply never received the key (AUD-12e-3),
+  and minting there seals an *empty* state over a name other members can still
+  read — a data-destroying move made on a local guess. Recovering a genuinely
+  lost key needs the opposite direction (ask a member for the epoch key), which
+  is a new pairwise message and so not a "no wire change" step. MODULE.md's
+  "Known limits" records the one window this fix cannot close: a request still
+  in flight when the read-back answers `not_found` forgets a key that the
+  committed group then needs.
+  Tests: `groups_test.dart` "a create whose answer is lost still returns the
+  group, and the key reaches the members" (the fake commits and the answer is
+  lost: no throw, the owner reads the name, exactly one group on the server, and
+  Bob receives the key) and "a create that never reached the server reports the
+  failure and keeps nothing" (nothing was committed: the call rethrows the
+  network failure, no local rows, and the setting that held the key is gone).
+  Both bite — the old blanket catch makes the first throw and the second never
+  ask, and dropping only the forget leaves the key of a group that does not
+  exist. The second compares that setting as a boolean, because
+  `expect(value, isNull)` prints the value on failure and the value is a group
+  master key.
+  Gate: engine suite **321 green**, `dart analyze lib test` clean, and
+  `server/test/client/engine/groups_test.dart` green against Postgres. No schema
+  and no wire change (the read-back is the existing `GET /v1/groups/{id}`), so no
+  APK is needed for this step.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

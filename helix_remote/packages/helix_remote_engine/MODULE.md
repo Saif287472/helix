@@ -678,6 +678,16 @@ the author only; a group message is `delivered` / `read` / `viewed` when
 **every** member that was in the group when it was sent has reported; groups
 above `GroupLimits.receiptsMaxMembers` (64) send none.
 
+**Creating a group** chooses the id and the first key on the device, seals the
+state under it and stores the key, and only then calls `POST /v1/groups`. The
+two kinds of failure are not alike: a refusal is an answer (no group, so the
+key is forgotten), while silence is not. A create that committed but whose
+answer was lost leaves this device holding the only copy of the key — the
+members were never sent it and no other device can seal the state — so the
+group is read back by that id and, if the server has it, the call finishes as
+though the answer had arrived and the share still runs (AUD-12e-1). Only the
+server's "no such group" justifies forgetting the key.
+
 **Group master key (CRYPTO_V2.md §9).** Whoever adds a member sends them a
 `group_key` (pairwise); the creator sends it to the first members; for a link
 join, where the joiner added themselves, the first admin by account id does.
@@ -706,7 +716,12 @@ online after a leave, nobody rotates the key (a rotation that fails or gives up
 is asked again by housekeeping; `GroupsService.rotateKey` still does it by
 hand). A device that has no key from a member can read that member's
 messages only after the member's next send or a repair. Bans made on other
-devices are not known.
+devices are not known. A create the read-back cannot see is still a dead end:
+if the request is in flight when the read-back answers "no such group", the
+key is forgotten and the create then commits, leaving a group that exists and
+is nameless for everyone (AUD-12e-1 narrows this to that window; closing it
+needs the server to be able to hand the state back to a member that can read
+it).
 
 ## Chat screen reads (Phase A2a)
 

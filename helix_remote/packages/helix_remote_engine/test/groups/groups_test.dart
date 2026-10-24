@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' hide GroupRole;
 import 'package:helix_remote_engine/helix_remote_engine.dart';
@@ -121,6 +122,62 @@ void main() {
         ];
         expect(notices.single, contains('group_created'));
       }
+    });
+
+    test('a create whose answer is lost still returns the group, and the key '
+        'reaches the members', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register('bob', phone: '+8801711000002');
+      // The server commits the group and the answer never arrives.
+      peers.server.loseResponseNext(Routes.createGroup);
+      final created = await alice.engine.groups.create(
+        name: 'Kept',
+        members: [bob.account],
+      );
+      // AUD-12e-1: this used to forget the only copy of the group key and
+      // throw. The call reads the group back by the id it chose and finishes,
+      // so the roster is stored, the name opens, and the follow-up share that
+      // the members are waiting for still runs.
+      expect(created.rejected, isEmpty);
+      final row = (await alice.db.groupsDao.byId(created.groupId))!;
+      expect((row.title, row.role, row.epoch), ('Kept', 'owner', 0));
+      // One group in all, under the id this device chose: a lost answer must
+      // not push the user into making a second one.
+      expect(server.groups.keys, [created.groupId]);
+      await alice.engine.drainOutbox();
+      await bob.sync();
+      expect((await bob.db.groupsDao.byId(created.groupId))!.title, 'Kept');
+    });
+
+    test('a create that never reached the server reports the failure and '
+        'keeps nothing', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register('bob', phone: '+8801711000002');
+      // The request is lost on the way in: nothing was committed.
+      peers.server.dropNext(Routes.createGroup);
+      await expectLater(
+        alice.engine.groups.create(name: 'Gone', members: [bob.account]),
+        throwsA(isA<NetworkException>()),
+      );
+      expect(await alice.db.groupsDao.all(), isEmpty);
+      expect(server.groups, isEmpty);
+      // The read-back asked for the id, and "no such group" is the one answer
+      // that means the key is worthless: it goes with the group that is not
+      // there.
+      final asked = peers.server.calls
+          .where((c) => c.startsWith('GET /v1/groups/'))
+          .toList();
+      expect(asked, hasLength(1));
+      final groupId = asked.single.split('/').last;
+      final stored = await alice.db.settingsDao.get(
+        Setting<String?>('group.keys.$groupId', null),
+      );
+      // Compared as a boolean, so that a failure cannot print key material.
+      expect(
+        stored == null,
+        isTrue,
+        reason: 'the key went with the group that is not there',
+      );
     });
 
     test('a member without the key sees the group, then its name once the '

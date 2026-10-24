@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart';
@@ -266,20 +267,7 @@ final class GroupsService {
     );
     await _keyring.put(groupId, 0, key);
     final wanted = members.where((m) => m != self).toSet().toList();
-    final Group created;
-    try {
-      created = await _ctx.api.groups.create(
-        CreateGroupRequest(
-          groupId: groupId,
-          encryptedState: sealed,
-          members: wanted,
-          settings: settings,
-        ),
-      );
-    } on Object {
-      await _keyring.forget(groupId);
-      rethrow;
-    }
+    final created = await _postCreate(groupId, sealed, wanted, settings);
     await _roster.apply(created);
     final inGroup = {for (final m in created.members) m.account};
     // Everyone in the group (and this account's other devices) needs the key
@@ -594,6 +582,66 @@ final class GroupsService {
   }
 
   // ------------------------------------------------------------ internals
+
+  /// The create call, with the two kinds of failure told apart (AUD-12e-1). A
+  /// refusal is an answer: there is no group, and a key for one is worth
+  /// forgetting. Silence is not. The server may have committed the group this
+  /// device named, and this holds the only copy of its first key - the members
+  /// were never sent it and no other device can seal the state - so dropping it
+  /// here would leave a group that exists and is nameless for everyone for
+  /// good. On silence the question is the group by that id, and one that is
+  /// there finishes the call as if the answer had arrived.
+  Future<Group> _postCreate(
+    String groupId,
+    Uint8List sealed,
+    List<String> wanted,
+    GroupSettings settings,
+  ) async {
+    final Group answer;
+    try {
+      answer = await _ctx.api.groups.create(
+        CreateGroupRequest(
+          groupId: groupId,
+          encryptedState: sealed,
+          members: wanted,
+          settings: settings,
+        ),
+      );
+    } on ApiException {
+      await _keyring.forget(groupId);
+      rethrow;
+    } on Object catch (error, stack) {
+      final Group? committed;
+      try {
+        committed = await _readBackCreate(groupId);
+      } on Object {
+        // Still no answer: keep the key and report the call's own failure.
+        Error.throwWithStackTrace(error, stack);
+      }
+      if (committed == null) {
+        // "No such group" is the one answer that means nothing was committed,
+        // so the key goes with it.
+        await _keyring.forget(groupId);
+        Error.throwWithStackTrace(error, stack);
+      }
+      return committed;
+    }
+    return answer;
+  }
+
+  /// Whether a create whose answer never arrived did commit: the group read
+  /// back by the id this device chose. Null is the server's "no such group",
+  /// the only answer that means nothing happened; any other failure (still
+  /// offline, a refusal) reaches the caller, because an unknown outcome must
+  /// not delete the key a committed group needs.
+  Future<Group?> _readBackCreate(String groupId) async {
+    try {
+      return await _ctx.api.groups.get(groupId);
+    } on ApiException catch (e) {
+      if (e.code == ErrorCode.notFound) return null;
+      rethrow;
+    }
+  }
 
   Future<void> _afterRemoval(String groupId, String account) async {
     final update = await _roster.refresh(groupId);
