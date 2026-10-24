@@ -89,6 +89,27 @@ abstract interface class MessagingApi {
     required int largestPayload,
   });
 
+  /// When a send of this id by [senderAccount]/[senderDevice] was accepted,
+  /// its `accepted_at`; null when it was not. `messaging.sends` is the record,
+  /// and a module that fans out on its own (groups) uses this to answer a
+  /// retry before it spends anything on it.
+  Future<DateTime?> acceptedAt(
+    String id, {
+    required String senderAccount,
+    required String senderDevice,
+  });
+
+  /// Records a send of [id] by [senderAccount]/[senderDevice] inside [tx] and
+  /// returns when it was accepted; null when the same id is recorded already,
+  /// and the caller must deliver nothing. Recording inside the transaction
+  /// that stores the fan-out means a send that rolls back frees its id.
+  Future<DateTime?> recordSend(
+    Tx tx,
+    String id, {
+    required String senderAccount,
+    required String senderDevice,
+  });
+
   /// Delivers to devices online now, without storing. Returns the devices
   /// it reached. Each one parks its own envelope under the delivery ref
   /// ([Delivery.id], generated when null) until [takeEphemeral] reads it.

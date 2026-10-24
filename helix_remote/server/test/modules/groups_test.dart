@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/groups/module.dart';
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -148,6 +151,137 @@ void main() {
       );
       expect(bobs.missing, [bob.id]);
     });
+
+    test('the same group message id sent twice stores it once', () async {
+      final g = await create([bob.accountId, carol.accountId]);
+      final digest = membersDigest({
+        alice.accountId: <String>[],
+        bob.accountId: [bob.id],
+        carol.accountId: [carol.id],
+      });
+      final id = Uuid.v7();
+      Future<TestResponse> send() => h.api.call(
+        Routes.sendGroupMessage,
+        params: {'group_id': g.groupId},
+        bearer: alice.bearer,
+        body: GroupMessageRequest(
+          id: id,
+          payload: bytes(200, 5),
+          devicesDigest: digest,
+        ).toJson(),
+      );
+      expect((await send()).status, 200);
+      // A retry whose answer was lost: no Idempotency-Key, just the id.
+      final retry = await send();
+      expect(retry.status, 200, reason: retry.body);
+      expect(
+        SendMessageResponse.fromJson(retry.json).replayed,
+        isTrue,
+        reason: 'a group send is idempotent by message id, like a direct one',
+      );
+      for (final d in [bob, carol]) {
+        expect(
+          (await mailbox(h, d)).envelopes.where((e) => e.id == id),
+          hasLength(1),
+          reason: '${d.id} holds one copy of the retried message',
+        );
+      }
+    });
+
+    test('a member list longer than the group can hold is refused', () async {
+      final g = await create([bob.accountId]);
+      final tooMany = await h.api.call(
+        Routes.addGroupMembers,
+        params: {'group_id': g.groupId},
+        bearer: alice.bearer,
+        body: AddMembersRequest(
+          accounts: [for (var i = 0; i <= Group.maxMembers; i++) Uuid.v7()],
+        ).toJson(),
+      );
+      expect(tooMany.errorCode, 'invalid_field');
+      expect(
+        tooMany.json.object('error').object('details').string('field'),
+        'accounts',
+        reason: 'refused before any id is resolved under the group lock',
+      );
+    });
+
+    test(
+      'a member removed while a send is in flight receives nothing',
+      () async {
+        final g = await create([bob.accountId, carol.accountId]);
+        final digest = membersDigest({
+          alice.accountId: <String>[],
+          bob.accountId: [bob.id],
+          carol.accountId: [carol.id],
+        });
+        Future<TestResponse> send(String id) => h.api.call(
+          Routes.sendGroupMessage,
+          params: {'group_id': g.groupId},
+          bearer: alice.bearer,
+          body: GroupMessageRequest(
+            id: id,
+            payload: bytes(200, 5),
+            devicesDigest: digest,
+          ).toJson(),
+        );
+        // One send first, so the group's rate bucket exists: it is what the
+        // gate below locks.
+        expect((await send(Uuid.v7())).status, 200);
+
+        final parked = Completer<void>();
+        final release = Completer<void>();
+        unawaited(
+          h.env.platform.db.tx((tx) async {
+            // A send stops on this bucket after reading the roster and
+            // before storing anything, which is the window the finding is
+            // about: hold it, change the roster inside it, then let go.
+            final row = await tx.queryOne(
+              'SELECT key FROM ${h.env.platform.schemas.platform}.rate_buckets '
+              'WHERE key = @k:text FOR UPDATE',
+              {'k': '${GroupsModule.fanOutPerGroup.name}:${g.groupId}'},
+            );
+            if (row == null) return;
+            parked.complete();
+            await release.future;
+          }),
+        );
+        await parked.future.timeout(const Duration(seconds: 5));
+
+        final id = Uuid.v7();
+        final inFlight = send(id);
+        expect(
+          await Future.any([
+            inFlight.then((_) => false),
+            Future.delayed(const Duration(milliseconds: 400), () => true),
+          ]),
+          isTrue,
+          reason: 'the send is parked on the locked budget',
+        );
+        final removed = await h.api.call(
+          Routes.removeGroupMember,
+          params: {'group_id': g.groupId, 'account': carol.accountId},
+          bearer: alice.bearer,
+        );
+        expect(removed.status, 200, reason: removed.body);
+        release.complete();
+
+        final answer = await inFlight;
+        expect(answer.status, 200, reason: 'the sender is still a member');
+        final seen = Future.wait([mailbox(h, bob), mailbox(h, carol)]);
+        final boxes = await seen;
+        expect(
+          boxes[0].envelopes.where((e) => e.id == id),
+          hasLength(1),
+          reason: 'the members left in the group get it',
+        );
+        expect(
+          boxes[1].envelopes.where((e) => e.id == id),
+          isEmpty,
+          reason: 'the removal committed before the message was stored',
+        );
+      },
+    );
 
     test(
       'roles: members cannot administer; owners transfer ownership',

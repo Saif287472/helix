@@ -41,7 +41,11 @@ deliver through it.
 - **Idempotency:** `sends` records each request id for 7 days, per
   (sender account, sender device, id) since migration 3, so another server
   reusing an id cannot suppress someone else's message. A retry answers
-  `replayed: true` and stores nothing.
+  `replayed: true` and stores nothing. A module that fans out on its own
+  (groups) shares the same record through `MessagingApi.acceptedAt` (ask
+  before spending anything on a retry) and `MessagingApi.recordSend` (take
+  the id inside its own delivery transaction, so a rolled-back send frees
+  it) rather than adding a table of its own.
 
 ## Sending (`POST /v1/messages`)
 

@@ -630,6 +630,17 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     final id = _uuid(params, 'group_id');
     final me = actor.account;
     final req = _decode(body, AddMembersRequest.fromJson);
+    // Each id is looked up under the group's row lock, so a list longer than
+    // the group can hold is only a way to hold that lock: refuse it before
+    // the lock, not after resolving it (AUD-4b-5). No wire change - the
+    // server just refuses an unreasonable list.
+    if (req.accounts.length > Group.maxMembers) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        message: 'too many accounts in one request',
+        details: {'field': 'accounts'},
+      );
+    }
     final response = await context.db.tx((tx) async {
       final g = await _groupOr404(tx, id, forUpdate: true);
       final role = await _requireMember(tx, id, me);
@@ -1086,6 +1097,23 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     if (!_allowed(_store.settings(g).sendMessages, role)) {
       throw const ApiError(ErrorCode.forbidden);
     }
+    // A retry of a message this device already sent is answered from the
+    // record before the roster is read, the group budget is touched or the
+    // sender is charged: group sends are idempotent by message id, like
+    // direct sends (AUD-4b-4). Live-only sends store nothing, so they have
+    // no record to replay.
+    if (!req.ephemeral) {
+      final previous = await messaging.acceptedAt(
+        req.id,
+        senderAccount: actor.account,
+        senderDevice: senderDevice,
+      );
+      if (previous != null) {
+        return jsonResponse(
+          SendMessageResponse(acceptedAt: previous, replayed: true).toJson(),
+        );
+      }
+    }
 
     // Every member device but the sending one, by stored account.
     final roster = [
@@ -1181,8 +1209,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     }
 
     // Stored sends cost what they store: the payload once per member
-    // device, plus the distributions. Charged to the sender, then to the
-    // group (review A-02).
+    // device, plus the distributions.
     final units =
         accountOf.length * storedUnits(req.payload.length) +
         distributions.values.fold<int>(0, (n, p) => n + storedUnits(p.length));
@@ -1190,11 +1217,10 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
       req.payload.length,
       (m, p) => p.length > m ? p.length : m,
     );
-    await messaging.chargeStored(
-      actor.account,
-      units: units,
-      largestPayload: largest,
-    );
+    // The group's budget first, then the sender's (review A-02): a group
+    // that is flooded refuses the send before any of the sender's own
+    // budget is spent on it, so a refusal costs them nothing to retry
+    // (AUD-4b-3).
     final perGroup = await context.rateLimiter.hit(
       fanOutPerGroup,
       groupId,
@@ -1203,14 +1229,48 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     if (!perGroup.allowed) {
       throw ApiError(ErrorCode.rateLimited, retryAfter: perGroup.retryAfter);
     }
+    await messaging.chargeStored(
+      actor.account,
+      units: units,
+      largestPayload: largest,
+    );
 
-    await context.db.tx((tx) async {
+    final accepted = await context.db.tx((tx) async {
+      // Membership, the permission and the roster above were read outside
+      // this transaction. Take the group's row lock - the one every roster
+      // change takes - and re-read them here, so a member removed in that
+      // window neither sends this message nor receives it (AUD-4b-6). A
+      // member added in it is not in the sender's digest, so they get the
+      // message with their next `device_list_stale` retry.
+      final fresh = await _groupOr404(tx, groupId, forUpdate: true);
+      final myRole = await _requireMember(tx, groupId, actor.account);
+      if (!_allowed(_store.settings(fresh).sendMessages, myRole)) {
+        throw const ApiError(ErrorCode.forbidden);
+      }
+      final at = await messaging.recordSend(
+        tx,
+        req.id,
+        senderAccount: actor.account,
+        senderDevice: senderDevice,
+      );
+      // A concurrent retry of the same id: one of them stores it.
+      if (at == null) return null;
+      final members = {
+        for (final m in await _store.members(tx, groupId)) m.account,
+      };
+      bool stillMember(String device) => members.contains(accountOf[device]);
       // Distributions first, so each device has the key before the message.
       await messaging.deliver(tx, {
         for (final d in localDevices)
-          if (distributions[d] != null) d: distributions[d],
+          if (distributions[d] != null && stillMember(d)) d: distributions[d],
       }, distribution);
-      await messaging.deliver(tx, fanOut, message);
+      await messaging.deliver(tx, {
+        for (final d in localDevices)
+          if (stillMember(d)) d: req.payload,
+      }, message);
+      // Remote members are the other server's roster to police: it checks
+      // the sender against the snapshot the home sent and delivers to its
+      // own members (`_receiveMessage`).
       for (final entry in remoteMessages.entries) {
         await context.outbox.enqueue(
           tx,
@@ -1224,10 +1284,22 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
           dedupeKey: 'gfan:${entry.key}:${req.id}',
         );
       }
+      return at;
     });
-    return jsonResponse(
-      SendMessageResponse(acceptedAt: context.clock.now()).toJson(),
-    );
+    if (accepted == null) {
+      final at = await messaging.acceptedAt(
+        req.id,
+        senderAccount: actor.account,
+        senderDevice: senderDevice,
+      );
+      return jsonResponse(
+        SendMessageResponse(
+          acceptedAt: at ?? context.clock.now(),
+          replayed: true,
+        ).toJson(),
+      );
+    }
+    return jsonResponse(SendMessageResponse(acceptedAt: accepted).toJson());
   }
 
   Future<void> _accountDeleted(Tx tx, String accountId) async {

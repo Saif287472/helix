@@ -126,7 +126,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `DELETE /v1/groups/{group_id}` | — → 204 | Owner only. `roster_change`/`deleted` to members. |
 | `PUT /v1/groups/{group_id}/state` | `SetGroupStateRequest` → `GroupVersionResponse` | `edit_info` permission; optimistic version. |
 | `PUT /v1/groups/{group_id}/settings` | `GroupSettings` → 204 | Admins. |
-| `POST /v1/groups/{group_id}/members` | `AddMembersRequest` → `AddMembersResponse` | `add_members` permission + each target's `group_add` audience. |
+| `POST /v1/groups/{group_id}/members` | `AddMembersRequest` → `AddMembersResponse` | `add_members` permission + each target's `group_add` audience. `invalid_field` (`accounts`) for a list longer than the group can hold (1,024). |
 | `DELETE /v1/groups/{group_id}/members/{account}` | — → `GroupVersionResponse` | Self = leave; otherwise admins. Bumps the epoch. |
 | `PUT /v1/groups/{group_id}/members/{account}/role` | `SetRoleRequest` → 204 | Admins set admin/member; only the owner sets owner (transfer). |
 | `PUT /v1/groups/{group_id}/bans/{account}` | — → 204 | Admins; removes and blocks rejoin. |
@@ -138,7 +138,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `GET /v1/groups/{group_id}/invite-links` | — → `InviteLinkList` | Admins. The live links, newest first: id, approval mode, who made it and when, expiry; never the token. |
 | `GET /v1/groups/{group_id}/join-requests` | — → `JoinRequestList` | Admins. |
 | `POST /v1/groups/{group_id}/join-requests/{request_id}` | `ResolveJoinRequest` → 204 | Admins. |
-| `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. Rate-limited per device (200 burst, 5/s, ephemeral sends included). A stored send costs the payload's units ([`POST /v1/messages`](#messaging)) once per member device, plus the distributions, charged to the sender's stored-envelope budget and to the group's own (200,000 burst, 2,000/s); `rate_limited` when either is spent. Ephemeral sends are not charged. |
+| `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. Rate-limited per device (200 burst, 5/s, ephemeral sends included). A stored send costs the payload's units ([`POST /v1/messages`](#messaging)) once per member device, plus the distributions, charged first to the group's own budget (200,000 burst, 2,000/s) and then to the sender's; `rate_limited` when either is spent, so a refused send costs the sender nothing. Ephemeral sends are not charged. A stored send is idempotent by `id` as well as by `Idempotency-Key`: a retry answers the original `accepted_at` with `replayed: true`. Membership and the roster are re-read under the group's row lock before storing, so a member removed while a send is in flight receives nothing. |
 
 Every roster or settings change emits a `roster_change` envelope to every
 member device (and to removed members, so they know).

@@ -315,6 +315,60 @@ void main() {
         },
       );
 
+      test(
+        'a group send reaches the group budget before the sender pays',
+        () async {
+          final g = await create();
+          const budget = MessagingModule.storedPerAccount;
+          // One cheap send first: it creates both buckets, and its group
+          // budget hit is the stamp the parked send's is compared to.
+          expect((await groupSend(g)).status, 200);
+          Future<DateTime>
+          groupBudgetHit() async => (await h.env.platform.db.queryOne(
+            'SELECT updated_at FROM ${h.env.platform.schemas.platform}.rate_buckets '
+            'WHERE key = @k:text',
+            {'k': '${GroupsModule.fanOutPerGroup.name}:$g'},
+          ))!.time('updated_at');
+          final before = await groupBudgetHit();
+
+          final gate = Completer<void>();
+          final release = Completer<void>();
+          unawaited(
+            h.env.platform.db.tx((tx) async {
+              // Hold the sender's stored-budget bucket so the send stops at
+              // its charge - the statement after the group's.
+              final row = await tx.queryOne(
+                'SELECT key FROM ${h.env.platform.schemas.platform}.rate_buckets '
+                'WHERE key = @k:text FOR UPDATE',
+                {'k': '${budget.name}:account:${alice.accountId}'},
+              );
+              if (row == null) return;
+              if (!gate.isCompleted) gate.complete();
+              await release.future;
+            }),
+          );
+          await gate.future.timeout(const Duration(seconds: 5));
+
+          final inFlight = groupSend(g, size: large, distribute: true);
+          expect(
+            await Future.any([
+              inFlight.then((_) => false),
+              Future.delayed(const Duration(milliseconds: 300), () => true),
+            ]),
+            isTrue,
+            reason: 'the send is stopped at the sender\'s charge',
+          );
+          // The group's budget was drawn on while the sender had not been
+          // charged yet, so a send the group refuses never costs the sender
+          // anything to retry (AUD-4b-3).
+          await eventually(() async {
+            expect((await groupBudgetHit()).isAfter(before), isTrue);
+          }, timeout: const Duration(seconds: 5));
+          release.complete();
+          expect((await inFlight).status, 200);
+        },
+      );
+
       test('a direct send draws on the same per-account budget', () async {
         // Read from the bucket: a refusal of a 16-unit send is too quick to
         // observe reliably (it refills in 64 ms).

@@ -18,7 +18,10 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
 - **Adding people** honours each target's `group_add` audience and blocks
   (`PeopleApi.mayAddToGroup`). People who don't allow it are listed in
   `rejected` as `privacy`; invite them with a link instead.
-  1,024 members at most.
+  1,024 members at most, and a request listing more ids than the group can
+  hold is refused (`invalid_field`, field `accounts`) before the group row
+  lock is taken - each id is resolved under that lock, so a long list is
+  otherwise a way to hold it.
 - **Removal, leaving and bans** bump the `epoch` (members rotate their
   sender keys and the group master key). When the owner leaves, the
   oldest admin (or else the oldest member) becomes owner. An empty group
@@ -55,19 +58,33 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
   - `groups.send`: 200 at once, 5 per second per device, checked before the
     body is read. Ephemeral sends (typing) count.
   - A stored send costs `storedUnits(payload)` per member device plus the
-    distributions. It is charged to the sender's stored-envelope budget,
-    which direct sends share (`MessagingApi.chargeStored`, 50,000 units,
-    250 per second), then to the group's own budget (`groups.fan_out`,
-    200,000 units, 2,000 per second, keyed by group id), so many accounts
-    cannot flood one group together either. A short text to 2,000 devices
-    costs 2,000 units. Over either, `rate_limited` with `Retry-After`.
-    Ephemeral sends are not charged.
+    distributions. It is charged to the group's own budget first
+    (`groups.fan_out`, 200,000 units, 2,000 per second, keyed by group id),
+    so many accounts cannot flood one group together and a group that is
+    already flooded refuses the send before any of the sender's own budget
+    is spent on it (a refusal costs them nothing to retry); then to the
+    sender's stored-envelope budget, which direct sends share
+    (`MessagingApi.chargeStored`, 50,000 units, 250 per second). A short
+    text to 2,000 devices costs 2,000 units. Over either, `rate_limited`
+    with `Retry-After`. Ephemeral sends are not charged.
   - A payload over 16 KiB while the server is over its storage budget:
     `quota_exceeded`.
   - A send proxied to another home server is charged there, and the
     local delivery to this server's members after it is not charged again
     (federation is off on Helix Global).
-- **Retries:** use `Idempotency-Key`.
+- **Retries:** use `Idempotency-Key`. A stored group message is also
+  idempotent by its own `id`: `messaging.sends` records it inside the
+  transaction that stores the fan-out, so a retry answers the original
+  `accepted_at` with `replayed` before the roster is read or any budget is
+  touched, and a rolled-back send frees its id. Live-only sends store
+  nothing and so have no record to replay.
+- **Roster races:** membership, the `send_messages` permission and the
+  member list are re-read inside the delivery transaction under the
+  group's row lock (the one every roster change takes), so a member
+  removed in that window neither sends the message nor receives it. A
+  member added in it is not in the sender's digest, so they get the
+  message on their next `device_list_stale` retry. Remote members are
+  policed by their own server against its snapshot.
 
 Every roster or settings change sends a `roster_change` envelope to every
 member device; removed members are told too.

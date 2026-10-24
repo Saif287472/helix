@@ -683,6 +683,31 @@ final class _MessagingFacade implements MessagingApi {
   }
 
   @override
+  Future<DateTime?> acceptedAt(
+    String id, {
+    required String senderAccount,
+    required String senderDevice,
+  }) => _store.acceptedAt(
+    _m.context.db,
+    id,
+    senderAccount: senderAccount,
+    senderDevice: senderDevice,
+  );
+
+  @override
+  Future<DateTime?> recordSend(
+    Tx tx,
+    String id, {
+    required String senderAccount,
+    required String senderDevice,
+  }) => _store.recordSend(
+    tx,
+    id,
+    senderAccount: senderAccount,
+    senderDevice: senderDevice,
+  );
+
+  @override
   Future<Set<String>> deliverEphemeral(
     Map<String, Uint8List?> payloads,
     Delivery delivery,
