@@ -228,24 +228,43 @@ final class MailboxStore {
     return deleted;
   }
 
-  /// Deletes expired envelopes (bounded batches) and fixes pending counts.
+  /// Deletes up to [batch] expired envelopes and takes exactly that many off
+  /// each device's `pending`, in one statement, and returns how many went.
+  ///
+  /// Two things used to be wrong here. The delete and the per-device updates
+  /// were separate autocommit statements, so a node killed in between left
+  /// `pending` above the rows actually stored - and the next send to that
+  /// device computed `excess = pending - quota` and had [trim] delete that many
+  /// of its oldest *undelivered* envelopes: mail lost because a sweep was
+  /// interrupted (AUD-3-2). And the rows were chosen by `ctid`, which is unique
+  /// only inside a partition, so a batch could also delete live rows of the
+  /// same `(block, offset)` in the other fifteen.
+  ///
+  /// One statement cannot be half-applied, and the batch is now picked by the
+  /// primary key, so what goes is exactly what was chosen.
   Future<int> purgeExpired(SqlSession db, {int batch = 5000}) async {
-    final rows = await db.query(
-      'WITH gone AS (DELETE FROM $s.mailbox WHERE ctid IN ('
-      '  SELECT ctid FROM $s.mailbox WHERE expires_at < now() LIMIT @n:int4'
-      ') RETURNING device_id) '
-      'SELECT device_id, count(*) AS n FROM gone GROUP BY device_id',
+    final r = await db.queryOne(
+      '''WITH picked AS (
+         SELECT device_id, seq FROM $s.mailbox
+         WHERE expires_at < now() LIMIT @n:int4
+       ), gone AS (
+         DELETE FROM $s.mailbox m USING picked p
+         WHERE m.device_id = p.device_id AND m.seq = p.seq
+         RETURNING m.device_id
+       ), by_device AS (
+         SELECT device_id, count(*)::int AS n FROM gone GROUP BY device_id
+       ), uncounted AS (
+         UPDATE $s.device_seq d SET pending = greatest(0, d.pending - g.n)
+         FROM by_device g WHERE d.device_id = g.device_id
+         RETURNING 1
+       )
+       -- Both counts are read: the second is what makes the update part of
+       -- this statement rather than a CTE whose result nothing asks for.
+       SELECT (SELECT count(*)::int FROM gone) AS deleted,
+              (SELECT count(*)::int FROM uncounted) AS uncounted''',
       {'n': batch},
     );
-    var total = 0;
-    for (final r in rows) {
-      total += r.integer('n');
-      await db.execute(
-        'UPDATE $s.device_seq SET pending = greatest(0, pending - @n:int4) WHERE device_id = @d:uuid',
-        {'d': r.string('device_id'), 'n': r.integer('n')},
-      );
-    }
-    return total;
+    return r?.integer('deleted') ?? 0;
   }
 
   Future<void> purgeDevice(SqlSession db, String deviceId) async {

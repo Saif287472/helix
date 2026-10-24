@@ -8,8 +8,13 @@ deliver through it.
 
 - **One row per recipient device** in `mailbox`, hash-partitioned by
   device (16 partitions). It is deleted when the device acks
-  (cumulative). Undelivered rows expire after 30 days (`messaging.expire`,
-  every 10 minutes).
+  (cumulative). Undelivered rows expire after 30 days: the periodic
+  `messaging.expire` (every 10 minutes, also purging `sends`) queues one
+  bounded batch, and a batch that came back full queues the next, so a
+  backlog - 30 days of retention after an outage - drains over seconds
+  instead of in one unbounded loop on the request pool (AUD-3-5). The batch
+  picks rows by primary key, not by `ctid`, which is only unique inside one
+  partition.
 - **Restored database** (review batch 9): `device_seq.last_seq` is the
   device's head, the highest `seq` ever given (`MailboxStore.head`). A
   cursor above it (`MessagingApi.resume`, used by `GET /v1/mailbox` and the
@@ -21,7 +26,11 @@ deliver through it.
   sends cannot deadlock. Concurrent sends from any node never share a
   number. Gaps are allowed and numbers are never reused.
 - **Quota: the newest 10,000 per device.** `device_seq.pending` counts
-  undelivered rows. A delivery that takes a device above 10,000 deletes that
+  undelivered rows, and it is adjusted in the same statement as the delete
+  that changes it - including by the expiry sweep, which used to be two
+  statements so a node killed between them left `pending` above the rows
+  stored, and the next send then trimmed that much real undelivered mail
+  (AUD-3-2). A delivery that takes a device above 10,000 deletes that
   device's oldest rows in the same transaction (`MailboxStore.trim`, counted
   in `helix_mailbox_trimmed_total`), as expiry would. Until 2026-10-09 the
   whole send failed with `quota_exceeded` instead, so one device that never

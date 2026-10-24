@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/media/module.dart';
+import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/modules/people/module.dart';
 import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
 import 'package:http/http.dart' as http;
@@ -83,6 +84,8 @@ void main() {
     });
 
     MediaModule media() => h.server.modules.whereType<MediaModule>().single;
+    MessagingModule messaging() =>
+        h.server.modules.whereType<MessagingModule>().single;
     String objects() => '${h.env.platform.schemas.of('media')}.objects';
 
     Future<String> upload(List<int> bytes) async {
@@ -244,6 +247,129 @@ void main() {
       };
       expect(left, {open, closedRecently});
       expect(PeopleModule.reportRetention, const Duration(days: 180));
+    });
+
+    test('an expiry batch deletes exactly the rows it picked', () async {
+      // The batch used to pick rows by `ctid`, which is unique only inside one
+      // of the mailbox's sixteen partitions: `ctid IN (...)` matched the same
+      // block and offset in *every* partition, so sweeping one device's expired
+      // mail also deleted live, undelivered envelopes of other devices - and an
+      // undelivered envelope is the only copy of that message.
+      final db = h.env.platform.db;
+      final box = h.env.platform.schemas.of('messaging');
+      final doomed = Uuid.v7();
+      final neighbours = [for (var i = 0; i < 24; i++) Uuid.v7()];
+      for (final d in [doomed, ...neighbours]) {
+        await db.execute(
+          'INSERT INTO $box.mailbox (device_id, seq, id, kind, urgent, expires_at) '
+          "SELECT @d:uuid, g, gen_random_uuid(), 'message', false, "
+          "now() + interval '1 day' FROM generate_series(1, 4) g",
+          {'d': d},
+        );
+        await db.execute(
+          'INSERT INTO $box.device_seq (device_id, last_seq, pending) '
+          'VALUES (@d:uuid, 4, 4)',
+          {'d': d},
+        );
+      }
+      await db.execute(
+        "UPDATE $box.mailbox SET expires_at = now() - interval '1 minute' "
+        'WHERE device_id = @d:uuid',
+        {'d': doomed},
+      );
+      await h.env.platform.jobs.stop();
+
+      await messaging().jobs[MessagingModule.expireBatchJob]!(const {});
+
+      final stored = {
+        for (final r in await db.query(
+          'SELECT device_id, count(*)::int AS n FROM $box.mailbox '
+          'GROUP BY device_id',
+        ))
+          r.string('device_id'): r.integer('n'),
+      };
+      expect(stored.containsKey(doomed), isFalse);
+      expect(
+        stored,
+        {for (final d in neighbours) d: 4},
+        reason:
+            'a neighbour whose row shares a ctid with a deleted one keeps it',
+      );
+      // The other half of the same statement: `pending` is what is stored, so
+      // a later send cannot `trim` mail that is not there (AUD-3-2).
+      final drift = await db.query(
+        'SELECT d.device_id FROM $box.device_seq d '
+        'LEFT JOIN (SELECT device_id, count(*)::int AS n FROM $box.mailbox '
+        'GROUP BY device_id) m USING (device_id) '
+        'WHERE d.pending <> coalesce(m.n, 0)',
+      );
+      expect(drift, isEmpty);
+    });
+
+    test('a backlog drains in bounded batches that queue the rest', () async {
+      // `messaging.expire` used to delete 5,000-row batches in a tight loop
+      // until nothing was expired: after an outage that loop ran for minutes on
+      // the request pool and could outlive its own lease (AUD-3-5). One run is
+      // now one batch, and the next batch is a queued job - so the work is
+      // spread over seconds, coalesced to one waiting batch, and retried with
+      // the backoff every other job has.
+      final db = h.env.platform.db;
+      final box = h.env.platform.schemas.of('messaging');
+      final jobs = '${h.env.platform.schemas.platform}.jobs';
+      final device = Uuid.v7();
+      final backlog = MessagingModule.expireBatch + 3;
+      await db.execute(
+        'INSERT INTO $box.mailbox (device_id, seq, id, kind, urgent, expires_at) '
+        "SELECT @d:uuid, g, gen_random_uuid(), 'message', false, "
+        "now() - interval '1 minute' FROM generate_series(1, @n:int4) g",
+        {'d': device, 'n': backlog},
+      );
+      await db.execute(
+        'INSERT INTO $box.device_seq (device_id, last_seq, pending) '
+        'VALUES (@d:uuid, @n:int8, @n:int8)',
+        {'d': device, 'n': backlog},
+      );
+      await h.env.platform.jobs.stop();
+      // The node's own loops would both run a queued batch and kick another
+      // while the test is measuring.
+      await h.env.platform.periodic.stop();
+      final expire = messaging().jobs[MessagingModule.expireBatchJob]!;
+      Future<int> stored() async => (await db.queryOne(
+        'SELECT count(*)::int AS n FROM $box.mailbox WHERE device_id = @d:uuid',
+        {'d': device},
+      ))!.integer('n');
+      Future<int> pending() async => (await db.queryOne(
+        'SELECT pending FROM $box.device_seq WHERE device_id = @d:uuid',
+        {'d': device},
+      ))!.integer('pending');
+      Future<int> queued() async => (await db.queryOne(
+        "SELECT count(*)::int AS n FROM $jobs WHERE kind = @k:text "
+        "AND status = 'pending'",
+        {'k': MessagingModule.expireBatchJob},
+      ))!.integer('n');
+
+      await expire(const {});
+      expect(await stored(), 3, reason: 'a run stops at the batch');
+      expect(await pending(), 3);
+      expect(await queued(), 1, reason: 'what is left is queued, not looped');
+
+      await expire(const {});
+      expect(await stored(), 0);
+      expect(await pending(), 0);
+
+      // A run that found less than a batch does not ask for another, and the
+      // periodic kick coalesces however often it fires.
+      await db.execute("DELETE FROM $jobs WHERE kind = @k:text", {
+        'k': MessagingModule.expireBatchJob,
+      });
+      await expire(const {});
+      expect(await queued(), 0);
+      final sweep = messaging().periodic.singleWhere(
+        (j) => j.name == 'messaging.expire',
+      );
+      await sweep.run();
+      await sweep.run();
+      expect(await queued(), 1);
     });
   });
 }

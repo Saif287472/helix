@@ -61,6 +61,14 @@ final class MessagingModule extends ModuleBase
   MessageRelay? _relay;
 
   static const pushJob = 'messaging.push';
+
+  /// One bounded batch of the expiry sweep (AUD-3-5). `messaging.expire` kicks
+  /// it once per interval and a run that found a full batch asks for the next,
+  /// so a backlog drains in batches spread over seconds instead of one loop
+  /// that holds the pool. The dedupe key keeps exactly one batch waiting.
+  static const expireBatchJob = 'messaging.expire_batch';
+  static const expireBatch = 5000;
+
   static const maxRecipients = 1100;
 
   /// How many devices one bus message may name: a `NOTIFY` payload is capped
@@ -122,15 +130,37 @@ final class MessagingModule extends ModuleBase
       'USING sender_account::text;';
 
   @override
-  Map<String, JobHandler> get jobs => {pushJob: _push};
+  Map<String, JobHandler> get jobs => {
+    pushJob: _push,
+    expireBatchJob: _expireBatch,
+  };
 
   @override
   List<PeriodicJob> get periodic => [
     PeriodicJob('messaging.expire', const Duration(minutes: 10), () async {
-      while (await _store.purgeExpired(context.db) > 0) {}
       await _store.purgeSends(context.db);
+      await _scheduleExpireBatch();
     }),
   ];
+
+  Future<void> _expireBatch(Map<String, Object?> payload) async {
+    if (await _store.purgeExpired(context.db, batch: expireBatch) >=
+        expireBatch) {
+      await _scheduleExpireBatch();
+    }
+  }
+
+  /// Queue one expiry batch. A key that went dead is free again (AUD-1b-1), so
+  /// a sweep that failed eight times starts over at the next interval instead
+  /// of staying silenced.
+  Future<void> _scheduleExpireBatch() => context.db.tx(
+    (tx) => context.outbox.enqueue(
+      tx,
+      expireBatchJob,
+      const {},
+      dedupeKey: expireBatchJob,
+    ),
+  );
 
   @override
   void routes(RouteRegistry r) {

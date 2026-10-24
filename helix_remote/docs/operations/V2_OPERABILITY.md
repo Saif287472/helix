@@ -228,6 +228,7 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   | Kind | Purpose | Max attempts |
   |---|---|---|
   | `messaging.push` | Data-only push wake-up (one pending per device) | 5 |
+  | `messaging.expire_batch` | One bounded batch (5,000) of expired envelopes; a full batch queues the next, so a backlog drains without one loop holding the pool | 8 (default) |
   | `calls.push` | Call push and `call_ended` push | 3 |
   | `federation.relay` | Message relay to a peer that was down | 12 |
   | `groups.sync`, `groups.fanout`, `groups.devices`, `groups.leave` | Group federation work | 12 |
@@ -236,7 +237,9 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
 - **Periodic jobs** (each runs once per interval on one node, decided by a
   conditional update of `platform.periodic_jobs`): `platform.sweep_ephemeral`
   (1 min), `platform.sweep_rate_buckets` (10 min), `platform.sweep_idempotency`
-  (1 h), `messaging.expire` (10 min), `calls.expire` (5 min),
+  (1 h), `messaging.expire` (10 min; it purges `sends` and queues
+  `messaging.expire_batch`, which does the mailbox deleting a batch at a
+  time), `calls.expire` (5 min),
   `identity.purge_expired` (6 h), `identity.revoke_inactive` (6 h, only with
   `HELIX_DEVICE_INACTIVE_DAYS`), `media.expire` (30 min),
   `media.sweep_orphans` (7 days), `people.purge_reports` (1 day),
