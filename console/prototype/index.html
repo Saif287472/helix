@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="orbit">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#F4F6F9" />
+<title>Helix Admin Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Prototype only: the app bundles its fonts (no runtime fetch). -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" />
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/pages.css" />
+<link rel="stylesheet" href="css/console.css" />
+<link rel="stylesheet" href="css/shell.css" />
+<link rel="stylesheet" href="css/cr.css" />
+<link rel="stylesheet" href="css/viewer.css" />
+</head>
+<body>
+<script>if (new URLSearchParams(location.search).has('bare')) document.body.classList.add('bare');</script>
+<div class="viewer" id="viewer">
+  <!-- Prototype chrome: the screen index (not part of the admin design) -->
+  <aside class="v-index" id="vIndex" aria-label="Screens">
+    <div class="v-brand">
+      <div class="v-mark" aria-hidden="true"></div>
+      <div>
+        <div class="v-name">Helix Admin</div>
+        <div class="v-sub">Prototype · one theme</div>
+      </div>
+    </div>
+    <div class="v-search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="vFilter" placeholder="Find a screen" aria-label="Find a screen" /></div>
+    <nav class="v-list" id="vList"></nav>
+  </aside>
+
+  <main class="v-stage">
+    <div class="v-stage-top">
+      <button class="v-chip" id="vIndexToggle" title="Show the screen list"><i class="ph ph-list"></i> Screens</button>
+      <div class="v-current" id="vCurrent"></div>
+      <div class="v-device" id="vTheme" role="group" aria-label="Theme">
+        <button data-theme-set="orbit" title="Orbit" aria-label="Orbit theme"><i class="ph ph-sun"></i>Orbit</button>
+        <button data-theme-set="night" title="Orbit Night" aria-label="Orbit Night theme"><i class="ph ph-moon"></i>Night</button>
+      </div>
+      <div class="v-device" id="vDevice" role="group" aria-label="Device">
+        <button data-device="phone" title="Android phone (412 × 866)"><i class="ph ph-device-mobile"></i>Phone</button>
+        <button data-device="window-m" title="Windows (960 × 720)"><i class="ph ph-app-window"></i>960</button>
+        <button data-device="window-l" title="Windows, wide (1280 × 800)"><i class="ph ph-monitor"></i>1280</button>
+      </div>
+    </div>
+
+    <div class="phone-holder" id="phoneHolder"><div class="phone" id="phone">
+      <div class="phone-screen" id="phoneScreen">
+        <div class="statusbar" id="statusbar" aria-hidden="true">
+          <span class="sb-time">11:42</span>
+          <span class="sb-icons"><i class="ph-fill ph-cell-signal-full"></i><i class="ph-fill ph-wifi-high"></i><i class="ph-fill ph-battery-high"></i></span>
+        </div>
+
+        <div class="app" id="app">
+          <!-- Direction A: an instrument rail whose labels are always visible,
+               and a status strip that answers "which node, how is it, when did
+               I last look" in one line. -->
+          <nav class="rail" id="topnav" aria-label="Places">
+            <button class="mark" data-nav="overview" title="Helix Admin - open Overview" aria-label="Helix Admin: open Overview">H</button>
+            <div class="places">
+              <button class="tab" data-nav="overview" title="Overview" aria-label="Overview"><i class="ph ph-gauge" aria-hidden="true"></i><span>Overview</span></button>
+              <button class="tab" data-nav="users" title="Users and devices" aria-label="Users and devices"><i class="ph ph-users-three" aria-hidden="true"></i><span>Users</span></button>
+              <button class="tab" data-nav="invites" data-invites title="Invites" aria-label="Invites"><i class="ph ph-ticket" aria-hidden="true"></i><span>Invites</span></button>
+              <button class="tab" data-nav="ops" title="Ops and logs" aria-label="Ops and logs"><i class="ph ph-pulse" aria-hidden="true"></i><span>Ops</span></button>
+            </div>
+            <div class="foot">
+              <span class="live" id="railLive" hidden><span class="dot"></span>live</span>
+              <button class="me" id="meBtn" title="Operator menu" aria-label="Operator menu">OP</button>
+            </div>
+          </nav>
+
+          <div class="main">
+            <div class="mstrip">
+              <span class="mk" aria-hidden="true">H</span>
+              <span class="mnode" id="mNode">node</span>
+              <span class="mtime" id="mStamp">11:42:08</span>
+              <span class="mstate"><span class="tb-dot ok" id="mDot"></span><span class="sstate" id="mState">Ready</span></span>
+            </div>
+
+            <header class="strip">
+              <div class="crumb">
+                <h1 id="stripTitle">Overview</h1>
+                <span class="where" id="stripWhere"></span>
+              </div>
+              <div class="right">
+                <span class="maint" id="stripMaint" hidden><i class="ph ph-traffic-cone" aria-hidden="true"></i>Maintenance</span>
+                <span class="sep"></span>
+                <span class="state"><span class="tb-dot ok" id="tbDot" title="Server ready"></span><span id="tbServer">Helix Global</span><span class="sstate" id="tbState">Ready</span></span>
+                <span class="node" id="stripNode">node</span>
+                <span class="stamp" id="stripStamp">updated -</span>
+                <button class="btn secondary" id="stripRefresh" title="Reload this screen" aria-label="Reload this screen"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button>
+              </div>
+            </header>
+
+            <div class="stack" id="stack"></div>
+
+            <nav class="tabbar" aria-label="Places">
+              <div class="dock">
+                <button class="tab-link" data-nav="overview" title="Overview" aria-label="Overview"><i class="ph ph-gauge" aria-hidden="true"></i><span class="lbl">Overview</span></button>
+                <button class="tab-link" data-nav="users" title="Users and devices" aria-label="Users and devices"><i class="ph ph-users-three" aria-hidden="true"></i><span class="lbl">Users</span></button>
+                <button class="tab-link" data-nav="invites" data-invites title="Invites" aria-label="Invites"><i class="ph ph-ticket" aria-hidden="true"></i><span class="lbl">Invites</span></button>
+                <button class="tab-link" data-nav="ops" title="Ops and logs" aria-label="Ops and logs"><i class="ph ph-pulse" aria-hidden="true"></i><span class="lbl">Ops</span></button>
+              </div>
+            </nav>
+
+            <div class="overlay-root" id="overlayRoot"></div>
+            <div class="snackbar" id="snackbar" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="gesture-bar" aria-hidden="true"></div>
+      </div>
+    </div></div>
+  </main>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/kit.js"></script>
+<script src="js/keys.js"></script>
+<script src="js/app.js"></script>
+<script src="js/shell.js"></script>
+<script src="js/screens/overview.js"></script>
+<script src="js/screens/users.js"></script>
+<script src="js/screens/ops_reports.js"></script>
+<script src="js/screens/ops_audit.js"></script>
+<script src="js/screens/ops_logs.js"></script>
+<script src="js/screens/ops_config.js"></script>
+<script src="js/screens/invites.js"></script>
+<script src="js/screens/signin.js"></script>
+<script src="js/screens/kit.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>

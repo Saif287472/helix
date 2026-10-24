@@ -1,0 +1,990 @@
+{
+ "devices": {
+  "phone": {
+   "w": 412,
+   "h": 866,
+   "label": "Phone"
+  },
+  "window-m": {
+   "w": 960,
+   "h": 720,
+   "label": "Window 960"
+  },
+  "window-l": {
+   "w": 1280,
+   "h": 800,
+   "label": "Window 1280"
+  }
+ },
+ "interactions": {
+  "global": [
+   {
+    "gesture": "tap",
+    "on": "A place in the header (window) or the floating dock (phone)",
+    "does": "Opens that place. The frame stays where it is; the page changes."
+   },
+   {
+    "gesture": "tap",
+    "on": "Back arrow on an account page",
+    "does": "Returns to Users & Devices."
+   },
+   {
+    "gesture": "key",
+    "on": "Esc",
+    "does": "Closes a dialog first; otherwise goes back one page."
+   },
+   {
+    "gesture": "tap",
+    "on": "An account row, report card or invite card",
+    "does": "Opens it; in a wide window an account opens beside the list instead."
+   },
+   {
+    "gesture": "tap",
+    "on": "A filter chip or the search field",
+    "does": "Narrows the list in place; the count beside each chip is what it would show."
+   },
+   {
+    "gesture": "tap",
+    "on": "Refresh",
+    "does": "Asks the server again and shows the page loading while it waits."
+   },
+   {
+    "gesture": "tap",
+    "on": "Resolve, Dismiss, Suspend, Resume, Revoke, Cancel, Purge, Create",
+    "does": "Runs in place. Anything that changes a person or a session asks first."
+   },
+   {
+    "gesture": "tap",
+    "on": "Copy beside an ID or a code",
+    "does": "Copies it and says so in a toast."
+   },
+   {
+    "gesture": "auto",
+    "on": "Toasts",
+    "does": "Disappear after 3 s; errors stay 5 s and are read out."
+   },
+   {
+    "gesture": "auto",
+    "on": "The header chip",
+    "does": "Shows the server’s name and a ready dot on every signed-in page. Invites appears only on servers that register by invite."
+   },
+   {
+    "gesture": "auto",
+    "on": "Destructive dialogs",
+    "does": "Name the account or job and the effect, and keep Cancel as the default."
+   }
+  ],
+  "components": [
+   {
+    "gesture": "tap",
+    "on": "Switch row",
+    "does": "Toggles it; the whole row is the target. Saves at once and says so."
+   },
+   {
+    "gesture": "tap",
+    "on": "Password eye",
+    "does": "Shows or hides the password."
+   },
+   {
+    "gesture": "tap",
+    "on": "Try again (could not be loaded)",
+    "does": "Reloads the page; while it waits it shows the skeleton."
+   },
+   {
+    "gesture": "type",
+    "on": "Typed confirmation (DELETE, BAN)",
+    "does": "The confirming button stays disabled until the word is exact."
+   },
+   {
+    "gesture": "tap",
+    "on": "Show a code once",
+    "does": "The invite code is shown in a dialog once; after it closes only the code’s ID remains."
+   },
+   {
+    "gesture": "auto",
+    "on": "Loading lists",
+    "does": "Placeholder rows the shape of the real ones, announced as loading."
+   },
+   {
+    "gesture": "auto",
+    "on": "Destructive dialogs",
+    "does": "Keep Cancel as the default and name what will change."
+   }
+  ]
+ },
+ "screenDefs": {
+  "overview": {
+   "title": "Overview",
+   "group": "Overview",
+   "nav": "overview",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Refresh in the status strip",
+     "does": "Asks GET /v1/ops/metrics and GET /v1/admin/config again; the page shows its skeleton while it waits and the strip stamps the new time."
+    },
+    {
+     "gesture": "tap",
+     "on": "Audit trail →",
+     "does": "Opens Ops → Audit at the same list."
+    },
+    {
+     "gesture": "tap",
+     "on": "Review → / Purge →",
+     "does": "Opens the open reports, or the configuration panel where a purge is confirmed."
+    },
+    {
+     "gesture": "hover",
+     "on": "A relative time",
+     "does": "The exact timestamp, from the datetime attribute."
+    },
+    {
+     "gesture": "auto",
+     "on": "Signal strip",
+     "does": "Four counts, each with what it means; failed jobs turn amber when they are not zero."
+    },
+    {
+     "gesture": "auto",
+     "on": "Maintenance mode",
+     "does": "When it is on, the status strip carries the warning before anything else on the page."
+    },
+    {
+     "gesture": "auto",
+     "on": "A failing readiness check",
+     "does": "The database line turns red and the strip stops saying Ready."
+    },
+    {
+     "gesture": "auto",
+     "on": "A node with nothing on it",
+     "does": "Every count reads 0, the bars are replaced by one line saying the node has answered nothing yet, and the audit panel says no action has been taken."
+    },
+    {
+     "gesture": "key",
+     "on": "r / ?",
+     "does": "r checks again, the same as Refresh; ? opens the keyboard sheet. This page has no rows to move through, so it does not advertise j and k."
+    }
+   ]
+  },
+  "users": {
+   "title": "Users & Devices",
+   "group": "Users",
+   "nav": "users",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "A person in the list",
+     "does": "Opens their account beside the list in a wide window, or as a page on a phone."
+    },
+    {
+     "gesture": "type",
+     "on": "The search field",
+     "does": "Filters by Helix name, display name, phone number or the last four digits."
+    },
+    {
+     "gesture": "tap",
+     "on": "All users / Active / Suspended",
+     "does": "Narrows the list; each chip shows how many it would show."
+    },
+    {
+     "gesture": "tap",
+     "on": "Refresh",
+     "does": "Asks the server again and shows the list’s loading state while it waits."
+    },
+    {
+     "gesture": "auto",
+     "on": "Account cards",
+     "does": "Show state, phone, Helix name, device count, join date and any open reports."
+    },
+    {
+     "gesture": "auto",
+     "on": "The wide split",
+     "does": "Keeps the list while an account is open; the phone pushes the account page with a back arrow."
+    }
+   ]
+  },
+  "account": {
+   "title": "Account",
+   "group": "Users",
+   "nav": "users",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Revoke beside a device",
+     "does": "Asks first, then ends that device’s access; the other devices keep working."
+    },
+    {
+     "gesture": "tap",
+     "on": "Create code (recovery)",
+     "does": "Asks first, then shows a one-time recovery code in a dialog. It is never shown again."
+    },
+    {
+     "gesture": "tap",
+     "on": "Suspend / Resume",
+     "does": "Suspending asks for a reason and blocks sign-in, sending and receiving; resuming lifts it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Ban",
+     "does": "Asks for a reason and the typed word BAN, then ends every session and refuses sign-in."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete",
+     "does": "Asks for the typed word DELETE, then removes the account and its devices."
+    },
+    {
+     "gesture": "tap",
+     "on": "Copy account ID or Copy user ID",
+     "does": "Copies the ID and says so in a toast."
+    },
+    {
+     "gesture": "tap",
+     "on": "View beside open reports",
+     "does": "Opens User Reports & Moderation."
+    },
+    {
+     "gesture": "tap",
+     "on": "Back",
+     "does": "Returns to Users & Devices."
+    }
+   ]
+  },
+  "ops_reports": {
+   "title": "User Reports & Moderation",
+   "group": "Ops & Logs",
+   "nav": "ops",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Open / Resolved / Dismissed / All",
+     "does": "Narrows the queue; each chip shows how many reports are in that state."
+    },
+    {
+     "gesture": "tap",
+     "on": "Resolve",
+     "does": "Closes the report as resolved and writes the decision to the audit trail."
+    },
+    {
+     "gesture": "tap",
+     "on": "Dismiss",
+     "does": "Closes the report as not a platform matter and writes that to the audit trail."
+    },
+    {
+     "gesture": "tap",
+     "on": "Open account (or the account ID)",
+     "does": "Opens the reported account; on a wide window it opens its page from the list."
+    },
+    {
+     "gesture": "tap",
+     "on": "Refresh",
+     "does": "Asks the server again and shows the loading state while it waits."
+    },
+    {
+     "gesture": "auto",
+     "on": "Reports tab badge",
+     "does": "Shows how many reports are open, on every Ops screen."
+    }
+   ]
+  },
+  "ops_audit": {
+   "title": "Administrative Audit Trail",
+   "group": "Ops & Logs",
+   "nav": "ops",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "All events / Access / Moderation / System",
+     "does": "Filters by what the action touched; All events shows the full count."
+    },
+    {
+     "gesture": "tap",
+     "on": "Refresh",
+     "does": "Asks the server again; the list keeps its filter while it loads."
+    },
+    {
+     "gesture": "auto",
+     "on": "Audit rows",
+     "does": "Show the action code, a kind pill, the target’s short ID, its details and the exact time."
+    },
+    {
+     "gesture": "auto",
+     "on": "Order",
+     "does": "Newest first, as the server returns it; entries are append-only."
+    }
+   ]
+  },
+  "ops_logs": {
+   "title": "Live Server Console",
+   "group": "Ops & Logs",
+   "nav": "ops",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Pause / Resume",
+     "does": "Stops following new lines without leaving the page; the pill changes to Stream paused."
+    },
+    {
+     "gesture": "tap",
+     "on": "Reload",
+     "does": "Fetches the tail again and shows the loading state while it waits."
+    },
+    {
+     "gesture": "tap",
+     "on": "Copy",
+     "does": "Copies the visible lines as text, one per line, and says how many."
+    },
+    {
+     "gesture": "type",
+     "on": "Filter by level, event or text",
+     "does": "Narrows the lines in place; the count shows how many of the tail match."
+    },
+    {
+     "gesture": "auto",
+     "on": "The live tail",
+     "does": "Follows the newest line while streaming; pause to read without the list moving."
+    },
+    {
+     "gesture": "auto",
+     "on": "The polling note",
+     "does": "Says plainly that the console asks for new lines every few seconds rather than holding a socket."
+    }
+   ]
+  },
+  "ops_config": {
+   "title": "Configuration",
+   "group": "Ops & Logs",
+   "nav": "ops",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Rename",
+     "does": "Opens a dialog with the server name; saving updates the console bar as well."
+    },
+    {
+     "gesture": "tap",
+     "on": "Worldwide mode",
+     "does": "Switches federation on or off and shows or hides the peer domain."
+    },
+    {
+     "gesture": "tap",
+     "on": "App lock",
+     "does": "Switches the device-lock gate for this console on or off; the choice stays on this device."
+    },
+    {
+     "gesture": "tap",
+     "on": "Change",
+     "does": "Changes the admin password; every other admin session is signed out."
+    },
+    {
+     "gesture": "tap",
+     "on": "Maintenance mode",
+     "does": "Turning it on asks first; while on, a banner says new sign-ins are refused."
+    },
+    {
+     "gesture": "tap",
+     "on": "Purge",
+     "does": "Asks first, then clears dead jobs and expired rows and reports the counts."
+    },
+    {
+     "gesture": "tap",
+     "on": "A feature flag",
+     "does": "Applies to the whole server at once and says so in a toast."
+    },
+    {
+     "gesture": "tap",
+     "on": "Sign out",
+     "does": "Asks first, then closes the console session and returns to sign-in."
+    },
+    {
+     "gesture": "tap",
+     "on": "Copy beside the address or node ID",
+     "does": "Copies it and says so in a toast."
+    },
+    {
+     "gesture": "auto",
+     "on": "Saving",
+     "does": "Every switch saves immediately; there is no Save button to forget."
+    }
+   ]
+  },
+  "invites": {
+   "title": "Invites",
+   "group": "Users",
+   "nav": "invites",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Create invite",
+     "does": "Asks for nothing else, creates the invite and shows its code once in a dialog."
+    },
+    {
+     "gesture": "tap",
+     "on": "Copy in the code dialog",
+     "does": "Copies the code and says so; the code cannot be seen again after the dialog closes."
+    },
+    {
+     "gesture": "tap",
+     "on": "Cancel beside an open invite",
+     "does": "Asks first, then stops the code working and marks the invite cancelled."
+    },
+    {
+     "gesture": "auto",
+     "on": "Invite cards",
+     "does": "Show the short invite ID, state, creation, expiry, issuer and who used it — never the code."
+    },
+    {
+     "gesture": "auto",
+     "on": "The place itself",
+     "does": "Only exists on servers that register by invite; Helix Global registers by phone, so the bar hides it."
+    }
+   ]
+  },
+  "signin": {
+   "title": "Sign in",
+   "group": "Access",
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Server address",
+     "does": "The address is remembered for next time; an empty or malformed address is refused in place."
+    },
+    {
+     "gesture": "tap",
+     "on": "Continue",
+     "does": "Checks the address, then shows first-run setup when the server has no admin password, otherwise sign-in."
+    },
+    {
+     "gesture": "tap",
+     "on": "Change server",
+     "does": "Goes back to the address without losing the saved server."
+    },
+    {
+     "gesture": "tap",
+     "on": "Sign in / Set password and sign in",
+     "does": "First-run setup needs two matching passwords of at least 12 characters; then the dashboard opens."
+    },
+    {
+     "gesture": "tap",
+     "on": "Password eye",
+     "does": "Shows or hides the password."
+    },
+    {
+     "gesture": "auto",
+     "on": "Wrong password",
+     "does": "The error banner says the server refused the password and that repeated failures are rate-limited."
+    },
+    {
+     "gesture": "auto",
+     "on": "The notice under the form",
+     "does": "Says the password never leaves the device and only a derived key is sent."
+    }
+   ]
+  },
+  "lock": {
+   "title": "Locked console",
+   "group": "Access",
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Unlock",
+     "does": "Asks for this device’s screen lock (biometrics, PIN, pattern or password), then reopens the console."
+    },
+    {
+     "gesture": "auto",
+     "on": "App lock",
+     "does": "Is a device setting; it never changes the admin password or ends the server session."
+    }
+   ]
+  },
+  "kit": {
+   "title": "Component kit",
+   "group": "Reference",
+   "nav": null,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "The switch row",
+     "does": "Toggles in place; the kit has no server behind it."
+    },
+    {
+     "gesture": "tap",
+     "on": "The password eye",
+     "does": "Shows or hides the sample password."
+    }
+   ]
+  }
+ },
+ "screens": [
+  {
+   "key": "overview",
+   "group": "Overview",
+   "label": "Overview",
+   "screen": "overview",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "overview-loading",
+   "group": "Overview",
+   "label": "Overview · loading",
+   "screen": "overview",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "overview-degraded",
+   "group": "Overview",
+   "label": "Overview · not ready",
+   "screen": "overview",
+   "params": {
+    "state": "degraded"
+   },
+   "base": []
+  },
+  {
+   "key": "overview-offline",
+   "group": "Overview",
+   "label": "Overview · node unreachable",
+   "screen": "overview",
+   "params": {
+    "state": "offline"
+   },
+   "base": []
+  },
+  {
+   "key": "overview-denied",
+   "group": "Overview",
+   "label": "Overview · session ended",
+   "screen": "overview",
+   "params": {
+    "state": "denied"
+   },
+   "base": []
+  },
+  {
+   "key": "overview-maintenance",
+   "group": "Overview",
+   "label": "Overview · maintenance on",
+   "screen": "overview",
+   "params": {
+    "state": "maintenance"
+   },
+   "base": []
+  },
+  {
+   "key": "overview-quiet",
+   "group": "Overview",
+   "label": "Overview · a node with nothing on it",
+   "screen": "overview",
+   "params": {
+    "state": "quiet"
+   },
+   "base": []
+  },
+  {
+   "key": "overview-long",
+   "group": "Overview",
+   "label": "Overview · long data",
+   "screen": "overview",
+   "params": {
+    "state": "ok",
+    "text": "2x"
+   },
+   "base": []
+  },
+  {
+   "key": "users",
+   "group": "Users",
+   "label": "Users & Devices",
+   "screen": "users",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "users:1",
+   "group": "Users",
+   "label": "Users · loading",
+   "screen": "users",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "users:2",
+   "group": "Users",
+   "label": "Users · empty",
+   "screen": "users",
+   "params": {
+    "state": "empty"
+   },
+   "base": []
+  },
+  {
+   "key": "users:3",
+   "group": "Users",
+   "label": "Users · error",
+   "screen": "users",
+   "params": {
+    "state": "error"
+   },
+   "base": []
+  },
+  {
+   "key": "users:4",
+   "group": "Users",
+   "label": "Users · suspended",
+   "screen": "users",
+   "params": {
+    "filter": "suspended"
+   },
+   "base": []
+  },
+  {
+   "key": "account",
+   "group": "Users",
+   "label": "Account · active",
+   "screen": "account",
+   "params": {
+    "id": "acc_7N2K9Q"
+   },
+   "base": [
+    {
+     "screen": "users",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "key": "account:1",
+   "group": "Users",
+   "label": "Account · suspended",
+   "screen": "account",
+   "params": {
+    "id": "acc_3M8Q1D"
+   },
+   "base": [
+    {
+     "screen": "users",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "key": "account:2",
+   "group": "Users",
+   "label": "Account · no devices",
+   "screen": "account",
+   "params": {
+    "id": "acc_4K8N2M"
+   },
+   "base": [
+    {
+     "screen": "users",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "key": "ops_reports",
+   "group": "Ops & Logs",
+   "label": "Reports",
+   "screen": "ops_reports",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "ops_reports:1",
+   "group": "Ops & Logs",
+   "label": "Reports · resolved",
+   "screen": "ops_reports",
+   "params": {
+    "filter": "resolved"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_reports:2",
+   "group": "Ops & Logs",
+   "label": "Reports · loading",
+   "screen": "ops_reports",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_reports:3",
+   "group": "Ops & Logs",
+   "label": "Reports · empty",
+   "screen": "ops_reports",
+   "params": {
+    "state": "empty"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_reports:4",
+   "group": "Ops & Logs",
+   "label": "Reports · error",
+   "screen": "ops_reports",
+   "params": {
+    "state": "error"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_audit",
+   "group": "Ops & Logs",
+   "label": "Audit trail",
+   "screen": "ops_audit",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "ops_audit:1",
+   "group": "Ops & Logs",
+   "label": "Audit · access",
+   "screen": "ops_audit",
+   "params": {
+    "filter": "access"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_audit:2",
+   "group": "Ops & Logs",
+   "label": "Audit · loading",
+   "screen": "ops_audit",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_audit:3",
+   "group": "Ops & Logs",
+   "label": "Audit · empty",
+   "screen": "ops_audit",
+   "params": {
+    "state": "empty"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_audit:4",
+   "group": "Ops & Logs",
+   "label": "Audit · error",
+   "screen": "ops_audit",
+   "params": {
+    "state": "error"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_logs",
+   "group": "Ops & Logs",
+   "label": "Logs",
+   "screen": "ops_logs",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "ops_logs:1",
+   "group": "Ops & Logs",
+   "label": "Logs · paused",
+   "screen": "ops_logs",
+   "params": {
+    "paused": true
+   },
+   "base": []
+  },
+  {
+   "key": "ops_logs:2",
+   "group": "Ops & Logs",
+   "label": "Logs · warnings",
+   "screen": "ops_logs",
+   "params": {
+    "q": "warn"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_logs:3",
+   "group": "Ops & Logs",
+   "label": "Logs · loading",
+   "screen": "ops_logs",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_logs:4",
+   "group": "Ops & Logs",
+   "label": "Logs · empty",
+   "screen": "ops_logs",
+   "params": {
+    "state": "empty"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_logs:5",
+   "group": "Ops & Logs",
+   "label": "Logs · error",
+   "screen": "ops_logs",
+   "params": {
+    "state": "error"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_config",
+   "group": "Ops & Logs",
+   "label": "Configuration",
+   "screen": "ops_config",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "ops_config:1",
+   "group": "Ops & Logs",
+   "label": "Config · maintenance on",
+   "screen": "ops_config",
+   "params": {
+    "maintenance": true
+   },
+   "base": []
+  },
+  {
+   "key": "ops_config:2",
+   "group": "Ops & Logs",
+   "label": "Config · loading",
+   "screen": "ops_config",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "ops_config:3",
+   "group": "Ops & Logs",
+   "label": "Config · error",
+   "screen": "ops_config",
+   "params": {
+    "state": "error"
+   },
+   "base": []
+  },
+  {
+   "key": "invites",
+   "group": "Users",
+   "label": "Invites",
+   "screen": "invites",
+   "params": {},
+   "base": []
+  },
+  {
+   "key": "invites:1",
+   "group": "Users",
+   "label": "Invites · new code",
+   "screen": "invites",
+   "params": {
+    "code": true
+   },
+   "base": []
+  },
+  {
+   "key": "invites:2",
+   "group": "Users",
+   "label": "Invites · empty",
+   "screen": "invites",
+   "params": {
+    "state": "empty"
+   },
+   "base": []
+  },
+  {
+   "key": "invites:3",
+   "group": "Users",
+   "label": "Invites · loading",
+   "screen": "invites",
+   "params": {
+    "state": "loading"
+   },
+   "base": []
+  },
+  {
+   "key": "invites:4",
+   "group": "Users",
+   "label": "Invites · error",
+   "screen": "invites",
+   "params": {
+    "state": "error"
+   },
+   "base": []
+  },
+  {
+   "key": "signin",
+   "group": "Access",
+   "label": "Sign in · address",
+   "screen": "signin",
+   "params": {
+    "mode": "address"
+   },
+   "base": []
+  },
+  {
+   "key": "signin:1",
+   "group": "Access",
+   "label": "Sign in · password",
+   "screen": "signin",
+   "params": {
+    "mode": "password"
+   },
+   "base": []
+  },
+  {
+   "key": "signin:2",
+   "group": "Access",
+   "label": "Sign in · first-run setup",
+   "screen": "signin",
+   "params": {
+    "mode": "setup"
+   },
+   "base": []
+  },
+  {
+   "key": "signin:error",
+   "group": "Access",
+   "label": "Sign in · wrong password",
+   "screen": "signin",
+   "params": {
+    "mode": "password",
+    "error": "1"
+   },
+   "base": []
+  },
+  {
+   "key": "lock",
+   "group": "Access",
+   "label": "Locked console",
+   "screen": "lock",
+   "params": {
+    "mode": "lock"
+   },
+   "base": []
+  },
+  {
+   "key": "kit",
+   "group": "Reference",
+   "label": "Component kit",
+   "screen": "kit",
+   "params": {},
+   "base": []
+  }
+ ]
+}

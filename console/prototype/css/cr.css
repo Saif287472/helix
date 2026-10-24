@@ -1,0 +1,175 @@
+/*
+  Direction A's content frame: the instrument canvas, the signal strip and the
+  flat panels. Named cr-* so nothing collides with the screens still waiting
+  for their batch. Colours only from css/tokens.css; measures from its layout
+  block (--row-h, --gutter, --strip-h).
+*/
+
+.canvas {
+  flex: 1 1 auto; min-height: 0; overflow: auto;
+  padding: 14px var(--gutter) 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.canvas-foot {
+  flex: none; min-height: 34px; padding: 0 var(--gutter);
+  display: flex; align-items: center; gap: 14px;
+  font-size: var(--t-caption); color: var(--ink-4);
+}
+.canvas-foot .right { margin-left: auto; font-family: var(--mono); font-size: var(--t-meta); }
+
+/* ---- the signal strip: four facts, one line each, no cards of their own --- */
+.cr-signals {
+  flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.cr-signal { padding: 10px 16px 11px; border-right: 1px solid var(--line); min-width: 0; }
+.cr-signal:last-child { border-right: 0; }
+.cr-signal .k {
+  font-family: var(--mono); font-size: var(--t-meta); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cr-signal .v { display: flex; align-items: baseline; gap: 7px; margin-top: 2px; }
+.cr-signal .v b { font-family: var(--font-display); font-size: calc(var(--t-display) * .8); font-weight: 660; letter-spacing: -.035em; line-height: 1; }
+.cr-signal .v span { font-size: var(--t-caption); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-signal .v b.warn { color: var(--warning); }
+.cr-signal .v b.bad { color: var(--danger); }
+
+/* ---- the panels ---- */
+.cr-grid {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: 1.55fr 1fr;
+  grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.cr-panel {
+  min-height: 0; min-width: 0; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 12px 16px; overflow: hidden;
+}
+.cr-panel > header { flex: none; display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.cr-panel > header h2 { margin: 0; font-size: var(--t-small); font-weight: 650; letter-spacing: -.005em; }
+.cr-panel > header .aside { margin-left: auto; font-size: var(--t-caption); color: var(--ink-4); }
+.cr-panel > header a.aside { color: var(--accent-ink); text-decoration: none; font-weight: 560; }
+.cr-panel > header a.aside:hover { text-decoration: underline; }
+.cr-note { margin-top: auto; padding-top: 8px; font-size: var(--t-caption); color: var(--ink-4); line-height: 1.45; }
+
+.cr-lead { display: flex; align-items: flex-end; gap: 12px; }
+.cr-lead b { font-family: var(--font-display); font-size: calc(var(--t-display) * 1.2); font-weight: 660; letter-spacing: -.04em; line-height: .95; font-variant-numeric: var(--tnum); }
+.cr-lead span { font-size: var(--t-caption); color: var(--ink-3); padding-bottom: 3px; }
+.cr-bar { display: flex; height: 7px; margin-top: 12px; border-radius: var(--r-pill); overflow: hidden; background: var(--field); }
+.cr-bar i { display: block; height: 100%; }
+.cr-bar .ok { background: var(--success); }
+.cr-bar .client { background: var(--warning); }
+.cr-bar .server { background: var(--danger); }
+.cr-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: var(--t-caption); color: var(--ink-3); }
+.cr-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cr-legend i { width: 6px; height: 6px; border-radius: 2px; display: inline-block; }
+.cr-legend b { font-family: var(--mono); font-weight: 500; }
+.cr-legend .muted { color: var(--ink-4); margin-left: auto; }
+
+.cr-list { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.cr-row {
+  flex: 1 1 auto; min-height: var(--row-h); display: flex; align-items: center; gap: 10px;
+  border-top: 1px solid var(--line-2);
+}
+.cr-row:first-child { border-top: 0; }
+.cr-row .name { font-size: var(--t-small); font-weight: 570; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-row .sub { font-size: var(--t-meta); color: var(--ink-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-row .word { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-caption); color: var(--ink-3); white-space: nowrap; }
+.cr-row .t { width: 34px; flex: none; font-family: var(--mono); font-size: var(--t-meta); color: var(--ink-4); white-space: nowrap; }
+.cr-row .act { font-family: var(--mono); font-size: var(--t-meta); color: var(--ink-2); white-space: nowrap; }
+.cr-row .det { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-caption); color: var(--ink-4); }
+.cr-row .who { font-size: var(--t-meta); color: var(--ink-4); }
+
+.cr-need { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-2); }
+.cr-need:first-of-type { border-top: 0; padding-top: 0; }
+.cr-need b { font-family: var(--font-display); font-size: calc(var(--t-display) * .63); font-weight: 660; letter-spacing: -.03em; min-width: 26px; font-variant-numeric: var(--tnum); }
+.cr-need .what { font-size: var(--t-caption); }
+.cr-need .what span { display: block; font-size: var(--t-meta); color: var(--ink-4); }
+.cr-need a { margin-left: auto; font-size: var(--t-caption); color: var(--accent-ink); text-decoration: none; font-weight: 560; white-space: nowrap; }
+.cr-need a:hover { text-decoration: underline; }
+.cr-need .none { margin-left: auto; font-size: var(--t-caption); color: var(--ink-4); }
+
+/* a panel with nothing in it says so in the panel's own voice */
+.cr-quiet { display: flex; align-items: center; gap: 9px; padding: 14px 0; font-size: var(--t-caption); color: var(--ink-3); line-height: 1.45; }
+.cr-quiet i { font-size: 17px; color: var(--ink-4); flex: none; }
+.cr-facts { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 2px; font-size: var(--t-meta); color: var(--ink-4); }
+.cr-facts b { font-weight: 500; color: var(--ink-3); font-family: var(--mono); }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--ink-4); display: inline-block; }
+.dot.ok { background: var(--success); }
+.dot.warn { background: var(--warning); }
+.dot.bad { background: var(--danger); }
+.dot.idle { background: var(--ink-4); }
+
+/* ---- phone: the same facts, stacked, one column ---- */
+@container (max-width: 699px) {
+  .canvas { padding: 10px 14px 96px; gap: 10px; }
+  .canvas-foot { display: none; }
+  .cr-signals { grid-template-columns: 1fr 1fr; }
+  .cr-signal { padding: 8px 11px 9px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .cr-signal:nth-child(odd) { border-right: 1px solid var(--line); }
+  .cr-signal:nth-last-child(-n+2) { border-bottom: 0; }
+  .cr-signal .v b { font-size: calc(var(--t-display) * .7); }
+  .cr-grid { grid-template-columns: minmax(0, 1fr); flex: none; grid-template-rows: none; grid-auto-rows: auto; }
+  .cr-panel { padding: 11px 12px; }
+  .cr-panel > .cr-list { flex: none; }
+  .cr-note { margin-top: 8px; }
+  .cr-lead b { font-size: var(--t-display); }
+  .cr-row { min-height: 40px; }
+}
+
+/* ---- the jobs breakdown inside the Requests panel ---- */
+.cr-jobs { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-2); }
+.cr-jobshead { display: flex; align-items: baseline; font-size: var(--t-caption); color: var(--ink-2); font-weight: 570; }
+.cr-jobshead span:last-child { margin-left: auto; font-family: var(--mono); font-size: var(--t-meta); font-weight: 500; color: var(--ink-4); }
+.cr-jobs .cr-bar { height: 6px; margin-top: 6px; }
+
+/* ---- the state pages explain themselves once ---- */
+.canvas-why { margin: 10px 2px 0; font-size: var(--t-caption); color: var(--ink-3); line-height: 1.5; max-width: 62ch; }
+
+/* A failed read is a panel at its own height, not a box stretched to fill the
+   board: the empty space below is the point. */
+.cr-state { flex: none; width: 100%; max-width: 760px; padding: 20px 22px 22px; }
+.cr-state .load-failed {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start;
+  column-gap: 14px; row-gap: 2px; padding: 0; text-align: left;
+}
+.cr-state .lf-ico { grid-column: 1; grid-row: 1; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; font-size: 21px; background: var(--field); border: 1px solid var(--line); color: var(--ink-3); }
+.cr-state .lf-text { display: contents; }
+.cr-state .lf-text > * { grid-column: 2; }
+.cr-state .lf-title { font-size: var(--t-headline); font-weight: 640; letter-spacing: -.015em; }
+.cr-state .lf-sub { font-size: var(--t-small); color: var(--ink-3); line-height: 1.5; max-width: 56ch; }
+.cr-state .btn { grid-column: 2; justify-self: start; margin-top: 12px; }
+
+/* one line, above the board, saying what the whole page means right now */
+.cr-flag {
+  flex: none; display: flex; align-items: center; gap: 9px;
+  padding: 9px 14px; border: 1px solid var(--warning-line); border-radius: var(--r-sm);
+  background: var(--warning-soft); color: var(--warning);
+  font-size: var(--t-caption); line-height: 1.45;
+}
+.cr-flag.bad { border-color: var(--danger-line); background: var(--danger-soft); color: var(--danger); }
+.cr-flag i { font-size: 16px; flex: none; }
+
+/* ---- skeleton table inside a panel ---- */
+.sk-table { display: flex; flex-direction: column; flex: 1 1 auto; }
+.sk-table .sk-row { flex: 1 1 auto; padding: 0; min-height: 30px; gap: 12px; align-items: center; }
+.sk-table .sk { height: 11px; flex: none; }
+
+/* ---- keyboard hints ---- */
+.kbd-hint { display: flex; align-items: center; gap: 12px; font-size: var(--t-meta); color: var(--ink-4); }
+.kbd-hint span { display: inline-flex; align-items: center; gap: 4px; }
+.key {
+  display: inline-grid; place-items: center; min-width: 1.8em; height: 1.8em; padding: 0 .4em;
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+  background: var(--surface); font-family: var(--mono); font-size: calc(var(--t-meta) * .9); color: var(--ink-2);
+}
+
+/* ---- the 2x text state: nothing may clip, and the grid gives way.
+   The type itself is doubled by the tokens (`--text-scale` in tokens.css), not
+   by a font-size here - a screen that wrote its own px size would not scale. ---- */
+.text-2x .cr-row { min-height: 52px; flex-wrap: wrap; }
+.text-2x .cr-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(0, auto); }
+.text-2x .canvas-foot { display: none; }
