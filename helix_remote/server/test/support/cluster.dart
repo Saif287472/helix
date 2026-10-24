@@ -6,6 +6,7 @@ import 'package:helix_remote_server/src/modules/realtime/module.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
 
 import 'harness.dart';
+import 'recording_push.dart';
 import 'test_client.dart';
 import 'test_platform.dart';
 import 'test_socket.dart';

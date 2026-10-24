@@ -130,28 +130,6 @@ final class NoPushProvider implements PushProvider {
   }) async {}
 }
 
-/// Records pushes (tests).
-final class RecordingPushProvider implements PushProvider {
-  final List<({String token, PushReason reason, String? callId})> sent = [];
-
-  /// Tokens that answer "unregistered".
-  final Set<String> gone = {};
-
-  @override
-  bool get isConfigured => true;
-
-  @override
-  Future<void> send({
-    required String token,
-    required String kind,
-    required PushReason reason,
-    String? callId,
-  }) async {
-    if (gone.contains(token)) throw const PushTokenGone();
-    sent.add((token: token, reason: reason, callId: callId));
-  }
-}
-
 /// Firebase Cloud Messaging HTTP v1 with a service-account key (ported
 /// from v1, which was proven in production). Access tokens are cached and
 /// refreshed five minutes early; one refresh runs at a time.

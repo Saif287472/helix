@@ -262,17 +262,46 @@ final class ServerConfig {
       case 'local':
         blobs = BlobConfig.local(read('HELIX_BLOB_DIR') ?? 'helix_blobs');
       case 's3':
-        final endpoint = Uri.tryParse(require('HELIX_S3_ENDPOINT'));
-        blobs = BlobConfig.s3(
-          S3Config(
-            endpoint: endpoint ?? Uri(),
-            region: read('HELIX_S3_REGION') ?? 'us-east-1',
-            bucket: require('HELIX_S3_BUCKET'),
-            accessKeyId: require('HELIX_S3_ACCESS_KEY_ID'),
-            secretAccessKey: require('HELIX_S3_SECRET_ACCESS_KEY'),
-            pathStyle: flag('HELIX_S3_PATH_STYLE', orElse: true),
-          ),
-        );
+        // Read every value even when the endpoint is wrong: one start-up
+        // names all the problems, not only the first.
+        final rawEndpoint = require('HELIX_S3_ENDPOINT');
+        final region = read('HELIX_S3_REGION') ?? 'us-east-1';
+        final bucket = require('HELIX_S3_BUCKET');
+        final accessKeyId = require('HELIX_S3_ACCESS_KEY_ID');
+        final secretAccessKey = require('HELIX_S3_SECRET_ACCESS_KEY');
+        final pathStyle = flag('HELIX_S3_PATH_STYLE', orElse: true);
+        final endpoint = Uri.tryParse(rawEndpoint);
+        // An endpoint that is not a full URL used to start the node and then
+        // fail per request with an error that named nothing: every signed
+        // request builds a relative URI. `minio:9000` parses as a scheme with
+        // no host, `storage.example.com` as a path (AUD-1c-3).
+        final usable =
+            endpoint != null &&
+            endpoint.hasAuthority &&
+            (endpoint.scheme == 'http' || endpoint.scheme == 'https') &&
+            endpoint.userInfo.isEmpty &&
+            !endpoint.hasQuery &&
+            !endpoint.hasFragment;
+        if (!usable && rawEndpoint.isNotEmpty) {
+          problems.add(
+            'HELIX_S3_ENDPOINT must be http(s)://host[:port], with no '
+            'credentials, query or fragment',
+          );
+        }
+        // A refused endpoint never stores anything: the node stops on the
+        // problem above, so this branch only keeps `blobs` a value.
+        blobs = usable
+            ? BlobConfig.s3(
+                S3Config(
+                  endpoint: endpoint,
+                  region: region,
+                  bucket: bucket,
+                  accessKeyId: accessKeyId,
+                  secretAccessKey: secretAccessKey,
+                  pathStyle: pathStyle,
+                ),
+              )
+            : const BlobConfig.local('helix_blobs');
       default:
         problems.add('HELIX_BLOB_STORE must be local or s3');
         blobs = const BlobConfig.local('helix_blobs');

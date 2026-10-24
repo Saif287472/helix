@@ -569,6 +569,40 @@ simply carries more headers.
   holding the budget" (a stream that never emits; then a second request gets
   204, not 503) and "a body that dribbles for ever is refused at the overall
   deadline".
+- S2 (AUD-1c-1, 1c-2, 1c-3, 1c-4, 1c-5) — one `_send` for every S3 call,
+  signed with its own headers so a `Range` is part of the request, bounded by
+  `S3ObjectStorage.timeout` (10 s) twice over: headers, then the gap between
+  two body chunks (`_signed` drains, `_streamed` passes through). The client
+  now has a 5 s `connectionTimeout`, so a blackholed endpoint fails in seconds
+  instead of the operating system's minutes. `ping` answers from one shared
+  probe (single-flight, result cached 5 s), which is what stops a dead store
+  from growing a socket per readiness request; `Future.timeout` in
+  `HealthRegistry` never cancelled the HTTP call, so this is the bound that
+  matters. `read` asks for its range and stops at the window instead of
+  downloading the object and slicing it, and 404 / 416 are `ObjectMissing` /
+  `ObjectShort` on both backends (the local one honours the same contract now,
+  which is why the assertions are in both groups). `LocalObjectStorage.append`
+  serializes per key in-process — the local backend is single-node by
+  construction — and returns the file's own length, never its writer's
+  counter, so a retry that overtakes the request it retried gets
+  `OffsetMismatch` and the route cannot seal two interleaved uploads as one
+  complete object. `HELIX_S3_ENDPOINT` is validated in config (scheme http(s),
+  a host, no userinfo, query or fragment) and `?? Uri()` is gone.
+  `RecordingPushProvider` moved to `test/support/recording_push.dart`;
+  `NoPushProvider` and the FCM provider stay in platform, and
+  `RecordingSmsProvider` stays where it is because `identity/config.dart`
+  selects it in dev mode.
+  Tests: `infra_test.dart` "a store that never answers fails instead of
+  hanging the caller", "a body that stops arriving abandons the request",
+  "a dead store is probed once, not once per readiness request", "a live store
+  answers one shared probe", "a range read asks the store for the range and
+  stops at its end", "a store that will not answer a range says so", "a missing
+  object and an unsatisfiable range are typed errors", "two writers at one
+  offset: one appends, the other is told to resume", "a malformed S3 endpoint
+  is named at start-up, not at request time".
+  **Owner-facing:** the validation makes a malformed endpoint a start-up
+  failure — check the production `.env` before deploying. Helix Global uses
+  `HELIX_BLOB_STORE=local`, so today's node is not affected.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**

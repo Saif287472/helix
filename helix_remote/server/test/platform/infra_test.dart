@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,6 +16,15 @@ Map<String, String> _env([Map<String, String> extra = const {}]) => {
   'HELIX_DATABASE_URL': 'postgresql://u:p@localhost/db',
   'HELIX_JWT_KEYS': '{"k1":"$_key"}',
   ...extra,
+};
+
+/// A complete S3 blob-store config, with the endpoint overridden per test.
+const _s3Env = {
+  'HELIX_BLOB_STORE': 's3',
+  'HELIX_S3_ENDPOINT': 'https://s3.example.com',
+  'HELIX_S3_BUCKET': 'b',
+  'HELIX_S3_ACCESS_KEY_ID': 'AK',
+  'HELIX_S3_SECRET_ACCESS_KEY': 'SK',
 };
 
 void main() {
@@ -53,17 +63,62 @@ void main() {
         throwsA(isA<ConfigError>()),
       );
       final c = ServerConfig.fromEnv(
-        _env({
-          'HELIX_TOPOLOGY': 'cluster',
-          'HELIX_BLOB_STORE': 's3',
-          'HELIX_S3_ENDPOINT': 'https://s3.example.com',
-          'HELIX_S3_BUCKET': 'b',
-          'HELIX_S3_ACCESS_KEY_ID': 'AK',
-          'HELIX_S3_SECRET_ACCESS_KEY': 'SK',
-        }),
+        _env({'HELIX_TOPOLOGY': 'cluster', ..._s3Env}),
       );
       expect(c.blobs.backend, BlobBackend.s3);
     });
+
+    test(
+      'a malformed S3 endpoint is named at start-up, not at request time',
+      () {
+        for (final good in [
+          'https://s3.example.com',
+          'http://127.0.0.1:9000',
+        ]) {
+          final c = ServerConfig.fromEnv(
+            _env({..._s3Env, 'HELIX_S3_ENDPOINT': good}),
+          );
+          expect(c.blobs.s3!.endpoint.toString(), good, reason: good);
+        }
+        // Each of these parses as a Uri but is not a URL the store can be
+        // reached at; each used to start the node and then fail every media
+        // request with an error that named nothing.
+        for (final bad in [
+          'minio:9000',
+          'storage.example.com',
+          'ftp://s3.example.com',
+          'http://user:pass@s3.example.com',
+          'https://s3.example.com?region=eu',
+          'https://s3.example.com#frag',
+        ]) {
+          expect(
+            () => ServerConfig.fromEnv(
+              _env({..._s3Env, 'HELIX_S3_ENDPOINT': bad}),
+            ),
+            throwsA(
+              isA<ConfigError>().having(
+                (e) => e.toString(),
+                'message',
+                contains('HELIX_S3_ENDPOINT'),
+              ),
+            ),
+            reason: bad,
+          );
+        }
+        // Absent is still "required", and the other S3 values are checked too.
+        expect(
+          () =>
+              ServerConfig.fromEnv(_env({..._s3Env, 'HELIX_S3_ENDPOINT': ''})),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.toString(),
+              'message',
+              allOf(contains('HELIX_S3_ENDPOINT'), contains('required')),
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'the storage budget is optional and at least 1 GiB outside dev mode',
@@ -230,7 +285,80 @@ void main() {
       );
       await storage.delete('media/a1');
       expect(await storage.size('media/a1'), isNull);
+      // The same typed answers as the S3 backend, on both edges of a read.
+      await expectLater(
+        storage.read('media/a1').toList(),
+        throwsA(isA<ObjectMissing>()),
+      );
+      await storage.append(
+        'media/a2',
+        Stream.value([1, 2]),
+        offset: 0,
+        maxSize: 4,
+      );
+      await expectLater(
+        storage.read('media/a2', start: 9, endInclusive: 12).toList(),
+        throwsA(isA<ObjectShort>()),
+      );
     });
+
+    test(
+      'two writers at one offset: one appends, the other is told to resume',
+      () async {
+        // A client that retries an upload while the first request is still
+        // streaming. Both used to pass the length check and both appended, so
+        // the object ended up twice its declared size with two bodies mixed into
+        // the first half (AUD-1c-2).
+        final first = storage.append(
+          'media/a1',
+          _drip([
+            [1, 2],
+            [3],
+          ]),
+          offset: 0,
+          maxSize: 10,
+        );
+        final second = storage.append(
+          'media/a1',
+          _drip([
+            [9, 9],
+          ]),
+          offset: 0,
+          maxSize: 10,
+        );
+        expect(
+          await Future.wait([
+            first.then((n) => 'written $n'),
+            second.then(
+              (n) => 'written $n',
+              onError: (Object e) =>
+                  e is OffsetMismatch ? 'mismatch ${e.actual}' : '$e',
+            ),
+          ]),
+          unorderedEquals(['written 3', 'mismatch 3']),
+        );
+        expect(await storage.size('media/a1'), 3);
+        // The retry resumes where the file actually stopped.
+        expect(
+          await storage.append(
+            'media/a1',
+            _drip([
+              [4, 5],
+            ]),
+            offset: 3,
+            maxSize: 10,
+          ),
+          5,
+        );
+        expect(await storage.read('media/a1').expand((c) => c).toList(), [
+          1,
+          2,
+          3,
+          4,
+          5,
+        ]);
+      },
+    );
 
     test('lists the objects under a prefix with their change times', () async {
       for (final key in ['attachment/a1', 'attachment/b2', 'backup/c3']) {
@@ -299,6 +427,167 @@ void main() {
       expect(asked.first['prefix'], 'attachment/');
       expect(asked.last['continuation-token'], 'next-page');
     });
+  });
+
+  group('S3ObjectStorage bounds', () {
+    final config = S3Config(
+      endpoint: Uri.parse('http://127.0.0.1:9000'),
+      region: 'us-east-1',
+      bucket: 'helix',
+      accessKeyId: 'a',
+      secretAccessKey: 'b',
+    );
+    const stalled = Duration(milliseconds: 80);
+
+    test(
+      'a store that never answers fails instead of hanging the caller',
+      () async {
+        var asked = 0;
+        final storage = S3ObjectStorage(
+          config,
+          client: _SilentStore(onSend: () => asked++),
+          now: () => DateTime.utc(2026, 10, 1),
+          timeout: stalled,
+        );
+        final started = Stopwatch()..start();
+        await expectLater(
+          storage.size('media/a1'),
+          throwsA(isA<HttpException>()),
+        );
+        await expectLater(
+          storage.delete('media/a1'),
+          throwsA(isA<HttpException>()),
+        );
+        await expectLater(
+          storage.list('attachment/').toList(),
+          throwsA(isA<HttpException>()),
+        );
+        expect(started.elapsed, lessThan(const Duration(seconds: 5)));
+        expect(asked, 3);
+        // Readiness reports unhealthy rather than waiting for the store.
+        expect(await storage.ping(), isFalse);
+      },
+    );
+
+    test('a body that stops arriving abandons the request', () async {
+      final storage = S3ObjectStorage(
+        config,
+        client: _StallingBody(),
+        now: () => DateTime.utc(2026, 10, 1),
+        timeout: stalled,
+      );
+      final started = Stopwatch()..start();
+      await expectLater(
+        storage.delete('media/a1'),
+        throwsA(isA<HttpException>()),
+      );
+      expect(started.elapsed, lessThan(const Duration(seconds: 5)));
+    });
+
+    test(
+      'a dead store is probed once, not once per readiness request',
+      () async {
+        var asked = 0;
+        final storage = S3ObjectStorage(
+          config,
+          client: _SilentStore(onSend: () => asked++),
+          timeout: stalled,
+        );
+        expect(
+          await Future.wait([storage.ping(), storage.ping(), storage.ping()]),
+          [false, false, false],
+        );
+        expect(asked, 1);
+        expect(await storage.ping(), isFalse);
+        expect(asked, 1);
+      },
+    );
+
+    test('a live store answers one shared probe', () async {
+      var asked = 0;
+      final storage = S3ObjectStorage(
+        config,
+        client: MockClient((request) async {
+          asked++;
+          return http.Response('', 200);
+        }),
+        timeout: stalled,
+      );
+      expect(
+        await Future.wait([storage.ping(), storage.ping(), storage.ping()]),
+        [true, true, true],
+      );
+      expect(asked, 1);
+    });
+    test(
+      'a range read asks the store for the range and stops at its end',
+      () async {
+        final asked = <String?>[];
+        final storage = S3ObjectStorage(
+          config,
+          client: MockClient((request) async {
+            asked.add(request.headers['range']);
+            // More bytes than the window: a store is not trusted to answer a
+            // range with exactly its length.
+            return http.Response.bytes(List.filled(20, 7), 206);
+          }),
+          timeout: stalled,
+        );
+        expect(
+          await storage
+              .read('media/a1', start: 2, endInclusive: 5)
+              .expand((c) => c)
+              .toList(),
+          List.filled(4, 7),
+        );
+        expect(asked, ['bytes=2-5']);
+        expect(
+          await storage.read('media/a1').expand((c) => c).toList(),
+          List.filled(20, 7),
+        );
+        expect(
+          asked.last,
+          isNull,
+          reason: 'a whole-object read sends no range',
+        );
+      },
+    );
+
+    test('a store that will not answer a range says so', () async {
+      final storage = S3ObjectStorage(
+        config,
+        client: MockClient(
+          (request) async => http.Response('whole object', 200),
+        ),
+        timeout: stalled,
+      );
+      await expectLater(
+        storage.read('media/a1', start: 4).toList(),
+        throwsA(isA<HttpException>()),
+      );
+    });
+
+    test(
+      'a missing object and an unsatisfiable range are typed errors',
+      () async {
+        Future<Object?> failure(int status) async {
+          final storage = S3ObjectStorage(
+            config,
+            client: MockClient((request) async => http.Response('', status)),
+            timeout: stalled,
+          );
+          try {
+            await storage.read('media/a1', start: 8, endInclusive: 12).toList();
+            return null;
+          } on Object catch (error) {
+            return error;
+          }
+        }
+
+        expect(await failure(404), isA<ObjectMissing>());
+        expect(await failure(416), isA<ObjectShort>());
+      },
+    );
   });
 
   group('S3ObjectStorage presigning', () {
@@ -397,4 +686,40 @@ void main() {
       );
     });
   });
+}
+
+/// A store that takes the request and never answers: the fault AUD-1c-1 is
+/// about (a blackholed route, a dead load balancer, throttling with no
+/// response).
+final class _SilentStore extends http.BaseClient {
+  _SilentStore({this.onSend});
+
+  final void Function()? onSend;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    onSend?.call();
+    return Completer<http.StreamedResponse>().future;
+  }
+}
+
+/// A store that sends the headers and two bytes, then stops mid-body.
+final class _StallingBody extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    final chunks = StreamController<List<int>>();
+    chunks.add([1, 2]);
+    return Future.value(
+      http.StreamedResponse(chunks.stream, 200, contentLength: 10),
+    );
+  }
+}
+
+/// Chunks that arrive one event-loop turn apart, so two uploads to one key
+/// genuinely overlap instead of running back to back.
+Stream<List<int>> _drip(List<List<int>> chunks) async* {
+  for (final chunk in chunks) {
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    yield chunk;
+  }
 }

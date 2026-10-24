@@ -6,8 +6,8 @@ import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/modules/realtime/module.dart';
 import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
-import 'package:helix_remote_server/src/platform/push/push.dart';
 
+import 'recording_push.dart';
 import 'test_client.dart';
 import 'test_platform.dart';
 

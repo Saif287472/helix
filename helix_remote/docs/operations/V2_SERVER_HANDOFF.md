@@ -165,7 +165,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_JWT_ACTIVE_KID` | if 2+ keys | the key, if only one | no | no | Which key signs new tokens. Must name a key in `HELIX_JWT_KEYS`. |
 | `HELIX_BLOB_STORE` | no | `local` | no | no | `local` (a directory) or `s3` (any S3-compatible store). |
 | `HELIX_BLOB_DIR` | no | `helix_blobs` | no | no | Directory for `local` storage, relative to the working directory; created if missing. Use an absolute path if more than one node shares it. |
-| `HELIX_S3_ENDPOINT` | if `s3` | none | no | no | Store endpoint, for example `https://s3.example.com`. Phones use presigned URLs on this endpoint, so it must be reachable from phones. |
+| `HELIX_S3_ENDPOINT` | if `s3` | none | no | no | Store endpoint: a full `http(s)://host[:port]` URL, for example `https://s3.example.com`. A value that is not one — `minio:9000`, a bare hostname, credentials or a query on it — stops the node at start-up with this variable named, instead of failing every media request later. Phones use presigned URLs on this endpoint, so it must be reachable from phones. |
 | `HELIX_S3_REGION` | no | `us-east-1` | no | no | SigV4 region. |
 | `HELIX_S3_BUCKET` | if `s3` | none | no | no | Bucket name. The bucket must already exist. |
 | `HELIX_S3_ACCESS_KEY_ID` | if `s3` | none | no | **yes** | Access key id. Treat as secret. |

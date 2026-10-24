@@ -18,7 +18,11 @@ Bytes live in `ObjectStorage` under `<kind>/<id>`.
 - **Upload:** `POST /v1/media` creates a random-id object.
   - Local storage returns the relative path `/v1/media/{id}/content`: a
     resumable `PUT` with `Upload-Offset` (a wrong offset gives 409 with
-    the stored offset; a size over the declared one gives 413).
+    the stored offset; a size over the declared one gives 413). Two
+    writers never mix into one object: `ObjectStorage.append` takes one
+    writer per key and returns the file's real length, so a retry that
+    overtakes the request it was retried after resumes at the stored
+    offset instead of sealing a corrupt object as complete.
   - S3 returns a presigned PUT URL valid for 15 minutes. It signs
     `content-length` = the declared size, so the store refuses any other
     size (one `PUT` of exactly `size` bytes).
