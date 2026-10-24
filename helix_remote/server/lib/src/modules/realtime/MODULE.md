@@ -31,9 +31,11 @@ with 4029.
    un-acked seqs below the oldest stored envelope (acked over REST, on any
    node), then sends `wake` if it is still full. Each `ack` deletes through
    messaging and releases credit. The 25 s refresh re-pumps full windows.
-5. **Live delivery:** `mailbox.wake` (bus) pumps the device's socket on
-   whichever node holds it. `realtime.ephemeral` delivers a parked
-   ephemeral envelope once. `platform.resync` (the bus connection came back)
+5. **Live delivery:** `mailbox.wake` (bus, a chunk of devices) pumps those
+   sockets on whichever node holds them. `realtime.ephemeral` (`{r: ref,
+   d: [devices]}`) names the devices a parked envelope waits for; each
+   socket takes its own value, so it is delivered once. `platform.resync`
+   (the bus connection came back)
    pumps every socket, so a wake-up missed meanwhile is not lost.
 6. **Close:** revocation (`device.revoked` on the bus) closes with 4003.
    Ended sessions (`identity.sessions_ended`, with the cut-off) and the 25 s

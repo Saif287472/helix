@@ -11,10 +11,10 @@ one Postgres database.
 | Migrations | `db/migrations.dart`, `platform_migrations.dart` | per-module Dart constants, checksummed, advisory lock | same |
 | Schema names | `db/schema_names.dart` | module name = schema | test prefixes |
 | Event bus | `bus/event_bus.dart` | `LISTEN/NOTIFY`; the `LISTEN` connection reopens with backoff and then publishes local `platform.resync` | Redis/NATS impl |
-| Ephemeral store | `ephemeral/ephemeral_store.dart` | UNLOGGED table, own 4-connection pool | Redis impl |
+| Ephemeral store | `ephemeral/ephemeral_store.dart` | UNLOGGED table, own 4-connection pool; `putAll` parks a whole fan-out with one statement | Redis impl |
 | Rate limits | `ratelimit/rate_limiter.dart` | UNLOGGED token buckets, one statement; a hit may cost several tokens (`cost:`, charged as the capacity when larger; a charge above what is left takes nothing); swept only once full again (`full_at`, one window after the last hit) | Redis impl |
 | Storage budget | `storage/storage_budget.dart` | `HELIX_STORAGE_BUDGET_BYTES` (optional): the size of this server's tables with indexes and TOAST (`pg_total_relation_size` over the catalogue, its own schema prefix only; not `pg_database_size`, which lists every file and took seconds on the shared test database) plus what modules `report` (media objects), measured at most once a minute per node; `check()` throws `quota_exceeded` (`reason: server_storage`) when over it and lets requests through when it cannot measure; gauge `helix_storage_used_bytes`; `close` waits for a measurement in flight | same (S3 bytes reported by media) |
-| Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters; a handler is given up on after 60 s (`JobRunnerSettings.jobTimeout`, shorter than the 2-minute lease) | same |
+| Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters; a handler is given up on after 60 s (`JobRunnerSettings.jobTimeout`, shorter than the 2-minute lease); `enqueueMany` inserts a fan-out with one statement and one wake | same |
 | Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide; each run given up on after 5 minutes | same |
 | Object storage | `blobs/object_storage.dart` | local directory; `list(prefix)` walks it (the media orphan sweep) | S3-compatible (SigV4; `list` is ListObjectsV2) |
 | Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |

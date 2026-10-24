@@ -58,6 +58,10 @@ final class MessagingModule extends ModuleBase
   static const pushJob = 'messaging.push';
   static const maxRecipients = 1100;
 
+  /// How many devices one bus message may name: a `NOTIFY` payload is capped
+  /// at 7,900 bytes, so a fan-out is published in chunks of this size.
+  static const busChunk = 150;
+
   /// `POST /v1/messages` per device and per account (all its devices):
   /// bursts for catching up after being offline, then a steady rate
   /// (S7 #15). Over either, `rate_limited` with `Retry-After`.
@@ -480,21 +484,22 @@ final class MessagingModule extends ModuleBase
     }
   }
 
-  /// Enqueues one pending push per device and reason (later sends coalesce
-  /// into it until it has run).
-  Future<void> enqueuePush(
-    Tx tx,
-    String deviceId,
-    PushReason reason, {
-    String? callId,
-  }) => context.outbox.enqueue(
-    tx,
-    pushJob,
-    {'device': deviceId, 'reason': reason.wire, 'call_id': ?callId},
-    maxAttempts: 5,
-    dedupeKey:
-        'push:${reason.wire}:$deviceId${callId == null ? '' : ':$callId'}',
-  );
+  /// Enqueues one pending push per device with a single statement. Each
+  /// device's key coalesces later sends into the same job until it has run.
+  Future<void> enqueuePushes(Tx tx, Iterable<String> deviceIds) async {
+    final devices = deviceIds.toList();
+    if (devices.isEmpty) return;
+    final reason = PushReason.message.wire;
+    await context.outbox.enqueueMany(tx, [
+      for (final device in devices)
+        QueuedJob(
+          pushJob,
+          {'device': device, 'reason': reason},
+          maxAttempts: 5,
+          dedupeKey: 'push:$reason:$device',
+        ),
+    ]);
+  }
 
   // ------------------------------------------------------------ hooks
 
@@ -594,19 +599,11 @@ final class _MessagingFacade implements MessagingApi {
     }
     if (delivery.urgent) {
       final online = await Presence.online(_m.context.ephemeral, devices);
-      for (final device in devices.where((d) => !online.contains(d))) {
-        await _m.enqueuePush(tx, device, PushReason.message);
-      }
+      await _m.enqueuePushes(tx, devices.where((d) => !online.contains(d)));
     }
     tx.afterCommit(() async {
-      // NOTIFY payloads are limited; wake in chunks.
-      for (var i = 0; i < devices.length; i += 150) {
-        await _m.context.bus.publish(MailboxTopics.wake, {
-          'd': devices.sublist(
-            i,
-            i + 150 > devices.length ? devices.length : i + 150,
-          ),
-        });
+      for (final chunk in _chunked(devices, MessagingModule.busChunk)) {
+        await _m.context.bus.publish(MailboxTopics.wake, {'d': chunk});
       }
     });
   }
@@ -637,36 +634,40 @@ final class _MessagingFacade implements MessagingApi {
     Delivery delivery,
   ) async {
     final online = await Presence.online(_m.context.ephemeral, payloads.keys);
+    if (online.isEmpty) return online;
     final id = delivery.id ?? Uuid.v7();
-    for (final device in online) {
-      final envelope = Envelope(
-        id: id,
-        kind: delivery.kind,
-        sentAt: _m.context.clock.now(),
-        from: delivery.from,
-        groupId: delivery.groupId,
-        callId: delivery.callId,
-        payload: payloads[device],
-        data: delivery.data,
-        urgent: delivery.urgent,
-      );
-      final ref = Uuid.v7();
-      await _m.context.ephemeral.put(
-        'msg:eph:$ref',
-        jsonEncode(envelope.toJson()),
-        const Duration(seconds: 60),
-      );
+    final sentAt = _m.context.clock.now();
+    // One parked value per online device, written in one statement, and one
+    // bus message per chunk of devices: a fan-out of a thousand devices used
+    // to cost two thousand round trips (AUD-3-1).
+    await _m.context.ephemeral.putAll({
+      for (final device in online)
+        _ephemeralKey(id, device): jsonEncode(
+          Envelope(
+            id: id,
+            kind: delivery.kind,
+            sentAt: sentAt,
+            from: delivery.from,
+            groupId: delivery.groupId,
+            callId: delivery.callId,
+            payload: payloads[device],
+            data: delivery.data,
+            urgent: delivery.urgent,
+          ).toJson(),
+        ),
+    }, _ephemeralLease);
+    for (final chunk in _chunked(online.toList(), MessagingModule.busChunk)) {
       await _m.context.bus.publish(MailboxTopics.ephemeral, {
-        'd': device,
-        'r': ref,
+        'r': id,
+        'd': chunk,
       });
     }
     return online;
   }
 
   @override
-  Future<Envelope?> takeEphemeral(String ref) async {
-    final raw = await _m.context.ephemeral.take('msg:eph:$ref');
+  Future<Envelope?> takeEphemeral(String ref, String deviceId) async {
+    final raw = await _m.context.ephemeral.take(_ephemeralKey(ref, deviceId));
     return raw == null ? null : Envelope.fromJson(JsonReader.decode(raw));
   }
 
@@ -771,3 +772,15 @@ final class _ParsedSend {
   /// Domain -> recipients with that server's bare account ids.
   final Map<String, List<Recipient>> remote;
 }
+
+/// How long a parked ephemeral envelope waits for its socket.
+const _ephemeralLease = Duration(seconds: 60);
+
+/// The parked value of one ephemeral delivery [ref] for one device.
+String _ephemeralKey(String ref, String deviceId) => 'msg:eph:$ref:$deviceId';
+
+/// [items] in batches of at most [size].
+List<List<T>> _chunked<T>(List<T> items, int size) => [
+  for (var i = 0; i < items.length; i += size)
+    items.sublist(i, i + size > items.length ? items.length : i + size),
+];

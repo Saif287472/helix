@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/messaging/api.dart';
+import 'package:helix_remote_server/src/modules/messaging/module.dart';
+import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:test/test.dart';
 
 import '../support/harness.dart';
@@ -8,6 +13,39 @@ import '../support/flows.dart';
 import '../support/test_socket.dart';
 
 void main() {
+  group('fan-out messages', () {
+    // A wake or an ephemeral hint names devices in chunks, because a NOTIFY
+    // payload that does not fit is refused by the bus (AUD-3-1). The chunk
+    // size is only safe as long as it fits, so the fit is asserted here.
+    test('a chunk of devices fits one bus message', () {
+      for (final topic in [MailboxTopics.wake, MailboxTopics.ephemeral]) {
+        final devices = List.generate(
+          MessagingModule.busChunk,
+          (_) => Uuid.v7(),
+        );
+        final message = topic == MailboxTopics.ephemeral
+            ? {'r': Uuid.v7(), 'd': devices}
+            : {'d': devices};
+        final bytes = utf8
+            .encode(jsonEncode({'t': topic, 'm': message}))
+            .length;
+        expect(
+          bytes,
+          lessThanOrEqualTo(PostgresEventBus.maxPayloadBytes),
+          reason: '$topic with ${devices.length} devices',
+        );
+      }
+    });
+
+    test('one send may address more devices than a chunk holds', () {
+      expect(
+        MessagingModule.maxRecipients,
+        greaterThan(MessagingModule.busChunk),
+        reason: 'the fan-out must chunk, not be capped by the bus',
+      );
+    });
+  });
+
   group('messaging', skip: databaseTestSkipReason, () {
     late Harness h;
     late TestDevice a1;

@@ -391,18 +391,22 @@ CREATE TABLE $s.call_metrics (
             },
           );
           if (stored.isEmpty) continue;
-          await context.outbox.enqueue(
-            tx,
-            pushJob,
-            {
-              'device': device,
-              'reason': PushReason.call.wire,
-              'call_id': callId,
-            },
-            maxAttempts: 3,
-            dedupeKey: 'call:$callId:$device',
-          );
           pending.add(device);
+        }
+        if (pending.isNotEmpty) {
+          await context.outbox.enqueueMany(tx, [
+            for (final device in pending)
+              QueuedJob(
+                pushJob,
+                {
+                  'device': device,
+                  'reason': PushReason.call.wire,
+                  'call_id': callId,
+                },
+                maxAttempts: 3,
+                dedupeKey: 'call:$callId:$device',
+              ),
+          ]);
         }
       });
     } else if (kind == CallSignalKind.end) {
@@ -489,21 +493,22 @@ CREATE TABLE $s.call_metrics (
         {'c': callId, 'a': party, 'ds': partyDevices},
       );
       if (!notifyEnded) return;
-      for (final r in rows) {
-        final device = r.string('callee_device');
-        if (device == except) continue;
-        await context.outbox.enqueue(
-          tx,
-          pushJob,
-          {
-            'device': device,
-            'reason': PushReason.callEnded.wire,
-            'call_id': callId,
-          },
-          maxAttempts: 3,
-          dedupeKey: 'call_ended:$callId:$device',
-        );
-      }
+      final ringing = [
+        for (final r in rows) r.string('callee_device'),
+      ].where((device) => device != except);
+      await context.outbox.enqueueMany(tx, [
+        for (final device in ringing)
+          QueuedJob(
+            pushJob,
+            {
+              'device': device,
+              'reason': PushReason.callEnded.wire,
+              'call_id': callId,
+            },
+            maxAttempts: 3,
+            dedupeKey: 'call_ended:$callId:$device',
+          ),
+      ]);
     });
   }
 

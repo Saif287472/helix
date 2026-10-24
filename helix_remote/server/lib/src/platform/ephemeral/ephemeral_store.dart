@@ -8,6 +8,11 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 abstract interface class EphemeralStore {
   Future<void> put(String key, String value, Duration ttl);
 
+  /// The [put] of many keys with one TTL, in one round trip: a fan-out that
+  /// parks one value per device must not cost a statement per device
+  /// (AUD-3-1).
+  Future<void> putAll(Map<String, String> entries, Duration ttl);
+
   Future<String?> get(String key);
 
   /// The live values of [keys] that exist, in one round trip.
@@ -55,6 +60,14 @@ final class InMemoryEphemeralStore implements EphemeralStore {
   @override
   Future<void> put(String key, String value, Duration ttl) async {
     _entries[key] = (value, _clock.now().add(ttl));
+  }
+
+  @override
+  Future<void> putAll(Map<String, String> entries, Duration ttl) async {
+    final expiresAt = _clock.now().add(ttl);
+    for (final entry in entries.entries) {
+      _entries[entry.key] = (entry.value, expiresAt);
+    }
   }
 
   @override
@@ -131,7 +144,8 @@ final class PostgresEphemeralStore implements EphemeralStore {
   PostgresEphemeralStore(this._db, String platformSchema)
     : _table = '$platformSchema.ephemeral';
 
-  final Db _db;
+  /// Statements only: the store never needs a transaction of its own.
+  final SqlSession _db;
   final String _table;
 
   int _ms(Duration ttl) => ttl.inMilliseconds;
@@ -143,6 +157,23 @@ final class PostgresEphemeralStore implements EphemeralStore {
          VALUES (@k:text, @v:text, now() + make_interval(secs => @ms:int8 / 1000.0))
          ON CONFLICT (key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at''',
       {'k': key, 'v': value, 'ms': _ms(ttl)},
+    );
+  }
+
+  @override
+  Future<void> putAll(Map<String, String> entries, Duration ttl) async {
+    if (entries.isEmpty) return;
+    final keys = entries.keys.toList();
+    await _db.execute(
+      '''INSERT INTO $_table (key, value, expires_at)
+         SELECT k, v, now() + make_interval(secs => @ms:int8 / 1000.0)
+         FROM unnest(@ks:_text, @vs:_text) AS e (k, v)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at''',
+      {
+        'ks': keys,
+        'vs': [for (final k in keys) entries[k]!],
+        'ms': _ms(ttl),
+      },
     );
   }
 

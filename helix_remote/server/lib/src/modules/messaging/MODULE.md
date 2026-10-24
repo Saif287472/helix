@@ -61,7 +61,10 @@ nothing and are not charged. With a server storage budget set
 over it gets `quota_exceeded` (`reason: server_storage`); shorter ones still
 go through (review A-02, A-03). Presence for urgent
 pushes and ephemeral delivery is read once per send (`Presence.online`,
-one `getAll`), not once per device. The `helix_mailbox_backlog` gauge counts
+one `getAll`), not once per device, and a fan-out writes its push jobs and
+its parked envelopes one statement each (`Outbox.enqueueMany`,
+`EphemeralStore.putAll`): the cost of a send is bounded by its work, not by
+its device count (AUD-3-1). The `helix_mailbox_backlog` gauge counts
 undelivered rows at scrape time.
 
 1. **Validate:** ids, payload sizes (256 KiB per device), at most 1,100
@@ -73,14 +76,18 @@ undelivered rows at scrape time.
    (`BlockPolicy`, which the people module installs in S4), and the
    response names those accounts in `blocked_by`: the send still succeeds
    for everyone else (the sender's own devices, other recipients).
-4. **Ephemeral sends** (`ephemeral: true`) go to online devices only: the
-   envelope is parked in the ephemeral store for 60 s, and
-   `realtime.ephemeral` on the bus tells the socket's node.
+4. **Ephemeral sends** (`ephemeral: true`) go to online devices only: each
+   device's envelope is parked for 60 s under `msg:eph:<ref>:<device>` (one
+   `putAll` for the whole fan-out), and `realtime.ephemeral` on the bus
+   carries `{r: ref, d: [devices]}` in chunks. A socket takes its own value,
+   so an ephemeral envelope is read once and never to two devices.
 5. **Stored sends:** charge the stored-envelope budget (before any relay
    to another server), then allocate seqs, insert rows, trim devices over
-   their quota and record the send in one transaction. After commit, `mailbox.wake` goes out on the bus (in
-   chunks of 150 devices). Urgent sends to offline devices enqueue
-   `messaging.push` (one pending per device).
+   their quota and record the send in one transaction. After commit,
+   `mailbox.wake` goes out on the bus in chunks of at most
+   `MessagingModule.busChunk` devices (a `NOTIFY` payload is capped at
+   7,900 bytes). Urgent sends to offline devices enqueue `messaging.push`
+   for all of them with one statement (one pending job per device).
 
 ## Push (`messaging.push` job)
 

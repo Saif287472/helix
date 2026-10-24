@@ -10,6 +10,7 @@ import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:helix_remote_server/src/platform/platform_migrations.dart';
 import 'package:test/test.dart';
 
+import '../support/query_plans.dart';
 import '../support/test_database.dart';
 import '../support/test_platform.dart';
 
@@ -80,9 +81,10 @@ void main() {
       final r2 = runner(otherNode, 'n2')
         ..register('demo.ok', (p) async => ranOn['n2']!.add(p['n']! as int));
       await db.tx((tx) async {
-        for (var i = 0; i < 30; i++) {
-          await outbox().enqueue(tx, 'demo.ok', {'n': i});
-        }
+        // One batch: what a thousand-device fan-out enqueues as.
+        await outbox().enqueueMany(tx, [
+          for (var i = 0; i < 30; i++) QueuedJob('demo.ok', {'n': i}),
+        ]);
       });
       await Future.wait([r1.tick(), r2.tick()]);
       final all = [...ranOn['n1']!, ...ranOn['n2']!]..sort();
@@ -124,6 +126,70 @@ void main() {
       });
       await r.tick();
       expect(calls, 1);
+    });
+
+    test('a fan-out enqueues with one statement and keeps each field', () async {
+      // AUD-3-1: a push per recipient device used to be one insert and one
+      // wake per device.
+      final devices = List.generate(200, (i) => 'dev-$i');
+      final log = <Statement>[];
+      final wakes = <Map<String, Object?>>[];
+      final sub = bus.subscribe(Outbox.wakeTopic).listen(wakes.add);
+      await db.tx(
+        (tx) => outbox().enqueueMany(Recording(tx, log), [
+          for (final d in devices)
+            QueuedJob(
+              'demo.fan',
+              {'device': d},
+              maxAttempts: 3,
+              dedupeKey: 'fan:$d',
+            ),
+          const QueuedJob('demo.later', {}, delay: Duration(hours: 1)),
+          const QueuedJob('demo.free', {}),
+          const QueuedJob('demo.free', {}),
+        ]),
+      );
+      expect(log, hasLength(1), reason: '203 jobs through one insert');
+      await Future<void>.delayed(Duration.zero);
+      expect(wakes, hasLength(1), reason: 'and one wake for the whole batch');
+
+      final rows = await db.query(
+        'SELECT kind, payload, max_attempts, dedupe_key, run_at > now() AS later '
+        'FROM ${schemas.platform}.jobs',
+      );
+      final fan = rows.where((r) => r.string('kind') == 'demo.fan').toList();
+      expect(fan, hasLength(200));
+      expect(
+        fan.map((r) => r.json('payload')['device']).toSet(),
+        devices.toSet(),
+        reason: 'each row kept its own payload: the lists did not shift',
+      );
+      expect(fan.every((r) => r.integer('max_attempts') == 3), isTrue);
+      expect(
+        fan.map((r) => r.optString('dedupe_key')).toSet(),
+        devices.map((d) => 'fan:$d').toSet(),
+      );
+      final free = rows.where((r) => r.string('kind') == 'demo.free');
+      expect(free, hasLength(2), reason: 'a null dedupe key never conflicts');
+      expect(
+        rows
+            .singleWhere((r) => r.string('kind') == 'demo.later')
+            .boolean('later'),
+        isTrue,
+        reason: 'its own delay travelled with it',
+      );
+
+      // The same batch again: deduped rows are ignored, the rest are new.
+      await db.tx(
+        (tx) => outbox().enqueueMany(tx, [
+          for (final d in devices)
+            QueuedJob('demo.fan', {'device': d}, dedupeKey: 'fan:$d'),
+          const QueuedJob('demo.free', {}),
+        ]),
+      );
+      expect(await _pending(db, schemas.platform, 'demo.fan'), 200);
+      expect(await _pending(db, schemas.platform, 'demo.free'), 3);
+      await sub.cancel();
     });
 
     test('delayed jobs wait', () async {
@@ -246,3 +312,11 @@ void main() {
     });
   });
 }
+
+/// Jobs of [kind] still waiting to run.
+Future<int> _pending(PostgresDb db, String platform, String kind) async =>
+    (await db.queryOne(
+      "SELECT count(*)::int8 AS n FROM $platform.jobs "
+      "WHERE kind = @k:text AND status = 'pending'",
+      {'k': kind},
+    ))!.integer('n');

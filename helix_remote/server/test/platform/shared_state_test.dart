@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
+import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/db/postgres_db.dart';
 import 'package:helix_remote_server/src/platform/db/schema_names.dart';
@@ -101,6 +102,49 @@ void main() {
       expect(await other.get('route:d'), isNull);
       expect(await store.replace('route:d', 'node-b|c2', 'x', ttl), isFalse);
     });
+
+    test(
+      'a fan-out parks one value per device in one statement (AUD-3-1)',
+      () async {
+        const ttl = Duration(seconds: 60);
+        final store = PostgresEphemeralStore(db, schemas.platform);
+        final devices = List.generate(1100, (i) => 'dev-$i');
+        await store.putAll({
+          for (final d in devices) 'msg:eph:r:$d': '{"to":"$d"}',
+        }, ttl);
+        expect(
+          await store.getAll([for (final d in devices) 'msg:eph:r:$d']),
+          hasLength(1100),
+          reason: 'every device got its own value',
+        );
+        expect(await store.get('msg:eph:r:dev-7'), '{"to":"dev-7"}');
+
+        // An existing key is replaced, not skipped, and a later TTL wins.
+        await store.put('msg:eph:r:dev-7', 'stale', const Duration(seconds: 1));
+        await store.putAll({
+          'msg:eph:r:dev-7': 'fresh',
+          'msg:eph:r:new': 'added',
+        }, const Duration(seconds: 30));
+        expect(await store.get('msg:eph:r:dev-7'), 'fresh');
+        expect(await store.get('msg:eph:r:new'), 'added');
+
+        final counting = _CountingSession();
+        await PostgresEphemeralStore(
+          counting,
+          schemas.platform,
+        ).putAll({for (final d in devices) 'msg:eph:r:$d': 'v'}, ttl);
+        expect(
+          counting.statements,
+          1,
+          reason: 'a thousand devices must not cost a thousand round trips',
+        );
+        await PostgresEphemeralStore(
+          counting,
+          schemas.platform,
+        ).putAll({}, ttl);
+        expect(counting.statements, 1, reason: 'an empty batch issues nothing');
+      },
+    );
 
     test('rate limiter: capacity, refill, shared across nodes', () async {
       final a = PostgresRateLimiter(db, schemas.platform);
@@ -215,6 +259,23 @@ void main() {
       expect(await store.get('k'), isNull);
     });
 
+    test('putAll writes every key and expires them together', () async {
+      final clock = ManualClock();
+      final store = InMemoryEphemeralStore(clock: clock);
+      await store.putAll({'a': '1', 'b': '2'}, const Duration(seconds: 10));
+      clock.advance(const Duration(seconds: 9));
+      expect(await store.getAll(['a', 'b']), {'a': '1', 'b': '2'});
+      clock.advance(const Duration(seconds: 2));
+      expect(await store.getAll(['a', 'b']), isEmpty);
+      await store.put('a', 'old', const Duration(seconds: 10));
+      await store.putAll({'a': 'new'}, const Duration(seconds: 10));
+      expect(
+        await store.get('a'),
+        'new',
+        reason: 'an existing key is replaced',
+      );
+    });
+
     test('rate limiter refills with the clock', () async {
       final clock = ManualClock();
       final limiter = InMemoryRateLimiter(clock: clock);
@@ -269,4 +330,39 @@ void main() {
       expect(await got, {'a': 1});
     });
   });
+}
+
+/// A session that answers nothing but counts the statements it is given:
+/// a fan-out is bounded by round trips, and this is how few they must be.
+final class _CountingSession implements SqlSession {
+  int statements = 0;
+
+  void _count() => statements++;
+
+  @override
+  Future<List<Row>> query(
+    String sql, [
+    Map<String, Object?> params = const {},
+  ]) async {
+    _count();
+    return const [];
+  }
+
+  @override
+  Future<Row?> queryOne(
+    String sql, [
+    Map<String, Object?> params = const {},
+  ]) async {
+    _count();
+    return null;
+  }
+
+  @override
+  Future<int> execute(
+    String sql, [
+    Map<String, Object?> params = const {},
+  ]) async {
+    _count();
+    return 0;
+  }
 }

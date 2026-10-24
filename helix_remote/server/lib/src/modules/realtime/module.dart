@@ -86,9 +86,12 @@ final class RealtimeModule extends ModuleBase {
       )
       ..add(
         bus.subscribe(MailboxTopics.ephemeral).listen((m) {
-          final connection = _connections[m['d']];
-          if (connection != null) {
-            track(() => connection.deliverEphemeral(m['r']! as String));
+          final ref = m['r']! as String;
+          for (final device in (m['d']! as List).cast<String>()) {
+            final connection = _connections[device];
+            if (connection != null) {
+              track(() => connection.deliverEphemeral(ref));
+            }
           }
         }),
       )
@@ -502,7 +505,7 @@ final class _Connection {
   }
 
   Future<void> deliverEphemeral(String ref) async {
-    final envelope = await _m.messaging.takeEphemeral(ref);
+    final envelope = await _m.messaging.takeEphemeral(ref, deviceId);
     if (envelope != null) _send(EnvelopeFrame(envelope));
   }
 

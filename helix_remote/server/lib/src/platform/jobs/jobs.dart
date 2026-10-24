@@ -8,6 +8,25 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 
+/// One entry of an [Outbox.enqueueMany] batch: the same fields [Outbox.enqueue]
+/// takes, so a caller can move a loop of enqueues to one batch without
+/// changing what each job asks for.
+final class QueuedJob {
+  const QueuedJob(
+    this.kind,
+    this.payload, {
+    this.delay = Duration.zero,
+    this.maxAttempts = 8,
+    this.dedupeKey,
+  });
+
+  final String kind;
+  final Map<String, Object?> payload;
+  final Duration delay;
+  final int maxAttempts;
+  final String? dedupeKey;
+}
+
 /// Work that must happen after a transaction commits and must not be lost
 /// (push notifications, federation relays, purges). Enqueued *inside* the
 /// caller's transaction (the transactional outbox), executed by any node.
@@ -28,24 +47,42 @@ final class Outbox {
     Duration delay = Duration.zero,
     int maxAttempts = 8,
     String? dedupeKey,
-  }) async {
+  }) => enqueueMany(tx, [
+    QueuedJob(
+      kind,
+      payload,
+      delay: delay,
+      maxAttempts: maxAttempts,
+      dedupeKey: dedupeKey,
+    ),
+  ]);
+
+  /// Enqueues many jobs with one statement, and wakes the runner once after
+  /// commit however many immediate entries there are. A fan-out that enqueues
+  /// a job per device costs one round trip, not one insert and one `NOTIFY`
+  /// per device (AUD-3-1).
+  Future<void> enqueueMany(Tx tx, Iterable<QueuedJob> jobs) async {
+    final list = jobs.toList();
+    if (list.isEmpty) return;
     await tx.execute(
       '''INSERT INTO $_platformSchema.jobs
            (id, kind, payload, run_at, max_attempts, dedupe_key)
-         VALUES (@id:uuid, @kind:text, @payload:jsonb,
-                 now() + make_interval(secs => @delay:int8 / 1000.0),
-                 @max:int4, @dedupe:text)
+         SELECT g, k, p::jsonb,
+                now() + make_interval(secs => d / 1000.0), m, nullif(dedupe, '')
+         FROM unnest(@id:_uuid, @kind:_text, @payload:_text,
+                     @delay:_int8, @max:_int4, @dedupe:_text)
+           AS t (g, k, p, d, m, dedupe)
          ON CONFLICT (dedupe_key) DO NOTHING''',
       {
-        'id': Uuid.v7(),
-        'kind': kind,
-        'payload': jsonEncode(payload),
-        'delay': delay.inMilliseconds,
-        'max': maxAttempts,
-        'dedupe': dedupeKey,
+        'id': List.generate(list.length, (_) => Uuid.v7()),
+        'kind': [for (final j in list) j.kind],
+        'payload': [for (final j in list) jsonEncode(j.payload)],
+        'delay': [for (final j in list) j.delay.inMilliseconds],
+        'max': [for (final j in list) j.maxAttempts],
+        'dedupe': [for (final j in list) j.dedupeKey ?? ''],
       },
     );
-    if (delay == Duration.zero) {
+    if (list.any((j) => j.delay == Duration.zero)) {
       tx.afterCommit(() => _bus.publish(wakeTopic, const {}));
     }
   }

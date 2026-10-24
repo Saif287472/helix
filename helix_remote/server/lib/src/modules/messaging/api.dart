@@ -90,7 +90,8 @@ abstract interface class MessagingApi {
   });
 
   /// Delivers to devices online now, without storing. Returns the devices
-  /// it reached.
+  /// it reached. Each one parks its own envelope under the delivery ref
+  /// ([Delivery.id], generated when null) until [takeEphemeral] reads it.
   Future<Set<String>> deliverEphemeral(
     Map<String, Uint8List?> payloads,
     Delivery delivery,
@@ -125,8 +126,9 @@ abstract interface class MessagingApi {
   /// Returns the effective cursor and the head.
   Future<({int after, int head})> resume(String deviceId, int after);
 
-  /// An ephemeral envelope parked for the realtime gateway.
-  Future<Envelope?> takeEphemeral(String ref);
+  /// The ephemeral envelope [ref] parked for [deviceId], once. Null when it
+  /// was already taken or its lease ran out.
+  Future<Envelope?> takeEphemeral(String ref, String deviceId);
 
   void setBlockPolicy(BlockPolicy policy);
 
@@ -155,6 +157,7 @@ abstract final class MailboxTopics {
   /// `{"d": [device ids]}`: these devices have new stored envelopes.
   static const wake = 'mailbox.wake';
 
-  /// `{"d": device id, "r": ref}`: an ephemeral envelope for one device.
+  /// `{"r": ref, "d": [device ids]}`: [ref] parks an ephemeral envelope for
+  /// each of these devices. A chunk is at most `MessagingModule.busChunk`.
   static const ephemeral = 'realtime.ephemeral';
 }
