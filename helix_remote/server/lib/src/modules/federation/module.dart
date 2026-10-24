@@ -104,6 +104,37 @@ final class FederationModule extends ModuleBase
     const Duration(minutes: 1),
   );
 
+  /// What one peer may hand this node to parse per minute, in bytes rather
+  /// than requests (AUD-6-6). The largest inbound bodies are 8 MiB and are
+  /// decoded whole, so the request-count limits alone let an allowed peer make
+  /// this node parse tens of gigabytes a minute; the 256 MiB `BodyBudget`
+  /// bounds concurrent memory, not CPU. Generous on purpose - a real peer's
+  /// volume is its own users' traffic - and charged only for a body whose
+  /// signature verified, so a stranger cannot spend a peer's budget.
+  static final _bytesLimit = RateLimitPolicy.per(
+    'federation.bytes',
+    64 * 1024 * 1024,
+    const Duration(minutes: 1),
+  );
+
+  /// The route handler, with the peer's byte budget charged first: a peer that
+  /// has spent its minute is refused before its body is parsed, and the node
+  /// tells it when to come back.
+  RouteHandler _charged(RouteHandler handle) => (q) async {
+    final body = q.body;
+    if (body != null && body.isNotEmpty) {
+      final decision = await context.rateLimiter.hit(
+        _bytesLimit,
+        q.server.key,
+        cost: body.length,
+      );
+      if (!decision.allowed) {
+        throw ApiError(ErrorCode.rateLimited, retryAfter: decision.retryAfter);
+      }
+    }
+    return handle(q);
+  };
+
   @override
   String get name => 'federation';
 
@@ -142,7 +173,7 @@ final class FederationModule extends ModuleBase
       ..add(
         name,
         Routes.s2sMessages,
-        _inboundMessages,
+        _charged(_inboundMessages),
         rateLimit: _messagesLimit,
         maxBodyBytes: 8 * 1024 * 1024,
       )
@@ -150,7 +181,7 @@ final class FederationModule extends ModuleBase
       ..add(
         name,
         Routes.s2sCallSignals,
-        _inboundSignal,
+        _charged(_inboundSignal),
         rateLimit: _signalsLimit,
         maxBodyBytes: 1024 * 1024,
       );
@@ -158,7 +189,7 @@ final class FederationModule extends ModuleBase
       ..add(
         name,
         Routes.s2sGroupMessages,
-        _inboundGroupMessage,
+        _charged(_inboundGroupMessage),
         rateLimit: _messagesLimit,
         maxBodyBytes: 8 * 1024 * 1024,
       )
@@ -166,14 +197,14 @@ final class FederationModule extends ModuleBase
       ..add(
         name,
         Routes.s2sGroupActions,
-        _inboundGroupAction,
+        _charged(_inboundGroupAction),
         rateLimit: _signalsLimit,
         maxBodyBytes: 8 * 1024 * 1024,
       )
       ..add(
         name,
         Routes.s2sGroupSync,
-        _inboundGroupSync,
+        _charged(_inboundGroupSync),
         rateLimit: _signalsLimit,
         maxBodyBytes: 1024 * 1024,
       );

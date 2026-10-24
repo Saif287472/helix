@@ -49,6 +49,16 @@ certificate.
 - **The document:** it must name the domain as `server_id`, carry a 32-byte
   key, and keep `api_base` on the same scheme and authority. Documents are
   cached for 24 hours.
+- **Reading a peer:** the document is read to at most 64 KiB and an API answer
+  to at most 8 MiB, both stopped *as the body streams* (`_readBounded`), with
+  the config timeout (5 s) applied to the whole read and to the gap between two
+  chunks. A peer that exceeds either is `PeerUnavailable`, which is what relays
+  already requeue on and `_verify` already answers 401.
+- **Concurrent lookups:** one fetch per domain at a time, its result and its
+  cache write shared by every caller that asks while it runs, and at most 16
+  domains fetched at once. A signature can only be checked after an unknown
+  domain's key has been fetched, so an S2S request that fails to verify is
+  refused on the *shared* cost of that lookup, not at one fetch per request.
 - **Re-fetching:** a signature that fails is re-fetched once, at most every
   10 minutes per domain, for key rotation. A changed key is logged
   (`peer_key_changed`).
@@ -67,7 +77,10 @@ and `x-helix-s2s-signature`: Ed25519 over `s2sSigningInput`, which is
 - **Replay:** each signature is accepted once. The ephemeral store remembers
   its hash for twice the skew.
 - **Principal:** `ServerPrincipal(serverId: domain)`. Per-server rate limits
-  apply after verification.
+  apply after verification, and so does the byte budget: every inbound body of
+  a verified peer is charged to `federation.bytes` (64 MiB a minute per server)
+  before its handler parses it, so a peer's *volume*, not only its request
+  count, is what the node agrees to read. A peer past it gets `rate_limited`.
 
 ## Relays
 

@@ -262,6 +262,16 @@ redirects.
 | `POST /v1/s2s/groups/{group_id}/sync` | `S2SGroupSync` → `S2SGroupSyncResponse` | Home → member server: the snapshot (null when deleted) and the change to deliver. The response lists members' devices and the accounts refused. A local account new in the snapshot is refused unless it exists and either asked to join through the receiver or was added (`created`/`added`) by a snapshot member allowed to add people whom its privacy and blocks allow. Older `roster_version`s are ignored. |
 | `POST /v1/s2s/calls/{call_id}/signals` | `S2SCallSignal` → `CallSignalResponse` | Live only; offers to offline devices become pending calls there. |
 
+**Bounds.** What a peer may cost this server is limited in bytes, not only in
+seconds and requests. An identity document over 64 KiB and any API answer over
+8 MiB are refused *while they stream*, never buffered whole, and a read that
+stops sending or runs past 5 s fails the same way. A peer whose signature
+verified is then charged for its body against a per-server budget of 64 MiB a
+minute, before anything is parsed: past it the answer is `rate_limited` with a
+`Retry-After`, and the batch is not applied. Peer lookups are shared, so a
+burst of requests naming one domain fetches its key once, and no more than 16
+domains are being looked up at a time.
+
 ## admin
 
 DTOs in `modules/admin.dart`. Lists are cursor-paged `Page<T>` (`cursor`,

@@ -247,6 +247,49 @@ void main() {
         final response = await post(b, headers, body);
         expect(response.statusCode, 403);
       });
+
+      test(
+        'a peer that spent its byte budget is refused before parsing',
+        () async {
+          // The body is padded past 3 MiB: what is being bounded is the parsing
+          // of an accepted peer's volume, not the size of one request.
+          final body = [
+            ...batchFor(sender: aliceAt()),
+            ...List.filled(3 * 1024 * 1024, 0x20),
+          ];
+          final headers = await a.federation.client.sign(
+            'POST',
+            Routes.s2sMessages.path,
+            body,
+          );
+          // Spend the whole minute's budget, twice: the second hit is the one
+          // that finds the bucket empty, so the peer's next body has nothing
+          // refill to stand on.
+          final budget = RateLimitPolicy.per(
+            'federation.bytes',
+            64 * 1024 * 1024,
+            const Duration(minutes: 1),
+          );
+          await b.env.platform.rateLimiter.hit(
+            budget,
+            'server:${a.domain}',
+            cost: 64 * 1024 * 1024,
+          );
+          await b.env.platform.rateLimiter.hit(
+            budget,
+            'server:${a.domain}',
+            cost: 64 * 1024 * 1024,
+          );
+          final response = await post(b, headers, body);
+          expect(response.statusCode, 429, reason: response.body);
+          expect(response.headers['retry-after'], isNotNull);
+          expect(
+            (await mailbox(b, bob)).envelopes,
+            isEmpty,
+            reason: 'the batch was never decoded',
+          );
+        },
+      );
     });
 
     test('a reused message id cannot suppress another sender', () async {
@@ -302,11 +345,19 @@ void main() {
       late HttpServer evil;
       late HttpServer internal;
       var internalHits = 0;
+      var identityHits = 0;
       var redirectIdentity = false;
+      var oversizeDocument = false;
+      var oversizeAnswer = false;
+      var slowIdentity = false;
 
       setUp(() async {
         internalHits = 0;
+        identityHits = 0;
         redirectIdentity = false;
+        oversizeDocument = false;
+        oversizeAnswer = false;
+        slowIdentity = false;
         internal = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         internal.listen((r) {
           internalHits++;
@@ -316,9 +367,33 @@ void main() {
         });
         evil = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final domain = '127.0.0.1:${evil.port}';
-        evil.listen((r) {
-          final wellKnown = r.uri.path == '/.well-known/helix-server';
-          if (wellKnown && !redirectIdentity) {
+        evil.listen((r) async {
+          if (r.uri.path == '/.well-known/helix-server') {
+            identityHits++;
+            // Long enough that a second request for the same domain arrives
+            // while the first lookup is still running.
+            if (slowIdentity) {
+              await Future<void>.delayed(const Duration(milliseconds: 300));
+            }
+            if (redirectIdentity) {
+              r.response
+                ..statusCode = 307
+                ..headers.set('location', 'http://127.0.0.1:${internal.port}/x')
+                ..close();
+              return;
+            }
+            if (oversizeDocument) {
+              // Chunks of space: too much of anything, and not JSON.
+              r.response
+                ..add(
+                  List.filled(
+                    PeerDirectory.identityDocumentMaxBytes + 4096,
+                    0x20,
+                  ),
+                )
+                ..close();
+              return;
+            }
             r.response
               ..headers.contentType = ContentType.json
               ..write(
@@ -330,6 +405,14 @@ void main() {
                   ).toJson(),
                 ),
               )
+              ..close();
+            return;
+          }
+          if (oversizeAnswer) {
+            r.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..add(List.filled(FederationClient.answerMaxBytes + 4096, 0x20))
               ..close();
             return;
           }
@@ -364,6 +447,90 @@ void main() {
           throwsA(isA<PeerUnavailable>()),
         );
         expect(internalHits, 0);
+      });
+
+      test(
+        'an identity document over the cap is refused, not buffered',
+        () async {
+          oversizeDocument = true;
+          await expectLater(
+            a.federation.peers.resolve('127.0.0.1:${evil.port}'),
+            throwsA(
+              isA<PeerUnavailable>().having(
+                (e) => e.reason,
+                'reason',
+                contains('over the'),
+              ),
+            ),
+          );
+          expect(identityHits, 1);
+        },
+      );
+
+      test('a peer answer too big or too slow to read is refused', () async {
+        oversizeAnswer = true;
+        await expectLater(
+          a.federation.client.call(
+            '127.0.0.1:${evil.port}',
+            'POST',
+            Routes.s2sMessages.path,
+            body: const {},
+          ),
+          throwsA(
+            isA<PeerUnavailable>().having(
+              (e) => e.reason,
+              'reason',
+              anyOf(contains('over the'), contains('timeout')),
+            ),
+          ),
+          reason:
+              'either bound may trip first on a busy machine; '
+              'neither lets the answer be buffered whole',
+        );
+        expect(
+          identityHits,
+          1,
+          reason: 'the document is read, the answer is not',
+        );
+      });
+
+      test(
+        'one domain is fetched once while twenty callers wait for it',
+        () async {
+          slowIdentity = true;
+          final domain = '127.0.0.1:${evil.port}';
+          final peers = await Future.wait([
+            for (var i = 0; i < 20; i++) a.federation.peers.resolve(domain),
+          ]);
+          expect(peers.map((p) => p.apiBase), everyElement('http://$domain'));
+          expect(identityHits, 1);
+        },
+      );
+
+      test('forged headers do not cost one peer lookup per request', () async {
+        // Twenty well-formed but unsigned S2S requests naming this domain.
+        // Each one must make this node fetch the domain's key before it can
+        // check a signature, so the fetch is shared: one for the unknown
+        // domain, and at most the one per ten minutes that a failed signature
+        // is allowed to ask for - never one per request.
+        slowIdentity = true;
+        final domain = '127.0.0.1:${evil.port}';
+        final body = utf8.encode('{"signed":"by nobody"}');
+        final headers = {
+          HelixHeaders.s2sServer: domain,
+          HelixHeaders.s2sTimestamp: '${DateTime.now().millisecondsSinceEpoch}',
+          HelixHeaders.s2sSignature: encodeBytes(bytes(64)),
+        };
+        final responses = await Future.wait([
+          for (var i = 0; i < 20; i++)
+            http.post(
+              b.server.baseUri.resolve(Routes.s2sMessages.path),
+              headers: {'content-type': 'application/json', ...headers},
+              body: body,
+            ),
+        ]);
+        expect(responses.map((r) => r.statusCode), everyElement(401));
+        expect(identityHits, lessThan(4));
       });
     });
 

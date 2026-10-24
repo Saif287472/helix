@@ -642,6 +642,41 @@ Wire: none; a replay simply carries more headers.
   today). No `.env` line, no wire change: a replay carries more headers and a
   concurrent duplicate is the only new answer, and it is a retryable one the
   client already handles.
+- S4 (AUD-6-2, AUD-6-6) — federation now reads a peer *to a limit*.
+  `_readBounded` replaces `http.Response.fromStream` on both outbound paths and
+  stops at 64 KiB for an identity document and 8 MiB for an API answer
+  (`PeerDirectory.identityDocumentMaxBytes`, `FederationClient.answerMaxBytes`),
+  applying the cap **as the body arrives** rather than to the declared
+  `content-length`, so a lying header buys an attacker nothing; the config
+  timeout (5 s) bounds the whole read *and* the gap between two chunks, the two
+  bounds S1 put on the device-facing body reader. Every throw happens inside the
+  loop, which cancels the subscription, so no abandoned read keeps running.
+  The ordering the finding names cannot be reversed — a signature cannot be
+  checked before an unknown domain's key has been fetched — so the *cost* of a
+  forged header is what got bounded: one lookup per domain, shared including
+  its cache write (the join is checked **before** reading the cache; reading
+  first is what let a second request miss the row the first was still writing
+  and fetch again), and at most 16 domains at a time, past which a caller gets
+  `PeerUnavailable` - a relay requeues, a peer retries. AUD-6-6:
+  `federation.bytes` (64 MiB a minute per server, the token bucket's `cost` in
+  bytes) is charged by `_charged`, which wraps each of the five body-carrying
+  S2S routes and runs *before* `q.json`, so an accepted peer's parsing volume -
+  not only its request count - is bounded; only verified bodies are charged, so
+  a stranger cannot spend a peer's budget, and a peer past it gets
+  `rate_limited` with `Retry-After` and its batch is not applied.
+  Tests: `federation_test.dart` — "an identity document over the cap is refused,
+  not buffered", "a peer answer too big or too slow to read is refused", "one
+  domain is fetched once while twenty callers wait for it", "forged headers do
+  not cost one peer lookup per request", "a peer that spent its byte budget is
+  refused before parsing" (3 MiB body, budget drained, 429, mailbox empty); the
+  group's fake peer now counts identity hits and can hold a document open.
+  **Residual, deliberate:** the answer test asserts `PeerUnavailable` for either
+  bound because an 8 MiB loopback read measures ~3.8 s here and would race the
+  5 s timeout on a busy machine - the 5 s bound is the one `fromStream` already
+  had, so no legitimate answer that used to arrive now fails, but a real peer
+  that needs longer than that is a tuning question for the operator, not a
+  behaviour this step changed. No migration, no `.env` line, no wire change:
+  `rate_limited` and `PeerUnavailable` are both answers peers already handle.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**

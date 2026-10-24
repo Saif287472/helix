@@ -35,6 +35,44 @@ final class PeerRefused implements Exception {
   String toString() => 'PeerRefused(${error.code.wire})';
 }
 
+/// The peer's answer, buffered but never past [maxBytes].
+///
+/// `http.Response.fromStream` reads whatever arrives; a peer - or a domain an
+/// attacker points at this server - can therefore stream for the whole timeout
+/// and land all of it in this node's memory (AUD-6-2). The cap is applied as
+/// the body arrives, not to the declared `content-length`, so a flood and a
+/// dribble stop at the same size and a lying header changes nothing. The read
+/// carries the same two bounds the platform's own body reader does: no chunk
+/// for [idle], and [deadline] for headers and body together. Both throw from
+/// inside the loop, which cancels the subscription on the way out, so no read
+/// keeps running behind an abandoned future.
+Future<http.Response> _readBounded(
+  Future<http.StreamedResponse> sent, {
+  required int maxBytes,
+  required Duration idle,
+  required Duration deadline,
+}) async {
+  final elapsed = Stopwatch()..start();
+  final response = await sent.timeout(deadline);
+  final body = BytesBuilder(copy: false);
+  await for (final chunk in response.stream.timeout(idle)) {
+    if (elapsed.elapsed > deadline) {
+      throw const PeerUnavailable('answer did not arrive within the timeout');
+    }
+    body.add(chunk);
+    if (body.length > maxBytes) {
+      throw PeerUnavailable('answer is over the $maxBytes limit');
+    }
+  }
+  return http.Response.bytes(
+    body.takeBytes(),
+    response.statusCode,
+    headers: response.headers,
+    request: response.request,
+    reasonPhrase: response.reasonPhrase,
+  );
+}
+
 /// Who a domain's server is. The trust root is the domain itself: a peer's
 /// key is whatever `https://<domain>/.well-known/helix-server` serves (TLS
 /// authenticates the domain). Keys are cached for a day and re-fetched, at
@@ -62,6 +100,24 @@ final class PeerDirectory {
   static const refreshGap = Duration(minutes: 10);
   static const downGap = Duration(minutes: 1);
 
+  /// What a peer's identity document may cost this node, in bytes. The real
+  /// document is three fields; anything near this limit is not a peer.
+  static const identityDocumentMaxBytes = 64 * 1024;
+
+  /// Peer lookups running at once. A forged S2S header names any public
+  /// domain, and this server must fetch that domain's key before it can check
+  /// the signature, so the number of lookups is itself a limit: past it a
+  /// request is told the peer is unavailable - a relay requeues its work, a
+  /// peer retries its request - instead of the node adding a socket, a DNS
+  /// lookup and a buffer for every domain an attacker invents.
+  static const maxConcurrentLookups = 16;
+
+  /// Lookups running at once, by domain: concurrent requests for one domain
+  /// share the fetch *and* its cache write, so the second request never reads
+  /// a cache the first has not filled yet.
+  final Map<String, Future<Peer>> _lookups = {};
+  int _lookupCount = 0;
+
   /// Refuses domains this server must not talk to.
   void checkAllowed(String domain) {
     if (!AccountAddress.isValidDomain(domain) ||
@@ -78,6 +134,13 @@ final class PeerDirectory {
   /// With [refresh], re-fetches (rate-limited) even if cached.
   Future<Peer> resolve(String domain, {bool refresh = false}) async {
     checkAllowed(domain);
+    // Join the lookup already running for this domain *before* reading the
+    // cache: its answer is fresher than anything stored, and a caller that
+    // reads an empty cache a moment after a fetch finished would otherwise
+    // start that same fetch again - which is how twenty forged requests became
+    // twenty peer lookups.
+    final running = _lookups[domain];
+    if (running != null) return running;
     final cached = await store.peer(db, domain);
     final fresh =
         cached != null &&
@@ -98,7 +161,7 @@ final class PeerDirectory {
     }
     final Peer fetched;
     try {
-      fetched = await _fetch(domain);
+      fetched = await _lookupShared(domain);
     } on PeerUnavailable {
       if (cached != null) return cached;
       await ephemeral.put('fed:down:$domain', '1', downGap);
@@ -115,8 +178,35 @@ final class PeerDirectory {
         !constantTimeEquals(cached.publicKey, fetched.publicKey)) {
       log.warn('peer_key_changed', {'peer': domain});
     }
-    await store.savePeer(db, fetched);
     return fetched;
+  }
+
+  /// The domain's document, fetched and cached once however many callers ask
+  /// for it at the same time, and refused outright once
+  /// [maxConcurrentLookups] domains are being looked up.
+  ///
+  /// The cache write is inside the shared future deliberately: two requests
+  /// that both read an empty cache must still cost one fetch, not one each.
+  Future<Peer> _lookupShared(String domain) {
+    final running = _lookups[domain];
+    if (running != null) return running;
+    if (_lookupCount >= maxConcurrentLookups) {
+      return Future.error(const PeerUnavailable('too many peer lookups'));
+    }
+    _lookupCount++;
+    late final Future<Peer> lookup;
+    lookup = _lookup(domain).whenComplete(() {
+      _lookupCount--;
+      if (identical(_lookups[domain], lookup)) _lookups.remove(domain);
+    });
+    _lookups[domain] = lookup;
+    return lookup;
+  }
+
+  Future<Peer> _lookup(String domain) async {
+    final peer = await _fetch(domain);
+    await store.savePeer(db, peer);
+    return peer;
   }
 
   Future<Peer> _fetch(String domain) async {
@@ -129,9 +219,14 @@ final class PeerDirectory {
       ..headers['accept'] = 'application/json';
     final http.Response response;
     try {
-      response = await http.Response.fromStream(
-        await httpClient.send(request).timeout(config.timeout),
-      ).timeout(config.timeout);
+      response = await _readBounded(
+        httpClient.send(request),
+        maxBytes: identityDocumentMaxBytes,
+        idle: config.timeout,
+        deadline: config.timeout,
+      );
+    } on PeerUnavailable {
+      rethrow;
     } on Object catch (e) {
       throw PeerUnavailable(e.runtimeType.toString());
     }
@@ -320,6 +415,11 @@ final class FederationClient {
   final Clock clock;
   final http.Client httpClient;
 
+  /// What one answer from a peer may cost this node, in bytes. It matches the
+  /// largest body this server is willing to *send* over federation, so a peer
+  /// can answer any request of ours in full and nothing larger.
+  static const answerMaxBytes = 8 * 1024 * 1024;
+
   /// The S2S headers for a request (also used by tests).
   Future<Map<String, String>> sign(
     String method,
@@ -369,9 +469,14 @@ final class FederationClient {
       ..bodyBytes = bytes;
     final http.Response response;
     try {
-      response = await http.Response.fromStream(
-        await httpClient.send(request).timeout(config.timeout),
-      ).timeout(config.timeout);
+      response = await _readBounded(
+        httpClient.send(request),
+        maxBytes: answerMaxBytes,
+        idle: config.timeout,
+        deadline: config.timeout,
+      );
+    } on PeerUnavailable {
+      rethrow;
     } on Object catch (e) {
       throw PeerUnavailable(e.runtimeType.toString());
     }
