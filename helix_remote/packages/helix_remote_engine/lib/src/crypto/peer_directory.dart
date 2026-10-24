@@ -107,6 +107,20 @@ final class PeerDirectory {
     }
     final changed = verified.pin == AikPinResult.changed;
     final now = _ctx.now();
+    // A key change retires this account's sessions, and it happens here,
+    // before the transaction below rather than inside it (AUD-12d-1): a
+    // transaction held while something waits is how the engine deadlocks. If
+    // this throws, nothing was pinned and the next fetch clears again; if a
+    // crash lands between the two, the pin is still the old one, so the fetch
+    // that follows repeats the clearing harmlessly.
+    if (changed) {
+      for (final device in await _ctx.db.peopleDao.devicesOf(
+        account,
+        includeStale: true,
+      )) {
+        await _clearSessions(DeviceAddress(account, device.deviceId), now);
+      }
+    }
     await _ctx.db.transaction(() async {
       if (changed) await _applyKeyChange(account, verified, now);
       if (verified.pin == AikPinResult.firstUse) {
@@ -149,19 +163,16 @@ final class PeerDirectory {
     return FetchedKeys(verified.devices, keyChanged: changed);
   }
 
-  /// A different AIK is a key change (CRYPTO_V2.md §2): drop every session
-  /// with the account's devices (keeping the retired base keys so their
-  /// prekey messages cannot be replayed), mark the devices stale, reset the
-  /// verified flag, pin the new key and tell the user in the chat.
+  /// A different AIK is a key change (CRYPTO_V2.md §2): the devices go stale,
+  /// the verified flag resets, the new key is pinned and the user is told in
+  /// the chat. The sessions this change retires are cleared by [fetch], before
+  /// it opens this transaction.
   Future<void> _applyKeyChange(
     String account,
     VerifiedAccountKeys verified,
     DateTime now,
   ) async {
     final dao = _ctx.db.peopleDao;
-    for (final device in await dao.devicesOf(account, includeStale: true)) {
-      await _clearSessions(DeviceAddress(account, device.deviceId), now);
-    }
     await dao.markDevicesStale(account);
     await dao.upsertPerson(
       PeopleCompanion.insert(
@@ -224,11 +235,18 @@ final class PeerDirectory {
 
   /// Forgets a device that is gone (revoked, or listed as `extra` in a
   /// `device_list_stale`): its cached keys and its sessions.
-  Future<void> dropDevice(String account, String deviceId) =>
-      _ctx.db.transaction(() async {
-        await _ctx.db.peopleDao.removeDevice(account, deviceId);
-        await _clearSessions(DeviceAddress(account, deviceId), _ctx.now());
-      });
+  ///
+  /// The sessions go before the row does, and not in the same transaction: a
+  /// clearing that fails leaves the device listed, so the next send fetches a
+  /// bundle and starts the session again, while a device row deleted over a
+  /// session that survived is a session nothing will ever clear.
+  Future<void> dropDevice(String account, String deviceId) async {
+    final remote = DeviceAddress(account, deviceId);
+    await _clearSessions(remote, _ctx.now());
+    await _ctx.db.transaction(
+      () => _ctx.db.peopleDao.removeDevice(account, deviceId),
+    );
+  }
 
   /// Keeps only [keepIds] among the cached devices of [account].
   Future<void> retainDevices(String account, Set<String> keepIds) async {
@@ -240,26 +258,34 @@ final class PeerDirectory {
     }
   }
 
-  /// Drops every cached session of [remote]. Retired base keys stay.
+  /// Drops every cached session of [remote]. Retired base keys stay, so the
+  /// prekey messages already sent on them cannot be replayed.
   ///
-  /// Clearing is not a compare-and-set race worth failing over: the record is
-  /// re-read and cleared again if another engine moved it, which reaches the
-  /// same result. The caller's own per-device lock is not held here (a device
-  /// list refresh clears many devices), so [StaleSessionState] is retried
-  /// inside the store's lock.
-  Future<void> _clearSessions(DeviceAddress remote, DateTime now) =>
-      _ctx.deviceLocks.run(remote, () async {
-        for (var attempt = 1; ; attempt++) {
-          final sessions = await _ctx.sessionStore.load(remote);
-          if (sessions == null) return;
-          try {
-            await _ctx.sessionStore.save(sessions.cleared(), now: now);
-            return;
-          } on StaleSessionState {
-            if (attempt >= staleAttempts) rethrow;
-          }
-        }
-      });
+  /// **No device lock, and never inside a transaction** (AUD-12d-1). The lock
+  /// would be taken in the wrong order: a send or an inbound apply holds the
+  /// lock of the very device it is working on and opens its transaction after,
+  /// and drift serializes transactions on this engine's single connection, so
+  /// a clearing that waits for a lock while a transaction is open can wait
+  /// forever — and the engine's `KeyedLock` is not re-entrant, so the same
+  /// task reaching this for the device it already holds (a prekey message from
+  /// an account whose key just changed) would wait on itself. The lock is also
+  /// not what makes this correct: the record is re-read and cleared again while
+  /// another engine's commit moves it under us, and the version
+  /// `DbSessionStore` stamps on it is the guard. The callers of this clear
+  /// several devices at a time, so it retries inside its own loop rather than
+  /// going through `PairwiseCrypto.locked`.
+  Future<void> _clearSessions(DeviceAddress remote, DateTime now) async {
+    for (var attempt = 1; ; attempt++) {
+      final sessions = await _ctx.sessionStore.load(remote);
+      if (sessions == null) return;
+      try {
+        await _ctx.sessionStore.save(sessions.cleared(), now: now);
+        return;
+      } on StaleSessionState {
+        if (attempt >= staleAttempts) rethrow;
+      }
+    }
+  }
 }
 
 /// Answers the session layer's question "who is this device?" for prekey

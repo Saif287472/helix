@@ -221,11 +221,14 @@ receiver skips).
 
 - **AIK pinning:** the first AIK seen for an account is pinned in `people`.
   A bundle under another AIK is a **key change**: sessions with all of the
-  account's devices are dropped (retired base keys kept), its devices are
-  marked `stale`, the verified flag resets, the new AIK is pinned, a local
-  `system` row `safety_number_changed` is added to the chat and
-  `KeyChangedEvent` is emitted. This account's own AIK never changes: a
-  bundle claiming otherwise is refused (`UntrustedPeerException`).
+  account's devices are dropped first (retired base keys kept), then one
+  transaction marks its devices `stale`, resets the verified flag and pins the
+  new AIK, adds the local `system` row `safety_number_changed` to the chat, and
+  `KeyChangedEvent` is emitted. Clearing before the commit is deliberate
+  (AUD-12d-1: never a lock inside a transaction) and self-healing - a failure
+  or a crash in between leaves the old pin, so the next fetch clears again. This
+  account's own AIK never changes: a bundle claiming otherwise is refused
+  (`UntrustedPeerException`).
 - **Certificates** are checked on every bundle (`VerifiedAccountKeys`); one bad
   bundle fails the fetch, nothing is encrypted to an unverified key.
 - **Prekeys** (`KeyMaintenance`): 1 signed + 100 one-time at registration or
@@ -262,6 +265,19 @@ receiver skips).
   committed - the retry must reload inside the attempt, never reuse a record
   loaded earlier. A cleared record is written as an empty one-slot record, not
   deleted, so the revision survives.
+- **Locks outermost, transactions innermost** (AUD-12d-1). Drift serializes
+  transactions on this engine's single connection, and `KeyedLock` is not
+  re-entrant, so a task that opens a transaction and then waits for a device
+  lock can wait forever (a send or an inbound apply holds the lock and queues
+  its transaction behind that one), and a task can also wait for a lock it
+  already holds. Nothing takes a device lock inside a transaction, and work
+  that needs several devices' locks at once (`encryptFor`) takes them sorted and
+  before its transaction. Clearing a device's sessions is one of those cases and
+  takes no lock at all: the record's `version` is what makes the write safe, and
+  the reload-and-clear again loop converges, so `PeerDirectory` can clear a
+  session of the very device whose lock the caller holds (a prekey message from
+  an account whose key just changed). `test/lock_order_test.dart` drives the two
+  orders against each other and fails if they ever meet.
 - Sender keys: `DbSenderKeyStore` does the same for this device's own sending
   key in a group (schema 4). `ownKey` remembers the revision it read; a commit
   of an `OwnSenderKeyWrite` lands only while that is still the stored one, and
@@ -319,6 +335,11 @@ ciphertext it cannot read.
   ticking test clock, and routes media to `test/support/fake_media.dart` when
   a test is given `Peers(media: ...)`. These cover the pipelines without
   Postgres.
+- `test/lock_order_test.dart` holds a device lock in one task while another
+  retires that device's sessions, in both orders, and fails on a timeout: the
+  shape of AUD-12d-1. It builds an `EngineContext` over a test peer's database
+  to drive `PeerDirectory` directly, the way `test/two_engines_test.dart` drives
+  the session compare-and-set.
 - End-to-end tests against the real in-process server are in
   `server/test/client/engine/` (the engine may not depend on the server): two
   engines over live sockets, a linked second device, offline catch-up,

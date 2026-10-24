@@ -1128,6 +1128,50 @@ update to be protected.
   `server/test/client/engine/groups_test.dart` green against Postgres. No schema
   and no wire change (the read-back is the existing `GET /v1/groups/{id}`), so no
   APK is needed for this step.
+- S5 (AUD-12d-1) — `PeerDirectory` took the per-device session lock *inside* its
+  caller's transaction (a key change cleared every device of the account, and
+  `dropDevice` cleared one), while a send (`encryptFor`) and an inbound apply
+  hold that lock and open their transaction after. Drift serializes transactions
+  on the engine's single connection, so the two could wait on each other with no
+  timeout — and because the engine's `KeyedLock` is not re-entrant, a third
+  shape needed no second task at all: an inbound prekey message from an account
+  whose key just changed is applied under that device's lock, and resolving its
+  identity reaches the same clearing, which waits on itself. The finding's
+  confidence ("likely: inversion confirmed in code; needs two paths to overlap")
+  understates it — the self-wait makes one path enough. Sessions now go
+  **before** the transaction that pins the new key and before the row delete in
+  `dropDevice`, each in its own transaction, and `_clearSessions` takes no lock:
+  the record's `version` (C-01's compare-and-set) is the guard and the reload-
+  and-clear-again loop converges, which is what the finding's fix sketch argued
+  and what the old doc comment already half-said. Clearing first is also the
+  order that fails safe: a throw or a crash before the commit leaves the *old*
+  pin, so the next fetch clears again, where clearing after a committed pin would
+  leave a session on the retired key that nothing ever revisits (the devices are
+  re-listed as trusted by that same transaction). The consequence of that rare
+  loss is one undecryptable message and a §13a repair, not a wedged engine.
+  Not done from the sketch: the `withDevice`/`withDevices` helpers and the debug
+  assertion that `db.inTransaction` is false when a lock is taken. Drift exposes
+  no transaction state to the engine, so the check needs a wrapper around all 52
+  `db.transaction` call sites in this package — a change of its own, in files
+  other work is touching, for a rule that now has one implementation left
+  (`PeerDirectory` takes no lock at all, and `encryptFor` already locks before
+  it transacts). The rule is instead written into the engine MODULE.md's data
+  conventions and enforced by a test.
+  Tests: `test/lock_order_test.dart`, two cases (a key change and a device drop
+  each racing a lock holder that then writes through a transaction), both of
+  which hang and fail on the 5 s timeout with the old order restored —
+  "Bad state: the device lock and the open transaction waited on each other" —
+  and pass in 2 s with the fix. The key-change case is forced by overwriting the
+  pinned AIK locally, which the crypto layer reports as `changed` while the
+  served bundles still verify.
+  Gate: engine suite **323 green**, `dart analyze lib test` and `dart analyze
+  server tool` clean, format clean, and the live-socket engine tests that walk
+  this path green against Postgres — `server/test/client/engine/security_test.dart`
+  (the key change is pinned, announced and resets "verified"; "signed prekeys
+  rotate when due" hit the documented pool-lock flake in a multi-file run and
+  passed alone), `recovery_test.dart`, and `devices_test.dart` +
+  `messaging_test.dart` (17 green, the `dropDevice` paths). No schema and no
+  wire change; no APK needed for this step on its own.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**
