@@ -169,7 +169,9 @@ final class RouteRegistry {
   ];
 
   /// Builds the router. Routes with more literal segments are added first so
-  /// `/v1/keys/status` wins over `/v1/keys/{account}`.
+  /// `/v1/keys/status` wins over `/v1/keys/{account}`, ties are settled per
+  /// segment from the left, and two templates that could only ever answer the
+  /// same requests stop the node rather than decide by chance.
   Handler build({
     required Authenticator authenticator,
     required RateLimiter rateLimiter,
@@ -183,12 +185,24 @@ final class RouteRegistry {
       ),
     );
     final budget = bodyBudget ?? BodyBudget(256 * 1024 * 1024);
+    final ambiguous = ambiguousPairs(_registrations.values.map((r) => r.route));
+    if (ambiguous.isNotEmpty) {
+      throw StateError(
+        'these route pairs match the same requests and only the order they '
+        'were added in decides which one answers: $ambiguous',
+      );
+    }
     final ordered = _registrations.values.toList()
       ..sort((a, b) {
         final bySpecificity = _specificity(
           b.route,
         ).compareTo(_specificity(a.route));
         if (bySpecificity != 0) return bySpecificity;
+        // Ties are settled per segment, left to right, then by the path and
+        // the method name: no two orders of the same catalog may answer the
+        // same request differently.
+        final byTemplate = _compareTemplates(a.route.path, b.route.path);
+        if (byTemplate != 0) return byTemplate;
         // HEAD before GET: shelf_router lets GET routes answer HEAD.
         return (a.route.method == HttpMethod.head ? 0 : 1).compareTo(
           b.route.method == HttpMethod.head ? 0 : 1,
@@ -216,9 +230,52 @@ final class RouteRegistry {
   }
 
   static int _specificity(ApiRoute route) {
-    final segments = route.path.split('/').where((s) => s.isNotEmpty).toList();
+    final segments = _segments(route.path);
     final literal = segments.where((s) => !s.startsWith('{')).length;
     return literal * 100 - segments.length;
+  }
+
+  static List<String> _segments(String path) =>
+      path.split('/').where((s) => s.isNotEmpty).toList();
+
+  /// Order between two templates [_specificity] cannot separate: the one that
+  /// is literal sooner, then the one whose literal is earlier in the alphabet.
+  /// A total order, so the router's answer never depends on the order the
+  /// modules registered in.
+  static int _compareTemplates(String left, String right) {
+    final a = _segments(left);
+    final b = _segments(right);
+    for (var i = 0; i < a.length && i < b.length; i++) {
+      final aParameter = a[i].startsWith('{');
+      final bParameter = b[i].startsWith('{');
+      if (aParameter != bParameter) return aParameter ? 1 : -1;
+      if (!aParameter) {
+        final byLiteral = a[i].compareTo(b[i]);
+        if (byLiteral != 0) return byLiteral;
+      }
+    }
+    return b.length.compareTo(a.length);
+  }
+
+  /// Templates of one method that can answer exactly the same requests, which
+  /// means they differ only in what their parameters are called. Whichever is
+  /// added second is unreachable, so this is a bug in the catalog, not a
+  /// question of order: [_compareTemplates] ranks them equal by design.
+  static List<String> ambiguousPairs(Iterable<ApiRoute> routes) {
+    final byShape = <String, List<ApiRoute>>{};
+    for (final route in routes) {
+      final shape =
+          '${route.method.name} '
+          '${_segments(route.path).map((s) => s.startsWith('{') ? '{}' : s).join('/')}';
+      byShape.putIfAbsent(shape, () => []).add(route);
+    }
+    return [
+      for (final group in byShape.values)
+        if (group.length > 1)
+          for (var i = 0; i < group.length; i++)
+            for (var j = i + 1; j < group.length; j++)
+              '${group[i]} and ${group[j]}',
+    ];
   }
 
   /// Order (S7): credentials, then the route's rate limit, and only then the
@@ -258,6 +315,11 @@ final class RouteRegistry {
       final params = <String, String>{};
       for (final name in route.parameters) {
         try {
+          // shelf_router matches `request.url.path`, which Dart hands over
+          // still percent-encoded, so this is the one decode a path parameter
+          // gets: `%252F` arrives as `%2F`, never as a `/` that would smuggle a
+          // segment past a handler's own one-segment check, and a name holding
+          // a literal `%` (sent as `%25`) stays addressable.
           params[name] = Uri.decodeComponent(request.params[name] ?? '');
         } on Object {
           // Malformed escapes (ArgumentError) or bytes that are not UTF-8

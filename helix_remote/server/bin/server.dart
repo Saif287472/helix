@@ -30,7 +30,11 @@ Future<void> main() async {
   final logFile = config.logFile;
   if (logFile != null) {
     try {
-      file = FileSink.open(logFile, keepDays: config.logKeepDays);
+      file = FileSink.open(
+        logFile,
+        keepDays: config.logKeepDays,
+        maxBytesPerDay: config.logMaxBytesPerDay,
+      );
     } on FileSystemException {
       stderr.writeln(
         'Invalid configuration:\n  HELIX_LOG_FILE cannot be opened for writing',

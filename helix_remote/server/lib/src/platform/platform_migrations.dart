@@ -10,8 +10,20 @@ const platformMigrations = MigrationSet(
     Migration(2, 'rate_bucket_full_at', _rateBucketFullAt),
     Migration(3, 'jobs_dedupe_live', _jobsDedupeLive),
     Migration(4, 'idempotency_claim', _idempotencyClaim),
+    Migration(5, 'ephemeral_key_pattern', _ephemeralKeyPattern),
   ],
 );
+
+/// `scan(prefix)` is `key LIKE 'prefix%'`, and Postgres can only use a btree
+/// for a prefix `LIKE` when the index is `text_pattern_ops` or the column is
+/// `"C"`-collated: the primary key is neither, and this database is created
+/// with the host locale, so every scan walked all the live ephemeral rows
+/// (AUD-1b-4). Additive: the planner simply gains a choice, and equality
+/// lookups keep using the primary key.
+String _ephemeralKeyPattern(String s) =>
+    '''
+CREATE INDEX ephemeral_key_pattern ON $s.ephemeral (key text_pattern_ops);
+''';
 
 /// A key is now claimed *before* its handler runs, so a concurrent duplicate
 /// is turned away instead of acting twice (AUD-1a-3) and a retry whose answer

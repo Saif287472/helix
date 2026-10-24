@@ -75,7 +75,7 @@ final class HelixRequest {
   final String requestId;
   final String clientIp;
 
-  /// Path parameters by name (already percent-decoded).
+  /// Path parameters by name (percent-decoded once, in the router).
   final Map<String, String> params;
 
   /// The request body, read up to the route's limit (null for streaming

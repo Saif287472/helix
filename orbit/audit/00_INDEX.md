@@ -343,7 +343,9 @@ decisions-and-ideas tier, rather than after the cross-cutting notes.
 12. AUD-1b-2 (P2) — periodic lease `max(60 s, interval)` is shorter than the
     5-minute job timeout, so a slow periodic job can run twice at once.
 13. AUD-1a-2 (P2) — path params percent-decoded twice (latent `/`, `..` in a
-    param; no live sink found yet).
+    param; no live sink found yet). **Closed as not a bug in B4 S6**: Dart
+    hands `Uri.path` over still percent-encoded, so the registry's decode is
+    the only one; the tests added there pin it.
 14. AUD-1b-3 (P2) — the plan's claimed EXPLAIN hot-path tests do not exist
     (mailbox fetch/ack are on the list).
 15. AUD-4c-1 (P2) — a member server checks the cached roster version outside

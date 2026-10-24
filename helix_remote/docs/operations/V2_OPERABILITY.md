@@ -99,9 +99,12 @@ identifiers into a ticket or chat without checking it first.
 - **Format.** One JSON object per line on **stdout**: `ts`, `level`, `event`,
   then fields. The level is `info` and above (no setting changes this).
   With `HELIX_LOG_FILE` set, the same lines are also appended to that file
-  (opened at start; an unwritable path exits with 78). The server rotates
-  it at midnight UTC into `<name>-YYYY-MM-DD<ext>` and keeps
-  `HELIX_LOG_KEEP_DAYS` days (default 14); copy-and-truncate tools do not
+  (opened at start; an unwritable path exits with 78). Lines are buffered and
+  written by one background flush, never synchronously on the request. The
+  server rotates it at midnight UTC into `<name>-YYYY-MM-DD<ext>` and keeps
+  `HELIX_LOG_KEEP_DAYS` days (default 14); a day that passes
+  `HELIX_LOG_MAX_BYTES_PER_DAY` (default 256 MiB) rotates early and its oldest
+  file goes, so a flood cannot fill the disk. copy-and-truncate tools do not
   work on Windows. (`platform/observability/log.dart`, `bin/server.dart`.)
 - **Access log.** Every request logs event `http` with `request_id`, `method`,
   `route` (the template, not the URL), `status` and `ms`; a request with a body

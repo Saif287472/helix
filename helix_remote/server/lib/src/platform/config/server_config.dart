@@ -100,6 +100,7 @@ final class ServerConfig {
     required this.schemaPrefix,
     required this.logFile,
     required this.logKeepDays,
+    required this.logMaxBytesPerDay,
     required this.dbPoolSize,
     required this.maxInFlightBodyBytes,
     required this.metricsToken,
@@ -155,6 +156,12 @@ final class ServerConfig {
   /// `HELIX_LOG_KEEP_DAYS`: how many days of rotated log files to keep
   /// (1 to 3650, default 14). The file rotates at midnight UTC.
   final int logKeepDays;
+
+  /// `HELIX_LOG_MAX_BYTES_PER_DAY`: the size one day's log file may reach
+  /// before it rotates early (default 256 MiB; 0 means no size bound, only
+  /// the daily one). A day that passes it loses its oldest file: the bound is
+  /// there for the flood that would otherwise fill the disk.
+  final int logMaxBytesPerDay;
 
   /// `HELIX_DB_POOL_SIZE`: connections in the main Postgres pool (the
   /// ephemeral store and the bus `LISTEN` have their own).
@@ -334,6 +341,11 @@ final class ServerConfig {
     );
     final dbPoolSize = integer('HELIX_DB_POOL_SIZE', 10, min: 2, max: 200);
     final logKeepDays = integer('HELIX_LOG_KEEP_DAYS', 14, min: 1, max: 3650);
+    final logMaxBytesPerDay = integer(
+      'HELIX_LOG_MAX_BYTES_PER_DAY',
+      256 * 1024 * 1024,
+      max: 1 << 40,
+    );
     final maxInFlightBodyBytes = integer(
       'HELIX_MAX_INFLIGHT_BODY_BYTES',
       256 * 1024 * 1024,
@@ -390,6 +402,7 @@ final class ServerConfig {
       schemaPrefix: prefix,
       logFile: read('HELIX_LOG_FILE'),
       logKeepDays: logKeepDays,
+      logMaxBytesPerDay: logMaxBytesPerDay,
       dbPoolSize: dbPoolSize,
       maxInFlightBodyBytes: maxInFlightBodyBytes,
       metricsToken: metricsToken,

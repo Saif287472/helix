@@ -288,7 +288,10 @@ the push-observability gate, each green when rerun alone: the same
 verification"). Seen 2026-10-25 in the B4 S5 gate, each green when rerun alone:
 `test/modules/messaging_test.dart` ("every wake-up says what became of it" - the
 `no_token` push line is not in the log yet) and the same `messaging_test.dart`
-send again. When another agent session is editing the server while a suite
+send again. Seen 2026-10-25 in the B4 S6 gate, green when rerun alone in 3 s:
+`test/modules/groups_test.dart` ("a member removed while a send is in flight
+receives nothing" - the send answered 409 `the sender is still a member` over
+its 200). When another agent session is editing the server while a suite
 runs, whole files can also fail to *load* on a compile error that is already
 gone by the time the report is read - re-`dart analyze` the file before treating
 a load failure as a result.

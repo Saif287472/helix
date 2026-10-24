@@ -209,6 +209,98 @@ void main() {
       );
     });
 
+    test('a path parameter is decoded once, not twice', () async {
+      final handler = build(
+        (r) => r.add(
+          'people',
+          Routes.findByName,
+          (req) => Response.ok(req.param('name')),
+        ),
+      );
+      final auth = {'authorization': 'Bearer good'};
+      Future<String> name(String encoded) async => (await call(
+        handler,
+        'GET',
+        '/v1/people/by-name/$encoded',
+        headers: auth,
+      )).readAsString();
+
+      // The wire value is percent-encoded, so a handler of a name with a space
+      // or a non-ASCII letter needs the decode to happen at all.
+      expect(await name('Helix%20Name'), 'Helix Name');
+      // `%252F` is an encoded slash *inside* the value. It decodes to `%2F`; a
+      // second decode would hand the handler a `/`, which is the one segment
+      // the route match already decided it may not hold (AUD-1a-2, whose
+      // premise - that shelf_router hands over a decoded path - is not true).
+      expect(await name('%252F'), '%2F');
+      // A name holding a literal `%` is addressable (sent as `%25`), not a
+      // 400 from a decode that cannot read it.
+      expect(await name('foo%25'), 'foo%');
+      // A percent-escape that is not a whole UTF-8 sequence never reaches a
+      // handler at all: shelf refuses the request while building it, so the
+      // router's own decode only ever sees values that came through.
+      await expectLater(
+        call(handler, 'GET', '/v1/people/by-name/%E0%A4%A', headers: auth),
+        throwsA(isA<ArgumentError>()),
+      );
+      // And a name that simply holds a stray `%` in the middle is addressable.
+      expect(await name('a%zb'), 'a%zb');
+    });
+
+    test('routes of equal specificity are ordered by their template', () async {
+      // `/v1/people/by-name/{name}` and `/v1/people/{account}/profile` score
+      // the same and both answer `/v1/people/by-name/profile`, so the order
+      // must come from the template, not from which registered first.
+      void byName(RouteRegistry r) => r.add(
+        'people',
+        Routes.findByName,
+        (req) => Response.ok('name ${req.param('name')}'),
+      );
+      void profile(RouteRegistry r) => r.add(
+        'people',
+        Routes.profile,
+        (req) => Response.ok('profile ${req.param('account')}'),
+      );
+      for (final order in [(byName, profile), (profile, byName)]) {
+        final handler = build((r) {
+          order.$1(r);
+          order.$2(r);
+        });
+        expect(
+          await (await call(
+            handler,
+            'GET',
+            '/v1/people/by-name/profile',
+            headers: const {'authorization': 'Bearer good'},
+          )).readAsString(),
+          'name profile',
+          reason: 'the literal segment comes before the parameter',
+        );
+      }
+    });
+
+    test('no two catalog routes can answer the same request', () {
+      expect(RouteRegistry.ambiguousPairs(Routes.all), isEmpty);
+      expect(
+        RouteRegistry.ambiguousPairs([
+          const ApiRoute(
+            HttpMethod.get,
+            '/v1/x/{one}',
+            module: 'ops',
+            access: RouteAccess.device,
+          ),
+          const ApiRoute(
+            HttpMethod.get,
+            '/v1/x/{other}',
+            module: 'ops',
+            access: RouteAccess.device,
+          ),
+        ]),
+        hasLength(1),
+        reason: 'whichever is added second would be unreachable',
+      );
+    });
+
     test(
       'malformed bodies name the field; unknown routes are JSON 404s',
       () async {

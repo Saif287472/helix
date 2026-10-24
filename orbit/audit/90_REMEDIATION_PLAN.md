@@ -503,6 +503,8 @@ owner deploys with `deploy-helix.ps1 -Tag`, and the release note names
 - AUD-1c-1 (P1) — every S3 request is unbounded; a stalled store hangs media
   requests and accumulates readiness probes.
 - AUD-1a-2 (P2) — path parameters are percent-decoded twice (latent `/`, `..`).
+  Closed in S6 as **not a bug**: the router decodes once and the finding's
+  premise about `request.url.path` is false.
 - AUD-1a-3 (P2) — concurrent duplicates with one `Idempotency-Key` both run.
 - AUD-1a-4 — an idempotent replay loses every response header but content-type.
 - AUD-1a-5 — the access log is synchronous disk I/O with no per-day cap.
@@ -538,12 +540,13 @@ decode limits on the protocol's string and list fields.
 **Verification:** `server/test/platform/http_test.dart` — a request declaring a
 body sends nothing, waits past the deadline, and the reservation is released
 (a second request gets 200, not 503); two concurrent requests with one key run
-the handler once; a replay preserves headers including `retry-after`; a
-double-encoded `%2F` is refused. `infra_test.dart` — a hanging S3 send times
-out, `ping` is single-flight, a malformed endpoint stops start-up with the
-variable named. `federation_test.dart` — an oversize response is refused and no
-identity fetch precedes signature verification. Protocol tests — every string
-and list field has a limit.
+the handler once; a replay preserves headers including `retry-after`; a path
+parameter is decoded once, so a double-encoded `%2F` arrives as `%2F` and never
+as a `/`; `infra_test.dart` — a hanging S3 send times out, `ping` is
+single-flight, a malformed endpoint stops start-up with the variable named.
+`federation_test.dart` — an oversize response is refused and no identity fetch
+precedes signature verification. Protocol tests — every string and list field
+has a limit.
 
 **Rollout:** platform migration 4 adds `state` and `taken_at` to
 `platform.idempotency` (expand-only; the headers ride inside the sealed answer,
@@ -739,6 +742,72 @@ Wire: none; a replay simply carries more headers.
   (`identityHits == 1`, forged headers "under four"); the four load flakes of
   that gate each passed alone and are noted in AGENTS.md. No migration, no
   `.env` line, no wire change.
+- S6 (AUD-1a-5, AUD-1b-4, the route-ordering item in 01a; AUD-1a-2 closed) —
+  `FileSink` gets off the request thread: lines pile into a buffer and one
+  chained asynchronous flush (`flushInterval` 200 ms, sooner once
+  `flushBeforeBytes` 64 KiB have gathered) puts them on the disk, so a flood or
+  a reconnect storm costs writes as fast as the disk can take them instead of
+  one blocking write per request line. Only whole lines are buffered and a
+  rotation always falls between two batches, so no rotation can split a line;
+  each batch is stamped with the day its *own* lines were written, so a flush
+  that runs after midnight files yesterday's lines under yesterday; at most
+  `maxQueuedBatches` 32 batches wait, so a disk slower than the requests costs
+  log lines and not unbounded memory (stdout still carries every one).
+  `HELIX_LOG_MAX_BYTES_PER_DAY` (default 256 MiB; `0` = no size bound, only the
+  daily one) is the new per-day cap: a day that reaches it rotates to the next
+  numbered file of the same day, and at each rotation that day's oldest file is
+  deleted until the day is back inside the bound. Retention by day alone bounds
+  nothing for a day that never ends, which is what 5k requests a second of
+  access lines (~86 MB an hour) actually looks like.
+  AUD-1b-4: platform migration 5 adds `ephemeral_key_pattern` on
+  `key text_pattern_ops`, so the ephemeral store's `LIKE 'ws:12:%'` prefix scan
+  reaches its rows through an index under this database's non-C collation. It
+  joins the `EXPLAIN` guard in `query_plans_test.dart`, seeded with 20 000
+  ephemeral keys and `ANALYZED` — a plan read against unanalyzed rows is not
+  the plan production picks, and the first draft of this case failed exactly
+  that way.
+  Route ordering: `build()` sorts by specificity, then by the template (a
+  literal sooner in the path wins, then the literal text, then the longer
+  path), with `HEAD` placed before its `GET`, so two routes scoring the same no
+  longer answer in whichever order they happened to be added.
+  `RouteRegistry.ambiguousPairs` groups the catalog by method with parameter
+  *names* erased, and `build()` refuses to start with a `StateError` if two
+  routes land in one group: the current catalog has none, and the tests pin
+  both halves (the same pair registered in either order answers the same, and
+  `{one}` over `{other}` on the same literal shape is reported).
+  AUD-1a-2 was worth the check and is **not a bug**: it read
+  `router.dart:182` (`route.match('/${request.url.path}')`) as matching a path
+  `Uri` had already decoded, but Dart hands the segment over still
+  percent-encoded, so the registry's `Uri.decodeComponent` is the *one* decode
+  that exists. Measured rather than argued — with the decode dropped, a name
+  sent as `Helix%20Name` reached the handler as `Helix%20Name` and `%252F` as
+  `%252F`, which is the regression the finding would have caused. What the code
+  does today is right and is now a test (`Helix%20Name` → `Helix Name`,
+  `%252F` → `%2F` and never `/`, `foo%25` → `foo%` so a name holding a literal
+  `%` stays addressable, and shelf itself refuses a truncated escape before the
+  router ever runs). The sentence the finding leaned on was ours, not the
+  dependency's: `request.dart`'s "already percent-decoded" now reads "decoded
+  once, in the router".
+  Tests: `operations_test.dart` "a line is buffered, not written on the request
+  thread" and "a day past its byte bound rotates early and stays bounded"
+  (~800 KiB against a 256 KiB cap: the day holds at most two caps and one
+  batch, the tail survives, the head went first, and a numbered second file of
+  the same day proves it rotated *within* the day); `http_test.dart` "a path
+  parameter is decoded once, not twice", "routes of equal specificity are
+  ordered by their template", "no two catalog routes can answer the same
+  request"; `query_plans_test.dart` "a prefix scan of the ephemeral store uses
+  the pattern index".
+  **Residual, deliberate:** the per-day bound is a soft one — it is checked per
+  batch, so a day can end up one flush-buffer over it, and a cap smaller than
+  that buffer rotates every batch rather than every line (`_rollFor` refuses to
+  rename a file that holds nothing yet). `logRotate`-style external rotation is
+  still not supported on Windows, which is why the sink rotates itself.
+  **Owner-facing:** platform migration 5 (`ephemeral_key_pattern`) runs at
+  start-up or with `bin/migrate.dart`; it creates one index and touches no
+  data, so any deploy order is safe — and migration 4 (S3) is still owed with
+  it. `HELIX_LOG_MAX_BYTES_PER_DAY` is new and optional: the default needs no
+  `.env` line, so production changes only if the operator wants a smaller day.
+  No wire change.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**

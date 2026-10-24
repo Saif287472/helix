@@ -108,6 +108,51 @@ void main() {
       expect(File(path).readAsStringSync(), 'two\n');
     });
 
+    test('a line is buffered, not written on the request thread', () async {
+      final sink = FileSink.open(path, now: () => now)..write('one');
+      expect(
+        File(path).readAsStringSync(),
+        isEmpty,
+        reason: 'the write returns before the disk sees it (AUD-1a-5)',
+      );
+      await sink.close();
+      expect(File(path).readAsStringSync(), 'one\n');
+    });
+
+    test('a day past its byte bound rotates early and stays bounded', () async {
+      // Above the sink's flush bound, so the rotation is the day's own limit
+      // rather than one oversized write hitting a cap a batch cannot fit in.
+      const cap = 256 * 1024;
+      final sink = FileSink.open(path, maxBytesPerDay: cap, now: () => now);
+      final padding = 'x' * 200;
+      const lines = 4000; // ~800 KiB: three times the cap
+      for (var i = 0; i < lines; i++) {
+        sink.write('n$i-$padding');
+      }
+      await sink.close();
+
+      final files1 = dir.listSync().whereType<File>().toList();
+      final bytes = files1.fold<int>(0, (total, f) => total + f.lengthSync());
+      final text = files1.map((f) => f.readAsStringSync()).join();
+      expect(
+        bytes,
+        lessThanOrEqualTo(2 * cap + FileSink.flushBeforeBytes),
+        reason: 'one day of logs costs the cap, not whatever the flood wrote',
+      );
+      expect(
+        bytes,
+        greaterThan(cap),
+        reason: 'the flood is really bigger than the cap',
+      );
+      expect(text, contains('n${lines - 1}-'), reason: 'the tail is kept');
+      expect(text, isNot(contains('n0-')), reason: 'the oldest went first');
+      expect(
+        files1.map((f) => p.basename(f.path)),
+        contains(matches(r'^helix-2026-10-14\.\d+\.log$')),
+        reason: 'the day rotated more than once instead of growing forever',
+      );
+    });
+
     test('rotated files older than keepDays are deleted', () async {
       for (final day in ['2026-09-01', '2026-10-10', '2026-10-13']) {
         File(p.join(dir.path, 'helix-$day.log')).writeAsStringSync('x');
@@ -149,6 +194,25 @@ void main() {
     expect(config(null).logKeepDays, 14);
     expect(config('30').logKeepDays, 30);
     for (final bad in ['0', '4000', 'week']) {
+      expect(() => config(bad), throwsA(isA<ConfigError>()), reason: bad);
+    }
+  });
+
+  test('HELIX_LOG_MAX_BYTES_PER_DAY: 256 MiB unless set, 0 turns it off', () {
+    ServerConfig config(String? bytes) => ServerConfig.fromEnv({
+      'HELIX_DATABASE_URL': 'postgresql://u:p@localhost/db',
+      'HELIX_JWT_KEYS':
+          '{"k1":"dGVzdC1vbmx5LWp3dC1rZXktdGhhdC1pcy0zMi1ieXRlcw"}',
+      'HELIX_LOG_MAX_BYTES_PER_DAY': ?bytes,
+    });
+    expect(config(null).logMaxBytesPerDay, FileSink.defaultMaxBytesPerDay);
+    expect(config('1024').logMaxBytesPerDay, 1024);
+    expect(
+      config('0').logMaxBytesPerDay,
+      0,
+      reason: 'the daily rotation alone, as before this bound existed',
+    );
+    for (final bad in ['-1', 'week']) {
       expect(() => config(bad), throwsA(isA<ConfigError>()), reason: bad);
     }
   });

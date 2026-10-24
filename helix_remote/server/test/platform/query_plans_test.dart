@@ -6,6 +6,7 @@ import 'package:helix_remote_server/src/modules/identity/data/identity_store.dar
 import 'package:helix_remote_server/src/modules/messaging/data/mailbox_store.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
+import 'package:helix_remote_server/src/platform/ephemeral/ephemeral_store.dart';
 import 'package:helix_remote_server/src/platform/platform_migrations.dart';
 import 'package:test/test.dart';
 
@@ -26,8 +27,9 @@ import '../support/test_platform.dart';
 /// last case proves the guard bites, by dropping an index and re-planning the
 /// same query.
 ///
-/// The platform ephemeral store's prefix scan is deliberately not here: it is
-/// a known sequential scan (AUD-1b-4) whose fix is a migration, in B4.
+/// The platform ephemeral store's prefix scan is here since B4: it was the one
+/// known sequential scan (AUD-1b-4), and platform migration 5 gave it the
+/// index a `LIKE 'prefix%'` can use.
 void main() {
   group(
     'hot-path query plans (AUD-1b-3)',
@@ -40,10 +42,12 @@ void main() {
       const mailDeviceCount = 100;
       const mailPerDevice = 500;
       const sendPerDevice = 500;
+      const ephemeralEntryCount = 20000;
 
       // One seeded schema for the whole group.
       late TestPlatform env;
       late Db db;
+      late String platformSchema;
       late String idn;
       late String msg;
       late List<String> mailDevices;
@@ -57,6 +61,7 @@ void main() {
           extra: {'HELIX_PHONE_PEPPER': testPepper},
         );
         db = env.platform.db;
+        platformSchema = env.platform.schemas.of('platform');
         idn = env.platform.schemas.of('identity');
         msg = env.platform.schemas.of('messaging');
 
@@ -125,6 +130,16 @@ void main() {
           {'m': mailDeviceCount, 'per': sendPerDevice},
         );
 
+        // Live short-lived keys, the shape `scan(prefix)` walks: one prefix
+        // shared by 50 of them, as a presence or WebSocket-route prefix is
+        // shared by the devices under it.
+        await db.execute(
+          'INSERT INTO $platformSchema.ephemeral (key, value, expires_at) '
+          'SELECT \'ws:\' || (g / 50) || \':\' || g, \'1\', now() + interval \'1 hour\' '
+          'FROM generate_series(1, @n:int4) g',
+          {'n': ephemeralEntryCount},
+        );
+
         for (final table in [
           '$idn.accounts',
           '$idn.devices',
@@ -132,6 +147,7 @@ void main() {
           '$msg.mailbox',
           '$msg.device_seq',
           '$msg.sends',
+          '$platformSchema.ephemeral',
         ]) {
           await db.execute('ANALYZE $table');
         }
@@ -257,6 +273,19 @@ void main() {
             (tx) => MailboxStore(msg).ack(Recording(tx, log), target, 150),
           );
           expect(deleted, greaterThan(0));
+          await expectIndexed(db, log);
+        },
+      );
+
+      test(
+        'a prefix scan of the ephemeral store uses the pattern index',
+        () async {
+          final log = <Statement>[];
+          final store = PostgresEphemeralStore(
+            Recording(db, log),
+            platformSchema,
+          );
+          expect(await store.scan('ws:12:'), hasLength(50));
           await expectIndexed(db, log);
         },
       );
