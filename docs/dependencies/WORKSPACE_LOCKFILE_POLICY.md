@@ -51,8 +51,12 @@ is the one that governs it; the preview depends on it by path.
 
 Its lockfile is committed for the same reason Helix Remote's is: the compare tool (`PORT_PLAN.md`,
 Phase 2) renders the same screen twice and diffs the pixels, so the resolved versions are part of
-what is being reviewed and must not move underneath the comparison. No CI job runs this workspace yet
-— CI starts covering Orbit when Part B lands.
+what is being reviewed and must not move underneath the comparison.
+
+No CI job runs this workspace, and none is planned. `orbit_ui` — every screen that ships — was
+moved into the Helix Remote workspace by Part B step 1 (2026-10-19) and is resolved, tested and
+built by the Helix Remote jobs above. What remains here is `apps/orbit_preview`, a compare harness;
+its versions are checked by hand when someone runs the preview, not by a gate.
 
 Since Part B step 1 the preview's lockfile describes only the Flutter SDK's own packages, the
 preview's dev-only lints and `orbit_ui` as a path package. It adds no hosted dependency of its own;
@@ -62,5 +66,19 @@ The preview's own packages are never shipped.
 ## Enforcement
 
 `helix_remote/tool/check_governance_controls.dart` runs in CI and fails when a governance document
-asserts a control the repository does not implement. Claims in this file about committed lockfiles,
-`--enforce-lockfile`, and the SBOM job are covered by it.
+asserts a control the repository does not implement. For this file the claims are checked against
+the repository, not against the file's own text:
+
+- `helix_remote/pubspec.lock` and `orbit/flutter/pubspec.lock` both exist, and neither
+  `helix_remote/.gitignore` nor `orbit/flutter/.gitignore` contains a rule for `pubspec.lock`
+  (the exemption there is a comment; a real rule would untrack a lockfile this file calls
+  committed).
+- `.github/workflows/ci.yml` contains `--enforce-lockfile` and
+  `dart run tool/generate_sbom.dart` — the flags this file says CI runs, read off the workflow
+  rather than off the sentence that claims them.
+- The `flutter-version:` pinned in `ci.yml` is the one this file names, and `ci.yml` pins exactly
+  one.
+
+The dependency versions in `docs/dependencies/DEPENDENCY_RISK_REGISTER.md` are compared with
+`helix_remote/pubspec.lock` by the same checker, in every package table; a row whose packages and
+versions do not pair up fails by name instead of being skipped.

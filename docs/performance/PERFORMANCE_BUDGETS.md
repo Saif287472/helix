@@ -64,7 +64,7 @@
 | Local APK (release, arm64) | ≤ 25 MB | `flutter build apk --release --target-platform android-arm64` |
 | Remote APK (release, arm64) | ≤ 15 MB | Same |
 | Local Windows MSIX/installer | ≤ 40 MB | `flutter build windows --release` |
-| Asset bundle (sounds + wordlist + logo) | ≤ 10 MB | `tool/check_asset_sizes.dart` |
+| Asset bundle (sounds + wordlist + logo) | ≤ 10 MB | No checker (`check_asset_sizes.dart` was never written); measured by hand from the built APK |
 
 ---
 
@@ -119,30 +119,35 @@ Baselines must be re-recorded after every release candidate using the commands b
 
 ### 3.1 How to record baselines
 
-> Status (2026-09): the June commands (`apps/helix_local`, `apps/helix_remote`,
+> Status (2026-10-24): the June commands (`apps/helix_local`, `apps/helix_remote`,
 > `tool/benchmark_baseline.dart`, `tool/check_asset_sizes.dart`,
 > `phase10_pagination_test.dart`, `phase10_remote_bench_test.dart`,
-> `docs/performance/baselines/`) were never built or no longer exist. What
-> actually exists today, run from `helix_remote/`:
+> `docs/performance/baselines/`) were never built or no longer exist, and the
+> v1 `backend/` directory is gone with them. What exists today, run from
+> `helix_remote/`, is below; `tool/check_performance_budgets.dart` fails when a
+> path one of these blocks names stops existing.
 
 ```powershell
-# Budget contract check (CI job `performance-budgets`): verifies the metric
-# names in this file are still present
+# Budget contract check (CI job `performance-budgets`): the metric names in
+# this file are still present and every path below still exists
 dart tool/check_performance_budgets.dart
 
-# Message-list burst budget on the CI reference runner (CI job `performance-budgets`)
-flutter test app/test/phase4_performance_budget_test.dart
+# The two budgets a headless test can actually measure (CI job
+# `performance-budgets`, first one only on the CI reference runner)
+flutter test app/test/performance_budget_test.dart
+flutter test app/test/chat_performance_test.dart
+flutter test app/test/people_performance_test.dart
 
-# Isolate compute and backend scalability tests
-flutter test app/test/phase10_isolate_compute_test.dart
-cd backend; dart test test/phase10_scalability_test.dart; cd ..
-
-# Backend load smoke (see helix_remote/docs/operations/LOAD_TESTING.md)
-cd backend; dart run tool/load_smoke.dart --url=http://127.0.0.1:8080/api/v1/health/ready --clients=32 --requests=20 --max-p95-ms=1000
+# Server load (start a node first; see docs/operations/LOAD_TESTING.md)
+cd server; dart run tool/load.dart --devices 1000 --duration 60 --json load.json; cd ..
 ```
 
-There is no baseline recorder and no asset-size checker; record results by hand
-in the table below. Helix Local has no benchmark tooling in `helix_local/`.
+Everything else in §1 and §2 has no recorder: cold start, RSS, frame timing,
+battery, APK and asset-bundle sizes are measured by hand on a device or from a
+release build, and the §2 latency and throughput numbers need a running server
+under the load harness above. There is no asset-size checker and no baseline
+recorder; record results by hand in the table below. Helix Local has no
+benchmark tooling in `helix_local/`.
 
 ### 3.2 Recorded baselines
 
@@ -156,26 +161,25 @@ in the table below. Helix Local has no benchmark tooling in `helix_local/`.
 
 ### 4.1 CI gates
 
-> Status (2026-09): only `dart tool/check_performance_budgets.dart` and
-> `app/test/phase4_performance_budget_test.dart` run in CI (job
-> `performance-budgets` in `.github/workflows/ci.yml`). The other rows name
-> tools and tests that do not exist yet.
-
-| Gate | Failure action |
-|---|---|
-| `tool/check_asset_sizes.dart` exceeds budget | PR blocked |
-| Backend unit test latency regression > 2× | PR flagged |
-| Frame time regression in `phase10_pagination_test.dart` | PR flagged |
-| DLQ count > 0 in `phase10_dr_drill_test.dart` | PR blocked |
+| Gate | Runs in CI? | Failure action |
+|---|---|---|
+| `dart tool/check_performance_budgets.dart` (metric names and the §3.1 paths) | yes, job `performance-budgets` | PR blocked |
+| `flutter test app/test/performance_budget_test.dart` (message-list burst) | yes, job `performance-budgets` | PR blocked |
+| Client startup budgets on a physical Android release build | no — needs a device | PR flagged |
+| Asset-bundle size | no tool: there is no `check_asset_sizes.dart` | not enforced |
+| Backend unit-test latency regression > 2× | no test measures it | not enforced |
+| Frame time regression | no — `phase10_pagination_test.dart` was never written | not enforced |
+| DLQ count > 0 | no — `phase10_dr_drill_test.dart` was never written | not enforced |
 
 ### 4.2 Release gates
 
-Before tagging a release (items naming `check_asset_sizes.dart` or
-`phase10_dr_drill_test.dart` need those tools written first):
+Items marked **needs a tool** cannot be checked on a release today; they stay
+here as the requirement the tool has to meet when it is written, not as a box
+someone can tick.
 
 - [ ] All client startup budgets met on physical Android device (release build).
-- [ ] All backend p50/p95/p99 budgets met under the load tool with 100 clients.
-- [ ] `check_asset_sizes.dart` reports total asset bundle ≤ 10 MB.
-- [ ] DR drill completed within RTO/RPO.
-- [ ] Memory leak test shows ≤ 5 MB growth per 1 000 navigations.
-- [ ] No DLQ items after reconnect-storm drill (`phase10_dr_drill_test.dart`).
+- [ ] All backend p50/p95/p99 budgets met under `server/tool/load.dart` with 100 clients.
+- [ ] Asset bundle ≤ 10 MB — **needs a tool** (`check_asset_sizes.dart` does not exist).
+- [ ] DR drill completed within RTO/RPO (`docs/performance/DR_DRILL_RUNBOOK.md`).
+- [ ] Memory leak test shows ≤ 5 MB growth per 1 000 navigations — **needs a device harness**.
+- [ ] No DLQ items after reconnect-storm drill — **needs a tool** (`phase10_dr_drill_test.dart` does not exist).

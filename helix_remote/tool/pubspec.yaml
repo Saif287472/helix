@@ -15,3 +15,8 @@ dependencies:
   cryptography: ^2.9.0
   helix_remote_domain:
     path: ../packages/helix_remote_domain
+
+dev_dependencies:
+  # The checker's own guards (AUD-18-2/3/4) are tested from `tool/test/`, so a
+  # parser that stops seeing a table cannot quietly start passing.
+  test: ^1.31.0

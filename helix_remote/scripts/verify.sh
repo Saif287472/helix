@@ -95,6 +95,11 @@ for pkg in packages/*/; do
   fi
 done
 
+# The gates that guard the guards: tool/ checks the governance docs, the
+# performance budgets and ci.yml, and its own tests are what say those checkers
+# still read the files they claim to read.
+run_step "Tests: tool" bash -c 'cd tool && dart test'
+
 run_step "Governance control evidence" dart run tool/check_governance_controls.dart
 
 step "Dependency health advisory"

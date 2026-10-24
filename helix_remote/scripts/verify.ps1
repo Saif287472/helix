@@ -1,5 +1,10 @@
 $ErrorActionPreference = "Stop"
 
+# The step helper is shared with remote_release_gate.ps1 and tested by
+# scripts/test_step.ps1, so a failing native command can never be reported as
+# success in either gate (AUD-18-1).
+. (Join-Path $PSScriptRoot "step.ps1")
+
 function Test-DependencyAdvisoryEnabled {
     $flag = $env:HELIX_DEPENDENCY_ADVISORY
     if ($flag -in @("1", "true", "TRUE", "yes", "YES")) { return $true }
@@ -18,33 +23,13 @@ if (-not (Test-DependencyAdvisoryEnabled)) {
     $FlutterPubArgs = @("--no-pub")
 }
 
-function Invoke-Step {
-    param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][scriptblock]$Command
-    )
-
-    Write-Host ""
-    Write-Host "==> $Name"
-    $global:LASTEXITCODE = 0
-    $timer = [System.Diagnostics.Stopwatch]::StartNew()
-    # PowerShell 5.1 wraps native-command stderr lines in ErrorRecords. With
-    # $ErrorActionPreference = "Stop" those would terminate the step before we
-    # reach the exit-code check. Switch to Continue so native stderr is printed
-    # but does not abort; LASTEXITCODE is the sole failure gate.
-    $ErrorActionPreference = "Continue"
-    try {
-        & $Command
-        if ($global:LASTEXITCODE -ne 0) {
-            throw "Step '$Name' failed (exit $global:LASTEXITCODE)."
-        }
-    } finally {
-        $timer.Stop()
-        Write-Host ("<== {0} completed in {1}" -f $Name, $timer.Elapsed)
-    }
-}
-
 if (-not (Test-BuildOnlyEnabled)) {
+    # The gate's own failure probe is tested first: if it cannot fail, nothing
+    # after it is evidence.
+    Invoke-Step "Step helper failure probe" {
+        & (Join-Path $PSScriptRoot "test_step.ps1")
+    }
+
     # Generated drift code is committed (ADR-027); fail when it is stale. CI
     # runs this as its own step and sets HELIX_VERIFY_SKIP_CODEGEN=1 here.
     if ($env:HELIX_VERIFY_SKIP_CODEGEN -in @("1", "true", "TRUE", "yes", "YES")) {
@@ -125,6 +110,18 @@ if (-not (Test-BuildOnlyEnabled)) {
             } finally {
                 Pop-Location
             }
+        }
+    }
+
+    # The gates that guard the guards: tool/ checks the governance docs, the
+    # performance budgets and ci.yml, and its own tests are what say those
+    # checkers still read the files they claim to read.
+    Invoke-Step "Tests: tool" {
+        Push-Location tool
+        try {
+            dart test
+        } finally {
+            Pop-Location
         }
     }
 

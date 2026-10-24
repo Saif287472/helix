@@ -11,17 +11,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Invoke-Step {
-    param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][scriptblock]$Command
-    )
-
-    Write-Host ""
-    Write-Host "==> $Name"
-    & $Command
-    if (-not $?) { throw "Step '$Name' failed." }
-}
+# The same tested step helper verify.ps1 uses (scripts/test_step.ps1). A local
+# copy is what let this gate report a failed step as success (AUD-18-1).
+. (Join-Path $PSScriptRoot "step.ps1")
 
 if (-not $Android -and -not $Windows) {
     $Android = $true

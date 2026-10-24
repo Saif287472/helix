@@ -26,12 +26,24 @@ permissions:
   pull-requests: read
 
 jobs:
+  # INVARIANT (AUD-18-2): `dorny/paths-filter` describes a *diff*. On push and
+  # pull_request that is the push range or the PR file list, but a scheduled or
+  # manually dispatched run has no such range - with `base` left at its default
+  # (the repository default branch, which is also what the run checks out) the
+  # action documents that "changes are detected from the last commit", so the
+  # filters describe only the tip commit. On the two events whose whole purpose
+  # is to re-verify an unchanged tree (a new OSV advisory, a runner image bump,
+  # an expired pinned action) every filter would be false and the run would
+  # consist of the `no-source-changes` echo: green, having verified nothing.
+  # The `forced` output below is therefore the bypass, and `tool/test/` asserts
+  # that every verifying job ORs it in and that `no-source-changes` excludes it.
   changes:
     runs-on: ubuntu-latest
     outputs:
       common: ${{ steps.filter.outputs.common }}
       local: ${{ steps.filter.outputs.local }}
       remote: ${{ steps.filter.outputs.remote }}
+      forced: ${{ steps.forced.outputs.forced }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -45,10 +57,21 @@ jobs:
               - 'helix_local/**'
             remote:
               - 'helix_remote/**'
+      - name: A scheduled or dispatched run verifies the tree, not a diff
+        id: forced
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'forced=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'forced=false' >> "$GITHUB_OUTPUT"
+          fi
 
   verify-windows:
     needs: changes
     if: >-
+      needs.changes.outputs.forced == 'true' ||
       needs.changes.outputs.common == 'true' ||
       needs.changes.outputs.remote == 'true'
     runs-on: windows-latest
@@ -92,6 +115,7 @@ jobs:
   verify-linux:
     needs: changes
     if: >-
+      needs.changes.outputs.forced == 'true' ||
       needs.changes.outputs.common == 'true' ||
       needs.changes.outputs.remote == 'true'
     runs-on: ubuntu-latest
@@ -172,6 +196,7 @@ jobs:
   performance-budgets:
     needs: changes
     if: >-
+      needs.changes.outputs.forced == 'true' ||
       needs.changes.outputs.common == 'true' ||
       needs.changes.outputs.remote == 'true'
     runs-on: ubuntu-latest
@@ -194,6 +219,7 @@ jobs:
   no-source-changes:
     needs: changes
     if: >-
+      needs.changes.outputs.forced != 'true' &&
       needs.changes.outputs.common != 'true' &&
       needs.changes.outputs.local != 'true' &&
       needs.changes.outputs.remote != 'true'
@@ -204,6 +230,7 @@ jobs:
   supply-chain:
     needs: changes
     if: >-
+      needs.changes.outputs.forced == 'true' ||
       needs.changes.outputs.common == 'true' ||
       needs.changes.outputs.remote == 'true'
     runs-on: ubuntu-latest

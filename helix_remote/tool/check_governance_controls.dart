@@ -188,14 +188,11 @@ const controls = <GovernanceControl>[
   ),
 
   // --- HIGH-4 / MED-9: dependency governance -------------------------------
-  GovernanceControl(
-    'lockfile policy describes the real workspace layout',
-    '../docs/dependencies/WORKSPACE_LOCKFILE_POLICY.md',
-    'enforce-lockfile',
-    because:
-        'HIGH-4 — the policy asserted a committed lockfile while the '
-        'workspace gitignored it.',
-  ),
+  // HIGH-4's claim - the workspace commits its lockfiles and CI resolves with
+  // `--enforce-lockfile` - is checked against the repository, not against this
+  // policy's own text, by `lockfilePolicyFailures()` below (AUD-18-4). A
+  // `contains` control on the policy was self-referential: it passed while the
+  // guarantee it named had no owner.
   GovernanceControl(
     'file_picker is recorded as a direct dependency',
     '../docs/dependencies/DEPENDENCY_RISK_REGISTER.md',
@@ -304,55 +301,473 @@ const _notInRemoteLock = {
   'sqlite3_flutter_libs',
 };
 
-/// Every `| `package` | `version` |` row of the dependency register (and its
-/// `a` / `b` form) must name the version `pubspec.lock` resolves (review
-/// G-01: the register said "held at ^18" while the app had moved to 22).
-List<String> registerVersionFailures() {
-  const register = '../docs/dependencies/DEPENDENCY_RISK_REGISTER.md';
-  const lockPath = 'pubspec.lock';
-  final regFile = File(register);
-  final lockFile = File(lockPath);
-  if (!regFile.existsSync()) return ['$register does not exist'];
-  if (!lockFile.existsSync()) return ['$lockPath does not exist'];
+/// `pubspec.lock` entries as `name -> resolved version`.
+Map<String, String> lockVersions(String lockText) {
   final resolved = <String, String>{};
   for (final m in RegExp(
     r'^  ([a-z0-9_]+):\r?\n(?:    .*\r?\n)*?    version: "([^"]+)"',
     multiLine: true,
-  ).allMatches(lockFile.readAsStringSync())) {
+  ).allMatches(lockText)) {
     resolved[m.group(1)!] = m.group(2)!;
   }
-  final row = RegExp(
-    r'^\| `([a-z0-9_]+)`((?: / `[a-z0-9_]+`)*) \| `([^`]+)`((?: / `[^`]+`)*) \|',
-  );
-  final ticked = RegExp('`([^`]+)`');
+  return resolved;
+}
+
+/// The cells of a markdown table row (the outer pipes dropped).
+List<String> _rowCells(String line) {
+  final cells = line.split('|');
+  if (cells.length > 1) {
+    if (cells.first.trim().isEmpty) cells.removeAt(0);
+    if (cells.last.trim().isEmpty) cells.removeLast();
+  }
+  return cells.map((c) => c.trim()).toList();
+}
+
+/// Whether [line] is the `|---|---:|` rule under a table header.
+bool _isTableRule(String line) {
+  final cells = _rowCells(line);
+  return cells.isNotEmpty &&
+      cells.every((c) => RegExp(r'^:?-{2,}:?$').hasMatch(c));
+}
+
+final _ticked = RegExp('`([^`]+)`');
+
+/// A `Package` cell names pub.dev packages: lower-case, digits and underscores.
+final _looksLikePackageName = RegExp(r'^[a-z][a-z0-9_]*$');
+
+/// A version cell is a number with at least one dot, optionally with a caret,
+/// tilde or comparator in front of it.
+final _looksLikeVersion = RegExp(r'^[\^~]?\d+(\.\d+)+');
+
+List<String> _names(String cell) =>
+    _ticked.allMatches(cell).map((m) => m.group(1)!).toList();
+
+/// Every `Package` table of the dependency register, as `(header, rows)` with
+/// the 1-based line each row starts on.
+List<({List<String> header, List<({int line, List<String> cells})> rows})>
+_packageTables(List<String> lines) {
+  final tables =
+      <({List<String> header, List<({int line, List<String> cells})> rows})>[];
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i];
+    if (!line.trimLeft().startsWith('|') ||
+        i + 1 >= lines.length ||
+        !_isTableRule(lines[i + 1])) {
+      continue;
+    }
+    final header = _rowCells(line);
+    final rows = <({int line, List<String> cells})>[];
+    var next = i + 2;
+    while (next < lines.length && lines[next].trimLeft().startsWith('|')) {
+      rows.add((line: next + 1, cells: _rowCells(lines[next])));
+      next++;
+    }
+    tables.add((header: header, rows: rows));
+    i = next - 1;
+  }
+  return tables;
+}
+
+/// One package a `Package` table row names, with the version the same row
+/// gives it. [heldAt] is the register's one explicit exemption: the "Held at"
+/// column holds a range (`^18.0.0`), not a resolution, so it cannot be
+/// compared with the lockfile - but the package must still be in it.
+typedef RegisterRow = ({String name, String? version, bool heldAt});
+
+/// Every package row of every `Package` table in the register, plus the rows
+/// the checker cannot read at all.
+///
+/// A row may name several packages in one cell (`` `shelf`, `shelf_router` ``
+/// or `` `a` + `b` ``) and pair them with the same number of versions
+/// (`` `1.4.2` / `1.1.4` ``), and a version cell may carry a note outside its
+/// backticks (`` `4.10.1` (already resolved transitively) ``). A row whose
+/// counts do not line up is a gap, never a silent skip: AUD-18-3 found nine
+/// rows skipped while the register claimed "any table".
+({List<RegisterRow> rows, List<String> gaps, int cells}) registerRows(
+  List<String> lines, {
+  String register = 'DEPENDENCY_RISK_REGISTER.md',
+}) {
+  final rows = <RegisterRow>[];
+  final gaps = <String>[];
+  var cells = 0;
+  for (final table in _packageTables(lines)) {
+    if (table.header.isEmpty) continue;
+    final isPackageTable = table.header.first.toLowerCase() == 'package';
+    if (!isPackageTable) {
+      // A table the checker does not read is how AUD-18-3 stayed hidden: the
+      // register claimed "any table" while rows in a differently headed table
+      // were skipped. Name one rather than silently not checking it.
+      for (final row in table.rows) {
+        if (row.cells.length < 2) continue;
+        final packages = _names(
+          row.cells[0],
+        ).where((n) => _looksLikePackageName.hasMatch(n)).toList();
+        final versions = _names(
+          row.cells[1],
+        ).where((v) => _looksLikeVersion.hasMatch(v)).toList();
+        if (packages.isEmpty || versions.isEmpty) continue;
+        gaps.add(
+          '$register line ${row.line}: a table headed '
+          '"${table.header[0]}" pairs ${packages.join(', ')} with versions but '
+          'is not a `Package` table, so registerRows() does not check it',
+        );
+      }
+      continue;
+    }
+    final holdsRanges =
+        table.header.length > 1 &&
+        table.header[1].toLowerCase().startsWith('held at');
+    for (final row in table.rows) {
+      if (row.cells.isEmpty) continue;
+      final names = _names(row.cells.first);
+      final versions = row.cells.length > 1 ? _names(row.cells[1]) : const [];
+      cells += names.length;
+      if (names.isEmpty) {
+        gaps.add(
+          '$register line ${row.line}: a row of a Package table names no '
+          '`package`, so nothing here can be checked',
+        );
+        continue;
+      }
+      if (holdsRanges) {
+        if (versions.isNotEmpty) {
+          gaps.add(
+            '$register line ${row.line}: a "Held at" row carries resolved '
+            'versions (${versions.join(', ')}); only ranges are exempt',
+          );
+          continue;
+        }
+        rows.addAll([
+          for (final name in names) (name: name, version: null, heldAt: true),
+        ]);
+        continue;
+      }
+      if (versions.length != names.length) {
+        gaps.add(
+          '$register line ${row.line}: names ${names.length} package(s) '
+          '(${names.join(', ')}) but gives ${versions.length} version(s) - '
+          r'a Package table row needs one `version` per `package`, or it is '
+          'checked only partly',
+        );
+        continue;
+      }
+      for (var i = 0; i < names.length; i++) {
+        rows.add((name: names[i], version: versions[i], heldAt: false));
+      }
+    }
+  }
+  return (rows: rows, gaps: gaps, cells: cells);
+}
+
+/// The register's claim (`tool/check_governance_controls.dart` fails when a
+/// version in it differs from the lockfile) applied to *every* table, with the
+/// "Held at" ranges exempted explicitly rather than accidentally.
+List<String> registerVersionFailures({
+  String register = '../docs/dependencies/DEPENDENCY_RISK_REGISTER.md',
+  String lockPath = 'pubspec.lock',
+}) {
+  final regFile = File(register);
+  final lockFile = File(lockPath);
+  if (!regFile.existsSync()) return ['$register does not exist'];
+  if (!lockFile.existsSync()) return ['$lockPath does not exist'];
+  final resolved = lockVersions(lockFile.readAsStringSync());
+  final read = registerRows(regFile.readAsLinesSync(), register: register);
+  final failures = <String>[...read.gaps];
+  final named = <String>{};
+  var compared = 0;
+  for (final row in read.rows) {
+    named.add(row.name);
+    if (row.heldAt) continue;
+    compared++;
+    final version = row.version!;
+    if (_notInRemoteLock.contains(row.name)) continue;
+    final locked = resolved[row.name];
+    if (locked == null) {
+      failures.add(
+        '$register lists ${row.name}, which $lockPath does not resolve',
+      );
+    } else if (locked != version) {
+      failures.add(
+        '$register says ${row.name} $version; $lockPath resolves $locked',
+      );
+    }
+  }
+  // The completeness guard: a package cell the parser did not hand back is a
+  // row that looks like prose and checks nothing. Counted separately from
+  // `failures` so a new table layout cannot reopen AUD-18-3 quietly.
+  if (read.rows.length != read.cells) {
+    failures.add(
+      '$register has ${read.cells} package cells but the checker read '
+      '${read.rows.length}; add the layout to registerRows()',
+    );
+  }
+  for (final exempt in _notInRemoteLock) {
+    if (!named.contains(exempt)) {
+      failures.add(
+        '$register no longer names $exempt, so its exemption in '
+        'check_governance_controls.dart is stale - drop it',
+      );
+    }
+  }
+  if (compared == 0) failures.add('$register has no package rows to check');
+  return failures;
+}
+
+/// The lockfile policy's factual claims, checked against the repository
+/// rather than against the policy's own text (AUD-18-4). A `contains` control
+/// on the policy is self-referential: it passes while the claim it names is
+/// unowned.
+List<String> lockfilePolicyFailures({
+  String policy = '../docs/dependencies/WORKSPACE_LOCKFILE_POLICY.md',
+  String workflow = '../.github/workflows/ci.yml',
+  List<String> committedLockfiles = const [
+    'pubspec.lock',
+    '../orbit/flutter/pubspec.lock',
+  ],
+  List<String> gitignores = const ['.gitignore', '../orbit/flutter/.gitignore'],
+}) {
   final failures = <String>[];
-  var rows = 0;
-  for (final line in regFile.readAsLinesSync()) {
-    final m = row.firstMatch(line);
-    if (m == null) continue;
-    final names = [
-      m.group(1)!,
-      for (final t in ticked.allMatches(m.group(2) ?? '')) t.group(1)!,
-    ];
-    final versions = [
-      m.group(3)!,
-      for (final t in ticked.allMatches(m.group(4) ?? '')) t.group(1)!,
-    ];
-    for (var i = 0; i < names.length && i < versions.length; i++) {
-      rows++;
-      final name = names[i];
-      if (_notInRemoteLock.contains(name)) continue;
-      final locked = resolved[name];
-      if (locked == null) {
-        failures.add('$register lists $name, which $lockPath does not resolve');
-      } else if (locked != versions[i]) {
+  final policyFile = File(policy);
+  final workflowFile = File(workflow);
+  if (!policyFile.existsSync()) return ['$policy does not exist'];
+  if (!workflowFile.existsSync()) return ['$workflow does not exist'];
+  final policyText = policyFile.readAsStringSync();
+  final workflowText = workflowFile.readAsStringSync();
+
+  for (final lock in committedLockfiles) {
+    if (!File(lock).existsSync()) {
+      failures.add(
+        '$policy says $lock is the committed dependency snapshot, but it '
+        'does not exist',
+      );
+    }
+  }
+  for (final marker in const [
+    '--enforce-lockfile',
+    'dart run tool/generate_sbom.dart',
+  ]) {
+    if (!workflowText.contains(marker)) {
+      failures.add(
+        '$policy claims CI runs "$marker", but $workflow does not contain it',
+      );
+    }
+  }
+  // A rule, not a comment: the workspace's .gitignore explains in a comment
+  // why the lockfile is committed, and must never also ignore it.
+  for (final gitignore in gitignores) {
+    final file = File(gitignore);
+    if (!file.existsSync()) continue;
+    for (final line in file.readAsLinesSync()) {
+      final text = line.trim();
+      if (text.startsWith('#') || text.isEmpty) continue;
+      if (text.contains('pubspec.lock')) {
         failures.add(
-          '$register says $name ${versions[i]}; $lockPath resolves $locked',
+          '$gitignore ignores pubspec.lock ($text), which contradicts '
+          '$policy: a lockfile it calls committed cannot be untracked',
         );
       }
     }
   }
-  if (rows == 0) failures.add('$register has no package rows to check');
+  final pin = RegExp(r'flutter-version: ([0-9.]+)');
+  final policyPin = pin.firstMatch(policyText)?.group(1);
+  final ciPins = pin.allMatches(workflowText).map((m) => m.group(1)!).toSet();
+  if (policyPin == null) {
+    failures.add(
+      '$policy no longer states the pinned `flutter-version:`, so the pin in '
+      '$workflow cannot be compared with it',
+    );
+  } else if (ciPins.isEmpty) {
+    failures.add('$workflow pins no flutter-version the policy can describe');
+  } else if (ciPins.length > 1) {
+    failures.add(
+      '$workflow pins more than one flutter-version (${ciPins.join(', ')}); '
+      '$policy names one ($policyPin)',
+    );
+  } else if (ciPins.single != policyPin) {
+    failures.add(
+      '$policy says the SDK is pinned at $policyPin; $workflow uses '
+      '${ciPins.single}',
+    );
+  }
+  return failures;
+}
+
+/// One job of the CI workflow: its name, the `if:` that gates it (line
+/// continuations folded into one string), whether it checks the repository out
+/// — that is, verifies the tree rather than describing what it did not do —
+/// and the jobs it waits for.
+typedef CiJob = ({
+  String name,
+  String gate,
+  bool verifies,
+  List<String> needs,
+  String body,
+});
+
+/// The jobs of [text], read from the shape `.github/workflows/ci.yml` is
+/// written in: two-space job names under `jobs:`, four-space keys, six-space
+/// steps. Deliberately not a YAML parser; a workflow restructured out of this
+/// shape makes [ciEventCoverageFailures] report that it read no gated jobs
+/// rather than pass quietly.
+List<CiJob> ciJobs(String text) {
+  final lines = text.split('\n');
+  final jobs = <CiJob>[];
+  var inJobs = false;
+  var name = '';
+  var body = <String>[];
+  var gate = <String>[];
+  var needs = <String>[];
+  var verifying = false;
+  var insideIf = false;
+  void flush() {
+    if (name.isEmpty) return;
+    jobs.add((
+      name: name,
+      gate: gate.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim(),
+      verifies: verifying,
+      needs: needs,
+      body: body.join('\n'),
+    ));
+    name = '';
+    body = [];
+    gate = [];
+    needs = [];
+    verifying = false;
+  }
+
+  for (final raw in lines) {
+    final line = raw.endsWith('\r') ? raw.substring(0, raw.length - 1) : raw;
+    if (line == 'jobs:') {
+      inJobs = true;
+      continue;
+    }
+    if (!inJobs) continue;
+    if (line.trimLeft().isEmpty || line.startsWith('  #') || line.isEmpty) {
+      if (name.isNotEmpty) body.add(line);
+      continue;
+    }
+    if (!line.startsWith(' ')) {
+      // Back to a top-level key: the job list is over.
+      flush();
+      inJobs = false;
+      continue;
+    }
+    final jobName = RegExp(r'^  ([A-Za-z0-9_-]+):\s*$').firstMatch(line);
+    if (jobName != null) {
+      flush();
+      name = jobName.group(1)!;
+      insideIf = false;
+      continue;
+    }
+    if (name.isEmpty) continue;
+    body.add(line);
+    final indent = line.length - line.trimLeft().length;
+    if (indent == 4) {
+      insideIf = false;
+      final inlineIf = RegExp(r'^    if:\s*(\S.*)$').firstMatch(line);
+      if (RegExp(r'^    if:\s*[>|]-?\s*$').hasMatch(line)) {
+        insideIf = true;
+      } else if (inlineIf != null) {
+        gate.add(inlineIf.group(1)!);
+      } else if (RegExp(r'^    needs:\s*(\S.*)$').hasMatch(line)) {
+        needs.add(line.substring(line.indexOf(':') + 1).trim());
+      } else if (line == '    needs:') {
+        // List form; the items follow at indent 6.
+      }
+    } else if (insideIf && indent > 4) {
+      gate.add(line.trim());
+    }
+    if (indent > 4 && !insideIf) {
+      needs.addAll(
+        RegExp(
+          r'^ +- +([A-Za-z0-9_-]+)\s*$',
+        ).allMatches(line).map((m) => m.group(1)!),
+      );
+    }
+    if (line.contains('uses: actions/checkout@')) verifying = true;
+  }
+  flush();
+  return jobs;
+}
+
+/// AUD-18-2: `dorny/paths-filter` describes a *diff*, so a `schedule` or
+/// `workflow_dispatch` run gets the filters of the tip commit only. Without a
+/// bypass those runs - the ones whose whole purpose is to re-verify an
+/// unchanged tree - consist of the "no changes" echo and report green having
+/// verified nothing, including the only unattended vulnerability scan. The
+/// bypass is the `changes.forced` output; this asserts every job that reads
+/// the filters has ORed it in, and the echo job has excluded it.
+List<String> ciEventCoverageFailures({
+  String workflow = '../.github/workflows/ci.yml',
+}) {
+  final file = File(workflow);
+  if (!file.existsSync()) return ['$workflow does not exist'];
+  final text = file.readAsStringSync();
+  final jobs = ciJobs(text);
+  final gated = jobs.where((j) => j.needs.contains('changes')).toList();
+  if (gated.isEmpty) {
+    return [
+      '$workflow was read as ${jobs.length} job(s) and none waits on the '
+          '`changes` filter; the AUD-18-2 guard cannot see this workflow - fix '
+          'ciJobs() before trusting it',
+    ];
+  }
+  final failures = <String>[];
+  final changes = jobs.where((j) => j.name == 'changes').toList();
+  if (changes.length != 1) {
+    failures.add(
+      '$workflow must have exactly one `changes` job for the verify jobs to '
+      'wait on (found ${changes.length})',
+    );
+  } else {
+    final body = changes.single.body;
+    if (!body.contains('steps.forced.outputs.forced')) {
+      failures.add(
+        "$workflow's `changes` job publishes no `forced` output, so a "
+        'scheduled or dispatched run has nothing to bypass the path filters '
+        'with (AUD-18-2)',
+      );
+    }
+    if (!body.contains('id: forced')) {
+      failures.add(
+        "$workflow's `forced` output is not produced by a step with "
+        '`id: forced`',
+      );
+    }
+    for (final event in const ['schedule', 'workflow_dispatch']) {
+      // The event name as a compared string literal, not as prose: the step
+      // above it is a comment that says "a scheduled or dispatched run".
+      if (!RegExp('''['"]$event['"]''').hasMatch(body)) {
+        failures.add(
+          "$workflow's `forced` step does not compare `$event` by name, so "
+          'that event still runs only the filters of the tip commit',
+        );
+      }
+    }
+  }
+  for (final job in gated) {
+    if (job.name == 'changes') continue;
+    final admits = job.gate.contains("""forced == 'true'""");
+    final excludes = job.gate.contains("""forced != 'true'""");
+    if (job.verifies) {
+      if (!admits) {
+        failures.add(
+          "$workflow job '${job.name}' checks the tree out but its `if:` "
+          "never admits needs.changes.outputs.forced == 'true': a scheduled "
+          'or dispatched run skips it and reports green anyway (AUD-18-2)',
+        );
+      }
+    } else if (!excludes) {
+      failures.add(
+        "$workflow job '${job.name}' does not check the tree out, so its "
+        "`if:` must exclude the bypass "
+        "(needs.changes.outputs.forced != 'true'): on a scheduled or "
+        'dispatched run it must either verify something or stay silent, not '
+        'report that the tree needed nothing (AUD-18-2). If this job does '
+        "verify, OR forced == 'true' into its `if:` instead.",
+      );
+    }
+  }
   return failures;
 }
 
@@ -364,6 +779,8 @@ void main() {
   }
   missing.addAll(regressionMatrixFailures());
   missing.addAll(registerVersionFailures());
+  missing.addAll(lockfilePolicyFailures());
+  missing.addAll(ciEventCoverageFailures());
 
   if (missing.isNotEmpty) {
     stderr.writeln('Governance control verification failed:');
