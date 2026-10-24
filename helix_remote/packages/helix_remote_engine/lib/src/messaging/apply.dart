@@ -320,7 +320,11 @@ final class ContentApplier {
     if (fromSelf) return const ApplyResult.applied();
 
     // The author is the sender: this branch only runs for a message that
-    // arrived, and the receipt goes back to whoever wrote it.
+    // arrived, and the receipt goes back to whoever wrote it. Exactly one per
+    // arriving message: it used to be queued again below the call-log branch,
+    // which doubled the outbox ops, the pairwise sends, the ratchet steps and
+    // the author's receipt writes of everything this device received
+    // (AUD-12c-1).
     await _delivered(chat, content.id, sender.account, now);
     // Only a missed call this device did not see ring alerts the user (one
     // that rang here already did, and the others were answered or declined).
@@ -328,7 +332,6 @@ final class ContentApplier {
         !(unseenCall && callLog.outcome == CallOutcome.missed)) {
       return const ApplyResult.applied();
     }
-    await _delivered(chat, content.id, sender.account, now);
     final conversation = await _db.conversationsDao.byId(chat.id);
     final muted = conversation?.mutedUntil;
     return ApplyResult.applied(

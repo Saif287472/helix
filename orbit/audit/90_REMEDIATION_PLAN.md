@@ -986,6 +986,23 @@ blocks in `_applyKeyChange` while a send is in flight (it deadlocks today).
 outbox's existing columns. The reset request uses an existing frame. Users must
 update to be protected.
 
+**Landing log (2026-10-25):**
+- S1 (AUD-12c-1) — the second `_delivered` call is gone; the one that stays is
+  the earlier call (messaging/apply.dart), not the one the finding sketched,
+  because a call log that already rang on this device returns early and still
+  owes its author a delivered receipt. Deleting the first call would have
+  dropped that case, which is a trust-adjacent behaviour change, so the fix
+  removes the duplicate below the call-log branch instead. Nothing else in the
+  path deduped it: `_delivered` mints a fresh content id per call
+  (`_ctx.ids.next()`), and that id is the outbox idempotency key.
+  Test: `inbound_test.dart` "an arriving message is acknowledged once" counts
+  what one exchange actually costs — the sends Bob's device made and the
+  envelopes waiting for Alice (1 and 1; with the duplicate put back by hand, 2
+  and 2, so the guardrail bites). Gate: engine suite **314 green**,
+  `dart analyze lib test` clean. No schema, no wire change, so no APK is
+  needed for this step on its own; the batch's rollout note still says users
+  must update to be protected.
+
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**
 

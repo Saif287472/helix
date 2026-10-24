@@ -835,6 +835,20 @@ void main() {
       expect(receipts.single.readAt, isNotNull);
     });
 
+    test('an arriving message is acknowledged once', () async {
+      await say('acknowledge me once');
+      // The inbound pass used to queue the same delivered receipt a second
+      // time below the call-log branch (AUD-12c-1): a second outbox op, a
+      // second pairwise send and a second ratchet step for every message this
+      // device received. Bob sends nothing else in this exchange, so his one
+      // send is the one receipt, and Alice has one envelope waiting.
+      expect(
+        peers.server.sends.where((s) => s.from.id == bob.device),
+        hasLength(1),
+      );
+      expect(peers.server.device(alice.device).mailbox, hasLength(1));
+    });
+
     test('read receipts to the author can be turned off', () async {
       await bob.engine.settings.set(EngineSettings.sendReadReceipts, false);
       final sent = await say('private');
