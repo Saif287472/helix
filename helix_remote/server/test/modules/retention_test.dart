@@ -249,6 +249,40 @@ void main() {
       expect(PeopleModule.reportRetention, const Duration(days: 180));
     });
 
+    test('past discovery budget days go, today and yesterday stay', () async {
+      // One row per account per UTC day, and nothing used to delete a past day
+      // except the account itself (AUD-4a-4).
+      final db = h.env.platform.db;
+      final budget = '${h.env.platform.schemas.of('people')}.discovery_budget';
+      for (final ago in [0, 1, 2, 30]) {
+        await db.execute(
+          'INSERT INTO $budget (account_id, day, used) VALUES (@a:uuid, '
+          "(now() at time zone 'utc')::date - @d:int4, 1)",
+          {'a': alice.accountId, 'd': ago},
+        );
+      }
+      final people = h.server.modules.whereType<PeopleModule>().single;
+      expect(
+        people.periodic.map((j) => j.name),
+        contains('people.purge_discovery'),
+      );
+
+      await people.periodic
+          .singleWhere((j) => j.name == 'people.purge_discovery')
+          .run();
+
+      final left = await db.query(
+        "SELECT day, day >= (now() at time zone 'utc')::date - @keep:int4 "
+        'AS kept FROM $budget WHERE account_id = @a:uuid',
+        {'a': alice.accountId, 'keep': PeopleModule.discoveryHistory.inDays},
+      );
+      expect(
+        [for (final r in left) r.boolean('kept')],
+        [true, true],
+        reason: 'today and the day before are what the sweep keeps',
+      );
+    });
+
     test('an expiry batch deletes exactly the rows it picked', () async {
       // The batch used to pick rows by `ctid`, which is unique only inside one
       // of the mailbox's sixteen partitions: `ctid IN (...)` matched the same

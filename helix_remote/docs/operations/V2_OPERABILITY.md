@@ -243,8 +243,11 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   `identity.purge_expired` (6 h), `identity.revoke_inactive` (6 h, only with
   `HELIX_DEVICE_INACTIVE_DAYS`), `media.expire` (30 min),
   `media.sweep_orphans` (7 days), `people.purge_reports` (1 day),
+  `people.purge_discovery` (1 day, leaves only today's and yesterday's
+  `people.discovery_budget` rows),
   `admin.purge_sign_in_failures` (6 h), `admin.purge_audit` (1 day).
-  Each run is given up on after 5 minutes.
+  Each run is given up on after 5 minutes, or after the worst case the job
+  declares; its lease is that worst case plus 30 s.
 - **Media deletes** (`media.expire`, `media.purge_account`) remove the blob
   first and the row after it. A blob that cannot be deleted (a file held open
   by an antivirus scan) keeps its row: the log says `media_delete_failed`

@@ -37,8 +37,13 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   to a pepper-keyed index and matches on that, so the database never holds
   a hash anyone can test numbers against (see identity's MODULE.md).
   Budget: 1,000 per call and 5,000 per account per day
-  (`discovery_budget`; a call over the budget consumes nothing). It
-  honours `discoverable_by_phone` and blocks. This remains the accepted
+  (`discovery_budget`; a call over the budget consumes nothing). The day is
+  the UTC one, not the session time zone's `current_date`, so the row the
+  server counts and the `retry_after` it promises end at the same instant:
+  the refusal names the next UTC midnight, and `people.purge_discovery`
+  (daily) keeps today's row plus `discoveryHistory`, which until AUD-4a-4
+  only account deletion ever removed. Discovery honours
+  `discoverable_by_phone` and blocks. This remains the accepted
   T-5 oracle: an authenticated client can ask the live server about
   numbers within the budget.
 - **Discovery opt-out:** turning `discoverable_by_phone` off deletes the

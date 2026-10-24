@@ -58,6 +58,45 @@ void main() {
       },
     );
 
+    test(
+      'an over-budget discovery names when the budget really refills',
+      () async {
+        // The budget is per UTC day, so that is the wait. It used to answer one
+        // hour, which sent a client that obeys `retry_after` back hourly all day
+        // for the same refusal (AUD-4a-4).
+        final salt = DiscoverySalt.fromJson(
+          (await h.api.call(Routes.discoverySalt, bearer: alice.bearer)).json,
+        );
+        await h.env.platform.db.execute(
+          'INSERT INTO ${h.env.platform.schemas.of('people')}.discovery_budget '
+          '(account_id, day, used) VALUES (@a:uuid, '
+          "(now() at time zone 'utc')::date, @n:int4)",
+          {'a': alice.accountId, 'n': PeopleModule.dailyDiscoveryBudget},
+        );
+
+        final over = await h.api.call(
+          Routes.discover,
+          bearer: alice.bearer,
+          body: DiscoverRequest(
+            phoneHashes: [discoveryHash(salt.salt, '+8801711000099')],
+          ).toJson(),
+        );
+
+        expect(over.errorCode, 'rate_limited');
+        final now = DateTime.now().toUtc();
+        final toMidnight = DateTime.utc(
+          now.year,
+          now.month,
+          now.day,
+        ).add(const Duration(days: 1)).difference(now);
+        expect(
+          int.parse(over.headers['retry-after']!),
+          closeTo(toMidnight.inSeconds, 30),
+          reason: 'not an hour: the day the row is keyed by',
+        );
+      },
+    );
+
     test('opting out of phone discovery and blocking hide you', () async {
       await h.api.call(
         Routes.setPrivacy,

@@ -87,6 +87,16 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   /// the operator handles them.
   static const reportRetention = Duration(days: 180);
 
+  /// Days of discovery budget rows kept besides today's. The table is one row
+  /// per account per day and, before AUD-4a-4, only account deletion ever
+  /// removed one, so a server that is used filled it for ever.
+  static const discoveryHistory = Duration(days: 1);
+
+  /// The budget's day, in UTC rather than `current_date`: the row used to be
+  /// keyed by whatever day the session time zone thought it was, while the
+  /// refusal on it promised an hour. Both now mean the same UTC day.
+  static const _budgetDay = "(now() at time zone 'utc')::date";
+
   @override
   List<PeriodicJob> get periodic => [
     PeriodicJob(
@@ -96,6 +106,14 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
         'DELETE FROM $s.reports WHERE resolved_at < now() - '
         'make_interval(secs => @age:int8)',
         {'age': reportRetention.inSeconds},
+      ),
+    ),
+    PeriodicJob(
+      'people.purge_discovery',
+      const Duration(hours: 24),
+      () => context.db.execute(
+        'DELETE FROM $s.discovery_budget WHERE day < $_budgetDay - @days:int4',
+        {'days': discoveryHistory.inDays},
       ),
     ),
   ];
@@ -316,17 +334,18 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
     final me = q.device.accountId;
     final remaining = await context.db.tx((tx) async {
       final row = await tx.queryOne(
-        'INSERT INTO $s.discovery_budget (account_id, day, used) VALUES (@a:uuid, current_date, @n:int4) '
+        'INSERT INTO $s.discovery_budget (account_id, day, used) '
+        'VALUES (@a:uuid, $_budgetDay, @n:int4) '
         'ON CONFLICT (account_id, day) DO UPDATE SET used = $s.discovery_budget.used + @n:int4 '
         'RETURNING used',
         {'a': me, 'n': hashes.length},
       );
       final used = row!.integer('used');
       if (used > dailyDiscoveryBudget) {
-        throw const ApiError(
+        throw ApiError(
           ErrorCode.rateLimited,
           message: 'daily contact discovery limit reached',
-          retryAfter: Duration(hours: 1),
+          retryAfter: _untilUtcMidnight(),
         );
       }
       return dailyDiscoveryBudget - used;
@@ -344,6 +363,21 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
         remainingToday: remaining,
       ).toJson(),
     );
+  }
+
+  /// When the UTC day turns, which is when [dailyDiscoveryBudget] is whole
+  /// again. The refusal used to say one hour: a client that obeys
+  /// `retry_after` came back hourly all day and was refused each time, each
+  /// attempt running the upsert and rolling it back (AUD-4a-4). Rounded up a
+  /// second so a retry never lands on the instant the day changes.
+  static Duration _untilUtcMidnight() {
+    final now = DateTime.now().toUtc();
+    final next = DateTime.utc(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1));
+    return Duration(seconds: next.difference(now).inSeconds + 1);
   }
 
   /// Accounts (of [accounts]) that opted out via [flag] or blocked [me].
