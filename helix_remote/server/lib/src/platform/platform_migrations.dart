@@ -8,8 +8,24 @@ const platformMigrations = MigrationSet(
   migrations: [
     Migration(1, 'platform_baseline', _baseline),
     Migration(2, 'rate_bucket_full_at', _rateBucketFullAt),
+    Migration(3, 'jobs_dedupe_live', _jobsDedupeLive),
   ],
 );
+
+/// Dedupe is a lock on the *pending* job with that key, not on the key
+/// forever: a job that ran out of attempts stays as a `dead` row for the
+/// operator, and the table-wide `UNIQUE` used to mean that the key was spent
+/// for good - one dead `push:call:<device>` or `gdev:<group>:<account>`
+/// silenced that wake-up or relay for ever (AUD-1b-1). Both statements are in
+/// one migration, so no node can be left with neither constraint nor index;
+/// the constraint is dropped rather than kept for a release because keeping it
+/// keeps the bug.
+String _jobsDedupeLive(String s) =>
+    '''
+ALTER TABLE $s.jobs DROP CONSTRAINT jobs_dedupe_key_key;
+CREATE UNIQUE INDEX jobs_dedupe_live ON $s.jobs (dedupe_key)
+  WHERE dedupe_key IS NOT NULL AND status = 'pending';
+''';
 
 /// When a bucket is certainly full again (one policy window after its last
 /// hit), so the sweep drops it then and not after a fixed hour: an hour reset

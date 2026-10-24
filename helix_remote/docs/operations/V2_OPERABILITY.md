@@ -202,6 +202,12 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   rescheduled with exponential backoff (5 s, doubling, capped at 1 hour) and
   `last_error` holds only the exception type. When `attempts` reaches
   `max_attempts` the row is kept with `status = 'dead'`.
+- **Dedupe.** `dedupe_key` is unique among `pending` rows only (the partial
+  index `jobs_dedupe_live`, platform migration 3): a second wake-up of the
+  same kind for the same device coalesces into the one that is already
+  waiting, and once the first has gone dead the key is free again. The
+  table-wide `UNIQUE` it replaces let one dead row silence that device's
+  pushes, or that group's device-list relays, for ever (AUD-1b-1).
 - **Timeouts.** A handler is given up on after 60 s (`last_error` is
   `TimeoutException`) and retried like any failure, so one stalled job (an FCM
   token endpoint that stopped answering) cannot hold every other job on the

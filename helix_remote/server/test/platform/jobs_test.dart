@@ -117,6 +117,47 @@ void main() {
       );
     });
 
+    test('a dead job does not spend its dedupe key', () async {
+      var calls = 0;
+      final r = runner(db, 'n1')
+        ..register('demo.flap', (p) async {
+          calls++;
+          if (calls == 1) throw StateError('the first attempt dies');
+        });
+      await db.tx(
+        (tx) => outbox().enqueue(
+          tx,
+          'demo.flap',
+          const {},
+          dedupeKey: 'x',
+          maxAttempts: 1,
+        ),
+      );
+      await r.tick();
+      expect(calls, 1);
+      final dead = await db.queryOne(
+        "SELECT dedupe_key FROM ${schemas.platform}.jobs WHERE status = 'dead'",
+      );
+      expect(dead!.string('dedupe_key'), 'x');
+
+      // The same wake-up is asked for again - the next message for that
+      // device, the next relay for that group. It must run: the dead row is
+      // the operator's record, not a tombstone that silences the key for
+      // ever (AUD-1b-1).
+      await db.tx(
+        (tx) => outbox().enqueue(tx, 'demo.flap', const {}, dedupeKey: 'x'),
+      );
+      await r.tick();
+      expect(calls, 2);
+      expect(
+        await db.query(
+          "SELECT id FROM ${schemas.platform}.jobs WHERE status = 'dead'",
+        ),
+        hasLength(1),
+        reason: 'the dead row is still there for the operator',
+      );
+    });
+
     test('dedupe keys collapse pending duplicates', () async {
       var calls = 0;
       final r = runner(db, 'n1')..register('demo.once', (p) async => calls++);

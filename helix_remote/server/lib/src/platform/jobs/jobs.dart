@@ -39,7 +39,9 @@ final class Outbox {
   static const wakeTopic = 'jobs.wake';
 
   /// Enqueues a job in [tx]. With [dedupeKey], a second enqueue of the same
-  /// key while the first is still pending is ignored.
+  /// key while the first is still pending is ignored. A key whose job went
+  /// dead is not spent: the dead row stays for the operator and the new
+  /// enqueue runs (AUD-1b-1).
   Future<void> enqueue(
     Tx tx,
     String kind,
@@ -72,7 +74,8 @@ final class Outbox {
          FROM unnest(@id:_uuid, @kind:_text, @payload:_text,
                      @delay:_int8, @max:_int4, @dedupe:_text)
            AS t (g, k, p, d, m, dedupe)
-         ON CONFLICT (dedupe_key) DO NOTHING''',
+         ON CONFLICT (dedupe_key)
+           WHERE dedupe_key IS NOT NULL AND status = 'pending' DO NOTHING''',
       {
         'id': List.generate(list.length, (_) => Uuid.v7()),
         'kind': [for (final j in list) j.kind],
