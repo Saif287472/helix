@@ -212,7 +212,12 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   `TimeoutException`) and retried like any failure, so one stalled job (an FCM
   token endpoint that stopped answering) cannot hold every other job on the
   node. The FCM token refresh itself gives up after 10 s. A periodic job is
-  given up on after 5 minutes and runs again next interval.
+  given up on after 5 minutes, or after the worst case it declares
+  (`PeriodicJob.timeout`), and runs again next interval. Its lease is that
+  worst case plus 30 s, so a run that uses its whole timeout is never claimed
+  by a second node while still going. The lease used to be `max(60 s,
+  interval)`, unrelated to the timeout: a sweep of a one-minute job that took
+  two minutes was claimable again after the first minute (AUD-1b-2).
 - **A handler that keeps running after its timeout** (the timeout stops the
   wait, not the work) can overlap a retry on another node. Handlers are
   written to be idempotent (reasoning, not tested for every handler).

@@ -90,5 +90,30 @@ void main() {
         'code': 'unauthenticated',
       });
     });
+
+    test('every periodic job is leased longer than it may run', () {
+      // AUD-1b-2, over the list a real node runs: a job whose run outlives its
+      // lease can be claimed a second time on another node while the first is
+      // still going, and every sweep here is written for one writer.
+      final scheduler = h.env.platform.periodic;
+      expect(
+        [for (final job in scheduler.jobs) job.name],
+        containsAll(<String>[
+          'platform.sweep_ephemeral',
+          'messaging.expire',
+          'people.purge_reports',
+          'media.sweep_orphans',
+        ]),
+        reason: 'this checks the whole server, not a fixture',
+      );
+      for (final job in scheduler.jobs) {
+        expect(
+          scheduler.leaseFor(job),
+          greaterThan(scheduler.limitFor(job)),
+          reason:
+              '${job.name} may still be running when another node claims it',
+        );
+      }
+    });
   });
 }

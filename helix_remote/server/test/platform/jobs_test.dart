@@ -351,6 +351,50 @@ void main() {
       await s2.stop();
       expect(runs, hasLength(1));
     });
+
+    test('a periodic lease outlasts the run it protects', () async {
+      // AUD-1b-2: the lease was `max(60 s, interval)` while a run may take its
+      // whole timeout, so a sweep longer than a minute could be claimed a
+      // second time on another node while its first run was still going.
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final job = PeriodicJob('demo.slow', Duration.zero, () async {
+        started.complete();
+        await release.future;
+      }, timeout: const Duration(minutes: 5));
+      PeriodicScheduler on(String node, PostgresDb db) => PeriodicScheduler(
+        db: db,
+        platformSchema: schemas.platform,
+        nodeId: node,
+        log: Log(sink: MemorySink()),
+      )..register(job);
+      final a = on('n1', db);
+      final b = on('n2', otherNode);
+      await a.start();
+      await b.start();
+
+      final running = a.tick();
+      await started.future;
+      final row = await db.queryOne(
+        'SELECT locked_until, last_run_at '
+        "FROM ${schemas.platform}.periodic_jobs WHERE name = 'demo.slow'",
+      );
+      expect(
+        row!.time('locked_until').difference(row.time('last_run_at')),
+        greaterThan(const Duration(minutes: 5)),
+        reason: 'the lease is the worst case plus the margin, not the interval',
+      );
+      expect(
+        await b.tick(),
+        isEmpty,
+        reason: 'a job still running on another node is not claimable',
+      );
+
+      release.complete();
+      expect(await running, ['demo.slow']);
+      await a.stop();
+      await b.stop();
+    });
   });
 }
 

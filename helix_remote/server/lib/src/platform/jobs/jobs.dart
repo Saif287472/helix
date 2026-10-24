@@ -290,12 +290,19 @@ final class JobRunner {
 }
 
 /// A task that runs every [interval] on exactly one node of the cluster.
+///
+/// [timeout] is the job's declared worst case: the run is given up on after it,
+/// and the lease that keeps another node out is longer by
+/// [PeriodicScheduler.leaseMargin]. It defaults to the scheduler's own
+/// [PeriodicScheduler.jobTimeout], which is what a job that never returns is
+/// stopped at (AUD-1b-2).
 final class PeriodicJob {
-  const PeriodicJob(this.name, this.interval, this.run);
+  const PeriodicJob(this.name, this.interval, this.run, {this.timeout});
 
   final String name;
   final Duration interval;
   final Future<void> Function() run;
+  final Duration? timeout;
 }
 
 /// Schedules [PeriodicJob]s. Each node checks every [checkInterval]; a
@@ -318,14 +325,34 @@ final class PeriodicScheduler {
   final Log _log;
   final Duration checkInterval;
 
-  /// How long one periodic job may run. The jobs run one after another in
-  /// this loop, so one that never returns would stop every later job on the
-  /// node; a timeout releases the loop and the job runs again next interval.
+  /// How long one periodic job may run when it does not say its own worst
+  /// case. The jobs run one after another in this loop, so one that never
+  /// returns would stop every later job on the node; a timeout releases the
+  /// loop and the job runs again next interval.
   final Duration jobTimeout;
+
+  /// Added to a job's worst case to get the lease, so a run that takes its
+  /// full timeout is still not claimable by another node (AUD-1b-2). The old
+  /// lease was `max(60 s, interval)` - a job that ran past 60 s could be
+  /// started a second time elsewhere while its first run was still going.
+  static const leaseMargin = Duration(seconds: 30);
+
   final Map<String, PeriodicJob> _jobs = {};
   Timer? _timer;
   bool _stopped = false;
   Future<List<String>>? _inFlight;
+
+  /// The registered jobs, in registration order (the invariant test reads the
+  /// real list, not a fixture).
+  Iterable<PeriodicJob> get jobs => _jobs.values;
+
+  /// How long [job]'s run may take: its own declaration, or this scheduler's
+  /// default.
+  Duration limitFor(PeriodicJob job) => job.timeout ?? jobTimeout;
+
+  /// The lease [job] is claimed with: its worst case plus [leaseMargin], so a
+  /// run that uses the whole timeout still cannot be claimed by another node.
+  Duration leaseFor(PeriodicJob job) => limitFor(job) + leaseMargin;
 
   void register(PeriodicJob job) {
     if (_jobs.containsKey(job.name)) {
@@ -381,12 +408,12 @@ final class PeriodicScheduler {
           'n': job.name,
           'node': nodeId,
           'every': job.interval.inSeconds,
-          'lease': math.max(60, job.interval.inSeconds),
+          'lease': leaseFor(job).inSeconds,
         },
       );
       if (claimed.isEmpty) continue;
       try {
-        await job.run().timeout(jobTimeout);
+        await job.run().timeout(limitFor(job));
         ran.add(job.name);
       } on Object catch (e) {
         _log.warn('periodic_failed', {
