@@ -388,6 +388,13 @@ void main() {
       final dir = second.platform.config.blobs.directory!;
       final socket = await TestSocket.connect(second.baseUri, b1.bearer);
       await socket.hello();
+      final store = h.env.platform.ephemeral;
+      expect(
+        await store.get(Presence.nodeKey(second.platform.config.nodeId)),
+        isNotNull,
+        reason: 'a running node renews its own liveness key',
+      );
+      expect(await Presence.isOnline(store, b1.id), isTrue);
       final logs = await WebSocket.connect(
         second.baseUri
             .replace(scheme: 'ws', path: Routes.adminLogStream.path)
@@ -401,6 +408,11 @@ void main() {
       expect(
         await logsClosed.timeout(const Duration(seconds: 5)),
         RealtimeCloseCode.goingAway,
+      );
+      expect(
+        await store.get(Presence.nodeKey(second.platform.config.nodeId)),
+        isNull,
+        reason: 'a stopped node stops claiming the routes it wrote',
       );
     });
   });

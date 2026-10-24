@@ -61,11 +61,14 @@ server                                        client
 ## Node routing (server side, not visible to clients)
 
 Each node records `device → node` routes in the ephemeral store with a
-heartbeat TTL. A node extends and deletes only its own connection's route
-(compare-and-set), so a newer connection on another node keeps its route. A send commits mailbox rows, then publishes `device.wake` on
-the event bus; the node holding the socket reads the mailbox and pushes.
-"Is the device online" is a route lookup, so call delivery and push decisions
-work across nodes. Revocation publishes `device.revoked`; the owning node
+heartbeat TTL, and renews a liveness key of its own. A node extends and
+deletes only its own connection's route (compare-and-set), so a newer
+connection on another node keeps its route. A send commits mailbox rows,
+then publishes `device.wake` on the event bus; the node holding the socket
+reads the mailbox and pushes. "Is the device online" is its route *and* the
+node behind it still beating, so call delivery and push decisions work
+across nodes and a crashed node stops holding its devices well before its
+routes expire. Revocation publishes `device.revoked`; the owning node
 closes the socket with `4003`. Ending sessions publishes the cut-off; the
 owning node re-checks the socket's token and closes it with `4001` only if
 the token predates the cut-off. Suspension publishes the account; its

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/helix_remote_server.dart';
+import 'package:helix_remote_server/src/modules/realtime/module.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
 
 import 'harness.dart';
@@ -22,6 +23,9 @@ final class Node {
   HelixPlatform get platform => server.platform;
 
   String get nodeId => platform.config.nodeId;
+
+  RealtimeModule get realtime =>
+      server.modules.whereType<RealtimeModule>().single;
 
   /// Connects [device]'s socket here and reads `hello`.
   Future<TestSocket> online(TestDevice device, {int? after}) async {

@@ -45,6 +45,7 @@ final class RealtimeModule extends ModuleBase {
   final List<StreamSubscription<Object?>> _subscriptions = [];
   final Set<Future<void>> _tasks = {};
   Timer? _routeTimer;
+  Timer? _nodeTimer;
   late final Counter _connected;
 
   static const heartbeat = Duration(seconds: 25);
@@ -151,11 +152,26 @@ final class RealtimeModule extends ModuleBase {
       const Duration(seconds: 25),
       (_) => track(refreshConnections),
     );
+    await keepAlive();
+    _nodeTimer = Timer.periodic(Presence.nodeRefresh, (_) => track(keepAlive));
+  }
+
+  /// Renews this node's liveness key. Presence reads it: a route on a node
+  /// that stopped beating is treated as offline (AUD-3-3).
+  Future<void> keepAlive() =>
+      context.ephemeral.put(Presence.nodeKey(nodeId), '1', Presence.nodeTtl);
+
+  /// Test hook: stops both refreshers and leaves every key they wrote behind,
+  /// as a node that died where it stood does.
+  void stallRefreshers() {
+    _routeTimer?.cancel();
+    _nodeTimer?.cancel();
   }
 
   @override
   Future<void> stop() async {
     _routeTimer?.cancel();
+    _nodeTimer?.cancel();
     for (final s in _subscriptions) {
       await s.cancel();
     }
@@ -167,6 +183,8 @@ final class RealtimeModule extends ModuleBase {
     while (_tasks.isNotEmpty) {
       await Future.wait(_tasks.toList());
     }
+    // Only now: while the sockets were still open the node was still alive.
+    await context.ephemeral.delete(Presence.nodeKey(nodeId));
   }
 
   /// Runs [work] for a connection, tracked so [stop] can wait for it.

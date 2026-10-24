@@ -48,7 +48,9 @@ one Postgres database.
   timeout. A nested `Db.tx` is safe: it joins the running transaction (a
   zone value) and commits, retries and runs `afterCommit` with it. The
   ephemeral store has its own pool so presence can be read inside send
-  transactions; `Presence.online` reads many devices in one `getAll`.
+  transactions; `Presence.online` asks whether a device is reachable in two
+  `getAll`s whatever the device count: their routes, then the nodes behind
+  them.
 - `@name:int4` / `@name:int2` parameters are range-checked before they reach
   the driver (it would wrap them silently) and raise `DbInvalidValue`, which
   the pipeline answers as `invalid_field`.

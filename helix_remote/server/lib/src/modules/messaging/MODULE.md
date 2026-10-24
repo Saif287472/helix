@@ -59,13 +59,13 @@ capacity, so a large send is slow, never impossible. Ephemeral sends store
 nothing and are not charged. With a server storage budget set
 (`HELIX_STORAGE_BUDGET_BYTES`), a payload over one unit while the server is
 over it gets `quota_exceeded` (`reason: server_storage`); shorter ones still
-go through (review A-02, A-03). Presence for urgent
-pushes and ephemeral delivery is read once per send (`Presence.online`,
-one `getAll`), not once per device, and a fan-out writes its push jobs and
-its parked envelopes one statement each (`Outbox.enqueueMany`,
-`EphemeralStore.putAll`): the cost of a send is bounded by its work, not by
-its device count (AUD-3-1). The `helix_mailbox_backlog` gauge counts
-undelivered rows at scrape time.
+go through (review A-02, A-03). Presence for urgent pushes and
+ephemeral delivery is read once per send, not once per device
+(`Presence.online`: two batched reads whatever the device count), and a
+fan-out writes its push jobs and its parked envelopes one statement
+each (`Outbox.enqueueMany`, `EphemeralStore.putAll`): the cost of a send
+is bounded by its work, not by its device count (AUD-3-1). The
+`helix_mailbox_backlog` gauge counts undelivered rows at scrape time.
 
 1. **Validate:** ids, payload sizes (256 KiB per device), at most 1,100
    devices, never the sending device itself.

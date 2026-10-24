@@ -25,6 +25,12 @@ with 4029.
    deletes the route only if it is still this connection's (`deleteIf`).
    `Presence` (kernel) reads it, so messaging can choose between socket and
    push.
+   A route alone is not reachability: it is what a crash leaves behind. So
+   each node also renews `rt:node:<node>` (20 s TTL, every 5 s) and
+   `Presence` counts a device online only while both keys are present
+   (AUD-3-3). A node that dies where it stood stops "holding" its devices
+   after 20 s rather than 75, and the conservative direction is a push;
+   `stop()` deletes its own key once the sockets have drained.
 3. **Hello:** `hello` with `last_seq`, `heartbeat_s: 25` and `window: 100`.
 4. **Pump:** stored envelopes after `?after=` are sent oldest first, at
    most 100 un-acked. When the window is full the server first drops

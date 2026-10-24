@@ -440,6 +440,63 @@ void main() {
           }
         },
       );
+
+      test(
+        'a route left on a node that stopped beating is not reachability: the '
+        'offer pends and is pushed, while the live node still rings',
+        () async {
+          final stranded = await a.online(bob1);
+          final live = await b.online(bob2);
+          await setPushToken(bob1, 'bob1-push');
+          final callId = 'call-${Uuid.v7()}';
+
+          // Node A dies where it stood: its routes stay, its heartbeat stops.
+          a.realtime.stallRefreshers();
+          await a.platform.ephemeral.delete(Presence.nodeKey(a.nodeId));
+          expect(
+            await a.platform.ephemeral.get(Presence.routeKey(bob1.id)),
+            isNotNull,
+            reason: 'the route is what a crash leaves behind',
+          );
+          expect(
+            await Presence.isOnline(a.platform.ephemeral, bob1.id),
+            isFalse,
+            reason: 'the node that wrote it no longer proves it is there',
+          );
+
+          final r = await signal(b, alice, callId, CallSignalKind.offer, {
+            bob1.accountId: [bob1.id, bob2.id, bob3.id],
+          });
+          expect(r.status, 200, reason: '$r');
+          final response = CallSignalResponse.fromJson(r.json);
+          expect(
+            response.delivered,
+            [bob2.id],
+            reason: 'only the device on the living node is rung',
+          );
+          expect(response.pending, unorderedEquals([bob1.id, bob3.id]));
+          expect((await live.envelope()).callId, callId);
+          expect(
+            await stranded.silent(),
+            isTrue,
+            reason: 'nothing is handed to a socket no one trusts',
+          );
+          expect((await pending(b, bob1)).single.callId, callId);
+
+          await c.tickJobs();
+          await eventually(
+            () async => expect(
+              c.pushes
+                  .where((p) => p.reason == PushReason.call)
+                  .map((p) => p.token),
+              unorderedEquals(['bob1-push', 'bob3-push']),
+              reason: 'a dead node wakes its devices by push, not by silence',
+            ),
+          );
+          await stranded.close();
+          await live.close();
+        },
+      );
     });
 
     group('revocation', () {
