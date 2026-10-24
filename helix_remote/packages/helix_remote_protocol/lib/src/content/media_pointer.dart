@@ -55,13 +55,16 @@ final class MediaPointer {
       throw ProtocolFormatException('bad media key or digest', path: json.path);
     }
     return MediaPointer(
-      id: json.nonEmpty('id'),
+      id: json.nonEmpty('id', maxLength: ContentLimits.maxIdLength),
       key: key,
       digest: digest,
       size: json.intIn('size', 0, MediaPointer.maxSize),
-      mime: json.nonEmpty('mime'),
-      name: json.optString('name'),
-      blurhash: json.optString('blurhash'),
+      mime: json.nonEmpty('mime', maxLength: ContentLimits.maxNameLength),
+      name: json.optString('name', maxLength: ContentLimits.maxNameLength),
+      blurhash: json.optString(
+        'blurhash',
+        maxLength: ContentLimits.maxNameLength,
+      ),
       thumbnail: allowThumbnail && json.has('thumbnail')
           ? MediaPointer.fromJson(
               json.object('thumbnail'),
@@ -127,7 +130,10 @@ final class MediaItem {
       orElse: MediaItemKind.unknown,
     ),
     media: MediaPointer.fromJson(json.object('media')),
-    caption: json.optString('caption'),
+    caption: json.optString(
+      'caption',
+      maxLength: ContentLimits.maxCaptionLength,
+    ),
     durationMs: json.optIntIn(
       'duration_ms',
       0,

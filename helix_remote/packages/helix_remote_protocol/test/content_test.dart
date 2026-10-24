@@ -190,46 +190,271 @@ void main() {
     expect(message.body, isA<UnknownBody>());
   });
 
-  test('limits are enforced on decode', () {
+  group('every field a peer writes is bounded on decode', () {
     JsonReader body(Map<String, Object?> json) =>
         JsonReader(json, path: 'body');
-    expect(
-      () => TextBody.fromJson(
-        body({'text': 'x' * (ContentLimits.maxTextLength + 1)}),
-      ),
-      throwsA(isA<ProtocolFormatException>()),
+    void refused(String what, String type, Map<String, Object?> json) {
+      test(what, () {
+        expect(
+          () => ContentBody.decode(type, body(json)),
+          throwsA(isA<ProtocolFormatException>()),
+        );
+      });
+    }
+
+    final options = [
+      for (var i = 0; i < ContentLimits.maxPollOptions; i++)
+        {'id': 'o$i', 'text': 'o$i'},
+    ];
+    final pointer = _pointer(thumb: false).toJson();
+
+    refused('text over the message limit', 'text', {
+      'text': 'x' * (ContentLimits.maxTextLength + 1),
+    });
+    refused('more mentions than the largest group has members', 'text', {
+      'text': 'hi',
+      'mentions': [
+        for (var i = 0; i <= ContentLimits.maxMentions; i++)
+          {'account': accountB, 'start': i, 'length': 3},
+      ],
+    });
+    refused('a link preview url over the url limit', 'text', {
+      'text': 'hi',
+      'link_preview': {'url': 'u' * (ContentLimits.maxUrlLength + 1)},
+    });
+    refused('a link preview title or description over its limit', 'text', {
+      'text': 'hi',
+      'link_preview': {
+        'url': 'https://x',
+        'description': 'd' * (ContentLimits.maxCaptionLength + 1),
+      },
+    });
+    refused('more media items than an album may hold', 'media', {
+      'items': [
+        for (var i = 0; i <= ContentLimits.maxMediaItems; i++)
+          {'kind': 'image', 'media': pointer},
+      ],
+    });
+    refused('an empty album', 'media', {'items': <Object?>[]});
+    refused('a per-item caption over the caption limit', 'media', {
+      'items': [
+        {
+          'kind': 'image',
+          'media': pointer,
+          'caption': 'c' * (ContentLimits.maxCaptionLength + 1),
+        },
+      ],
+    });
+    refused('a media file name of any size', 'media', {
+      'items': [
+        {
+          'kind': 'image',
+          'media': {
+            ...pointer,
+            'name': 'n' * (ContentLimits.maxNameLength + 1),
+          },
+        },
+      ],
+    });
+    refused('a sticker emoji over the emoji limit', 'sticker', {
+      'pack_id': 'p',
+      'sticker_id': 's',
+      'media': pointer,
+      'emoji': 'x' * (ContentLimits.maxEmojiLength + 1),
+    });
+    refused('a location label or address of any size', 'location', {
+      'lat_e7': 1,
+      'lng_e7': 1,
+      'accuracy_m': 1,
+      'label': 'l' * (ContentLimits.maxNameLength + 1),
+    });
+    refused('a contact card with a name of any size', 'contact', {
+      'name': 'n' * (ContentLimits.maxNameLength + 1),
+    });
+    refused('a contact card with more numbers than a card holds', 'contact', {
+      'name': 'Ann',
+      'numbers': [
+        for (var i = 0; i <= ContentLimits.maxContactNumbers; i++) '+1',
+      ],
+    });
+    refused('a contact card with a number of any size', 'contact', {
+      'name': 'Ann',
+      'numbers': ['1' * (ContentLimits.maxNumberLength + 1)],
+    });
+    refused('a poll question of any size', 'poll', {
+      'question': 'q' * (ContentLimits.maxCaptionLength + 1),
+      'options': options,
+    });
+    refused('a poll option over the name limit', 'poll', {
+      'question': 'q',
+      'options': [
+        {'id': 'a', 'text': 'a'},
+        {'id': 'b', 'text': 'b' * (ContentLimits.maxNameLength + 1)},
+      ],
+    });
+    refused('a poll with fewer options than it may offer', 'poll', {
+      'question': 'q',
+      'options': [
+        {'id': 'a', 'text': 'a'},
+      ],
+    });
+    refused('a poll with more options than it may offer', 'poll', {
+      'question': 'q',
+      'options': [
+        ...options,
+        {'id': 'extra', 'text': 'extra'},
+      ],
+    });
+    refused('a vote for more options than the poll has', 'poll_vote', {
+      'target': _target.toJson(),
+      'option_ids': [
+        for (var i = 0; i <= ContentLimits.maxPollOptions; i++) 'o',
+      ],
+    });
+    refused('an event title, zone or place of any size', 'event', {
+      'title': 't' * (ContentLimits.maxNameLength + 1),
+      'starts_at': 1,
+      'time_zone': 'Asia/Dhaka',
+    });
+    refused('a system notice with more fields than it may carry', 'system', {
+      'kind': 'member_added',
+      for (var i = 0; i <= ContentLimits.maxSystemFields; i++) 'f$i': i,
+    });
+    refused('a reaction emoji over the emoji limit', 'reaction', {
+      'target': _target.toJson(),
+      'emoji': 'x' * (ContentLimits.maxEmojiLength + 1),
+    });
+    refused('an edit over the text limit', 'edit', {
+      'target': _target.toJson(),
+      'text': 'x' * (ContentLimits.maxTextLength + 1),
+    });
+    refused('an edit with neither text nor caption', 'edit', {
+      'target': _target.toJson(),
+    });
+    refused('a receipt of more ids than it may name', 'receipt', {
+      'kind': 'read',
+      'ids': [
+        for (var i = 0; i <= ContentLimits.maxIdsPerReceipt; i++) messageM,
+      ],
+    });
+    refused('a receipt naming an id of any size', 'receipt', {
+      'kind': 'read',
+      'ids': ['x' * (ContentLimits.maxIdLength + 1)],
+    });
+    refused('an empty receipt', 'receipt', {
+      'kind': 'read',
+      'ids': <Object?>[],
+    });
+    refused('a resend request of more ids than it may name', 'resend_request', {
+      'ids': [
+        for (var i = 0; i <= ContentLimits.maxIdsPerReceipt; i++) messageM,
+      ],
+    });
+    refused(
+      'a contact sync of more entries than it may carry',
+      'contact_sync',
+      {
+        'entries': [
+          for (var i = 0; i <= ContentLimits.maxContactEntries; i++)
+            {'account': accountB},
+        ],
+      },
     );
-    expect(
-      () => PollBody.fromJson(
-        body({
-          'question': 'q',
-          'options': [
-            {'id': 'a', 'text': 'a'},
-          ],
-        }),
-      ),
-      throwsA(isA<ProtocolFormatException>()),
+    refused('a contact sync nickname of any size', 'contact_sync', {
+      'entries': [
+        {
+          'account': accountB,
+          'nickname': 'n' * (ContentLimits.maxNameLength + 1),
+        },
+      ],
+    });
+    refused(
+      'a transfer offering more devices than an account has',
+      'device_transfer_offer',
+      {
+        'transfer_id': 't',
+        'devices': [for (var i = 0; i <= ContentLimits.maxDevices; i++) 'd'],
+      },
     );
-    expect(
-      () => MediaBody.fromJson(body({'items': <Object?>[]})),
-      throwsA(isA<ProtocolFormatException>()),
+    refused('a media pointer whose key is not 32 bytes', 'media', {
+      'items': [
+        {
+          'kind': 'image',
+          'media': {...pointer, 'key': encodeBytes(List.filled(16, 1))},
+        },
+      ],
+    });
+    refused(
+      'a sender-key distribution with a chain key of the wrong length',
+      'sender_key_distribution',
+      {
+        'group_id': groupG,
+        'dist_id': 'd',
+        'iteration': 1,
+        'chain_key': encodeBytes(List.filled(31, 1)),
+        'signing_key': encodeBytes(List.filled(32, 2)),
+      },
     );
-    expect(
-      () => EditBody.fromJson(body({'target': _target.toJson()})),
-      throwsA(isA<ProtocolFormatException>()),
-    );
-    expect(
-      () => MediaPointer.fromJson(
-        body({
-          'id': 'm',
-          'key': encodeBytes(bytes(16)),
-          'digest': encodeBytes(bytes(32)),
-          'size': 1,
-          'mime': 'x/y',
-        }),
-      ),
-      throwsA(isA<ProtocolFormatException>()),
-    );
+    refused('a group key of the wrong length', 'group_key', {
+      'group_id': groupG,
+      'epoch': 1,
+      'key': encodeBytes(List.filled(33, 1)),
+    });
+    refused('a profile key of the wrong length', 'profile_key_update', {
+      'key': encodeBytes(List.filled(16, 1)),
+      'version': 1,
+    });
+
+    test('a message profile key of the wrong length is refused', () {
+      final message = _message(const TextBody(text: 'hi')).toJson();
+      JsonReader withKey(int length) => JsonReader({
+        ...message,
+        'profile_key': encodeBytes(List.filled(length, 1)),
+      });
+      expect(
+        () => ContentMessage.fromJson(withKey(31)),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(ContentMessage.fromJson(withKey(32)).profileKey, hasLength(32));
+    });
+
+    test('a body at exactly its limit decodes', () {
+      expect(
+        ContentBody.decode(
+          'contact',
+          body({
+            'name': 'n' * ContentLimits.maxNameLength,
+            'numbers': ['1' * ContentLimits.maxNumberLength],
+          }),
+        ),
+        isA<ContactBody>(),
+      );
+      expect(
+        ContentBody.decode(
+          'poll_vote',
+          body({
+            'target': _target.toJson(),
+            'option_ids': [
+              for (var i = 0; i < ContentLimits.maxPollOptions; i++) 'o$i',
+            ],
+          }),
+        ),
+        isA<PollVoteBody>(),
+      );
+      expect(
+        ContentBody.decode(
+          'text',
+          body({
+            'text': 'x' * ContentLimits.maxTextLength,
+            'mentions': [
+              for (var i = 0; i < ContentLimits.maxMentions; i++)
+                {'account': accountB, 'start': 0, 'length': 3},
+            ],
+          }),
+        ),
+        isA<TextBody>(),
+      );
+    });
   });
 
   test('direct chats resolve to the other person on every device', () {

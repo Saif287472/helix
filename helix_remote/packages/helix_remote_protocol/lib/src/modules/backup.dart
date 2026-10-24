@@ -27,7 +27,7 @@ final class HistoryBackup {
 
   factory HistoryBackup.fromJson(JsonReader json) => HistoryBackup(
     version: json.integer('version'),
-    data: json.bytes('data'),
+    data: json.bytes('data', maxLength: maxBytes),
     updatedAt: json.optTime('updated_at'),
   );
 }

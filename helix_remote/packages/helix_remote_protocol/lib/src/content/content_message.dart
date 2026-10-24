@@ -131,7 +131,7 @@ final class ContentMessage {
           ? MessageRef.fromJson(json.object('reply'))
           : null,
       expireSeconds: json.optIntIn('exp', 0, ContentLimits.maxExpireSeconds),
-      profileKey: json.optBytes('profile_key'),
+      profileKey: json.optBytesOf('profile_key', ContentLimits.keyBytes),
       viewOnce: flags?.flag('view_once') ?? false,
     );
   }

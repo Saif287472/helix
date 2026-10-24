@@ -677,6 +677,53 @@ Wire: none; a replay simply carries more headers.
   that needs longer than that is a tuning question for the operator, not a
   behaviour this step changed. No migration, no `.env` line, no wire change:
   `rate_limited` and `PeerUnavailable` are both answers peers already handle.
+- S5 (AUD-8-1) — the limit is in the reader, not in the field. `_limited` was
+  called by five fields, so the other ~350 strings, byte arrays and lists took
+  whatever the sender chose. `JsonReader.string/optString/nonEmpty` now take
+  `maxLength`, `bytes/optBytes` take `maxLength` **on the decoded value** (the
+  base64url text is refused at its 4/3 size before anything is allocated),
+  `bytesOf`/`optBytesOf` fix a length exactly, and `objects/optObjects/
+  strings/optStrings` take `maxItems`, checked before the first item decodes.
+  Each defaults to a backstop (`maxWireStringLength` 64 KiB, `maxWireBytes`
+  1 MiB, `maxWireListItems` 20 000), so forgetting a limit is no longer
+  possible; a call site names the real number where the contract knows it.
+  `ContentLimits` gained the counts the finding asked for (`maxMentions` 1024
+  = the largest group, `maxContactEntries` 4096, `maxSystemFields` 32,
+  `maxContactNumbers` 32, `maxDevices` 256) plus sizes for the strings a peer
+  writes about something (`maxNameLength`, `maxUrlLength`, `maxNumberLength`,
+  `maxIdLength` 512/4096/32/512) and `keyBytes` 32, and every content body now
+  uses them: a 60 KiB poll question, a 5000-strong mention list, a contact name
+  of any length and a `option_ids` list of ten thousand ids are all decode
+  failures, as is a chain / group / profile key or a message `profile_key`
+  that is not 32 bytes — previously a crypto failure later. `ReceiptBody` and
+  `ResendRequestBody` carry the same 500 the engine already enforced for
+  resends; `HistoryBackup.data` names its own 16 MiB (it is the one field above
+  the backstop, and the only deliberate exception). `_pollVote` also stores a
+  voter's choice **deduplicated**, so repeating an option cannot grow that
+  voter's row on every member's device — the sharp half of the finding.
+  Tests: `json_and_ids_test.dart` "every read is bounded, by default or by the
+  call site" (each accessor at limit, limit+1 and under a smaller named one,
+  and no item of a refused list decoded); `content_test.dart` replaces "limits
+  are enforced on decode" with 34 refusals — one per field the
+  finding names — plus "a body at exactly its limit decodes" (the caps are not
+  off by one) and "a message profile key of the wrong length is refused";
+  `inbound_test.dart` "poll votes and RSVPs update the poll message" now votes
+  `['a','b','a','b']` and asserts the row stores `["a","b"]`. Nothing in
+  `app/`, `admin/` or the engine produces a value over these limits (checked
+  by reading every producer: there is no poll or event composer in the app
+  yet, `people_service` syncs one entry per message, `newSymmetricKey` is
+  32 bytes), and protocol 120, engine 313, api 205, db 140, cli 13, orbit_ui
+  230 and app 1022 tests pass on the tightened decode.
+  Docs: `MODULE.md` rules (a new field inherits the backstop; a new *large*
+  field must name its limit) and `CONTENT_V2.md` §1 "Bounds".
+  **Residual, deliberate:** transport DTOs ride the backstop instead of a named
+  number (a roster change is capped at 20 000 accounts, not at
+  `Group.maxMembers`), `SystemBody` caps the field *count* while a value stays
+  arbitrary JSON inside the 256 KiB payload, and `UnknownBody.raw` keeps the
+  body map it was handed — all three are bounded by the payload cap, which is
+  the point of it. No migration, no `.env` line, no wire change: every limit is
+  receive-side, an over-limit body already means "quarantine this envelope" on
+  the engine path and `invalid_field` on the server path.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**

@@ -188,6 +188,19 @@ void main() {
         'Bobby',
       );
 
+      // A name longer than a sync message may carry is cut where it is
+      // stored, so the other device reads exactly what this one shows.
+      await alice1.engine.people.setNickname(
+        bob.account,
+        'n' * (ContentLimits.maxNameLength + 40),
+      );
+      await alice1.engine.drainOutbox();
+      await alice2.sync();
+      expect(
+        (await alice2.engine.people.person(bob.account))!.nickname,
+        'n' * ContentLimits.maxNameLength,
+      );
+
       await alice1.engine.people.setNickname(bob.account, null);
       await alice1.engine.drainOutbox();
       await alice2.sync();

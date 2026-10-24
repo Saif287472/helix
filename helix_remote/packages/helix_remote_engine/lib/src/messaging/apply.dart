@@ -560,11 +560,14 @@ final class ContentApplier {
         if (o is Map && o['id'] is String) o['id'] as String,
     };
     if (!body.optionIds.every(options.contains)) return _Action.ignore;
+    // One entry per option the voter chose: a peer may not make its own vote
+    // row grow by repeating an id.
+    final choice = {...body.optionIds}.toList();
     final votes = {...(payload['votes'] as Map? ?? const {})};
-    if (body.optionIds.isEmpty) {
+    if (choice.isEmpty) {
       votes.remove(voter);
     } else {
-      votes[voter] = body.optionIds;
+      votes[voter] = choice;
     }
     await _db.messagesDao.updatePayload(
       target.localRowid,

@@ -561,7 +561,14 @@ final class PeopleService {
   /// when the person has a number there.
   Future<void> setNickname(String account, String? nickname) async {
     final trimmed = nickname?.trim();
-    final value = trimmed == null || trimmed.isEmpty ? null : trimmed;
+    // What is stored is what a sync message may carry: a longer name would be
+    // refused by the receiving device (ContentLimits.maxNameLength), so it is
+    // cut here, where every device sees the same thing.
+    final capped = trimmed != null &&
+            trimmed.length > ContentLimits.maxNameLength
+        ? trimmed.substring(0, ContentLimits.maxNameLength)
+        : trimmed;
+    final value = capped == null || capped.isEmpty ? null : capped;
     final person = await _db.peopleDao.byAccount(account);
     await _db.transaction(() async {
       await _db.peopleDao.upsertPerson(

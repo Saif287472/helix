@@ -4,14 +4,59 @@ import 'package:helix_remote_protocol/src/content/media_pointer.dart';
 import 'package:helix_remote_protocol/src/json.dart';
 
 /// Limits receivers enforce; content past them is treated as unreadable.
+///
+/// Every one of these is applied by the reader at decode
+/// ([JsonReader.string], [JsonReader.bytes], [JsonReader.objects]), so a
+/// field that names no limit here still gets the backstop in `json.dart`;
+/// these are the fields whose real size the contract knows.
 abstract final class ContentLimits {
   static const maxTextLength = 65536;
   static const maxCaptionLength = 4096;
+
+  /// A name, title, label or address: one line a peer writes about something.
+  static const maxNameLength = 512;
+
+  /// An identifier on the wire (a message id, an account address, a group or
+  /// device id). Account addresses are `uuid@host`, so this covers the widest
+  /// legal one.
+  static const maxIdLength = 512;
+
+  /// A URL in a link preview.
+  static const maxUrlLength = 4096;
+
+  /// A phone number in a contact card, as the sender typed it.
+  static const maxNumberLength = 32;
+
+  /// The length of a key or digest the crypto fixes: X25519 and Ed25519
+  /// public keys, chain keys, group and profile keys, SHA-256.
+  static const keyBytes = 32;
+
   static const maxMediaItems = 30;
+
+  /// Mentions in one text message: at most one per member of the largest
+  /// group (Group.maxMembers).
+  static const maxMentions = 1024;
+
   static const minPollOptions = 2;
   static const maxPollOptions = 12;
   static const maxEmojiLength = 16;
+
+  /// Ids in one receipt — and in one resend request, which is the same shape.
   static const maxIdsPerReceipt = 500;
+
+  /// Contacts in one `contact_sync` message (own devices only).
+  static const maxContactEntries = 4096;
+
+  /// Numbers in one contact card.
+  static const maxContactNumbers = 32;
+
+  /// Keys in one `system` body's field map.
+  static const maxSystemFields = 32;
+
+  /// Devices named in one message (a history transfer). No account comes
+  /// near this; the list is the sender's own device id list.
+  static const maxDevices = 256;
+
   static const editWindow = Duration(minutes: 15);
   static const deleteWindow = Duration(days: 2);
 
@@ -41,8 +86,10 @@ final class MessageRef {
 
   JsonMap toJson() => {'id': id, 'author': author};
 
-  factory MessageRef.fromJson(JsonReader json) =>
-      MessageRef(id: json.nonEmpty('id'), author: json.nonEmpty('author'));
+  factory MessageRef.fromJson(JsonReader json) => MessageRef(
+    id: json.nonEmpty('id', maxLength: ContentLimits.maxIdLength),
+    author: json.nonEmpty('author', maxLength: ContentLimits.maxIdLength),
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -95,17 +142,6 @@ sealed class ContentBody {
   };
 }
 
-String _limited(JsonReader json, String key, int max) {
-  final value = json.string(key);
-  if (value.length > max) {
-    throw ProtocolFormatException('too long', path: '${json.path}.$key');
-  }
-  return value;
-}
-
-String? _optLimited(JsonReader json, String key, int max) =>
-    json.has(key) ? _limited(json, key, max) : null;
-
 // -------------------------------------------------------- visible messages
 
 final class Mention {
@@ -122,7 +158,7 @@ final class Mention {
   JsonMap toJson() => {'account': account, 'start': start, 'length': length};
 
   factory Mention.fromJson(JsonReader json) => Mention(
-    account: json.nonEmpty('account'),
+    account: json.nonEmpty('account', maxLength: ContentLimits.maxIdLength),
     start: json.intIn('start', 0, ContentLimits.maxTextLength),
     length: json.intIn('length', 0, ContentLimits.maxTextLength),
   );
@@ -149,9 +185,12 @@ final class LinkPreview {
   });
 
   factory LinkPreview.fromJson(JsonReader json) => LinkPreview(
-    url: json.nonEmpty('url'),
-    title: json.optString('title'),
-    description: json.optString('description'),
+    url: json.nonEmpty('url', maxLength: ContentLimits.maxUrlLength),
+    title: json.optString('title', maxLength: ContentLimits.maxNameLength),
+    description: json.optString(
+      'description',
+      maxLength: ContentLimits.maxCaptionLength,
+    ),
     image: json.has('image')
         ? MediaPointer.fromJson(json.object('image'))
         : null,
@@ -187,8 +226,12 @@ final class TextBody extends ContentBody {
   });
 
   factory TextBody.fromJson(JsonReader json) => TextBody(
-    text: _limited(json, 'text', ContentLimits.maxTextLength),
-    mentions: json.optObjects('mentions', Mention.fromJson),
+    text: json.string('text', maxLength: ContentLimits.maxTextLength),
+    mentions: json.optObjects(
+      'mentions',
+      Mention.fromJson,
+      maxItems: ContentLimits.maxMentions,
+    ),
     linkPreview: json.has('link_preview')
         ? LinkPreview.fromJson(json.object('link_preview'))
         : null,
@@ -216,8 +259,12 @@ final class MediaBody extends ContentBody {
   });
 
   factory MediaBody.fromJson(JsonReader json) {
-    final items = json.objects('items', MediaItem.fromJson);
-    if (items.isEmpty || items.length > ContentLimits.maxMediaItems) {
+    final items = json.objects(
+      'items',
+      MediaItem.fromJson,
+      maxItems: ContentLimits.maxMediaItems,
+    );
+    if (items.isEmpty) {
       throw ProtocolFormatException(
         'bad item count',
         path: '${json.path}.items',
@@ -225,7 +272,10 @@ final class MediaBody extends ContentBody {
     }
     return MediaBody(
       items: items,
-      caption: _optLimited(json, 'caption', ContentLimits.maxCaptionLength),
+      caption: json.optString(
+        'caption',
+        maxLength: ContentLimits.maxCaptionLength,
+      ),
     );
   }
 }
@@ -260,10 +310,13 @@ final class StickerBody extends ContentBody {
   });
 
   factory StickerBody.fromJson(JsonReader json) => StickerBody(
-    packId: json.nonEmpty('pack_id'),
-    stickerId: json.nonEmpty('sticker_id'),
+    packId: json.nonEmpty('pack_id', maxLength: ContentLimits.maxIdLength),
+    stickerId: json.nonEmpty(
+      'sticker_id',
+      maxLength: ContentLimits.maxIdLength,
+    ),
     media: MediaPointer.fromJson(json.object('media')),
-    emoji: _optLimited(json, 'emoji', ContentLimits.maxEmojiLength),
+    emoji: json.optString('emoji', maxLength: ContentLimits.maxEmojiLength),
   );
 }
 
@@ -312,8 +365,8 @@ final class LocationBody extends ContentBody {
       ContentLimits.maxLngE7,
     ),
     accuracyM: json.intIn('accuracy_m', 0, ContentLimits.maxAccuracyM),
-    label: json.optString('label'),
-    address: json.optString('address'),
+    label: json.optString('label', maxLength: ContentLimits.maxNameLength),
+    address: json.optString('address', maxLength: ContentLimits.maxNameLength),
   );
 }
 
@@ -365,7 +418,10 @@ final class LiveLocationBody extends ContentBody {
   };
 
   factory LiveLocationBody.fromJson(JsonReader json) => LiveLocationBody(
-    sessionId: json.nonEmpty('session_id'),
+    sessionId: json.nonEmpty(
+      'session_id',
+      maxLength: ContentLimits.maxIdLength,
+    ),
     state: json.enumValue('state', LiveLocationState.values),
     latE7: json.intIn(
       'lat_e7',
@@ -409,9 +465,13 @@ final class ContactBody extends ContentBody {
   });
 
   factory ContactBody.fromJson(JsonReader json) => ContactBody(
-    name: json.string('name'),
-    numbers: json.optStrings('numbers'),
-    account: json.optString('account'),
+    name: json.string('name', maxLength: ContentLimits.maxNameLength),
+    numbers: json.optStrings(
+      'numbers',
+      maxItems: ContentLimits.maxContactNumbers,
+      maxLength: ContentLimits.maxNumberLength,
+    ),
+    account: json.optString('account', maxLength: ContentLimits.maxIdLength),
   );
 }
 
@@ -423,8 +483,10 @@ final class PollOption {
 
   JsonMap toJson() => {'id': id, 'text': text};
 
-  factory PollOption.fromJson(JsonReader json) =>
-      PollOption(id: json.nonEmpty('id'), text: json.string('text'));
+  factory PollOption.fromJson(JsonReader json) => PollOption(
+    id: json.nonEmpty('id', maxLength: ContentLimits.maxIdLength),
+    text: json.string('text', maxLength: ContentLimits.maxNameLength),
+  );
 }
 
 final class PollBody extends ContentBody {
@@ -457,16 +519,22 @@ final class PollBody extends ContentBody {
   });
 
   factory PollBody.fromJson(JsonReader json) {
-    final options = json.objects('options', PollOption.fromJson);
-    if (options.length < ContentLimits.minPollOptions ||
-        options.length > ContentLimits.maxPollOptions) {
+    final options = json.objects(
+      'options',
+      PollOption.fromJson,
+      maxItems: ContentLimits.maxPollOptions,
+    );
+    if (options.length < ContentLimits.minPollOptions) {
       throw ProtocolFormatException(
         'bad option count',
         path: '${json.path}.options',
       );
     }
     return PollBody(
-      question: json.string('question'),
+      question: json.string(
+        'question',
+        maxLength: ContentLimits.maxCaptionLength,
+      ),
       options: options,
       multiple: json.flag('multiple'),
       closesAt: json.optTime('closes_at'),
@@ -512,11 +580,17 @@ final class EventBody extends ContentBody {
   });
 
   factory EventBody.fromJson(JsonReader json) => EventBody(
-    title: json.string('title'),
+    title: json.string('title', maxLength: ContentLimits.maxNameLength),
     startsAt: json.time('starts_at'),
     endsAt: json.optTime('ends_at'),
-    timeZone: json.nonEmpty('time_zone'),
-    locationText: json.optString('location_text'),
+    timeZone: json.nonEmpty(
+      'time_zone',
+      maxLength: ContentLimits.maxNameLength,
+    ),
+    locationText: json.optString(
+      'location_text',
+      maxLength: ContentLimits.maxNameLength,
+    ),
     plusOneAllowed: json.flag('plus_one_allowed'),
   );
 }
@@ -543,13 +617,16 @@ final class SystemBody extends ContentBody {
   @override
   JsonMap toJson() => {'kind': kind, ...fields};
 
-  factory SystemBody.fromJson(JsonReader json) => SystemBody(
-    kind: json.nonEmpty('kind'),
-    fields: {
+  factory SystemBody.fromJson(JsonReader json) {
+    final fields = {
       for (final e in json.json.entries)
         if (e.key != 'kind') e.key: e.value,
-    },
-  );
+    };
+    if (fields.length > ContentLimits.maxSystemFields) {
+      throw ProtocolFormatException('too many fields', path: json.path);
+    }
+    return SystemBody(kind: json.nonEmpty('kind'), fields: fields);
+  }
 }
 
 enum CallMedia implements WireEnum {
@@ -646,7 +723,7 @@ final class ReactionBody extends ContentBody {
 
   factory ReactionBody.fromJson(JsonReader json) => ReactionBody(
     target: MessageRef.fromJson(json.object('target')),
-    emoji: _limited(json, 'emoji', ContentLimits.maxEmojiLength),
+    emoji: json.string('emoji', maxLength: ContentLimits.maxEmojiLength),
     remove: json.flag('remove'),
   );
 }
@@ -677,8 +754,11 @@ final class EditBody extends ContentBody {
   factory EditBody.fromJson(JsonReader json) {
     final edit = EditBody(
       target: MessageRef.fromJson(json.object('target')),
-      text: _optLimited(json, 'text', ContentLimits.maxTextLength),
-      caption: _optLimited(json, 'caption', ContentLimits.maxCaptionLength),
+      text: json.optString('text', maxLength: ContentLimits.maxTextLength),
+      caption: json.optString(
+        'caption',
+        maxLength: ContentLimits.maxCaptionLength,
+      ),
     );
     if ((edit.text == null) == (edit.caption == null)) {
       throw ProtocolFormatException(
@@ -731,7 +811,14 @@ final class PollVoteBody extends ContentBody {
 
   factory PollVoteBody.fromJson(JsonReader json) => PollVoteBody(
     target: MessageRef.fromJson(json.object('target')),
-    optionIds: json.strings('option_ids'),
+    // A vote names options of this poll: never more than the poll has, and an
+    // over-long id is not one of them. Duplicates are dropped where the vote
+    // is applied.
+    optionIds: json.strings(
+      'option_ids',
+      maxItems: ContentLimits.maxPollOptions,
+      maxLength: ContentLimits.maxIdLength,
+    ),
   );
 }
 
@@ -808,8 +895,12 @@ final class ReceiptBody extends ContentBody {
   JsonMap toJson() => {'kind': kind.wire, 'ids': ids};
 
   factory ReceiptBody.fromJson(JsonReader json) {
-    final ids = json.strings('ids');
-    if (ids.isEmpty || ids.length > ContentLimits.maxIdsPerReceipt) {
+    final ids = json.strings(
+      'ids',
+      maxItems: ContentLimits.maxIdsPerReceipt,
+      maxLength: ContentLimits.maxIdLength,
+    );
+    if (ids.isEmpty) {
       throw ProtocolFormatException('bad id count', path: '${json.path}.ids');
     }
     return ReceiptBody(
@@ -890,8 +981,8 @@ final class SenderKeyDistributionBody extends ContentBody {
         groupId: json.nonEmpty('group_id'),
         distributionId: json.nonEmpty('dist_id'),
         iteration: json.intIn('iteration', 0, ContentLimits.maxCounter),
-        chainKey: json.bytes('chain_key'),
-        signingKey: json.bytes('signing_key'),
+        chainKey: json.bytesOf('chain_key', ContentLimits.keyBytes),
+        signingKey: json.bytesOf('signing_key', ContentLimits.keyBytes),
       );
 }
 
@@ -924,7 +1015,7 @@ final class GroupKeyBody extends ContentBody {
   factory GroupKeyBody.fromJson(JsonReader json) => GroupKeyBody(
     groupId: json.nonEmpty('group_id'),
     epoch: json.intIn('epoch', 0, ContentLimits.maxCounter),
-    key: json.bytes('key'),
+    key: json.bytesOf('key', ContentLimits.keyBytes),
   );
 }
 
@@ -947,7 +1038,7 @@ final class ProfileKeyUpdateBody extends ContentBody {
 
   factory ProfileKeyUpdateBody.fromJson(JsonReader json) =>
       ProfileKeyUpdateBody(
-        key: json.bytes('key'),
+        key: json.bytesOf('key', ContentLimits.keyBytes),
         version: json.intIn('version', 0, ContentLimits.maxCounter),
       );
 }
@@ -995,8 +1086,13 @@ final class ResendRequestBody extends ContentBody {
   @override
   JsonMap toJson() => {'ids': ids};
 
-  factory ResendRequestBody.fromJson(JsonReader json) =>
-      ResendRequestBody(ids: json.strings('ids'));
+  factory ResendRequestBody.fromJson(JsonReader json) => ResendRequestBody(
+    ids: json.strings(
+      'ids',
+      maxItems: ContentLimits.maxIdsPerReceipt,
+      maxLength: ContentLimits.maxIdLength,
+    ),
+  );
 }
 
 final class ContactSyncEntry {
@@ -1008,8 +1104,11 @@ final class ContactSyncEntry {
   JsonMap toJson() => compact({'account': account, 'nickname': nickname});
 
   factory ContactSyncEntry.fromJson(JsonReader json) => ContactSyncEntry(
-    account: json.nonEmpty('account'),
-    nickname: json.optString('nickname'),
+    account: json.nonEmpty('account', maxLength: ContentLimits.maxIdLength),
+    nickname: json.optString(
+      'nickname',
+      maxLength: ContentLimits.maxNameLength,
+    ),
   );
 }
 
@@ -1033,7 +1132,11 @@ final class ContactSyncBody extends ContentBody {
   };
 
   factory ContactSyncBody.fromJson(JsonReader json) => ContactSyncBody(
-    entries: json.objects('entries', ContactSyncEntry.fromJson),
+    entries: json.objects(
+      'entries',
+      ContactSyncEntry.fromJson,
+      maxItems: ContentLimits.maxContactEntries,
+    ),
   );
 }
 
@@ -1111,7 +1214,13 @@ final class DeviceTransferOfferBody extends ContentBody {
               orElse: DeviceTransferState.cancelled,
             ) ??
             DeviceTransferState.offer,
-        devices: json.has('devices') ? json.strings('devices') : null,
+        devices: json.has('devices')
+            ? json.strings(
+                'devices',
+                maxItems: ContentLimits.maxDevices,
+                maxLength: ContentLimits.maxIdLength,
+              )
+            : null,
       );
 }
 

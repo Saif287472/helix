@@ -39,6 +39,20 @@ could read (2026-10-01 survey).
   raw JSON (v1 showed raw JSON). A content `v` above the client's supported
   version is treated the same way. Bodies evolve only additively; a breaking
   change is a new `type` name.
+- **Bounds.** Every field a receiver reads has a limit, applied by the shared
+  `JsonReader` while decoding, so a peer cannot make a client retain or render
+  an oversize value: a string is at most 64 KiB of text unless the field's own
+  limit is smaller (`ContentLimits` names the size of a title, name, label,
+  caption, url, emoji and phone number), a base64 field at most 1 MiB decoded
+  unless the contract fixes its length (keys and digests are exactly 32 bytes)
+  or names a bigger one (a history backup), and a list at most 20 000 entries
+  unless the field is counted (`ContentLimits`: 30 media items, 12 poll options
+  and one vote's worth of them, 1024 mentions, 500 receipt and resend ids,
+  4096 contact-sync entries, 32 contact numbers, 32 system fields, 256
+  devices). Limits are receive-side only and identical in every client, so
+  they change no wire message; content past a limit is a
+  `ProtocolFormatException`, and the engine quarantines that envelope like any
+  other it cannot read.
 
 ## 2. Message types (shown in the chat)
 

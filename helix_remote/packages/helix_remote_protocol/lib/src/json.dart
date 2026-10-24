@@ -14,6 +14,24 @@ const minWireTime = 0;
 /// The latest wire timestamp: 9999-12-31T23:59:59.999Z.
 const maxWireTime = 253402300799999;
 
+/// The backstop limit on a decoded string, for a field whose DTO names no
+/// smaller one. Nothing legitimate needs more: the longest field on the wire
+/// is a 32 KiB SDP blob (`CallSignal.maxSdpLength`), then a compiled-in legal
+/// document and a crash stack, all well under this.
+const maxWireStringLength = 65536;
+
+/// The backstop limit on a base64url field, measured on the decoded bytes.
+/// The largest payload the server accepts is 256 KiB
+/// (`SendMessageRequest.maxPayloadBytes`); a field that legitimately carries
+/// more names its own limit at the call site (a history backup does).
+const maxWireBytes = 1024 * 1024;
+
+/// The backstop limit on the length of a decoded list. The largest legitimate
+/// list is a contact sync (`SetContactsRequest.maxContacts`, 5000), so this
+/// leaves room without letting a peer build a list the body cap already paid
+/// for.
+const maxWireListItems = 20000;
+
 /// Thrown when a wire message does not match the contract. [path] names the
 /// offending field (`body.recipients[2].device_id`), never its value: wire
 /// values can be secrets.
@@ -43,6 +61,11 @@ Uint8List decodeBytes(String value, {String path = ''}) {
 /// a [ProtocolFormatException] naming the field, instead of a `TypeError`
 /// somewhere inside the server or app. Unknown fields are ignored (forward
 /// compatibility, `remote_compatibility_policy.md`).
+///
+/// Every string, byte field and list is bounded: [string], [bytes] and the
+/// list readers take a limit and default it to the backstops above, so a
+/// field nobody thought about is still capped. Where the contract knows the
+/// real size of a field, the call site names it.
 final class JsonReader {
   JsonReader(this.json, {this.path = ''});
 
@@ -84,17 +107,22 @@ final class JsonReader {
     return value;
   }
 
-  String string(String key) {
+  String string(String key, {int maxLength = maxWireStringLength}) {
     final value = _required(key);
-    return value is String ? value : _type(key, 'a string');
+    if (value is! String) return _type(key, 'a string');
+    if (value.length > maxLength) {
+      throw ProtocolFormatException('too long', path: _at(key));
+    }
+    return value;
   }
 
-  String? optString(String key) => has(key) ? string(key) : null;
+  String? optString(String key, {int maxLength = maxWireStringLength}) =>
+      has(key) ? string(key, maxLength: maxLength) : null;
 
   /// A non-empty string, trimmed of nothing: the wire value must already be
   /// canonical.
-  String nonEmpty(String key) {
-    final value = string(key);
+  String nonEmpty(String key, {int maxLength = maxWireStringLength}) {
+    final value = string(key, maxLength: maxLength);
     if (value.isEmpty) {
       throw ProtocolFormatException('must not be empty', path: _at(key));
     }
@@ -148,9 +176,34 @@ final class JsonReader {
   bool flag(String key, {bool orElse = false}) =>
       has(key) ? boolean(key) : orElse;
 
-  Uint8List bytes(String key) => decodeBytes(string(key), path: _at(key));
+  /// Base64url bytes, capped on the decoded length ([maxLength]). The text is
+  /// checked first, at its four-chars-per-three-bytes size, so an oversize
+  /// field is refused before it is decoded into memory.
+  Uint8List bytes(String key, {int maxLength = maxWireBytes}) {
+    final value = string(key, maxLength: maxLength * 4 ~/ 3 + 4);
+    final decoded = decodeBytes(value, path: _at(key));
+    if (decoded.length > maxLength) {
+      throw ProtocolFormatException('too long', path: _at(key));
+    }
+    return decoded;
+  }
 
-  Uint8List? optBytes(String key) => has(key) ? bytes(key) : null;
+  Uint8List? optBytes(String key, {int maxLength = maxWireBytes}) =>
+      has(key) ? bytes(key, maxLength: maxLength) : null;
+
+  /// [bytes] where the contract fixes the length (a key, a digest, a
+  /// signature): a wrong length is a protocol error here, not a crypto
+  /// failure somewhere later.
+  Uint8List bytesOf(String key, int length) {
+    final value = bytes(key, maxLength: length);
+    if (value.length != length) {
+      throw ProtocolFormatException('expected $length bytes', path: _at(key));
+    }
+    return value;
+  }
+
+  Uint8List? optBytesOf(String key, int length) =>
+      has(key) ? bytesOf(key, length) : null;
 
   /// Epoch milliseconds (UTC). All wire timestamps use this form, within
   /// [minWireTime] .. [maxWireTime] (1970 to the end of year 9999): a value
@@ -171,14 +224,25 @@ final class JsonReader {
 
   JsonReader? optObject(String key) => has(key) ? object(key) : null;
 
-  List<Object?> _list(String key) {
+  List<Object?> _list(String key, {int maxItems = maxWireListItems}) {
     final value = _required(key);
-    return value is List ? value.cast<Object?>() : _type(key, 'a list');
+    if (value is! List) return _type(key, 'a list');
+    if (value.length > maxItems) {
+      throw ProtocolFormatException(
+        'over the $maxItems item limit',
+        path: _at(key),
+      );
+    }
+    return value.cast<Object?>();
   }
 
   /// A list of objects, each decoded by [decode].
-  List<T> objects<T>(String key, T Function(JsonReader item) decode) {
-    final items = _list(key);
+  List<T> objects<T>(
+    String key,
+    T Function(JsonReader item) decode, {
+    int maxItems = maxWireListItems,
+  }) {
+    final items = _list(key, maxItems: maxItems);
     return [
       for (var i = 0; i < items.length; i++)
         decode(JsonReader.of(items[i], path: '${_at(key)}[$i]')),
@@ -186,23 +250,36 @@ final class JsonReader {
   }
 
   /// Like [objects], but a missing field is an empty list.
-  List<T> optObjects<T>(String key, T Function(JsonReader item) decode) =>
-      has(key) ? objects(key, decode) : <T>[];
+  List<T> optObjects<T>(
+    String key,
+    T Function(JsonReader item) decode, {
+    int maxItems = maxWireListItems,
+  }) => has(key) ? objects(key, decode, maxItems: maxItems) : <T>[];
 
-  List<String> strings(String key) {
-    final items = _list(key);
+  List<String> strings(
+    String key, {
+    int maxItems = maxWireListItems,
+    int maxLength = maxWireStringLength,
+  }) {
+    final items = _list(key, maxItems: maxItems);
     return [
       for (var i = 0; i < items.length; i++)
-        items[i] is String
+        items[i] is String && (items[i]! as String).length <= maxLength
             ? items[i]! as String
             : throw ProtocolFormatException(
-                'expected a string',
+                'expected a string of at most $maxLength characters',
                 path: '${_at(key)}[$i]',
               ),
     ];
   }
 
-  List<String> optStrings(String key) => has(key) ? strings(key) : <String>[];
+  List<String> optStrings(
+    String key, {
+    int maxItems = maxWireListItems,
+    int maxLength = maxWireStringLength,
+  }) => has(key)
+      ? strings(key, maxItems: maxItems, maxLength: maxLength)
+      : <String>[];
 
   /// A wire enum value. Unknown values throw unless [orElse] is given, which
   /// is how forward-compatible enums decode values from newer peers.

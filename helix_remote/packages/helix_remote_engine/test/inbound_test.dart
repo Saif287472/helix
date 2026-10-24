@@ -536,6 +536,26 @@ void main() {
       await alice.sync();
       final votes = (await alice.db.messagesDao.byRowid(poll.localRowid))!;
       expect(votes.payload, contains('"votes":{"${bob.account}":["b"]}'));
+
+      // Naming one option twice does not make this voter's row grow.
+      await bob.engine.debugSend(
+        ContentMessage(
+          id: Uuid.v7(),
+          sentAt: peers.clock.now,
+          conversation: DirectConversation(to: alice.account),
+          body: PollVoteBody(
+            target: MessageRef(id: poll.messageId, author: alice.account),
+            optionIds: const ['a', 'b', 'a', 'b'],
+          ),
+        ),
+        audience: [alice.account],
+      );
+      await bob.engine.drainOutbox();
+      await alice.sync();
+      expect(
+        (await alice.db.messagesDao.byRowid(poll.localRowid))!.payload,
+        contains('"votes":{"${bob.account}":["a","b"]}'),
+      );
       final rsvps = (await alice.db.messagesDao.byRowid(event.localRowid))!;
       expect(rsvps.payload, contains('"rsvps"'));
       expect(rsvps.payload, contains('"going"'));

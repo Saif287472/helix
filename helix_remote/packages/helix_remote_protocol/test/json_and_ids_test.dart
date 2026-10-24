@@ -121,6 +121,105 @@ void main() {
         throwsA(isA<ProtocolFormatException>()),
       );
     });
+
+    test('every read is bounded, by default or by the call site', () {
+      JsonReader field(String key, Object? value) => JsonReader({key: value});
+      expect(
+        () => field('s', 'x' * (maxWireStringLength + 1)).string('s'),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        field('s', 'x' * maxWireStringLength).string('s').length,
+        maxWireStringLength,
+      );
+      for (final read in [
+        () => field('s', 'x' * 8).string('s', maxLength: 7),
+        () => field('s', 'x' * 8).optString('s', maxLength: 7),
+        () => field('s', 'x' * 600).nonEmpty('s', maxLength: 512),
+      ]) {
+        expect(read, throwsA(isA<ProtocolFormatException>()));
+      }
+
+      // A byte field is capped on what it decodes to, so base64url text may
+      // be a third larger than the limit.
+      expect(
+        field('b', encodeBytes(List.filled(1024, 7))).bytes('b').length,
+        1024,
+      );
+      expect(
+        () => field(
+          'b',
+          encodeBytes(List.filled(maxWireBytes + 1, 7)),
+        ).bytes('b'),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field(
+          'b',
+          encodeBytes(List.filled(16 * 1024 * 1024 + 1, 7)),
+        ).bytes('b', maxLength: 16 * 1024 * 1024),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field('b', encodeBytes(List.filled(31, 7))).bytesOf('b', 32),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field('b', encodeBytes(List.filled(33, 7))).optBytesOf('b', 32),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        field('b', encodeBytes(List.filled(32, 7))).bytesOf('b', 32).length,
+        32,
+      );
+
+      // A list is capped before anything in it is decoded.
+      var decoded = 0;
+      expect(
+        () => field('l', List.filled(maxWireListItems + 1, 1)).strings('l'),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field(
+          'l',
+          List.filled(3, 'x' * (maxWireStringLength + 1)),
+        ).strings('l'),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field('l', List.filled(maxWireListItems + 1, {'a': 1})).objects(
+          'l',
+          (item) {
+            decoded++;
+            return item.integer('a');
+          },
+        ),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(decoded, 0, reason: 'the count is checked before decoding');
+      expect(
+        () => field('l', List.filled(3, {'a': 1})).objects('l', (item) {
+          decoded++;
+          return item.integer('a');
+        }, maxItems: 2),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field('l', List.filled(3, {'a': 1})).optObjects('l', (item) {
+          decoded++;
+          return item.integer('a');
+        }, maxItems: 2),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(
+        () => field(
+          'l',
+          List.filled(3, 'x' * 600),
+        ).optStrings('l', maxLength: 512),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(decoded, 0, reason: 'no item of a refused list is decoded');
+    });
   });
 
   group('Uuid', () {

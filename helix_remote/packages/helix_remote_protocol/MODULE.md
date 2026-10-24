@@ -15,12 +15,20 @@ no Flutter, no `dart:io` in `lib/` (architecture test). Depends only on
 | `src/sealed.dart` | Encrypted payload forms (prekey, ratchet, sender-key messages). |
 | `src/content/` | Everything inside the encryption: `ContentMessage`, bodies, media pointers, padding. |
 | `src/errors.dart` | `ErrorCode`, `ApiError`, `StaleDevices`. |
-| `src/json.dart` | `JsonReader` (strict, path-tracking decode; never echoes values), base64url bytes, epoch-ms times. |
+| `src/json.dart` | `JsonReader` (strict, path-tracking decode, every read bounded, never echoes values), base64url bytes, epoch-ms times. |
 | `src/ids.dart` | UUIDv7. |
 
 ## Rules
 
 - Every DTO decodes through `JsonReader` and has a round-trip test.
+- **Nothing decodes unbounded.** `string`, `bytes` and the list readers each
+  take a limit and default it to the backstops in `src/json.dart`
+  (`maxWireStringLength`, `maxWireBytes`, `maxWireListItems`), so a field
+  nobody thought about is still capped. `ContentLimits` (and the DTO's own
+  `maxBytes`/`maxBatch`-style constant) names the real size where the contract
+  knows it; `bytesOf` fixes the length of a key or digest. A new field gets no
+  extra work — it inherits the backstop; a new *large* field names its own
+  limit at the call site, or the decode refuses what the sender sends.
 - Wire changes are additive. A changed golden fixture
   (`contracts/v2/fixtures/`) is a reviewed decision, not an incidental diff.
 - Every route in the catalog appears in `REST_V2.md` (`docs_test.dart`); the
