@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
@@ -81,6 +82,11 @@ Future<void> wakeSignedInAccounts({
     } on Object catch (error) {
       // One account that cannot be read does not stop the others.
       debugPrint('[push] wake failed: ${error.runtimeType}');
+      AnomalyLog.state(
+        'push.wake',
+        'account failed',
+        fields: {'error': error.runtimeType.toString()},
+      );
     }
   }
 }
@@ -110,6 +116,17 @@ Future<void> _wakeAccount(
     headless: true,
     keys: keys,
   );
+  // A phone that did not wake leaves no log an operator can read: this
+  // isolate is gone before the app's own diagnostics ever run. The wake gives
+  // the anomaly log this account's route - only when no sender exists, which
+  // is every background pass and never the running app, whose provider installs
+  // one at start and would otherwise be left sending through a runtime this
+  // pass closes. What the wake counted rides out on it, including what an
+  // earlier account failed with.
+  final ownsLog = !AnomalyLog.hasSender;
+  if (ownsLog) {
+    AnomalyLog.install((report) => runtime.api.ops.anomalies(report));
+  }
   try {
     if (pushToken != null) {
       try {
@@ -129,6 +146,17 @@ Future<void> _wakeAccount(
         audible.add(notice);
       }
     }
+    // Counts, never names, numbers or content: what the server woke the phone
+    // for, and what this pass found to say about it.
+    AnomalyLog.state(
+      'push.wake',
+      'woken',
+      fields: {
+        'notices': '${summary.notices.length}',
+        'alerted': '${audible.length}',
+        'calls': '${summary.pendingCalls.length}',
+      },
+    );
     if (audible.isNotEmpty) {
       await LocalNotifications.init();
       await MessageAlerts.show(
@@ -174,6 +202,12 @@ Future<void> _wakeAccount(
       );
     }
   } finally {
+    if (ownsLog) {
+      // Out before the runtime closes: afterwards there is no session to send
+      // on, and this isolate will not live to see the next flush tick.
+      await AnomalyLog.flush();
+      AnomalyLog.install(null);
+    }
     await runtime.close();
   }
 }

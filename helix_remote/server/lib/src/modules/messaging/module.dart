@@ -42,6 +42,7 @@ final class MessagingModule extends ModuleBase
       'helix_mailbox_signal_dropped_total',
       'Server-generated signals dropped because a device was already at its mailbox quota',
     );
+    _wakes = PushTrail(log, context.metrics);
     context.metrics.collectedGauge(
       'helix_mailbox_backlog',
       'Undelivered envelopes, cluster-wide (counted up to 1,000,000)',
@@ -57,6 +58,7 @@ final class MessagingModule extends ModuleBase
   late final MessagingApi api;
   late final Counter _trimmed;
   late final Counter _signalDropped;
+  late final PushTrail _wakes;
   BlockPolicy _blockPolicy = (db, sender, recipients) async => const <String>{};
   MessageRelay? _relay;
 
@@ -557,10 +559,18 @@ final class MessagingModule extends ModuleBase
     );
     if (reason == PushReason.message &&
         await Presence.isOnline(context.ephemeral, deviceId)) {
+      _wakes.record(PushOutcome.online, reason, deviceId);
       return; // It connected meanwhile; the socket delivers.
     }
     final target = await identity.pushTarget(context.db, deviceId);
-    if (target == null || !context.push.isConfigured) return;
+    if (target == null) {
+      _wakes.record(PushOutcome.noToken, reason, deviceId);
+      return;
+    }
+    if (!context.push.isConfigured) {
+      _wakes.record(PushOutcome.providerOff, reason, deviceId);
+      return;
+    }
     try {
       await context.push.send(
         token: target.token,
@@ -568,8 +578,18 @@ final class MessagingModule extends ModuleBase
         reason: reason,
         callId: payload['call_id'] as String?,
       );
+      _wakes.record(PushOutcome.sent, reason, deviceId);
     } on PushTokenGone {
       await identity.dropPushToken(context.db, deviceId);
+      _wakes.record(PushOutcome.tokenGone, reason, deviceId);
+    } on PushFailed catch (failure) {
+      _wakes.record(
+        PushOutcome.failed,
+        reason,
+        deviceId,
+        error: failure.reason,
+      );
+      rethrow; // Backoff and retry, and a `job_retry` line with the kind.
     }
   }
 

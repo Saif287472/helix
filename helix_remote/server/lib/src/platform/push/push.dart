@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:googleapis_auth/auth_io.dart' as gauth;
 import 'package:helix_remote_server/src/platform/config/server_config.dart';
+import 'package:helix_remote_server/src/platform/observability/log.dart';
+import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:http/http.dart' as http;
 
 /// Why a device is being woken. Pushes carry only this — never content,
@@ -36,6 +38,69 @@ final class PushFailed implements Exception {
 
   @override
   String toString() => 'PushFailed($reason)';
+}
+
+/// What happened when a device was woken. Every wake-up ends in exactly one of
+/// these, including the ones that send nothing: an operator asking "why did
+/// this phone not ring" cannot otherwise tell a device with no token from a
+/// provider that was never configured, and both from a send Google accepted
+/// and the phone never showed.
+enum PushOutcome {
+  /// The provider accepted it (Google answered 200).
+  sent('sent'),
+
+  /// The device's socket is up: the server delivers over it instead.
+  online('online'),
+
+  /// The device has no stored token (never registered, or removed).
+  noToken('no_token'),
+
+  /// No provider is configured (`HELIX_PUSH_PROVIDER=none`): nothing can be
+  /// sent, and this is what a phone that never rings on a fresh install means.
+  providerOff('provider_off'),
+
+  /// The provider refused or was unreachable; the job retries with backoff.
+  failed('failed'),
+
+  /// The token is no longer valid (the app was uninstalled); it is dropped.
+  tokenGone('token_gone');
+
+  const PushOutcome(this.wire);
+
+  final String wire;
+}
+
+/// One log line and one count per wake-up attempt.
+///
+/// A module creates one (`helix_push_total` is the same family whatever asks
+/// for it, so messaging and calls share their labels) and records the outcome
+/// with the device id, which is the only identifier a wake-up has. The token is
+/// never part of it.
+final class PushTrail {
+  PushTrail(Log log, Metrics metrics)
+    : _log = log.child({'component': 'push'}),
+      _total = metrics.counter(
+        'helix_push_total',
+        'Device wake-ups, by reason and outcome',
+      );
+
+  final Log _log;
+  final Counter _total;
+
+  void record(
+    PushOutcome outcome,
+    PushReason reason,
+    String deviceId, {
+    String? error,
+  }) {
+    _total.inc({'reason': reason.wire, 'outcome': outcome.wire});
+    _log.info('push', {
+      'device_id': deviceId,
+      'reason': reason.wire,
+      'outcome': outcome.wire,
+      'error': ?error,
+    });
+  }
 }
 
 abstract interface class PushProvider {

@@ -35,6 +35,13 @@
   an address to a person. `HELIX_TURN_URLS` entries must start with `turn:`
   or `turns:` (TLS, port 5349); list both and clients try them in order.
   Limited to 10 per device per hour; 503 `unavailable` if not configured.
+- **Push (`calls.push` job):** every attempt at a `call` or `call_ended`
+  wake-up leaves one `push` log line and one `helix_push_total` count, by
+  reason and outcome (`sent`, `no_token`, `provider_off`, `failed`,
+  `token_gone` — never the token, and no `online` skip: a device on its socket
+  is rung over it by the signal envelope, not by this job). A `failed` record
+  is followed by a rethrow, so the job retries (3 attempts) even though the
+  call is usually over by the time the backoff runs.
 - **Metrics:** quality numbers keyed by call id only, kept 90 days.
 - **Limits:** 30 offers per account per 10 minutes; every other signal
   (`update`, `end`, ICE) 240 per sending device per minute, on top of the

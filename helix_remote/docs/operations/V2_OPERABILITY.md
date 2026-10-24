@@ -56,7 +56,7 @@ identifiers into a ticket or chat without checking it first.
   Prometheus `Authorization: Bearer <that token>`
   (`authorization: {credentials: ...}` in the scrape config). The token
   opens this route only and is compared in constant time. Without it, the
-  route needs an admin token (`POST /v1/admin/sessions`, 12 hours). (The
+  route needs an admin token (`POST /v1/admin/sessions`, 7 days). (The
   plan said `/metrics`; the code serves `/v1/ops/metrics`.) With the
   hardened Caddy site (`deploy/windows/Caddyfile.example`), Caddy answers
   404 to this route and to `/v1/admin...` unless the caller is on the PC or
@@ -79,13 +79,14 @@ identifiers into a ticket or chat without checking it first.
   | `helix_storage_used_bytes` | gauge | none | Helix's tables with their indexes, plus stored media bytes, cluster-wide, at most a minute old (Postgres's own files, such as the write-ahead log, are not counted). Compare with `HELIX_STORAGE_BUDGET_BYTES` and the free disk space. |
   | `helix_mailbox_trimmed_total` | counter | none | Undelivered envelopes this node dropped because a device was over its 10,000-envelope mailbox quota. A steady rise means a device that never collects its mail. |
   | `helix_mailbox_signal_dropped_total` | counter | none | Server-generated signals (device list, key change, account signal, prekeys low, roster) this node dropped because the device was already over that quota: the signal goes, never the mail it would have evicted. Rising with `helix_mailbox_trimmed_total` means a device that stopped collecting; it then also stops hearing the server until it collects again. |
+  | `helix_push_total` | counter | `reason` (`message`, `call`, `call_ended`), `outcome` (`sent`, `online`, `no_token`, `provider_off`, `failed`, `token_gone`) | Device wake-ups attempted, one count each including those that send nothing (same family for messaging and calls). `helix_push_total{outcome="no_token"}` or `provider_off` rising is a phone that can never ring. |
 
   The cluster-wide gauges are queried on each scrape (3 s timeout; a
   failed read keeps the last value, `NaN` before the first). Every node
   reports the same value for them, so do not sum them across nodes.
 - **Not exported (gaps):** database pool use, rate-limit rejections as a
-  counter (they show up as `429` in the histogram's `status` label), push and
-  SMS results.
+  counter (they show up as `429` in the histogram's `status` label) and SMS
+  results.
 - Useful starting signals, taken from the old operability targets and mapped
   to what exists: readiness failing for 2 minutes; `5xx` share of
   `helix_http_request_seconds_count` above 2% for 5 minutes; `429` share above
@@ -134,6 +135,7 @@ identifiers into a ticket or chat without checking it first.
   | `sms_failed` | SMS gateway refused or was unreachable (`reason`). |
   | `sms_budget_exhausted` | The day's text budget (`HELIX_SMS_DAILY_LIMIT`) is spent; code requests get 429 until it refills. Many in a row usually mean SMS pumping. |
   | `sms_country_refused` | A code was asked for a number outside `HELIX_SMS_COUNTRIES` (`purpose`; never the number). |
+  | `push` | One line per device wake-up attempt (`component: push`, with `device_id`, `reason` and `outcome`; an `error` type only when the provider refused). The token is never in the line, and a wake-up that sends nothing still says why (`no_token`, `provider_off`). |
   | `after_commit_failed` | A step after a committed write (a bus publish) failed (`error` type). The write stands; sockets catch up at their next refresh. |
   | `admin_setup`, `admin_seeded`, `admin_seed_ignored`, `admin_sign_in_failed` | Operator account events. |
   | `admin_seed_still_set` | `HELIX_ADMIN_PASSWORD` is still in `.env` although an operator exists; it is ignored. Remove it. |
@@ -712,11 +714,27 @@ admin app (`PATCH /v1/admin/config`, `{"maintenance": false}`).
 `gateway_error` or `rejected` on the first real run, suspect the POST-versus-GET
 open item (`V2_SERVER_HANDOFF.md`, "SMS"). Phones see 503 `sms_unavailable`.
 
-**Push wake-ups do not arrive.**
-- `HELIX_PUSH_PROVIDER` is `none` (wake-ups are dropped without a log).
-- `job_retry` or `job_dead` for `messaging.push` / `calls.push`: wrong project
-  id or key, or Google unreachable. Fix, then retry dead jobs (above).
-- The device was online at send time (route present), so no push was needed.
+**Push wake-ups do not arrive.** Every attempt leaves one `push` line and one
+`helix_push_total` count, so the log answers this instead of the phone. Search
+stdout, or the file `HELIX_LOG_FILE` names, for `"event":"push"` (the console's
+live view shows the same lines) and read its `outcome`:
+
+| `outcome` | What happened | What to do |
+|---|---|---|
+| `sent` | Google accepted it (HTTP 200). The phone was woken, so anything else is on the device. | Look for that device's `client_anomaly` line with `where: push.wake`: it counts what the wake found. |
+| `online` | The device's socket was up on this node, so the mail went over it and nothing was pushed. | Expected. Not ringing while `online` is a delivery or app problem, not push. |
+| `no_token` | The server holds no token for this device: it never registered one, or it was dropped. | The app sends `PUT /v1/devices/self/push-token` whenever an engine reaches running; open the app once, then a send should read `sent`. A fresh install that was never opened shows this. |
+| `provider_off` | `HELIX_PUSH_PROVIDER=none`: nothing can ever be sent, whatever the device does. | Set `HELIX_PUSH_PROVIDER=fcm` with `HELIX_FCM_PROJECT_ID` and `HELIX_FCM_SERVICE_ACCOUNT` in the production `.env`, then restart. |
+| `failed` | The provider refused or was unreachable; `error` says which (`unreachable`, `http_403`, ...). The job retries with backoff (messaging 5 attempts, calls 3), then goes to the dead letters. | Wrong project id or key, or Google unreachable. Fix, then retry dead jobs (above). |
+| `token_gone` | Google no longer knows that token (the app was uninstalled or its data cleared), so the server dropped it. | The phone registers a new one the next time it runs and reaches running. |
+
+A `sent` for a device with no `client_anomaly` afterwards means FCM reached the
+phone and the pass there died - a locked database, or the running app holding
+that account (the wake reports an `account failed` entry with the exception
+*type*). `dart run tool/anomalies.dart` on the log file lists what the apps
+reported. An entry whose device and account are both missing entirely, with no
+`push` line at all, means the send was never queued: the recipient had no
+active device, or the job coalesced into one already run.
 
 **Calls cannot connect.** `GET /v1/calls/turn` answering 503 `unavailable`
 means `HELIX_TURN_URLS`/`HELIX_TURN_SECRET` are not set. If credentials are

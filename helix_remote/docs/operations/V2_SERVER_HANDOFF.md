@@ -396,6 +396,9 @@ platform HTTP stack, so it would protect none of the app's Dart traffic
 
 - Push is data-only: `{t: message|call|call_ended}` and a call id, never
   content. Apps fetch and decrypt after waking.
+- Every attempt leaves one `push` log line and one `helix_push_total` count
+  (device id, reason, outcome - never the token), so "why did this phone not
+  ring" is answered from the log (`V2_OPERABILITY.md`, "Troubleshooting").
 - Set `HELIX_PUSH_PROVIDER=fcm`, `HELIX_FCM_PROJECT_ID`, and
   `HELIX_FCM_SERVICE_ACCOUNT` (a path to the service-account key file; keep
   it outside the repository). The server calls the FCM HTTP v1 API
@@ -483,7 +486,7 @@ private key**. See "Backups" in `V2_OPERABILITY.md`.
   (log events `admin_seeded`, or `admin_seed_ignored` if the value is shorter
   than 12 characters). It never replaces an existing password. Remove the
   line from `.env` after the first start, then restart when convenient.
-- Passwords are 12 to 256 characters (Argon2id). Admin tokens last 12 hours.
+- Passwords are 12 to 256 characters (Argon2id). Admin tokens last 7 days.
   Five failed sign-ins lock the admin for 15 minutes, doubling up to 24 hours.
 - **There is no reset tool.** v1 had `bin/reset_admin_password.dart`; v2 has
   no equivalent yet. The recovery steps (a SQL change by the operator) are in
@@ -510,7 +513,7 @@ log note below).
 - **Signing in:** admin password only. After five wrong passwords from one
   address the server locks that address (15 minutes, doubling) and the
   console says how long to wait, from the `Retry-After` header. The token
-  lasts 12 hours; after that, or after the admin password is changed
+  lasts 7 days; after that, or after the admin password is changed
   elsewhere, the console returns to sign-in with a note.
 - **Saved session:** the console keeps the token in platform secure storage
   (Android Keystore, Windows credential store) and the server address in
@@ -537,7 +540,7 @@ log note below).
 
 - **JWT key:** add a new entry to `HELIX_JWT_KEYS`, set
   `HELIX_JWT_ACTIVE_KID` to it, restart every node, keep the old key for at
-  least 12 hours (the longest token lifetime: admin tokens are 12 hours,
+  least 7 days (the longest token lifetime: admin tokens are 7 days,
   device access tokens 15 minutes, and refresh tokens are not JWTs), then
   remove the old key. Nobody is signed out while the old key stays.
 - **Phone pepper:** do not rotate. It orphans stored phone hashes.

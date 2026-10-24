@@ -252,6 +252,36 @@ void main() {
       expect(h.push.sent, isEmpty, reason: 'non-urgent sends never push');
     });
 
+    test('every wake-up says what became of it', () async {
+      await h.api.call(
+        Routes.setPushToken,
+        bearer: b1.bearer,
+        body: const PushTokenRequest(token: 'bob-token').toJson(),
+      );
+      await send(h, a1, {
+        b1.accountId: [b1.id],
+        a1.accountId: [a2.id],
+      });
+      await h.env.platform.jobs.tick();
+
+      final wakes = h.env.log.lines
+          .map((line) => jsonDecode(line) as Map<String, dynamic>)
+          .where((line) => line['event'] == 'push')
+          .toList();
+      String? outcomeOf(String deviceId) {
+        for (final line in wakes) {
+          if (line['device_id'] == deviceId) return line['outcome'] as String;
+        }
+        return null;
+      }
+
+      // The device with a token: the provider took it. The one without: the
+      // reason a fresh install never rings, said instead of skipped.
+      expect(outcomeOf(b1.id), 'sent');
+      expect(outcomeOf(a2.id), 'no_token');
+      expect(wakes.every((line) => !line.containsKey('token')), isTrue);
+    });
+
     test(
       'blocked senders reach nobody, and are told who blocked them',
       () async {

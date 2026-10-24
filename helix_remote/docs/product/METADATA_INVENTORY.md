@@ -42,8 +42,8 @@ timers are inside the encrypted content, so they are not server data at all.
 | Operator (`admin.admins`, `admin.audit`, `admin.sign_in_failures`) | the Argon2id admin password hash and lockout counters; an audit row for every operator mutation (actor, action, target ids, time); failed sign-in counters by address | Operator accountability | Audit: one year (deleted daily); failure counters 2 days |
 | Settings (`ops.settings`) | server name, maintenance flag, federation switch, allow-listed feature flags | Operator configuration | Until changed |
 | Platform (`platform.idempotency`, `jobs`, `periodic_jobs`, `schema_migrations`, `rate_buckets`, `ephemeral`) | idempotency keys with the response sealed at rest; outbox jobs (push wake-ups, relays, purges) and dead letters; token-bucket counters keyed by principal or address (bundle fetches by requesting account and target account); schema versions and checksums | Retry safety, background work, limits | Idempotency 24 hours; a bucket until it is full again, one policy window after last use (a minute to a day; per-address buckets at most an hour); dead letters until the operator purges them |
-| Logs (stdout and the optional `HELIX_LOG_FILE`) | JSON lines with a request id, route template, status, duration, redacted fields. Client addresses appear only as the rightmost-untrusted forwarded address | Operations | Whatever the operator rotates; nothing here is in the database |
-| App problem reports (`client_anomaly` log lines) | per entry: kind, where (error type, route template or engine step), the error's message and stack (whole from a debug build; trimmed, app frames only, from a release build; masked on the device and redacted again by the server), the device id, app version, platform, time, a repeat count and a request id for refused requests. Since 2026-10-23 also timings (launch to first frame and to engine ready, in milliseconds; slow-frame counts per quarter hour) and a memory-pressure note; never content, never a name or a number | Finding and fixing faults | Logs only, as above; never in the database |
+| Logs (stdout and the optional `HELIX_LOG_FILE`) | JSON lines with a request id, route template, status, duration, redacted fields. Client addresses appear only as the rightmost-untrusted forwarded address. A device wake-up adds one `push` line per attempt (`component: push`, with the device id, the reason and the outcome: `sent`, `online`, `no_token`, `provider_off`, `failed`, `token_gone`) — the token itself never appears | Operations | Whatever the operator rotates; nothing here is in the database |
+| App problem reports (`client_anomaly` log lines) | per entry: kind, where (error type, route template or engine step), the error's message and stack (whole from a debug build; trimmed, app frames only, from a release build; masked on the device and redacted again by the server), the device id, app version, platform, time, a repeat count and a request id for refused requests. Since 2026-10-23 also timings (launch to first frame and to engine ready, in milliseconds; slow-frame counts per quarter hour) and a memory-pressure note; since 2026-10-24 a `push.wake` note from the background wake, in counts (how many new messages it found, how many of them alerted, how many calls were pending) and the exception *type* of an account that could not be read. Never content, never a name or a number | Finding and fixing faults | Logs only, as above; never in the database |
 
 ## Minimization rules
 
@@ -52,7 +52,10 @@ timers are inside the encrypted content, so they are not server data at all.
   never logged (the logger redacts by field name and by value shape; a test pins
   it).
 - Push is data-only. A wake-up carries the kind and a call id, never content;
-  the app fetches and decrypts after waking.
+  the app fetches and decrypts after waking. What the server keeps of it is one
+  log line per attempt - the device, the reason and what became of it - and the
+  app's background pass reports back the same way, in counts of what that one
+  mailbox read found.
 - The server identifies accounts by `phone_hash` and the keyed discovery index.
   The raw number is sent with each code request (so it can be hashed and passed
   to the SMS gateway, BulkSMSBD), with password sign-in and its parameters

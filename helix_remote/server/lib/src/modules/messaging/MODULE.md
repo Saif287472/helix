@@ -135,6 +135,16 @@ A data-only wake-up through `PushProvider`: `{t: message|call|call_ended}`
 and nothing else. It is skipped if the device came online meanwhile. A
 token the provider no longer knows is dropped through identity.
 
+Every attempt ends in one `PushTrail` record (`platform/push/push.dart`): one
+`push` log line (`component: push`, `device_id`, `reason`, `outcome`, and an
+`error` type only when the provider refused) and one `helix_push_total` count
+labelled by reason and outcome. The token is never part of either, and a wake
+that sends nothing still says why: `online`, `no_token`, `provider_off`,
+`failed` (rethrown after the record, so the job retries with backoff up to its
+5 attempts), `token_gone`. `sent` means Google took it; anything the phone did
+after that is the app's own `push.wake` anomaly
+(`V2_OPERABILITY.md`, "Troubleshooting").
+
 ## Server-generated envelopes
 
 | Kind | To | From |

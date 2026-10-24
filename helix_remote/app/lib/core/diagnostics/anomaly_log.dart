@@ -53,6 +53,11 @@ abstract final class AnomalyLog {
   /// What is waiting to be sent, oldest first.
   static List<Anomaly> get queued => [for (final e in _queue) e.toAnomaly()];
 
+  /// Whether the log has a way out. A short-lived isolate checks this before
+  /// giving the log its own route, so it never takes the place of the sender
+  /// the running app installed.
+  static bool get hasSender => _send != null;
+
   /// An uncaught error.
   static void crash(Object error, StackTrace? stack) => record(
     'crash',
@@ -254,7 +259,12 @@ abstract final class AnomalyLog {
             : m.group(0)!;
       });
 
-  @visibleForTesting
+  /// Gives the log its way out, and takes it away again when passed null.
+  ///
+  /// The app does this once at start ([anomalyLogInstallProvider]) and a
+  /// one-pass isolate for as long as it lives ([hasSender] says whether
+  /// anyone already has). What was recorded before a sender exists waits for
+  /// the next [flush].
   static void install(Future<void> Function(AnomalyReport report)? send) {
     _send = send;
     _timer?.cancel();

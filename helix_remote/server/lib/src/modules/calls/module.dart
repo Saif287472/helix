@@ -57,6 +57,7 @@ final class TurnConfig {
 final class CallsModule extends ModuleBase {
   CallsModule(super.context, {required this.identity, required this.messaging})
     : turn = TurnConfig.from(context.config) {
+    _wakes = PushTrail(log, context.metrics);
     identity.onDeviceRevoked(
       (tx, device) => tx.execute(
         'DELETE FROM $schema.pending_calls WHERE callee_device = @d:uuid',
@@ -69,6 +70,7 @@ final class CallsModule extends ModuleBase {
   final MessagingApi messaging;
   final TurnConfig turn;
   late final CallsApi api = _CallsFacade(this);
+  late final PushTrail _wakes;
   CallRelay? _relay;
 
   static const pushJob = 'calls.push';
@@ -590,19 +592,34 @@ CREATE TABLE $s.call_metrics (
 
   Future<void> _push(Map<String, Object?> payload) async {
     final device = payload['device']! as String;
+    final reason = PushReason.values.firstWhere(
+      (r) => r.wire == payload['reason'],
+    );
     final target = await identity.pushTarget(context.db, device);
-    if (target == null || !context.push.isConfigured) return;
+    if (target == null) {
+      _wakes.record(PushOutcome.noToken, reason, device);
+      return;
+    }
+    if (!context.push.isConfigured) {
+      _wakes.record(PushOutcome.providerOff, reason, device);
+      return;
+    }
     try {
       await context.push.send(
         token: target.token,
         kind: target.kind.wire,
-        reason: PushReason.values.firstWhere(
-          (r) => r.wire == payload['reason'],
-        ),
+        reason: reason,
         callId: payload['call_id'] as String?,
       );
+      _wakes.record(PushOutcome.sent, reason, device);
     } on PushTokenGone {
       await identity.dropPushToken(context.db, device);
+      _wakes.record(PushOutcome.tokenGone, reason, device);
+    } on PushFailed catch (failure) {
+      // A ringing phone is worth one retry even if the next offer may already
+      // have arrived: the call is over by the time the backoff runs.
+      _wakes.record(PushOutcome.failed, reason, device, error: failure.reason);
+      rethrow;
     }
   }
 }
