@@ -193,6 +193,1906 @@
   --display-tracking: -0.02em;
   --display-transform: none;
 
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
   /* ---- Night: camera and media viewer only ---- */
   --night: #090C15;
   --night-2: #111626;
