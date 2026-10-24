@@ -345,10 +345,26 @@ final class GroupsService {
       accounts.toSet().toList(),
     );
     // Added by this account: explained, not "added by the server roster".
-    await _roster.explainOwnAdds(groupId, result.added);
+    // The answer names them, and names one `already_member` that this device
+    // has not seen in the roster as an add whose own answer was lost but
+    // which the server took (AUD-12e-3). Someone already listed needs no
+    // explanation: the marker would sit unused and could be taken by a later
+    // addition of that account by anyone else.
+    final alreadyTaken = <String>{};
+    for (final entry in result.rejected.entries) {
+      if (entry.value != AddMemberRejection.alreadyMember) continue;
+      if (await _db.groupsDao.member(groupId, entry.key) != null) continue;
+      alreadyTaken.add(entry.key);
+    }
+    final mine = {...result.added, ...alreadyTaken};
+    await _roster.explainOwnAdds(groupId, mine);
     final update = await _roster.refresh(groupId);
-    if (update != null && result.added.isNotEmpty) {
-      await _keys.share(groupId, result.added, epoch: update.group.epoch);
+    // The audience is the roster this device now has, not the response: a
+    // member nobody else has explained is one the server added, and `share`
+    // holds them back until the user confirms them.
+    if (update != null) {
+      final audience = {...mine, ...update.added};
+      await _keys.share(groupId, audience, epoch: update.group.epoch);
     }
     return result;
   }
@@ -360,8 +376,8 @@ final class GroupsService {
   Future<void> removeMember(String groupId, String account) async {
     if (account == _ctx.identity.accountId) return leave(groupId);
     await _requireAdmin(groupId);
-    await _ctx.api.groups.removeMember(groupId, account);
-    await _afterRemoval(groupId, account);
+    final version = await _ctx.api.groups.removeMember(groupId, account);
+    await _afterRemoval(groupId, account, epoch: version.epoch);
   }
 
   /// Leaves the group. The chat stays as history.
@@ -537,8 +553,12 @@ final class GroupsService {
     await _ctx.api.groups.resolveJoinRequest(groupId, requestId, approve: true);
     if (account != null) await _roster.explainOwnAdds(groupId, [account]);
     final update = await _roster.refresh(groupId);
-    if (account != null && update != null) {
-      await _keys.share(groupId, [account], epoch: update.group.epoch);
+    // As in [addMembers]: the roster decides who is handed the key, so an
+    // approval whose answer named nothing still reaches the member the refresh
+    // finds new (AUD-12e-3). `share` holds back whoever nothing explains.
+    if (update != null) {
+      final audience = {?account, ...update.added};
+      await _keys.share(groupId, audience, epoch: update.group.epoch);
     }
   }
 
@@ -643,13 +663,23 @@ final class GroupsService {
     }
   }
 
-  Future<void> _afterRemoval(String groupId, String account) async {
-    final update = await _roster.refresh(groupId);
+  /// What this device owes the group after one of its members is gone, done
+  /// without waiting for the roster to be read back (AUD-12e-3): the removed
+  /// member's sender keys go, and the rotation is queued at [epoch] - the one
+  /// the removal's own answer named, or this device's for a call that returns
+  /// none. `rekey` reads the group when it runs, so the key it makes is the
+  /// current epoch's either way. A refresh that cannot reach the server must
+  /// not leave the group unrotated with the removed member still holding the
+  /// key.
+  Future<void> _afterRemoval(
+    String groupId,
+    String account, {
+    int? epoch,
+  }) async {
     await _senderKeys.forgetMember(groupId, account);
-    // The server bumped the epoch: the group key changes with it.
-    if (update != null) {
-      await _outbox.enqueueRekey(groupId, update.group.epoch);
-    }
+    final at = epoch ?? (await _db.groupsDao.byId(groupId))?.epoch;
+    if (at != null) await _outbox.enqueueRekey(groupId, at);
+    await _roster.refresh(groupId);
   }
 
   Future<GroupDetails> _require(String groupId) async {

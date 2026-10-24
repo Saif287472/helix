@@ -180,6 +180,98 @@ void main() {
       );
     });
 
+    test('an add whose answer is lost still hands the group key to the new '
+        'member', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register('bob', phone: '+8801711000002');
+      final carol = await peers.register('carol', phone: '+8801711000003');
+      final created = await alice.engine.groups.create(
+        name: 'Weekend',
+        members: [bob.account],
+      );
+      await alice.engine.drainOutbox();
+      await bob.sync();
+
+      // The server commits the add and the answer never arrives.
+      peers.server.loseResponseNext(Routes.addGroupMembers);
+      await expectLater(
+        alice.engine.groups.addMembers(created.groupId, [carol.account]),
+        throwsA(isA<NetworkException>()),
+      );
+      // The user tries again. The server now reports Carol as already a
+      // member, so the response names nobody new: AUD-12e-3 used to skip the
+      // key share here, and Carol stayed in a group with no name.
+      final retry = await alice.engine.groups.addMembers(created.groupId, [
+        carol.account,
+      ]);
+      expect(retry.rejected[carol.account], AddMemberRejection.alreadyMember);
+      expect(retry.added, isEmpty);
+      await alice.engine.drainOutbox();
+      await carol.sync();
+      expect(
+        (await carol.db.groupsDao.byId(created.groupId))!.title,
+        'Weekend',
+        reason: 'the retry shared the key, so the name opens for Carol',
+      );
+      // She is this account's own add, not a member the server put there:
+      // nothing to confirm.
+      expect(
+        await alice.engine.groups.pendingMembers(created.groupId),
+        isEmpty,
+      );
+    });
+
+    test('an add that reads the roster wide still keys nobody the user has '
+        'not confirmed', () async {
+      final g = await trio();
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      final erin = await peers.register('erin', phone: '+8801711000005');
+      // The server puts Dave in the group with no announcement at all.
+      server.injectMember(server.groups[g.id]!, dave.account);
+      // Alice adds Erin. The share that follows is built from the refreshed
+      // roster, so it names Dave too - and GroupTrust holds him back
+      // (AUD-12e-3 must not become a way to key a member the server added).
+      await g.alice.engine.groups.addMembers(g.id, [erin.account]);
+      expect(await g.alice.engine.groups.pendingMembers(g.id), {
+        dave.account: 'unattributed',
+      });
+      await g.alice.engine.drainOutbox();
+      await erin.sync();
+      await dave.sync();
+      expect((await erin.db.groupsDao.byId(g.id))!.title, 'Weekend');
+      expect(
+        (await dave.db.groupsDao.byId(g.id))!.title,
+        isEmpty,
+        reason: 'Dave was never handed the group key',
+      );
+    });
+
+    test('a removal whose roster read fails still forgets the member and '
+        'queues the rotation', () async {
+      final g = await trio();
+      expect(await g.alice.db.outboxDao.watchQueuedCount().first, 0);
+      // The removal lands; reading the roster back does not.
+      peers.server.dropNext(Routes.group);
+      await expectLater(
+        g.alice.engine.groups.removeMember(g.id, g.carol.account),
+        throwsA(isA<NetworkException>()),
+      );
+      // AUD-12e-3: both local steps used to wait behind that read, so this
+      // device left the group rotated by nobody and Carol still holding the
+      // key she was read out with.
+      expect(
+        await g.alice.db.outboxDao.watchQueuedCount().first,
+        greaterThan(0),
+        reason: 'the rotation duty is queued from the removal itself',
+      );
+      // The duty runs as soon as the network is back, and the rotation lands:
+      // a rename under the new epoch reaches Bob.
+      await g.alice.engine.drainOutbox();
+      await g.alice.engine.groups.rename(g.id, 'Two left');
+      await g.bob.sync();
+      expect((await g.bob.engine.groups.details(g.id))!.title, 'Two left');
+    });
+
     test('a member without the key sees the group, then its name once the '
         'key arrives', () async {
       final alice = await peers.register('alice', phone: '+8801711000001');

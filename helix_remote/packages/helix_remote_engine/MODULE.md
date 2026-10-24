@@ -709,6 +709,22 @@ group is read back by that id and, if the server has it, the call finishes as
 though the answer had arrived and the share still runs (AUD-12e-1). Only the
 server's "no such group" justifies forgetting the key.
 
+**Who gets the key follows the roster, not the response** (AUD-12e-3).
+`addMembers` and `approveJoinRequest` share with the members the refreshed
+roster lists as new, not with the accounts the one response happened to name:
+an add that committed but whose answer was lost comes back as
+`already_member`, and the retry of it names nobody — those are this account's
+own adds, so they are explained before the roster is read (an account already
+in the local roster is not, which would leave a marker for some later
+addition to consume) and the retry shares with them. A member nothing explains
+stays in `GroupTrust`'s pending set, which `share` removes from the audience,
+so widening it cannot hand a key to someone the user has not confirmed.
+`_afterRemoval` does the work that needs no server answer first — the removed
+member's sender keys and the rotation duty, keyed by the epoch the removal's
+own response named — and reads the roster back last: a device that is offline
+after a removal still owes the rotation, and `rekey` re-reads the group when it
+runs.
+
 **Group master key (CRYPTO_V2.md §9).** Whoever adds a member sends them a
 `group_key` (pairwise); the creator sends it to the first members; for a link
 join, where the joiner added themselves, the first admin by account id does.

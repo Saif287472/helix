@@ -1172,6 +1172,54 @@ update to be protected.
   passed alone), `recovery_test.dart`, and `devices_test.dart` +
   `messaging_test.dart` (17 green, the `dropDevice` paths). No schema and no
   wire change; no APK needed for this step on its own.
+- S6 (AUD-12e-3) — the key share after an add or an approval was chained to the
+  one response, so an ambiguous answer left the new member in the group with no
+  key: the server's repeat of that add reports them `already_member`, the
+  audience built from `result.added` was empty, and the roster event's own share
+  defers to the actor, who is this account. `addMembers` and
+  `approveJoinRequest` now take the audience from the refreshed roster
+  (`update.added`) as well as the response, and `addMembers` explains an
+  `already_member` that this device's roster has not seen — that is what its own
+  lost call added — before the roster is read, so the apply does not hold her
+  back as a member the server put there on its own. An account *already* in the
+  local roster is deliberately not explained: the marker would sit unused and a
+  later addition of that account by anyone else would consume it, which is the
+  one way this could weaken the §14 confirmation gate. The gate itself is
+  untouched: `GroupKeyDistributor.share` already removes everyone in
+  `GroupTrust`'s pending set, so widening the audience cannot key an
+  unconfirmed member, and the tests below assert both halves.
+  `_afterRemoval` does the two steps that need no server answer first — the
+  removed member's sender keys and the rotation duty, keyed by the epoch the
+  removal's own response named (`removeMember` returns it; a ban answers nothing
+  and uses this device's epoch, which is right because `rekey` re-reads the
+  group when it runs) — and reads the roster back last, so an offline device
+  after a removal no longer leaves the group unrotated with the removed member
+  still holding the key.
+  Not done from the sketch: the durable "share with whoever is new" *duty*. The
+  roster-diff audience already covers the reachable cases at the moment the
+  mutation is made; a background duty needs a way to tell "this member has
+  never been given the current key" from "they have" (the keyring keeps no
+  record of whom a key was sent to), so it would re-share on every pass and,
+  worse, would hand the key to a member whose confirmation is still pending on
+  this device if the pending set were ever read wrong. A lost *approval* answer
+  has the same shape (the request is consumed, so a retry 404s and names nobody),
+  and there the joiner waits in the pending set for the admin to confirm them —
+  visible in the app's member list, not silent, and not this step's fix.
+  Tests: `groups_test.dart` "an add whose answer is lost still hands the group
+  key to the new member" (the fake commits the add and the answer is lost; the
+  retry reports `already_member` and shares; Carol's title opens, and she is not
+  in Alice's pending set), "an add that reads the roster wide still keys nobody
+  the user has not confirmed" (a silently injected member is named by the same
+  refreshed roster and still gets no key, while the real add does) and "a
+  removal whose roster read fails still forgets the member and queues the
+  rotation" (the `GET` after the removal is dropped: the duty is queued and,
+  once the network returns, the rotation lands and a rename reaches Bob). The
+  first and the last fail on the previous code — Carol held back as
+  `unattributed` with no key, and a queue count of 0 — and pass with the fix.
+  Gate: engine suite **326 green**, `dart analyze lib test` and format clean,
+  and `server/test/client/engine/groups_test.dart` **16 green** against Postgres
+  (it is where the approval and two-server key paths actually run). No schema
+  and no wire change; no APK needed for this step on its own.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**
