@@ -66,9 +66,21 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
     sender's stored-envelope budget, which direct sends share
     (`MessagingApi.chargeStored`, 50,000 units, 250 per second). A short
     text to 2,000 devices costs 2,000 units. Over either, `rate_limited`
-    with `Retry-After`. Ephemeral sends are not charged.
+    with `Retry-After`.
   - A payload over 16 KiB while the server is over its storage budget:
     `quota_exceeded`.
+  - Ephemeral (typing) sends cost the sender nothing - nothing is stored -
+    but they cost the group one token per device the frame reached, from
+    `groups.live` (20,000 at once, 2,000 per second, keyed by group id): a
+    thousand members still make one keystroke a thousand frames, so typing
+    must not be a per-device amplifier of one member's send rate
+    (AUD-4b-2). Over it, `rate_limited`; a refusal drops an indicator,
+    never a message.
+  - `groups.mutate`: 40 at once, 2 per second per device, on the routes
+    that change a roster, a role, a setting, a ban or an invite link
+    (AUD-4b-1). Each one takes the group's row lock and fans a notice out
+    to every member device, so without it one device could hold a group's
+    lock and pay its fan-out budget continuously.
   - A send proxied to another home server is charged there, and the
     local delivery to this server's members after it is not charged again
     (federation is off on Helix Global).
@@ -86,8 +98,21 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
   message on their next `device_list_stale` retry. Remote members are
   policed by their own server against its snapshot.
 
-Every roster or settings change sends a `roster_change` envelope to every
-member device; removed members are told too.
+Every roster or settings change sends a `roster_change` envelope to member
+devices. The accounts the change is *about* are always told - a removed
+member has to learn it while offline. The rest of the group hears about each
+account and kind once per `announceWindow` (15 s, one
+`grp:announce:<group>:<account>:<kind>` marker in the ephemeral store), so an
+add/remove loop on one account folds into the two notices already sent
+instead of a fresh fan-out every cycle (AUD-4b-1); a change that names no
+account (a rename, a settings change) always goes out. A member that misses
+one catches up by fetching the group, which is also what the engine does when
+it cannot read a message from a member it does not know. Remote members are
+told through the queued sync every time: the coalescing is of local device
+rows only. The marker is written while the transaction is still open and the
+ephemeral store does not roll back with it, so a change whose transaction
+retries may arrive folded for bystanders (the accounts it is about are still
+told).
 
 ## Federation (`federation.dart`)
 

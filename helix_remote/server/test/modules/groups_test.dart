@@ -284,6 +284,80 @@ void main() {
     );
 
     test(
+      'an add/remove loop on one account tells the bystanders twice, and the '
+      'account itself every time',
+      () async {
+        final g = await create([bob.accountId]);
+        for (var i = 0; i < 4; i++) {
+          expect(
+            (await h.api.call(
+              Routes.addGroupMembers,
+              params: {'group_id': g.groupId},
+              bearer: alice.bearer,
+              body: AddMembersRequest(accounts: [carol.accountId]).toJson(),
+            )).status,
+            200,
+          );
+          expect(
+            (await h.api.call(
+              Routes.removeGroupMember,
+              params: {'group_id': g.groupId, 'account': carol.accountId},
+              bearer: alice.bearer,
+            )).status,
+            200,
+          );
+        }
+        expect(
+          (await roster(bob)).map((e) => e.change).toList(),
+          [
+            RosterChangeKind.created,
+            RosterChangeKind.added,
+            RosterChangeKind.removed,
+          ],
+          reason: 'the loop on carol folded into what bob already heard',
+        );
+        expect(
+          (await roster(carol)).map((e) => e.change).toList(),
+          hasLength(8),
+          reason: 'the account a change is about is always told',
+        );
+      },
+    );
+
+    test('group administration is limited per device', () async {
+      final g = await create([bob.accountId]);
+      await h.env.platform.db.execute(
+        'INSERT INTO ${h.env.platform.schemas.platform}.rate_buckets '
+        '(key, tokens, updated_at, allowed) VALUES (@k:text, 0, now(), true) '
+        'ON CONFLICT (key) DO UPDATE SET tokens = 0, updated_at = now()',
+        {'k': '${GroupsModule.mutatePerDevice.name}:device:${alice.id}'},
+      );
+      expect(
+        (await h.api.call(
+          Routes.setGroupSettings,
+          params: {'group_id': g.groupId},
+          bearer: alice.bearer,
+          body: const GroupSettings(
+            addMembers: GroupPermission.everyone,
+          ).toJson(),
+        )).errorCode,
+        'rate_limited',
+      );
+      expect(
+        (await h.api.call(
+          Routes.setGroupSettings,
+          params: {'group_id': g.groupId},
+          bearer: bob.bearer,
+          body: const GroupSettings(
+            addMembers: GroupPermission.everyone,
+          ).toJson(),
+        )).errorCode,
+        'forbidden',
+        reason: 'another device has its own budget',
+      );
+    });
+
+    test(
       'roles: members cannot administer; owners transfer ownership',
       () async {
         final g = await create([bob.accountId, carol.accountId]);

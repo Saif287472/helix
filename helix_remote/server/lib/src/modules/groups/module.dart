@@ -107,6 +107,33 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     perSecond: 2000,
   );
 
+  /// What one group's live sends (typing) may fan out, all senders together,
+  /// in member devices. A live send stores nothing and is charged to nobody
+  /// (ruling Q1), but one device of a 1,024-member group would otherwise be a
+  /// 5x amplifier of its own send rate (AUD-4b-2). Refusing one costs a
+  /// typing indicator, not a message.
+  static const livePerGroup = RateLimitPolicy(
+    'groups.live',
+    capacity: 20000,
+    perSecond: 2000,
+  );
+
+  /// Roster and settings mutations per device. Every one of these announces
+  /// the change to the group's members, so an unthrottled add/remove loop was
+  /// a cheap way to write into a stranger's mailbox (AUD-4b-1). The app adds
+  /// a whole list in one request, so this is bursty work, not a trickle.
+  static const mutatePerDevice = RateLimitPolicy(
+    'groups.mutate',
+    capacity: 40,
+    perSecond: 2,
+  );
+
+  /// How often the rest of a group is told about one account joining or
+  /// leaving it. The window folds a flapped add/remove of the same account
+  /// into the first announcement, so one person looping on a puppet cannot
+  /// write into every member device's mailbox on every cycle (AUD-4b-1).
+  static const announceWindow = Duration(seconds: 15);
+
   /// Memberships and roles (group names and pictures are encrypted).
   @override
   Future<Object?> exportAccount(SqlSession s, String accountId) async {
@@ -177,25 +204,72 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
         Routes.setGroupState,
         _scoped('set_state'),
         maxBodyBytes: 256 * 1024,
+        rateLimit: mutatePerDevice,
       )
-      ..add(name, Routes.setGroupSettings, _scoped('set_settings'))
-      ..add(name, Routes.addGroupMembers, _scoped('add_members'))
+      ..add(
+        name,
+        Routes.setGroupSettings,
+        _scoped('set_settings'),
+        rateLimit: mutatePerDevice,
+      )
+      ..add(
+        name,
+        Routes.addGroupMembers,
+        _scoped('add_members'),
+        rateLimit: mutatePerDevice,
+      )
       ..add(
         name,
         Routes.removeGroupMember,
         _scoped('remove_member'),
         allowSuspended: true,
+        rateLimit: mutatePerDevice,
       )
-      ..add(name, Routes.setGroupRole, _scoped('set_role'))
-      ..add(name, Routes.banFromGroup, _scoped('ban'))
-      ..add(name, Routes.unbanFromGroup, _scoped('unban'))
-      ..add(name, Routes.createInviteLink, _scoped('create_link'))
-      ..add(name, Routes.revokeInviteLink, _scoped('revoke_link'))
+      ..add(
+        name,
+        Routes.setGroupRole,
+        _scoped('set_role'),
+        rateLimit: mutatePerDevice,
+      )
+      ..add(
+        name,
+        Routes.banFromGroup,
+        _scoped('ban'),
+        rateLimit: mutatePerDevice,
+      )
+      ..add(
+        name,
+        Routes.unbanFromGroup,
+        _scoped('unban'),
+        rateLimit: mutatePerDevice,
+      )
+      ..add(
+        name,
+        Routes.createInviteLink,
+        _scoped('create_link'),
+        rateLimit: mutatePerDevice,
+      )
+      ..add(
+        name,
+        Routes.revokeInviteLink,
+        _scoped('revoke_link'),
+        rateLimit: mutatePerDevice,
+      )
       ..add(name, Routes.listInviteLinks, _scoped('list_links'))
       ..add(name, Routes.previewInviteLink, _byToken('preview'))
-      ..add(name, Routes.joinGroup, _byToken('join'))
+      ..add(
+        name,
+        Routes.joinGroup,
+        _byToken('join'),
+        rateLimit: mutatePerDevice,
+      )
       ..add(name, Routes.joinRequests, _scoped('join_requests'))
-      ..add(name, Routes.resolveJoinRequest, _scoped('resolve_join'))
+      ..add(
+        name,
+        Routes.resolveJoinRequest,
+        _scoped('resolve_join'),
+        rateLimit: mutatePerDevice,
+      )
       ..add(
         name,
         Routes.sendGroupMessage,
@@ -377,6 +451,15 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
 
   /// Tells every member device (and [also]) what changed, in [tx]: local
   /// devices directly, other servers through queued syncs.
+  ///
+  /// The accounts a change is *about* ([members] plus [also]) are always told:
+  /// a removed member has to learn it while offline. The rest of the group
+  /// hears about each account and kind once per [announceWindow], so an
+  /// add/remove loop on one account folds into the two notices already sent
+  /// instead of a fresh fan-out every cycle (AUD-4b-1). A change that names no
+  /// account (a rename, a settings change) always goes out. A member that
+  /// misses one catches up by fetching the group, which is also what the
+  /// engine does when it cannot read a message from a member it does not know.
   Future<void> _announce(
     Tx tx,
     String groupId,
@@ -399,24 +482,38 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
       tx,
       accounts.where(Frame.isLocalId),
     );
-    await messaging.deliver(
-      tx,
-      {
-        for (final list in devices.values)
-          for (final d in list) d.id: null,
-      },
-      Delivery(
-        kind: EnvelopeKind.rosterChange,
-        groupId: groupId,
-        data: RosterChangeEvent(
+    final about = {...members, ...also};
+    final fresh = <bool>[
+      for (final a in about)
+        await context.ephemeral.putIfAbsent(
+          'grp:announce:$groupId:$a:${change.wire}',
+          '1',
+          announceWindow,
+        ),
+    ];
+    final tellAll = about.isEmpty || fresh.contains(true);
+    final targets = {
+      for (final e in devices.entries)
+        for (final d in e.value)
+          if (tellAll || about.contains(e.key)) d.id,
+    };
+    if (targets.isNotEmpty) {
+      await messaging.deliver(
+        tx,
+        {for (final d in targets) d: null},
+        Delivery(
+          kind: EnvelopeKind.rosterChange,
           groupId: groupId,
-          change: change,
-          epoch: epoch,
-          actor: actor,
-          members: members,
-        ).toJson(),
-      ),
-    );
+          data: RosterChangeEvent(
+            groupId: groupId,
+            change: change,
+            epoch: epoch,
+            actor: actor,
+            members: members,
+          ).toJson(),
+        ),
+      );
+    }
     await _queueSyncs(
       tx,
       groupId,
@@ -1201,6 +1298,18 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     if (!frame.isLocal) remoteMessages.remove(frame.viewer);
 
     if (req.ephemeral) {
+      // Nothing is stored, so the sender pays nothing (ruling Q1) - but the
+      // group as a whole still has a live budget, so one member cannot turn
+      // typing into a per-device amplifier of their own send rate
+      // (AUD-4b-2). A refusal drops a typing indicator, not a message.
+      final live = await context.rateLimiter.hit(
+        livePerGroup,
+        groupId,
+        cost: fanOut.length + remoteMessages.length,
+      );
+      if (!live.allowed) {
+        throw ApiError(ErrorCode.rateLimited, retryAfter: live.retryAfter);
+      }
       await messaging.deliverEphemeral(fanOut, message);
       _sendEphemeral(groupId, remoteMessages);
       return jsonResponse(

@@ -109,7 +109,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `PUT /v1/profile` | `EncryptedProfile` → 204 | `version` must increase. ≤ 16 KiB. |
 | `PUT /v1/profile/name` | `SetOwnNameRequest` → 204 | The name this account gives itself, **in the clear**, for the operator console only (ADR-030); contacts read the encrypted profile. ≤ 80 characters; empty removes it. Apps send it with every profile save and once after signing in. |
 | `GET /v1/people/blocks` | — → `BlockList` | |
-| `PUT /v1/people/blocks/{account}` | — → 204 | Blocks are not secret. The blocked account's devices get a `block_change` envelope (`BlockChangeEvent`: `account`, `blocked: true`) at once, and `DELETE` sends one with `blocked: false`; only an actual change is announced, and an account on another server is not told. Its messages reach nobody (`blocked_by` on its sends), its call offers are refused with `blocked` (403), and it cannot add you to groups. |
+| `PUT /v1/people/blocks/{account}` | — → 204 | Blocks are not secret. The blocked account's **online** devices get a live-only `block_change` frame (`BlockChangeEvent`: `account`, `blocked: true`) at once, and `DELETE` sends one with `blocked: false`; only an actual change is announced, an account on another server is not told, and nothing is stored or numbered - a device that is away learns the state from its next send. Its messages reach nobody (`blocked_by` on its sends), its call offers are refused with `blocked` (403), and it cannot add you to groups. 60 at once, 2 per second per device. |
 | `DELETE /v1/people/blocks/{account}` | — → 204 | |
 | `GET /v1/people/privacy` | — → `PrivacySettings` | |
 | `PUT /v1/people/privacy` | `PrivacySettings` → 204 | Turning `discoverable_by_phone` off deletes the server's discovery entry for the account. Turning it back on needs `phone_number` (the account's own number, E.164; checked against the verified number, `invalid_field` otherwise); other changes while it stays on need none. Never returned by `GET`. |
@@ -138,10 +138,15 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `GET /v1/groups/{group_id}/invite-links` | — → `InviteLinkList` | Admins. The live links, newest first: id, approval mode, who made it and when, expiry; never the token. |
 | `GET /v1/groups/{group_id}/join-requests` | — → `JoinRequestList` | Admins. |
 | `POST /v1/groups/{group_id}/join-requests/{request_id}` | `ResolveJoinRequest` → 204 | Admins. |
-| `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. Rate-limited per device (200 burst, 5/s, ephemeral sends included). A stored send costs the payload's units ([`POST /v1/messages`](#messaging)) once per member device, plus the distributions, charged first to the group's own budget (200,000 burst, 2,000/s) and then to the sender's; `rate_limited` when either is spent, so a refused send costs the sender nothing. Ephemeral sends are not charged. A stored send is idempotent by `id` as well as by `Idempotency-Key`: a retry answers the original `accepted_at` with `replayed: true`. Membership and the roster are re-read under the group's row lock before storing, so a member removed while a send is in flight receives nothing. |
+| `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. Rate-limited per device (200 burst, 5/s, ephemeral sends included). A stored send costs the payload's units ([`POST /v1/messages`](#messaging)) once per member device, plus the distributions, charged first to the group's own budget (200,000 burst, 2,000/s) and then to the sender's; `rate_limited` when either is spent, so a refused send costs the sender nothing. A live (typing) send stores nothing and costs the sender nothing, but it costs the group one token per device the frame reached from its own live budget (20,000 burst, 2,000/s); over that `rate_limited` too, which drops an indicator rather than a message. A stored send is idempotent by `id` as well as by `Idempotency-Key`: a retry answers the original `accepted_at` with `replayed: true`. Membership and the roster are re-read under the group's row lock before storing, so a member removed while a send is in flight receives nothing. |
 
-Every roster or settings change emits a `roster_change` envelope to every
-member device (and to removed members, so they know).
+Every roster or settings change emits a stored `roster_change` envelope:
+always to the devices of the accounts the change is about (so a removed
+member learns it even while away), and once per account and kind per 15
+seconds to the rest of the group - a member that misses one catches up by
+fetching the group. A change that names no account (a rename, a settings
+change) goes to every member device. Roster, role, setting, ban and
+invite-link changes are limited per device (40 burst, 2/s).
 
 ## calls
 

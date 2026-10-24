@@ -114,6 +114,48 @@ void main() {
           );
         },
       );
+
+      test('a server signal to a device at its quota is dropped, not the mail it '
+          'would have evicted', () async {
+        h = await Harness.start();
+        final alice = await h.registerGlobal(aliceNumber);
+        final bob = await h.registerGlobal(bobNumber);
+        for (var i = 0; i < 3; i++) {
+          await send(h, alice, {
+            bob.accountId: [bob.id],
+          });
+        }
+        expect(await seqs(bob), [1, 2, 3]);
+        await h.env.platform.db.execute(
+          'UPDATE ${table('messaging', 'device_seq')} SET pending = @n:int4 WHERE device_id = @d:uuid',
+          {'d': bob.id, 'n': MailboxStore.quota},
+        );
+
+        // Bob signs in on a second device. Identity announces it to his old
+        // device with two server-generated signals, and that device is
+        // exactly where the quota is already spent (AUD-4a-1).
+        await secondDevice(h, bob, bobNumber);
+
+        expect(await seqs(bob), [
+          1,
+          2,
+          3,
+        ], reason: 'what he had not read yet is untouched');
+        expect(await rows(bob.id), 3);
+        expect(
+          (await mailbox(
+            h,
+            bob,
+          )).envelopes.where((e) => e.kind == EnvelopeKind.deviceListChange),
+          isEmpty,
+          reason: 'the signal is the row that went',
+        );
+        expect(await pending(bob.id), MailboxStore.quota);
+        expect(
+          h.env.platform.metrics.render(),
+          contains('helix_mailbox_signal_dropped_total 2'),
+        );
+      });
     });
 
     group('deliveries and revokes (A-09)', () {
@@ -429,6 +471,71 @@ void main() {
           reason: 'the newest envelope is kept',
         );
       });
+
+      test(
+        'a live group send draws on the group\'s live budget, not on storage',
+        () async {
+          final g = await create();
+          expect(
+            (await groupSend(g, ephemeral: true, size: large)).status,
+            200,
+          );
+          expect(
+            await tokens(GroupsModule.livePerGroup, g),
+            GroupsModule.livePerGroup.capacity - 2,
+            reason: 'one frame per device it reached, not per byte (AUD-4b-2)',
+          );
+          expect(
+            await tokens(GroupsModule.fanOutPerGroup, g),
+            isNull,
+            reason: 'a live send touches no stored-message budget',
+          );
+          expect(
+            await tokens(
+              MessagingModule.storedPerAccount,
+              'account:${alice.accountId}',
+            ),
+            isNull,
+            reason: 'and the sender pays nothing for it (ruling Q1)',
+          );
+          expect(
+            (await mailbox(
+              h,
+              bob,
+            )).envelopes.where((e) => e.kind == EnvelopeKind.groupMessage),
+            isEmpty,
+          );
+          final other = await create();
+          expect(
+            await tokens(GroupsModule.livePerGroup, other),
+            isNull,
+            reason: 'each group has its own live budget',
+          );
+          // A budget that refills at 2000 a second cannot be emptied by
+          // hitting it: one round trip already pays for the next token. Write
+          // the state a drain would leave instead - no tokens, the next one
+          // due a second out - so the refusal below is not a race.
+          await h.env.platform.db.execute(
+            'UPDATE ${h.env.platform.schemas.platform}.rate_buckets '
+            'SET tokens = 0, updated_at = now() + make_interval(secs => @secs:int8) '
+            'WHERE key = @k:text',
+            {'k': '${GroupsModule.livePerGroup.name}:$g', 'secs': 1},
+          );
+          expect(
+            (await groupSend(g, ephemeral: true)).errorCode,
+            'rate_limited',
+            reason: 'a spent live budget refuses the next indicator',
+          );
+          expect(
+            (await mailbox(
+              h,
+              bob,
+            )).envelopes.where((e) => e.kind == EnvelopeKind.groupMessage),
+            isEmpty,
+            reason: 'a refusal drops it; it does not fall back to storage',
+          );
+        },
+      );
     });
 
     group('storage budget (A-03)', () {

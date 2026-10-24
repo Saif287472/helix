@@ -18,10 +18,15 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   replace-all, at most 5,000 entries).
 - **Blocks:** `blocks`. Installed as messaging's `BlockPolicy`, so sends
   and calls from a blocked account reach nobody. Blocks are not secret:
-  blocking and unblocking send the blocked account's devices a
-  `block_change` envelope in the same transaction (only when the row
-  changed; accounts on other servers are not told), sends name the blockers
-  in `blocked_by`, and calls refuse the offer with `blocked`. Blocked
+  blocking and unblocking tell the blocked account's **online** devices with
+  a live-only `block_change` frame (only when the row changed; accounts on
+  other servers and devices that are away are not told - an away device
+  learns the state from its next send's `blocked_by`), sends name the
+  blockers in `blocked_by`, and calls refuse the offer with `blocked`. The
+  notice stores no row, so one person flapping a block cannot fill another
+  account's mailbox and make it lose its unread mail (AUD-4a-1).
+  `people.block` (burst 60, 2 a second, per device) bounds how fast those
+  frames can be pushed into other people's sockets. Blocked
   accounts also cannot discover you, find your `~name`, see your presence
   or add you to groups.
 - **Discovery:** `POST /v1/people/discover` takes client-computed

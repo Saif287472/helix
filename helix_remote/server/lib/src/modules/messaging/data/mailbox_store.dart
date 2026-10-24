@@ -67,6 +67,34 @@ final class MailboxStore {
     return total;
   }
 
+  /// Deletes the envelope just stored for each device in [newest] (device id →
+  /// its new `seq`), and un-counts it. A server-generated signal uses this
+  /// instead of [trim]: when a device is at its quota the signal is the row
+  /// that goes, never the mail the device had not read yet (AUD-4a-1). Every
+  /// signal it can miss is re-discoverable (a stale device list answers
+  /// `device_list_stale`, blocks answer `blocked_by`) or moot (a revoked
+  /// device cannot authenticate). Returns how many rows went.
+  Future<int> dropNewest(Tx tx, Map<String, int> newest) async {
+    if (newest.isEmpty) return 0;
+    final devices = newest.keys.toList();
+    final deleted = await tx.execute(
+      'DELETE FROM $s.mailbox WHERE (device_id, seq) IN ('
+      'SELECT d, q FROM unnest(@devs:_uuid, @seqs:_int8) AS t(d, q))',
+      {
+        'devs': devices,
+        'seqs': [for (final d in devices) newest[d]!],
+      },
+    );
+    if (deleted > 0) {
+      await tx.execute(
+        'UPDATE $s.device_seq SET pending = greatest(0, pending - 1) '
+        'WHERE device_id = ANY(@devs:_uuid)',
+        {'devs': devices},
+      );
+    }
+    return deleted;
+  }
+
   Future<void> insert(
     Tx tx, {
     required Map<String, int> seqs,

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/presence.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
@@ -59,6 +61,15 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
     'people.read_targets',
     2000,
     const Duration(days: 1),
+  );
+
+  /// Block and unblock per device. The notice is live-only now, so this does
+  /// not protect anyone's storage - it bounds how fast one device can push
+  /// frames into other people's sockets (AUD-4a-1).
+  static const blockPerDevice = RateLimitPolicy(
+    'people.block',
+    capacity: 60,
+    perSecond: 2,
   );
 
   /// Resolved and dismissed reports are deleted this long after they were
@@ -171,8 +182,20 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       ..add(name, Routes.setOwnProfile, _setProfile, maxBodyBytes: 64 * 1024)
       ..add(name, Routes.setOwnName, _setOwnName)
       ..add(name, Routes.blocks, _blocks, allowSuspended: true)
-      ..add(name, Routes.block, _block, allowSuspended: true)
-      ..add(name, Routes.unblock, _unblock, allowSuspended: true)
+      ..add(
+        name,
+        Routes.block,
+        _block,
+        allowSuspended: true,
+        rateLimit: blockPerDevice,
+      )
+      ..add(
+        name,
+        Routes.unblock,
+        _unblock,
+        allowSuspended: true,
+        rateLimit: blockPerDevice,
+      )
       ..add(name, Routes.privacy, _privacy, allowSuspended: true)
       ..add(name, Routes.setPrivacy, _setPrivacy, allowSuspended: true)
       ..add(name, Routes.setContacts, _setContacts, maxBodyBytes: 512 * 1024)
@@ -509,45 +532,52 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
     if (target == me) {
       throw const ApiError(ErrorCode.invalidField);
     }
-    await context.db.tx((tx) async {
+    final devices = await context.db.tx((tx) async {
       final added = await tx.execute(
         'INSERT INTO $s.blocks (account_id, blocked) VALUES (@a:uuid, @b:text) ON CONFLICT DO NOTHING',
         {'a': me, 'b': target},
       );
-      if (added > 0) await _tellBlocked(tx, me, target, blocked: true);
+      return added > 0 ? await _targetDevices(tx, target) : const <String>[];
     });
+    await _tellBlocked(devices, blocker: me, blocked: true);
     return noContent();
   }
 
   Future<Response> _unblock(HelixRequest q) async {
     final me = q.device.accountId;
     final target = _blockTarget(q);
-    await context.db.tx((tx) async {
+    final devices = await context.db.tx((tx) async {
       final removed = await tx.execute(
         'DELETE FROM $s.blocks WHERE account_id = @a:uuid AND blocked = @b:text',
         {'a': me, 'b': target},
       );
-      if (removed > 0) await _tellBlocked(tx, me, target, blocked: false);
+      return removed > 0 ? await _targetDevices(tx, target) : const <String>[];
     });
+    await _tellBlocked(devices, blocker: me, blocked: false);
     return noContent();
   }
 
-  /// Blocks are not secret: [target]'s devices learn at once that [blocker]
-  /// blocked (or unblocked) them, so their chat says so before they type.
-  /// An account on another server is not told (federation has no such
-  /// signal); it learns from its next send.
+  /// [target]'s active devices, or none for an account on another server
+  /// (federation has no such signal; it learns from its next send).
+  Future<List<String>> _targetDevices(SqlSession db, String target) async =>
+      !Uuid.isValid(target)
+      ? const <String>[]
+      : [for (final d in await identity.activeDevices(db, target)) d.id];
+
+  /// Blocks are not secret: [target]'s devices learn that [blocker] blocked
+  /// (or unblocked) them, so their chat says so before they type. It is an
+  /// advisory live-only notice (AUD-4a-1): it stores nothing, so no one can
+  /// fill another account's mailbox - and so trim its real messages - by
+  /// flapping a block. An offline device learns the state from its next
+  /// send's `blocked_by`, which is how a remote blocked sender works today.
   Future<void> _tellBlocked(
-    Tx tx,
-    String blocker,
-    String target, {
+    List<String> devices, {
+    required String blocker,
     required bool blocked,
   }) async {
-    if (!Uuid.isValid(target)) return;
-    final devices = await identity.activeDevices(tx, target);
     if (devices.isEmpty) return;
-    await messaging.deliver(
-      tx,
-      {for (final d in devices) d.id: null},
+    await messaging.deliverEphemeral(
+      <String, Uint8List?>{for (final d in devices) d: null},
       Delivery(
         kind: EnvelopeKind.blockChange,
         data: BlockChangeEvent(account: blocker, blocked: blocked).toJson(),

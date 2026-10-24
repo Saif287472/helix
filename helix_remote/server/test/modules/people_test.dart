@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/people/module.dart';
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -217,61 +218,137 @@ void main() {
       expect(read.version, 1);
     });
 
-    test('blocks stop messages, and the blocked person is told', () async {
-      await h.api.call(
-        Routes.block,
-        params: {'account': alice.accountId},
-        bearer: bob.bearer,
-      );
-      final told = [
-        for (final e in (await mailbox(h, alice)).envelopes)
-          if (e.kind == EnvelopeKind.blockChange)
-            BlockChangeEvent.fromJson(JsonReader(e.data!)),
-      ];
-      expect(told.single.account, bob.accountId);
-      expect(told.single.blocked, isTrue);
-      expect(
-        BlockList.fromJson(
-          (await h.api.call(Routes.blocks, bearer: bob.bearer)).json,
-        ).accounts,
-        [alice.accountId],
-      );
-      final sent = await send(h, alice, {
-        bob.accountId: [bob.id],
-      });
-      expect(sent.status, 200);
-      expect(
-        SendMessageResponse.fromJson(sent.json).blockedBy,
-        [bob.accountId],
-        reason: 'blocks are not secret: the sender is told',
-      );
-      expect(
-        (await mailbox(
+    test(
+      'blocks stop messages; an online blocked person is told, nothing is stored',
+      () async {
+        final socket = await TestSocket.connect(h.server.baseUri, alice.bearer);
+        await socket.hello();
+        await h.api.call(
+          Routes.block,
+          params: {'account': alice.accountId},
+          bearer: bob.bearer,
+        );
+        final told = await socket.envelope();
+        expect(told.kind, EnvelopeKind.blockChange);
+        expect(
+          told.seq,
+          isNull,
+          reason: 'the notice is advisory: it has no place in a mailbox',
+        );
+        final event = BlockChangeEvent.fromJson(JsonReader(told.data!));
+        expect((event.account, event.blocked), (bob.accountId, true));
+        expect(
+          BlockList.fromJson(
+            (await h.api.call(Routes.blocks, bearer: bob.bearer)).json,
+          ).accounts,
+          [alice.accountId],
+        );
+        final sent = await send(h, alice, {
+          bob.accountId: [bob.id],
+        });
+        expect(sent.status, 200);
+        expect(
+          SendMessageResponse.fromJson(sent.json).blockedBy,
+          [bob.accountId],
+          reason: 'blocks are not secret: the sender is told',
+        );
+        expect(
+          (await mailbox(
+            h,
+            bob,
+          )).envelopes.where((e) => e.kind == EnvelopeKind.message),
+          isEmpty,
+        );
+        expect(
+          (await mailbox(h, alice)).envelopes,
+          isEmpty,
+          reason: 'the notice is not a stored row',
+        );
+        await h.api.call(
+          Routes.unblock,
+          params: {'account': alice.accountId},
+          bearer: bob.bearer,
+        );
+        final changed = await socket.envelope();
+        expect(
+          BlockChangeEvent.fromJson(JsonReader(changed.data!)).blocked,
+          isFalse,
+          reason: 'unblocking is told too',
+        );
+        await socket.close();
+        await send(h, alice, {
+          bob.accountId: [bob.id],
+        });
+        expect(
+          (await mailbox(
+            h,
+            bob,
+          )).envelopes.where((e) => e.kind == EnvelopeKind.message),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
+      'a block flap stores nothing, so it cannot fill another account\'s mailbox',
+      () async {
+        await send(h, bob, {
+          alice.accountId: [alice.id],
+        });
+        for (var i = 0; i < 5; i++) {
+          for (final route in [Routes.block, Routes.unblock]) {
+            expect(
+              (await h.api.call(
+                route,
+                params: {'account': alice.accountId},
+                bearer: bob.bearer,
+              )).status,
+              204,
+            );
+          }
+        }
+        final kinds = (await mailbox(
           h,
-          bob,
-        )).envelopes.where((e) => e.kind == EnvelopeKind.message),
-        isEmpty,
+          alice,
+        )).envelopes.map((e) => e.kind).toList();
+        expect(kinds, [EnvelopeKind.message], reason: 'alice keeps her mail');
+        expect(
+          kinds,
+          isNot(contains(EnvelopeKind.blockChange)),
+          reason: 'a notice that stores nothing can be missed',
+        );
+      },
+    );
+
+    test('blocking is limited per device', () async {
+      Future<TestResponse> block(TestDevice who, TestDevice target) =>
+          h.api.call(
+            Routes.block,
+            params: {'account': target.accountId},
+            bearer: who.bearer,
+          );
+      expect((await block(alice, bob)).status, 204);
+      // Spend alice's notice budget (a burst of 60) in one write.
+      await h.env.platform.db.execute(
+        'INSERT INTO ${h.env.platform.schemas.platform}.rate_buckets '
+        '(key, tokens, updated_at, allowed) VALUES (@k:text, 0, now(), true) '
+        'ON CONFLICT (key) DO UPDATE SET tokens = 0, updated_at = now()',
+        {'k': '${PeopleModule.blockPerDevice.name}:device:${alice.id}'},
       );
-      await h.api.call(
-        Routes.unblock,
-        params: {'account': alice.accountId},
-        bearer: bob.bearer,
-      );
-      final changes = [
-        for (final e in (await mailbox(h, alice)).envelopes)
-          if (e.kind == EnvelopeKind.blockChange)
-            BlockChangeEvent.fromJson(JsonReader(e.data!)).blocked,
-      ];
-      expect(changes, [true, false], reason: 'unblocking is told too');
-      await send(h, alice, {
-        bob.accountId: [bob.id],
-      });
+      expect((await block(alice, bob)).errorCode, 'rate_limited');
       expect(
-        (await mailbox(
-          h,
-          bob,
-        )).envelopes.where((e) => e.kind == EnvelopeKind.message),
-        hasLength(1),
+        (await h.api.call(
+          Routes.unblock,
+          params: {'account': bob.accountId},
+          bearer: alice.bearer,
+        )).errorCode,
+        'rate_limited',
+        reason: 'the same policy covers unblocking',
+      );
+      expect(
+        (await block(bob, alice)).status,
+        204,
+        reason: 'another device has its own budget',
       );
     });
 

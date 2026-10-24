@@ -78,6 +78,7 @@ identifiers into a ticket or chat without checking it first.
   | `helix_http_body_bytes_in_flight` | gauge | none | Request body bytes this node is buffering (limit `HELIX_MAX_INFLIGHT_BODY_BYTES`). |
   | `helix_storage_used_bytes` | gauge | none | Helix's tables with their indexes, plus stored media bytes, cluster-wide, at most a minute old (Postgres's own files, such as the write-ahead log, are not counted). Compare with `HELIX_STORAGE_BUDGET_BYTES` and the free disk space. |
   | `helix_mailbox_trimmed_total` | counter | none | Undelivered envelopes this node dropped because a device was over its 10,000-envelope mailbox quota. A steady rise means a device that never collects its mail. |
+  | `helix_mailbox_signal_dropped_total` | counter | none | Server-generated signals (device list, key change, account signal, prekeys low, roster) this node dropped because the device was already over that quota: the signal goes, never the mail it would have evicted. Rising with `helix_mailbox_trimmed_total` means a device that stopped collecting; it then also stops hearing the server until it collects again. |
 
   The cluster-wide gauges are queried on each scrape (3 s timeout; a
   failed read keeps the last value, `NaN` before the first). Every node
@@ -313,10 +314,12 @@ kind = '...'`) for that.
   | `messaging.send` (per device) / `messaging.send_account` (per account) | 200 at once, 5 per second / 400 at once, 10 per second |
   | `messaging.stored_account` (per account, direct and group sends together) | 50,000 units at once, 250 per second; a unit is one started 16 KiB per recipient device |
   | `groups.send` (per device) / `groups.fan_out` (per group) | 200 at once, 5 per second / 200,000 units at once, 2,000 per second |
+  | `groups.live` (per group) / `groups.mutate` (per device) | 20,000 at once, 2,000 per second, one token per live frame a member device receives (a stored send is charged by size; a live one by reach) / 40 at once, 2 per second for roster, role, setting, ban and invite-link changes |
   | `calls.turn` / `calls.offers` / `calls.signals` | 10 per hour per device / 30 per 10 minutes per account / 240 per minute per sending device (update, end, ICE) |
   | `groups.create` / `groups.preview` | 20 per day / 60 per hour |
   | `people.by_name` / `people.reports` | 30 per minute / 20 per hour |
   | `people.reads` / `people.read_targets` (presence and profiles of other accounts) | 120 per minute / 2,000 distinct accounts per day |
+  | `people.block` (per device) | 60 at once, 2 per second (the block notice is live-only, so this bounds frames into other people's sockets, not storage) |
   | `compliance.export` / `compliance.delete` | 5 per day / 5 per hour |
   | `federation.*` | identity 120, keys 600, signals 1200, messages 3000 per minute (keys per target: 30) |
 
@@ -326,7 +329,7 @@ kind = '...'`) for that.
 - **Keys.** A bucket key is `<policy>:<principal>` where the principal is
   `ip:<address>`, `device:<id>`, `admin:<id>` or `server:<domain>`. The global
   limit's key is `ip:<address>`. Handler limits use `account:<id>` or, for
-  `groups.fan_out`, the bare group id; `keys.bundle_pair` uses
+  `groups.fan_out` and `groups.live`, the bare group id; `keys.bundle_pair` uses
   `<account id>/<target>`, and the SMS budget is `identity.sms_daily:all`.
 - **Clear a stuck limit** (for example your own address after testing):
 
@@ -611,8 +614,10 @@ millions of users; this section is about two nodes on one host.
 - **Mailbox:** deleted on ack; undelivered rows expire after 30 days
   (`messaging.expire`). Each device keeps its newest 10,000 undelivered
   envelopes; older ones are dropped as new ones arrive
-  (`helix_mailbox_trimmed_total`). With `HELIX_DEVICE_INACTIVE_DAYS` set,
-  devices unused for that long are revoked (never an account's newest).
+  (`helix_mailbox_trimmed_total`), except a server-generated signal, which is
+  dropped itself instead (`helix_mailbox_signal_dropped_total`). With
+  `HELIX_DEVICE_INACTIVE_DAYS` set, devices unused for that long are revoked
+  (never an account's newest).
 - **Server-wide budget:** `HELIX_STORAGE_BUDGET_BYTES` (optional) caps the
   database plus stored media. Over it, media uploads, backups and sends of
   payloads over 16 KiB get `quota_exceeded`; short messages still go

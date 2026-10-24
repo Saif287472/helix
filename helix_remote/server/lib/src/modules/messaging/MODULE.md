@@ -29,6 +29,17 @@ deliver through it.
   send to its account and its groups (review A-01). The price: a sender who
   floods an offline device pushes out its oldest undelivered envelopes,
   including other people's.
+- **A signal never evicts mail.** A server-generated envelope
+  (`EnvelopeKind.isServerGenerated`: device list, key change, account signal,
+  prekeys low, roster, block) is worth less than a message nobody has read:
+  when its device is over quota, `MailboxStore.dropNewest` deletes the signal
+  it just stored instead of trimming (`helix_mailbox_signal_dropped_total`).
+  So one person's fan-out cannot delete another person's unread mail by
+  making signals for a device that stopped collecting (AUD-4a-1). A device at
+  its quota stops hearing the server until it collects again; every signal it
+  can miss is re-discoverable (a stale device list answers
+  `device_list_stale`, blocks answer `blocked_by`) or moot (a revoked device
+  cannot authenticate).
 - **Only active devices get rows.** `deliver` first reads the devices with
   `IdentityApi.lockActiveDevices` (`FOR SHARE`, in id order) and skips any
   that are not active. A revoke updates the device row, so it waits for a
@@ -100,8 +111,10 @@ is bounded by its work, not by its device count (AUD-3-1). The
    so an ephemeral envelope is read once and never to two devices. They are
    neither claimed nor charged: nothing is stored.
 6. **Stored sends:** charge the stored-envelope budget (before any relay
-   to another server), then allocate seqs, insert rows, trim devices over
-   their quota and record the send in one transaction. After commit,
+   to another server), then allocate seqs, insert rows, make room for them
+   (a device over its quota loses its oldest rows; a server-generated
+   signal to such a device loses *itself* instead) and record the send in
+   one transaction. After commit,
    `mailbox.wake` goes out on the bus in chunks of at most
    `MessagingModule.busChunk` devices (a `NOTIFY` payload is capped at
    7,900 bytes). Urgent sends to offline devices enqueue `messaging.push`

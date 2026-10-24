@@ -38,6 +38,10 @@ final class MessagingModule extends ModuleBase
       'helix_mailbox_trimmed_total',
       'Undelivered envelopes dropped because a device was over its mailbox quota',
     );
+    _signalDropped = context.metrics.counter(
+      'helix_mailbox_signal_dropped_total',
+      'Server-generated signals dropped because a device was already at its mailbox quota',
+    );
     context.metrics.collectedGauge(
       'helix_mailbox_backlog',
       'Undelivered envelopes, cluster-wide (counted up to 1,000,000)',
@@ -52,6 +56,7 @@ final class MessagingModule extends ModuleBase
   late final MailboxStore _store;
   late final MessagingApi api;
   late final Counter _trimmed;
+  late final Counter _signalDropped;
   BlockPolicy _blockPolicy = (db, sender, recipients) async => const <String>{};
   MessageRelay? _relay;
 
@@ -647,16 +652,34 @@ final class _MessagingFacade implements MessagingApi {
       data: delivery.data,
       urgent: delivery.urgent,
     );
+    var delivered = devices;
     if (allocated.over.isNotEmpty) {
-      final dropped = await _store.trim(tx, allocated.over);
-      if (dropped > 0) _m._trimmed.inc(const {}, dropped.toDouble());
+      if (delivery.kind.isServerGenerated) {
+        // A server signal never evicts what the device had not read yet: when
+        // its mailbox is full, the signal is the row that goes (AUD-4a-1).
+        // Nothing one person generates can then delete another's messages.
+        final over = {
+          for (final d in allocated.over.keys) d: allocated.seqs[d]!,
+        };
+        final dropped = await _store.dropNewest(tx, over);
+        if (dropped > 0) {
+          _m._signalDropped.inc(const {}, dropped.toDouble());
+          delivered = [
+            for (final d in devices)
+              if (!over.containsKey(d)) d,
+          ];
+        }
+      } else {
+        final dropped = await _store.trim(tx, allocated.over);
+        if (dropped > 0) _m._trimmed.inc(const {}, dropped.toDouble());
+      }
     }
     if (delivery.urgent) {
-      final online = await Presence.online(_m.context.ephemeral, devices);
-      await _m.enqueuePushes(tx, devices.where((d) => !online.contains(d)));
+      final online = await Presence.online(_m.context.ephemeral, delivered);
+      await _m.enqueuePushes(tx, delivered.where((d) => !online.contains(d)));
     }
     tx.afterCommit(() async {
-      for (final chunk in _chunked(devices, MessagingModule.busChunk)) {
+      for (final chunk in _chunked(delivered, MessagingModule.busChunk)) {
         await _m.context.bus.publish(MailboxTopics.wake, {'d': chunk});
       }
     });
