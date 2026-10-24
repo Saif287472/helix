@@ -435,20 +435,31 @@ reviewed**.
   checks that `identity_key` is the public key of `identity_key_private`.
   The QR code is parsed from the right, because the origin contains colons.
 
-**Engine policy for §13a (Phase C3b, `helix_remote_engine`)**
+**Engine policy for §13a (Phase C3b, `helix_remote_engine`; the repair rule
+changed in remediation batch B6, AUD-12f-1)**
 
-- A re-send is requested after any pairwise decryption failure of a
-  user-visible message, authentication failures included. The crypto layer
-  keeps `requestsSessionReset` false for them because tampering looks the
-  same, but after a restore (or when a new session was started while a
-  message was in flight) a message encrypted under a lost session fails
-  authentication exactly like a tampered one, and without a re-send it would
-  be lost for good. Cost of being wrong: one session start per remote device
-  per 10 minutes and a re-send the sender authenticates anyway.
-- "User-visible" is the envelope's `urgent` flag. The engine sends receipts,
-  reactions, edits, deletes, votes, RSVPs, typing, `decryption_error` and
-  contact sync non-urgent (no push, no placeholder row, no repair request:
-  there is nothing the sender could re-send), and messages urgent.
+- A repair is requested after any pairwise decryption failure of an envelope
+  the server stored (one with a `seq`; typing has none), authentication
+  failures included — `QuarantinePolicy.asksForRepair`, and the group pipeline
+  uses the same policy. The crypto layer keeps `requestsSessionReset` false for
+  them because tampering looks the same, but after a restore (or when a new
+  session was started while a message was in flight) a message encrypted under a
+  lost session fails authentication exactly like a tampered one, and without a
+  repair it would be lost for good. Cost of being wrong: one session start per
+  remote device per 10 minutes and a re-send the sender authenticates anyway.
+- What is *shown* is still the envelope's `urgent` flag
+  (`QuarantinePolicy.showsPlaceholder`). The engine sends receipts, reactions,
+  edits, deletes, votes, RSVPs, typing, `decryption_error` and contact sync
+  non-urgent (no push, no placeholder row), and text and media urgent. Asking
+  for a repair is no longer gated on it: a quiet action still has to reach every
+  device, and a "delete for everyone" one device could not read used to be
+  dropped in silence, leaving the message visible there forever while the author
+  was told it had been deleted. A request the sender cannot answer costs one
+  small control message, bounded by the reset op's idempotency key
+  (`reset:<device>:<envelope id>`) and the cooldown.
+- The sender answers with a fresh session and re-sends what it still has as a
+  row, so an action only buys the new session today — re-sending the action
+  itself needs sender-side retention (AUD-12i-1, the step after this one).
 - `decryption_error.message_id` is the **envelope id** of the failed
   envelope. A first send uses the content id as the request id, so the
   receiver can name a message it cannot read; the sender looks the message

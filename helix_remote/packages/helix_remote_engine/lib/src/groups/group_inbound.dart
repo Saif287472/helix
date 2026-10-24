@@ -14,6 +14,7 @@ import 'package:helix_remote_engine/src/messaging/apply.dart';
 import 'package:helix_remote_engine/src/messaging/inbound.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
+import 'package:helix_remote_engine/src/messaging/quarantine_policy.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// Writes `processed_envelopes` and the cursor (the pipeline's own
@@ -263,12 +264,12 @@ final class GroupInbound {
     }
     final now = _ctx.now();
     final self = _ctx.identity.accountId;
-    final userMessage = envelope.urgent && envelope.seq != null;
-    final repair = resend && userMessage;
+    final placeholder = QuarantinePolicy.showsPlaceholder(envelope);
+    final repair = QuarantinePolicy.asksForRepair(envelope, curable: resend);
     await _db.transaction(() async {
       final chat = GroupIds.conversationId(groupId);
       if (sender.account != self &&
-          userMessage &&
+          placeholder &&
           await _db.conversationsDao.byId(chat) != null &&
           await _db.messagesDao.find(envelope.id, sender: sender.account) ==
               null) {

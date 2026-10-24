@@ -1002,6 +1002,37 @@ update to be protected.
   `dart analyze lib test` clean. No schema, no wire change, so no APK is
   needed for this step on its own; the batch's rollout note still says users
   must update to be protected.
+- S2 (AUD-12f-1) — not implemented as the finding sketched it. The sketch was
+  "one quarantine policy keyed by content kind", but the receiver cannot see
+  the content kind: reading the body is exactly what failed, so the wire offers
+  no classifier. What is implementable is the split the finding was really
+  after: `urgent` is a push hint and stays the rule for *showing* a
+  placeholder, and it stops being the rule for *asking for repair*. New
+  `messaging/quarantine_policy.dart` holds both decisions in one place
+  (`showsPlaceholder` = `urgent` and stored; `asksForRepair` = the crypto
+  layer's own curable flag and stored), and `messaging/inbound.dart` and
+  `groups/group_inbound.dart` both call it, so the two pipelines cannot drift
+  again. Repairing a quiet envelope is cheap and bounded: the reset op's
+  idempotency key is `reset:<device>:<envelope id>`, `hasFreshUnansweredSession`
+  limits a session start to one per `resetCooldown` per device, and the sender
+  only re-sends rows it holds and authorises the requester. A delete that one
+  device cannot read now at least starts a fresh session there instead of
+  vanishing.
+  Tests: `inbound_test.dart` "a quiet action asks for repair but leaves no row"
+  (a non-urgent `DeleteBody` with Bob's session gone → no `undecryptable` row,
+  exactly one send out of Bob's device, and the next message still arrives) and
+  `groups_test.dart` "a quiet group action is repaired, and leaves no row" (the
+  same with a lost sender key in a trio). With `urgent` put back on
+  `asksForRepair` both fail on the send count (0), so they bite.
+  Gate: engine suite **316 green**, `dart analyze lib test` clean. Docs that
+  claimed a non-urgent envelope gets "no repair request: there is nothing the
+  sender could re-send" corrected: CRYPTO_V2.md §13a engine policy and the
+  engine MODULE.md quarantine rules (direct and group).
+  Follow-up this step deliberately left open: the sender still cannot answer
+  for an action — `_resend` looks the target up with `messagesDao.find(id,
+  sender: self)` and actions are not stored as rows, so a quiet edit, delete,
+  reaction or vote now gets a new session but no re-send. That is S3, and it is
+  the same missing piece as AUD-12i-1.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

@@ -815,6 +815,37 @@ void main() {
       expect(await texts(g.carol, g.chat), ['first', 'second', 'third']);
     });
 
+    test('a quiet group action is repaired, and leaves no row', () async {
+      final g = await trio();
+      final target = await say(g.alice, g.chat, 'first', [g.bob, g.carol]);
+      await g.carol.db.cryptoDao.deleteSenderKeys(
+        g.id,
+        account: g.alice.account,
+      );
+      // An action on a message Carol already holds. It travels with the
+      // sender key and non-urgent, so it used to be dropped here in silence
+      // (AUD-12f-1): Carol went on showing what the author had deleted for
+      // everyone, and neither end was told.
+      final before = peers.server.sends
+          .where((s) => s.from.id == g.carol.device)
+          .length;
+      await g.alice.engine.chats.deleteForEveryone(target.localRowid);
+      await g.alice.engine.drainOutbox();
+      await g.carol.sync();
+      final rows = (await g.carol.db.messagesDao.pageOlder(g.chat)).messages;
+      expect(
+        rows.where((m) => m.kind == MessageKinds.undecryptable),
+        isEmpty,
+        reason: 'an action is not a row the user would have seen',
+      );
+      expect(
+        peers.server.sends.where((s) => s.from.id == g.carol.device).length -
+            before,
+        1,
+        reason: 'the sender is asked to repair it',
+      );
+    });
+
     test(
       'a forged message is quarantined without asking for a re-send',
       () async {

@@ -119,22 +119,26 @@ or the REST mailbox (`fetchOnce`); both share one serial queue and
 
 Rules:
 
-- **Quarantine, never block.** An envelope that cannot be read becomes a
-  visible `undecryptable` row (`payload`: `{code, waiting, device}`) and the
-  stream goes on. When it is a user-visible message (the server's `urgent`
-  flag; receipts, reactions, edits and other control content go out
-  non-urgent and have nothing to re-send) and the failure is a lost or
-  diverged session (no session, unknown prekey, used key, or an
-  authentication failure, which after a restore looks the same as tampering)
-  a `session_reset` op is queued (CRYPTO_V2.md §13a): start a fresh session
-  with that device (at most one per `resetCooldown`, however many messages
-  failed) and send `decryption_error` (the failed envelope id) to the sender's
-  account; the sender re-sends the message (under 24 h) over the new session
-  and the real message replaces the placeholder. Identity failures
-  (`untrusted_identity`) and unparseable payloads do not ask for a reset. A
-  hostile server can use authentication failures to make a client start
-  cooldown-limited sessions and request re-sends; it could drop the messages
-  anyway.
+- **Quarantine, never block.** An envelope that cannot be read is quarantined
+  and the stream goes on. Whether it is *shown* and whether the sender is
+  asked to *repair* are two decisions, both from `QuarantinePolicy`
+  (`messaging/quarantine_policy.dart`) so the direct and group pipelines cannot
+  drift (AUD-12f-1). Shown: a placeholder row (`payload`: `{code, waiting,
+  device}`) for what the user would have seen — the server's `urgent` flag;
+  receipts, reactions, edits, deletes and votes go out non-urgent and get no
+  row. Repaired: any curable failure, urgent or not — a lost or diverged
+  session (no session, unknown prekey, used key, or an authentication failure,
+  which after a restore looks the same as tampering) queues a `session_reset`
+  op (CRYPTO_V2.md §13a): start a fresh session with that device (at most one
+  per `resetCooldown`, however many messages failed) and send
+  `decryption_error` (the failed envelope id) to the sender's account; the
+  sender re-sends the message (under 24 h) over the new session and the real
+  message replaces the placeholder. An action is not stored as a row, so a
+  quiet action buys a new session now and its own re-send once the sender can
+  rebuild one (AUD-12i-1). Identity failures (`untrusted_identity`) and
+  unparseable payloads do not ask for a reset. A hostile server can use
+  authentication failures to make a client start cooldown-limited sessions and
+  request re-sends; it could drop the messages anyway.
 - **Only a `TransientEngineException`** (no network while looking up an
   unknown sender's keys) holds the stream back, because acks are cumulative:
   the runner retries that envelope with backoff. Any other unexpected failure
@@ -637,11 +641,11 @@ the server's checks); a pairwise group message is dropped, except receipts. The
 sender must be in the stored roster (a refresh is tried first for an unknown
 sender or group). Group `system` messages are dropped except `timer_changed`
 from an admin; notices come from roster envelopes. **Quarantine:** an unreadable
-group message becomes a visible placeholder; a missing sender key or an
-authentication failure also queues a `session_reset` op (a `decryption_error`
-to the sender, CRYPTO_V2.md §13a), and the sender re-sends that message to the
-group with its sender key distributed again to the device that asked
-(`redistribute`). A bad signature or a replay asks for nothing.
+group message becomes a visible placeholder when it is urgent; a missing sender
+key or an authentication failure queues a `session_reset` op whatever its
+urgency (a `decryption_error` to the sender, CRYPTO_V2.md §13a), and the sender
+re-sends that message to the group with its sender key distributed again to the
+device that asked (`redistribute`). A bad signature or a replay asks for nothing.
 
 **Message features in groups.** Replies, reactions, edits, deletes, polls,
 RSVPs and the disappearing timer go through the group send (not urgent for

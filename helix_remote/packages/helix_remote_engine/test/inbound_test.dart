@@ -34,6 +34,10 @@ void main() {
   MessageRow? rowOf(List<MessageRow> rows, String? text) =>
       rows.where((m) => m.body == text).firstOrNull;
 
+  /// How many sends [peer]'s device has put on the wire so far.
+  int sendsBy(Peer peer) =>
+      peers.server.sends.where((s) => s.from.id == peer.device).length;
+
   group('delivery and dedupe', () {
     test(
       'a message arrives as one row with its summary and a notice',
@@ -328,6 +332,48 @@ void main() {
         alice.device,
       );
       expect(sessions.map((s) => s.slot), [0]);
+    });
+
+    test('a quiet action asks for repair but leaves no row', () async {
+      final target = await say('m1');
+      // Bob loses his session with Alice (a restore), so what she sends next
+      // cannot be read here.
+      await bob.db.cryptoDao.deleteSessions(alice.account);
+      await alice.engine.debugSend(
+        ContentMessage(
+          id: Uuid.v7(now: peers.clock.now),
+          sentAt: peers.clock.now,
+          conversation: DirectConversation(to: bob.account),
+          body: DeleteBody(
+            target: MessageRef(id: target.messageId, author: alice.account),
+          ),
+        ),
+        audience: [bob.account],
+        // What `_sendAction` does with every action: a delete is not worth
+        // waking a phone for.
+        urgent: false,
+      );
+      await alice.engine.drainOutbox();
+      final before = sendsBy(bob);
+      await bob.engine.syncOnce();
+      // The placeholder rule is unchanged: `urgent` marks what the user would
+      // have seen, and a delete is not that.
+      expect(
+        (await bob.messages(
+          alice,
+        )).where((m) => m.kind == MessageKinds.undecryptable),
+        isEmpty,
+      );
+      // The repair is asked for anyway (AUD-12f-1): without it a delete that
+      // one device could not read stays visible there forever while the author
+      // is told it was deleted.
+      expect(sendsBy(bob) - before, 1, reason: 'the repair request');
+      // And asking for it costs the stream nothing: Alice answers with a fresh
+      // session and the next message arrives normally.
+      await alice.engine.syncOnce();
+      await bob.engine.syncOnce();
+      await say('m2');
+      expect(await bob.texts(alice), ['m1', 'm2']);
     });
   });
 

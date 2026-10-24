@@ -11,6 +11,7 @@ import 'package:helix_remote_engine/src/groups/group_inbound.dart';
 import 'package:helix_remote_engine/src/messaging/apply.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
+import 'package:helix_remote_engine/src/messaging/quarantine_policy.dart';
 import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
@@ -375,13 +376,13 @@ final class InboundProcessor {
 
   /// Replaces an unreadable envelope with a visible placeholder and, when
   /// it makes sense, asks the sender's device for a fresh session
-  /// (CRYPTO_V2.md §13a).
+  /// (CRYPTO_V2.md §13a). The two decisions come from [QuarantinePolicy], the
+  /// same one the group pipeline uses.
   ///
-  /// Only user-visible messages get a placeholder and a repair request: the
-  /// server's `urgent` flag marks them (receipts, reactions, edits and other
-  /// control content go out non-urgent, and there is nothing the sender could
-  /// re-send for them). A hostile server can only hide a placeholder this
-  /// way, which it could do by dropping the message.
+  /// A hostile server can still choose which rows are shown, as it could by
+  /// dropping a message, and can now make this device ask a peer for re-sends:
+  /// the cooldown on starting a session, the idempotency key on the reset op
+  /// and the sender's own re-send checks bound what that costs.
   Future<InboundResult> _quarantine(
     Envelope envelope,
     DeviceAddress sender,
@@ -390,10 +391,13 @@ final class InboundProcessor {
   }) async {
     final now = _ctx.now();
     final self = _ctx.identity.accountId;
-    final userMessage = envelope.urgent && envelope.seq != null;
-    final repair = requestReset && userMessage;
+    final placeholder = QuarantinePolicy.showsPlaceholder(envelope);
+    final repair = QuarantinePolicy.asksForRepair(
+      envelope,
+      curable: requestReset,
+    );
     await _db.transaction(() async {
-      if (sender.account != self && userMessage) {
+      if (sender.account != self && placeholder) {
         final person = await _db.peopleDao.byAccount(sender.account);
         final existing = await _db.messagesDao.find(
           envelope.id,
