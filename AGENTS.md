@@ -273,7 +273,14 @@ run alone: `test/client/engine/calls_test.dart` ("hang-up from either side, and
 a decline") and `test/client/engine/security_test.dart` ("signed prekeys
 rotate when due"). Do not run Flutter analysis or tests alongside the server suite.
 The two timing budgets in `app/test/performance_budget_test.dart` can likewise
-flake under load.
+flake under load. Seen 2026-10-24 during batch B2, each green when rerun alone:
+`test/modules/messaging_test.dart` ("a send that only reaches people who
+blocked you pays nothing" - the token bucket refills under it during a
+`--concurrency=3` run), `test/client/engine/messaging_test.dart` ("two engines
+talking at once never corrupt a session" - proved pre-existing by reverting the
+step's source files and rerunning at `c04bc84`: same shape, different position),
+and the engine two-server group test in `test/client/engine/groups_test.dart`
+(fails inside a multi-file run, passes alone in 6 s).
 
 Add any failure you confirm is pre-existing here, with the date.
 
