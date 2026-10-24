@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -36,6 +37,7 @@ void main() {
   Handler build(
     void Function(RouteRegistry r) register, {
     Future<bool> Function()? maintenance,
+    BodyBudget? bodyBudget,
   }) {
     sink = MemorySink();
     limiter = InMemoryRateLimiter();
@@ -52,6 +54,7 @@ void main() {
         authenticator: _FakeAuth(),
         rateLimiter: limiter,
         idempotency: InMemoryIdempotencyStore(),
+        bodyBudget: bodyBudget,
       ),
     );
   }
@@ -61,7 +64,7 @@ void main() {
     String method,
     String path, {
     Map<String, String> headers = const {},
-    String? body,
+    Object? body,
   }) async => handler(
     Request(
       method,
@@ -221,6 +224,85 @@ void main() {
       );
       expect(response.statusCode, 413);
     });
+
+    test(
+      'a body that stops arriving is refused and stops holding the budget',
+      () async {
+        // The budget is node-wide, so before this fix one anonymous client
+        // declaring 256 KiB and sending nothing kept its slice until the
+        // operating system dropped the socket - around 1,024 such connections
+        // answered every later request on the node with 503 "the server is
+        // busy" (AUD-1a-1).
+        final budget = BodyBudget(
+          1024,
+          idleGap: const Duration(milliseconds: 50),
+          deadline: const Duration(seconds: 5),
+        );
+        final handler = build(
+          (r) => r.add(
+            'keys',
+            Routes.addOneTimePrekeys,
+            (req) => noContent(),
+            maxBodyBytes: 1024,
+          ),
+          bodyBudget: budget,
+        );
+        final stalled = StreamController<List<int>>();
+        addTearDown(stalled.close);
+
+        final response = await call(
+          handler,
+          'POST',
+          '/v1/keys/one-time-prekeys',
+          headers: {'authorization': 'Bearer good', 'content-length': '1024'},
+          body: stalled.stream,
+        );
+
+        expect(response.statusCode, 408);
+        expect((await errorOf(response))['code'], 'request_timeout');
+        expect(budget.inFlight, 0, reason: 'the reservation came back');
+
+        final next = await call(
+          handler,
+          'POST',
+          '/v1/keys/one-time-prekeys',
+          headers: {'authorization': 'Bearer good'},
+          body: '{}',
+        );
+        expect(next.statusCode, 204, reason: 'the node still takes bodies');
+      },
+    );
+
+    test(
+      'a body that dribbles for ever is refused at the overall deadline',
+      () async {
+        // An idle gap alone would be beaten by a client that sends one byte
+        // every few milliseconds: it never goes quiet, and it never finishes.
+        final budget = BodyBudget(
+          1024 * 1024,
+          idleGap: const Duration(seconds: 5),
+          deadline: const Duration(milliseconds: 100),
+        );
+        final handler = build(
+          (r) => r.add('keys', Routes.addOneTimePrekeys, (req) => noContent()),
+          bodyBudget: budget,
+        );
+
+        final response = await call(
+          handler,
+          'POST',
+          '/v1/keys/one-time-prekeys',
+          headers: {'authorization': 'Bearer good'},
+          body: Stream.periodic(
+            const Duration(milliseconds: 10),
+            (i) => const <int>[0],
+          ),
+        );
+
+        expect(response.statusCode, 408);
+        expect(budget.inFlight, 0);
+      },
+    );
 
     test('route rate limits apply per principal and set retry-after', () async {
       const tight = RateLimitPolicy('test.tight', capacity: 1, perSecond: 0.01);

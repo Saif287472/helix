@@ -70,10 +70,26 @@ final class _Registration {
 /// (S7 #1). A body that does not fit does not wait: the request gets
 /// `unavailable` (503, retry soon), so parallel large uploads cannot run the
 /// node out of memory.
+///
+/// A reservation is only worth having if it is returned, so a read is bounded
+/// by [idleGap] between two chunks and by [deadline] end to end: a client that
+/// declares 256 KiB and sends nothing held its slice of the node-wide budget
+/// until the operating system dropped the socket, which is hours (AUD-1a-1).
 final class BodyBudget {
-  BodyBudget(this.maxBytes);
+  BodyBudget(
+    this.maxBytes, {
+    this.idleGap = const Duration(seconds: 10),
+    this.deadline = const Duration(seconds: 30),
+  });
 
   final int maxBytes;
+
+  /// How long a buffered body may go without another chunk.
+  final Duration idleGap;
+
+  /// How long a buffered body may take in total, however steadily it arrives.
+  final Duration deadline;
+
   int _inFlight = 0;
 
   int get inFlight => _inFlight;
@@ -351,6 +367,10 @@ Future<(Uint8List, int)> _readBody(
     message: 'the server is busy, retry shortly',
     retryAfter: Duration(seconds: 2),
   );
+  const stalled = ApiError(
+    ErrorCode.requestTimeout,
+    message: 'the request body stopped arriving',
+  );
   var reserved = 0;
   if (declared != null) {
     if (!budget._reserve(declared)) throw busy;
@@ -358,7 +378,9 @@ Future<(Uint8List, int)> _readBody(
   }
   try {
     final builder = BytesBuilder(copy: false);
-    await for (final chunk in request.read()) {
+    final started = Stopwatch()..start();
+    await for (final chunk in request.read().timeout(budget.idleGap)) {
+      if (started.elapsed > budget.deadline) throw stalled;
       builder.add(chunk);
       if (builder.length > max) {
         throw const ApiError(ErrorCode.payloadTooLarge);
@@ -370,9 +392,9 @@ Future<(Uint8List, int)> _readBody(
       }
     }
     return (builder.toBytes(), reserved);
-  } on Object {
+  } on Object catch (failure) {
     budget._release(reserved);
-    rethrow;
+    throw failure is TimeoutException ? stalled : failure;
   }
 }
 

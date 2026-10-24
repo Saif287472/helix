@@ -35,6 +35,9 @@ enum ErrorCode implements WireEnum {
   groupFull('group_full', 409),
   expired('expired', 410),
 
+  // 408 - the client declared a body and stopped sending it.
+  requestTimeout('request_timeout', 408),
+
   // 413 / 422 / 429
   payloadTooLarge('payload_too_large', 413),
   quotaExceeded('quota_exceeded', 422),
@@ -75,6 +78,7 @@ enum ErrorCode implements WireEnum {
   bool get isRetryable => switch (this) {
     rateLimited ||
     passwordLocked ||
+    requestTimeout ||
     internal ||
     smsUnavailable ||
     federationUnavailable ||

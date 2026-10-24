@@ -27,10 +27,13 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 - **Bodies:** credentials (and, for S2S, the signature headers' shape and
   clock skew) are checked before the body is read. Each route has a size
   limit (`payload_too_large`); a node that is already buffering its limit of
-  request bodies answers `unavailable` (503, `Retry-After`). JSON bodies
-  nested deeper than 64 levels are `bad_request` before decoding. Values a
-  column cannot hold (an `int4` past 2^31 − 1) are `invalid_field`, never
-  500.
+  request bodies answers `unavailable` (503, `Retry-After`). A body that stops
+  arriving is `request_timeout` (408, retryable): the read is given up on
+  after 10 s between two chunks or 30 s end to end, so a client that declares
+  a large body and sends nothing cannot hold the node's budget until the
+  socket times out hours later. JSON bodies nested deeper than 64 levels are
+  `bad_request` before decoding. Values a column cannot hold (an `int4` past
+  2^31 − 1) are `invalid_field`, never 500.
 - **Paging:** `?cursor=&limit=` (max 200), responses `{items, next_cursor?}`.
   No offsets.
 - **Unknown fields** are ignored by both sides; new optional fields are
