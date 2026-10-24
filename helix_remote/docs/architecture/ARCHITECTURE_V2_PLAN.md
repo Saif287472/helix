@@ -208,8 +208,12 @@ own rows, tracked to completion by `compliance`.
   range-partitioned by month; they are plain tables with retention jobs
   instead (`admin.purge_audit`, one year; call metrics 90 days), which is
   enough at their size (§12, 2026-10-14).
-- **Indexing rule:** every query in a repository has an index, verified by an
-  `EXPLAIN` test for the hot paths (send, fetch mailbox, ack, auth lookup).
+- **Indexing rule:** every query in a repository has an index, verified for
+  the hot paths (send, fetch mailbox, ack, auth lookup) by
+  `server/test/platform/query_plans_test.dart`, which runs those paths on
+  seeded volumes and asserts no sequential scan in the plan of what they
+  actually executed. It landed 2026-10-24; the rule was convention before
+  that (AUD-1b-3).
 
 ### 4.4 Messaging and delivery model (the core)
 
@@ -563,7 +567,8 @@ user does.
 - WS gateway with routes in `EphemeralStore`, wake via the bus, replay with
   credits, typing and presence, and revocation closing sockets.
 - Push via the outbox.
-- `EXPLAIN` tests on hot paths.
+- `EXPLAIN` tests on hot paths — `server/test/platform/query_plans_test.dart`,
+  which landed on 2026-10-24, long after the phase itself.
 
 ### Phase S4 — `people` + `media` + `backup`
 - Profiles, discovery match with budgets (keeps the documented T-5 oracle
