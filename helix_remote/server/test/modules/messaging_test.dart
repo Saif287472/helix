@@ -342,5 +342,172 @@ void main() {
         expect(PrekeysLowEvent.fromJson(JsonReader(low.data!)).remaining, 19);
       },
     );
+
+    // A retry whose response was lost can arrive while the original is still
+    // running. Both used to pay for the send and relay it, and only one of
+    // them lost the `sends` insert afterwards (AUD-3-6).
+    test('two concurrent sends of one id: one of them does the work', () async {
+      final id = Uuid.v7();
+      final both = await Future.wait([
+        for (var i = 0; i < 2; i++)
+          send(h, a1, {
+            b1.accountId: [b1.id],
+          }, id: id),
+      ]);
+      for (final r in both) {
+        expect(
+          r.status,
+          anyOf(200, 429),
+          reason: 'a duplicate is answered or told to come back, never both',
+        );
+      }
+      final did = both.where(
+        (r) =>
+            r.status == 200 && !SendMessageResponse.fromJson(r.json).replayed,
+      );
+      expect(did, hasLength(1), reason: 'exactly one charged, relayed, stored');
+      final box = await mailbox(h, b1);
+      expect(
+        box.envelopes.where((e) => e.kind == EnvelopeKind.message),
+        hasLength(1),
+      );
+    });
+
+    test(
+      'a send refused for a stale device list can be retried with that id',
+      () async {
+        final b2 = await secondDevice(h, b1, bobNumber);
+        final id = Uuid.v7();
+        expect(
+          (await send(h, a1, {
+            b1.accountId: [b1.id],
+          }, id: id)).status,
+          409,
+        );
+        final fixed = await send(h, a1, {
+          b1.accountId: [b1.id, b2.id],
+        }, id: id);
+        expect(fixed.status, 200, reason: 'the refused claim is not held');
+        expect(SendMessageResponse.fromJson(fixed.json).replayed, isFalse);
+        final box = await mailbox(h, b1);
+        expect(
+          box.envelopes.where((e) => e.kind == EnvelopeKind.message),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
+      'a replayed send still names the recipients that blocked you',
+      () async {
+        await h.api.call(
+          Routes.block,
+          params: {'account': a1.accountId},
+          bearer: b1.bearer,
+        );
+        final id = Uuid.v7();
+        final first = await send(h, a1, {
+          b1.accountId: [b1.id],
+          a1.accountId: [a2.id],
+        }, id: id);
+        expect(SendMessageResponse.fromJson(first.json).blockedBy, [
+          b1.accountId,
+        ]);
+
+        final replay = await send(h, a1, {
+          b1.accountId: [b1.id],
+          a1.accountId: [a2.id],
+        }, id: id);
+        final again = SendMessageResponse.fromJson(replay.json);
+        expect(again.replayed, isTrue);
+        expect(
+          again.blockedBy,
+          [b1.accountId],
+          reason: 'the retry gets the answer the original gave (AUD-3-7)',
+        );
+        expect(
+          (await mailbox(
+            h,
+            b1,
+          )).envelopes.where((e) => e.kind == EnvelopeKind.message),
+          isEmpty,
+        );
+      },
+    );
+
+    // A blocker is not a recipient: his device list must not be demanded of
+    // the sender, and nothing is stored for him (AUD-3-8, AUD-3-6).
+    test(
+      'a blocker who changed devices does not fail the send for the others',
+      () async {
+        await h.api.call(
+          Routes.block,
+          params: {'account': a1.accountId},
+          bearer: b1.bearer,
+        );
+        final b2 = await secondDevice(h, b1, bobNumber);
+        final carol = await h.registerGlobal('+8801711000099');
+        final sent = await send(h, a1, {
+          b1.accountId: [b1.id],
+          carol.accountId: [carol.id],
+        });
+        expect(sent.status, 200, reason: sent.body);
+        final response = SendMessageResponse.fromJson(sent.json);
+        expect(response.blockedBy, [b1.accountId]);
+        expect(
+          (await mailbox(h, carol)).envelopes.where(
+            (e) => e.kind == EnvelopeKind.message && e.from?.device == a1.id,
+          ),
+          hasLength(1),
+          reason: 'the send goes out to everyone else',
+        );
+        expect(
+          (await mailbox(
+            h,
+            b2,
+          )).envelopes.where((e) => e.kind == EnvelopeKind.message),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'a send that only reaches people who blocked you pays nothing',
+      () async {
+        const budget = MessagingModule.storedPerAccount;
+        final key = 'account:${a1.accountId}';
+        final limiter = h.env.platform.rateLimiter;
+        Future<bool> spentOnOrdinary() async {
+          for (var i = 0; i < 5; i++) {
+            // Empty the bucket the way the availability tests do, then check it
+            // with a send that stores something. It is deliberately a fat one:
+            // 13 units, so the few tokens the bucket refills while the request
+            // travels cannot pay for it.
+            for (var cost = budget.capacity; cost >= 1; cost ~/= 2) {
+              while ((await limiter.hit(budget, key, cost: cost)).allowed) {}
+            }
+            final r = await send(h, a1, {
+              a1.accountId: [a2.id],
+            }, size: 200 * 1024);
+            if (r.errorCode == 'rate_limited') return true;
+          }
+          return false;
+        }
+
+        await h.api.call(
+          Routes.block,
+          params: {'account': a1.accountId},
+          bearer: b1.bearer,
+        );
+        expect(await spentOnOrdinary(), isTrue, reason: 'the budget is spent');
+        expect(
+          (await send(h, a1, {
+            b1.accountId: [b1.id],
+          })).status,
+          200,
+          reason: 'nothing stored for a blocker means nothing charged',
+        );
+      },
+    );
   });
 }

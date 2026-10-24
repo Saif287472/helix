@@ -69,19 +69,33 @@ is bounded by its work, not by its device count (AUD-3-1). The
 
 1. **Validate:** ids, payload sizes (256 KiB per device), at most 1,100
    devices, never the sending device itself.
-2. **Device lists:** each listed account must be addressed on all its
-   active devices (the sender's own: all except the sending one), or
-   `device_list_stale` with `StaleDevices` details.
+2. **Claim (stored sends):** the id is taken in the ephemeral store under
+   `msg:send:<sender account>:<sender device>:<id>` — the same triple
+   `messaging.sends` is keyed on — before anything is spent on the send, so
+   a retry that races the request it retries cannot charge the budget or
+   relay the batch twice (AUD-3-6). A second request while one is running is
+   told `rate_limited` with a short `retry_after`; when the winner answers,
+   the claim holds that response for 24 h, so a replay names the same
+   `blocked_by` the original did (AUD-3-7). A refused send frees the claim
+   again, so the retry can deliver. The `sends` row stays the durable record:
+   the claim is a window over a live request, not a log, and beyond it a
+   replay answers from `sends` with an empty `blocked_by`.
 3. **Blocks:** devices of recipients who blocked the sender are dropped
    (`BlockPolicy`, which the people module installs in S4), and the
    response names those accounts in `blocked_by`: the send still succeeds
-   for everyone else (the sender's own devices, other recipients).
-4. **Ephemeral sends** (`ephemeral: true`) go to online devices only: each
+   for everyone else (the sender's own devices, other recipients). This is
+   read *before* the device lists and the charge, so a blocker neither fails
+   the whole send by having changed devices nor is paid for (AUD-3-8).
+4. **Device lists:** each remaining account must be addressed on all its
+   active devices (the sender's own: all except the sending one), or
+   `device_list_stale` with `StaleDevices` details.
+5. **Ephemeral sends** (`ephemeral: true`) go to online devices only: each
    device's envelope is parked for 60 s under `msg:eph:<ref>:<device>` (one
    `putAll` for the whole fan-out), and `realtime.ephemeral` on the bus
    carries `{r: ref, d: [devices]}` in chunks. A socket takes its own value,
-   so an ephemeral envelope is read once and never to two devices.
-5. **Stored sends:** charge the stored-envelope budget (before any relay
+   so an ephemeral envelope is read once and never to two devices. They are
+   neither claimed nor charged: nothing is stored.
+6. **Stored sends:** charge the stored-envelope budget (before any relay
    to another server), then allocate seqs, insert rows, trim devices over
    their quota and record the send in one transaction. After commit,
    `mailbox.wake` goes out on the bus in chunks of at most

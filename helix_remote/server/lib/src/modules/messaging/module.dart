@@ -302,9 +302,10 @@ final class MessagingModule extends ModuleBase
     return _ParsedSend(addressed, payloads, remote);
   }
 
-  /// The shared acceptance path of local and relayed sends: replay check,
-  /// exact device lists, [beforeDelivery] (relays to other servers), block
-  /// policy, then storage (or live delivery for ephemeral sends).
+  /// The shared acceptance path of local and relayed sends: the request-id
+  /// claim, block policy, exact device lists for the recipients that are left,
+  /// [beforeDelivery] (relays to other servers), then storage (or live delivery
+  /// for ephemeral sends).
   Future<SendMessageResponse> _accept({
     required String id,
     required String senderAccount,
@@ -314,94 +315,147 @@ final class MessagingModule extends ModuleBase
     required bool ephemeral,
     Future<void> Function()? beforeDelivery,
   }) async {
-    final previous = await _store.acceptedAt(
-      context.db,
-      id,
-      senderAccount: senderAccount,
-      senderDevice: senderDevice,
-    );
-    if (previous != null) {
-      return SendMessageResponse(acceptedAt: previous, replayed: true);
-    }
     final payloads = parsed.payloads;
     final addressed = parsed.addressed;
-    if (addressed.isNotEmpty) {
-      await api.checkDevices(
+    // A retry whose response was lost can race the request it retries, and
+    // both of them used to charge the budget and relay the batch before one of
+    // them lost the `sends` insert. So the id is claimed before anything is
+    // spent on it, and the claim then carries the answer: a replay can still
+    // name the blockers. The `sends` row stays the durable record - this is a
+    // window over a live request, not a log (AUD-3-6, AUD-3-7).
+    final claim = ephemeral ? null : _sendKey(senderAccount, senderDevice, id);
+    if (claim != null) {
+      final answered = await _claimSend(claim);
+      if (answered != null) return answered;
+    }
+    try {
+      final previous = await _store.acceptedAt(
         context.db,
-        addressed,
+        id,
         senderAccount: senderAccount,
         senderDevice: senderDevice,
       );
-    }
-    if (!ephemeral) {
-      // Before any relay, so a refused send is refused everywhere.
-      final sizes = [
-        for (final p in payloads.values) p.length,
-        for (final recipients in parsed.remote.values)
-          for (final r in recipients)
-            for (final d in r.devices) d.payload.length,
-      ];
-      await api.chargeStored(
-        senderAccount,
-        units: sizes.fold<int>(0, (n, size) => n + storedUnits(size)),
-        largestPayload: sizes.fold<int>(0, (m, size) => size > m ? size : m),
-      );
-    }
-    await beforeDelivery?.call();
-
-    // Recipients who blocked the sender get nothing, and the sender is told
-    // which ones (`blocked_by`): blocks are not secret.
-    final blockers = await api.blockedBy(
-      context.db,
-      senderAccount,
-      addressed.keys.where((a) => a != senderAccount),
-    );
-    for (final account in blockers) {
-      for (final device in addressed[account]!) {
-        payloads.remove(device);
+      if (previous != null) {
+        return SendMessageResponse(acceptedAt: previous, replayed: true);
       }
-    }
+      // Recipients who blocked the sender get nothing, and the sender is told
+      // which ones (`blocked_by`): blocks are not secret. Read before the
+      // device lists and the charge, so a blocker neither fails the whole send
+      // by having changed devices (AUD-3-8) nor is paid for.
+      final blockers = await api.blockedBy(
+        context.db,
+        senderAccount,
+        addressed.keys.where((a) => a != senderAccount),
+      );
+      for (final account in blockers) {
+        for (final device in addressed.remove(account) ?? const <String>[]) {
+          payloads.remove(device);
+        }
+      }
+      if (addressed.isNotEmpty) {
+        await api.checkDevices(
+          context.db,
+          addressed,
+          senderAccount: senderAccount,
+          senderDevice: senderDevice,
+        );
+      }
+      if (!ephemeral) {
+        // Before any relay, so a refused send is refused everywhere.
+        final sizes = [
+          for (final p in payloads.values) p.length,
+          for (final recipients in parsed.remote.values)
+            for (final r in recipients)
+              for (final d in r.devices) d.payload.length,
+        ];
+        await api.chargeStored(
+          senderAccount,
+          units: sizes.fold<int>(0, (n, size) => n + storedUnits(size)),
+          largestPayload: sizes.fold<int>(0, (m, size) => size > m ? size : m),
+        );
+      }
+      await beforeDelivery?.call();
 
-    final delivery = Delivery(
-      kind: EnvelopeKind.message,
-      id: id,
-      from: EnvelopeSender(account: senderAccount, device: senderDevice),
-      urgent: urgent,
-    );
+      final delivery = Delivery(
+        kind: EnvelopeKind.message,
+        id: id,
+        from: EnvelopeSender(account: senderAccount, device: senderDevice),
+        urgent: urgent,
+      );
 
-    final blockedBy = blockers.toList()..sort();
-    if (ephemeral) {
-      await api.deliverEphemeral(payloads, delivery);
-      return SendMessageResponse(
-        acceptedAt: context.clock.now(),
+      final blockedBy = blockers.toList()..sort();
+      if (ephemeral) {
+        await api.deliverEphemeral(payloads, delivery);
+        return SendMessageResponse(
+          acceptedAt: context.clock.now(),
+          blockedBy: blockedBy,
+        );
+      }
+
+      final accepted = await context.db.tx((tx) async {
+        final at = await _store.recordSend(
+          tx,
+          id,
+          senderAccount: senderAccount,
+          senderDevice: senderDevice,
+        );
+        if (at == null) return null;
+        await api.deliver(tx, payloads, delivery);
+        return at;
+      });
+      if (accepted == null) {
+        final at = await _store.acceptedAt(
+          context.db,
+          id,
+          senderAccount: senderAccount,
+          senderDevice: senderDevice,
+        );
+        return SendMessageResponse(
+          acceptedAt: at ?? context.clock.now(),
+          replayed: true,
+        );
+      }
+      final response = SendMessageResponse(
+        acceptedAt: accepted,
         blockedBy: blockedBy,
       );
+      if (claim != null) {
+        await context.ephemeral.replace(
+          claim,
+          _inFlight,
+          jsonEncode(response.toJson()),
+          _sendAnswerTtl,
+        );
+      }
+      return response;
+    } finally {
+      // Frees the claim if anything here refused the send, so the retry can
+      // deliver it; does nothing once the claim holds the answer.
+      if (claim != null) await context.ephemeral.deleteIf(claim, _inFlight);
     }
+  }
 
-    final accepted = await context.db.tx((tx) async {
-      final at = await _store.recordSend(
-        tx,
-        id,
-        senderAccount: senderAccount,
-        senderDevice: senderDevice,
-      );
-      if (at == null) return null;
-      await api.deliver(tx, payloads, delivery);
-      return at;
-    });
-    if (accepted == null) {
-      final at = await _store.acceptedAt(
-        context.db,
-        id,
-        senderAccount: senderAccount,
-        senderDevice: senderDevice,
-      );
-      return SendMessageResponse(
-        acceptedAt: at ?? context.clock.now(),
-        replayed: true,
+  /// Takes [key] for this request, or answers with what the request that holds
+  /// it already recorded. Throws `rate_limited` while that one is still
+  /// running: the client retries, and by then it is either answered or gone.
+  Future<SendMessageResponse?> _claimSend(String key) async {
+    if (await context.ephemeral.putIfAbsent(key, _inFlight, _sendClaimTtl)) {
+      return null;
+    }
+    final held = await context.ephemeral.get(key);
+    if (held == null || held == _inFlight) {
+      throw const ApiError(
+        ErrorCode.rateLimited,
+        message: 'this message is being accepted already',
+        retryAfter: Duration(seconds: 2),
       );
     }
-    return SendMessageResponse(acceptedAt: accepted, blockedBy: blockedBy);
+    final answer = SendMessageResponse.fromJson(JsonReader.decode(held));
+    return SendMessageResponse(
+      acceptedAt: answer.acceptedAt,
+      replayed: true,
+      blockedBy: answer.blockedBy,
+    );
   }
 
   Future<SendMessageResponse> _receive(
@@ -778,6 +832,24 @@ const _ephemeralLease = Duration(seconds: 60);
 
 /// The parked value of one ephemeral delivery [ref] for one device.
 String _ephemeralKey(String ref, String deviceId) => 'msg:eph:$ref:$deviceId';
+
+/// The claim value of a send still being accepted; a recorded answer is JSON,
+/// so the two cannot be confused.
+const _inFlight = '-';
+
+/// How long a send may hold its own claim. One handler does the work, so this
+/// only bounds how long a duplicate is told to come back.
+const _sendClaimTtl = Duration(minutes: 2);
+
+/// How long the claim keeps the answer, so a retry replays the original
+/// response. `platform.idempotency` holds the same body for the same window;
+/// the `sends` row outlives both at 7 days and decides delivery on its own.
+const _sendAnswerTtl = Duration(hours: 24);
+
+/// The claim of one send: the id is unique per sender device, so it is keyed
+/// the same way `messaging.sends` is.
+String _sendKey(String account, String device, String id) =>
+    'msg:send:$account:$device:$id';
 
 /// [items] in batches of at most [size].
 List<List<T>> _chunked<T>(List<T> items, int size) => [
