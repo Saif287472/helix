@@ -1004,6 +1004,117 @@ void main() {
     });
 
     test(
+      'a rotation the state keeps moving under is retried, not dropped',
+      () async {
+        final g = await trio();
+        await g.alice.engine.groups.removeMember(g.id, g.carol.account);
+        // Another device wins every state write the rotation attempts inside
+        // one run, so the op ends its attempt on a conflict.
+        server.conflictsOnNextState = GroupLimits.stateRetries;
+        await g.alice.engine.drainOutbox();
+        // AUD-12b-1: this used to mark the op failed for good. A duty op has
+        // no message row, so no retry button and no screen would ever run it
+        // again - and the group would stay unnameable for everyone.
+        expect(await g.alice.db.outboxDao.failed(), isEmpty);
+        expect(
+          await g.alice.db.outboxDao.watchQueuedCount().first,
+          greaterThan(0),
+          reason: 'the rotation waits for its next attempt',
+        );
+
+        server.conflictsOnNextState = 0;
+        peers.clock.advance(const Duration(minutes: 1));
+        await g.alice.engine.drainOutbox();
+        expect(await g.alice.db.outboxDao.watchQueuedCount().first, 0);
+        // The rotation landed: a rename under the new epoch reaches Bob.
+        await g.alice.engine.groups.rename(g.id, 'Two left');
+        await g.bob.sync();
+        expect((await g.bob.engine.groups.details(g.id))!.title, 'Two left');
+      },
+    );
+
+    test(
+      'a rotation that gave up is asked for again by housekeeping',
+      () async {
+        final g = await trio();
+        await g.alice.engine.groups.removeMember(g.id, g.carol.account);
+        // A refusal is terminal for the op: retrying the same request changes
+        // nothing, so the classifier is right to give up on it.
+        peers.server.failNext(Routes.setGroupState, code: ErrorCode.forbidden);
+        await g.alice.engine.drainOutbox();
+        expect(
+          (await g.alice.db.outboxDao.failed()).single.lastError,
+          'forbidden',
+        );
+
+        // The duty outlives the op: the maintenance pass reads what the
+        // rotation was for (the group's state does not open under this
+        // device's key for the current epoch), finds this account owes it, and
+        // asks again.
+        await g.alice.engine.runMaintenance();
+        expect(await g.alice.db.outboxDao.failed(), isEmpty);
+        await g.alice.engine.drainOutbox();
+        expect(await g.alice.db.outboxDao.failed(), isEmpty);
+        // The state is sealed under the epoch's key, so a rename works and
+        // reaches Bob.
+        await g.alice.engine.groups.rename(g.id, 'Rotated again');
+        await g.bob.sync();
+        expect(
+          (await g.bob.engine.groups.details(g.id))!.title,
+          'Rotated again',
+        );
+
+        // With the duty done, the pass stops asking: no op piles up.
+        await g.alice.engine.drainOutbox();
+        await g.alice.engine.runMaintenance();
+        await g.alice.engine.runMaintenance();
+        expect(await g.alice.db.outboxDao.watchQueuedCount().first, 0);
+        expect(await g.alice.db.outboxDao.failed(), isEmpty);
+      },
+    );
+
+    test(
+      'a rotation that keeps failing is asked for a bounded number of times',
+      () async {
+        final g = await trio();
+        await g.alice.engine.groups.removeMember(g.id, g.carol.account);
+        // A server that refuses every state write: each pass asks once more,
+        // and the bound is what stops the asking, not a pass that forgets.
+        for (var i = 0; i < GroupLimits.rekeyDutyRetries; i++) {
+          peers.server.failNext(
+            Routes.setGroupState,
+            code: ErrorCode.forbidden,
+          );
+          await g.alice.engine.runMaintenance();
+          await g.alice.engine.drainOutbox();
+        }
+        expect(
+          (await g.alice.db.outboxDao.failed()).single.attempts,
+          GroupLimits.rekeyDutyRetries,
+        );
+
+        // The next pass does not ask again: the duty stays where a person can
+        // see it instead of costing one request per pass forever.
+        await g.alice.engine.runMaintenance();
+        await g.alice.engine.drainOutbox();
+        expect(
+          (await g.alice.db.outboxDao.failed()).single.attempts,
+          GroupLimits.rekeyDutyRetries,
+        );
+        // An admin asking by hand is not bounded, and it lands.
+        await g.alice.engine.groups.rotateKey(g.id);
+        await g.alice.engine.drainOutbox();
+        expect(await g.alice.db.outboxDao.failed(), isEmpty);
+        await g.alice.engine.groups.rename(g.id, 'Rotated by hand');
+        await g.bob.sync();
+        expect(
+          (await g.bob.engine.groups.details(g.id))!.title,
+          'Rotated by hand',
+        );
+      },
+    );
+
+    test(
       'leaving keeps the history; the group is gone for the leaver',
       () async {
         final g = await trio();

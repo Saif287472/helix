@@ -188,6 +188,29 @@ holds back later ones of its chat; failed ops do not), and for each:
    failed and `SendFailedEvent` is emitted; `device_revoked` starts the
    revocation path; a dead session pauses the worker.
 
+**Classification** (`classifyOpError`) is by error class, then by the server's
+code or the engine's own `GroupFailure` reason - never by message text. A group
+refusal this device cannot outgrow (`notAMember`, `notAllowed`, `badLink`,
+`badMention`) gives up; one the world can still overtake (`noGroupKey`,
+`versionConflict`) retries, and so does the server's `version_conflict`, which
+is what an optimistic state write gets when someone moved first (the retry
+re-reads the newer state; giving up on it left the group unreadable for
+everyone - AUD-12b-1). A `NoSessionException` retries too: the session is one
+bundle fetch away.
+
+An op that gives up leaves a `failed` row. A `send_content` op has a message
+under it, so the user gets a retry; a duty op (`group_rekey`, `session_reset`)
+has none, and nothing in the UI would ever ask again. So housekeeping
+re-derives the duty from the state (`GroupKeyDistributor.reconcileRekeyDuties`,
+run by `MaintenanceService`): a group whose stored blob does not yet open under
+the current epoch's key, for the member who owes that rotation (the first admin
+by account id, the same rule the inbound path uses), gets its `group_rekey` op
+back. The duty's idempotency key names the epoch (`rekey:<group>:<epoch>`), so
+re-asking is cheap and a rotated group generates no op at all; a duty that keeps
+failing is re-asked `GroupLimits.rekeyDutyRetries` times and then left failed for
+an admin, because a pass that re-asked forever would be its own unbounded cost.
+Asking by hand (`GroupsService.rotateKey`, a roster envelope) is never bounded.
+
 Every visible send, action, edit, delete and `read` receipt also goes to this
 account's own other devices (they get the same content; `conv.to` names the
 peer). `delivered` receipts go to the author only. Retried sends re-encrypt
@@ -661,7 +684,8 @@ join, where the joiner added themselves, the first admin by account id does.
 After a removal the remover (else the first admin, for a leave or a
 server-side removal) runs the `group_rekey` op: a new key for the new epoch,
 queued to every member, the state re-sealed under it with the optimistic
-`expected_version` (retried on `version_conflict`). The blob stays sealed under
+`expected_version` (the op retries on `version_conflict`, both from the writer
+and from the server). The blob stays sealed under
 the epoch it was written in, so opening tries the held epochs newest first. A
 `group_key` is accepted from a member, never for an epoch the server has not
 reached, and never replaces a key that opens the stored state with one that
@@ -678,8 +702,9 @@ fragment); the server keeps the token's hash and the sealed preview.
 **Known limits.** The group state AAD binds the epoch, not the version (CRYPTO_V2.md
 §14). A member that is not an admin can hand a new member a wrong key; the name
 stays unreadable until an admin's key arrives. If the first admin never comes
-online after a leave, nobody rotates the key (`GroupsService.rotateKey` does it
-by hand). A device that has no key from a member can read that member's
+online after a leave, nobody rotates the key (a rotation that fails or gives up
+is asked again by housekeeping; `GroupsService.rotateKey` still does it by
+hand). A device that has no key from a member can read that member's
 messages only after the member's next send or a repair. Bans made on other
 devices are not known.
 

@@ -136,7 +136,12 @@ final class Engine {
       ctx,
       _keys,
       devices,
-      extraWork: backup.runMaintenance,
+      extraWork: [
+        backup.runMaintenance,
+        // A group rotation that never landed is asked for again from the
+        // state, because nothing else can reach a duty op with no row.
+        _groupPipeline.reconcileRekeyDuties,
+      ],
     );
     presence = PresenceService(ctx, _sender, _groupPipeline.sender);
     _inbound = InboundRunner(

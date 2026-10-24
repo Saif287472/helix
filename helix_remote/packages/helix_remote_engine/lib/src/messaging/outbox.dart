@@ -142,13 +142,41 @@ final class OutboxService {
     now: _ctx.now(),
   );
 
-  /// Queues the rotation of [groupId]'s master key (after a removal).
-  Future<OutboxOpRow> enqueueRekey(String groupId) => _ctx.db.outboxDao.enqueue(
-    kind: GroupOutboxKinds.groupRekey,
-    idempotencyKey: _ctx.ids.next(),
-    payload: GroupRekeyPayload(groupId: groupId).encode(),
-    now: _ctx.now(),
-  );
+  /// Queues the rotation of [groupId]'s master key for its epoch [epoch]
+  /// (after a removal).
+  ///
+  /// The key is the group and the epoch, so a duty that is asked for twice -
+  /// by the roster envelope and again by the maintenance pass - is one op, and
+  /// an op that had given up is put back in the queue rather than left dead
+  /// (AUD-12b-1: a lost rotation leaves the group unnameable for every member
+  /// and the removed member keeps the previous epoch's key, and a rekey op has
+  /// no message row for a retry button to sit on). [epoch] only names the
+  /// duty: the op itself reads the group again when it runs, so an op left over
+  /// from an older epoch rotates the current one and then stops.
+  ///
+  /// [reaskMaxAttempts] bounds the re-asking for whoever derives the duty from
+  /// state: a duty that keeps failing the same way would otherwise be put back
+  /// in the queue by every maintenance pass forever. An explicit request (the
+  /// roster change, an admin's rotate) is never bounded - the person asking is
+  /// the one who knows the state.
+  Future<OutboxOpRow> enqueueRekey(
+    String groupId,
+    int epoch, {
+    int? reaskMaxAttempts,
+  }) async {
+    final now = _ctx.now();
+    final op = await _ctx.db.outboxDao.enqueue(
+      kind: GroupOutboxKinds.groupRekey,
+      idempotencyKey: 'rekey:$groupId:$epoch',
+      payload: GroupRekeyPayload(groupId: groupId).encode(),
+      now: now,
+    );
+    if (op.state == OutboxState.failed &&
+        (reaskMaxAttempts == null || op.attempts < reaskMaxAttempts)) {
+      await _ctx.db.outboxDao.retry(op.id, now: now);
+    }
+    return op;
+  }
 
   Future<OutboxOpRow> enqueueReset(SessionResetPayload payload) =>
       _ctx.db.outboxDao.enqueue(
@@ -200,6 +228,12 @@ final class SessionEnded extends OpFailure {
 /// Sorts an error from an attempt into retry, give up, or an account-level
 /// condition. Unknown errors retry (with backoff and the age limit) rather
 /// than losing the message.
+///
+/// The reason matters more than the class: `noGroupKey` and `versionConflict`
+/// are both "the world moved, or has not moved yet" and a later attempt is
+/// what fixes them, while `notAMember` is a fact about this account that no
+/// retry changes. Mapping every [GroupException] to a give-up is what made a
+/// lost group key rotation permanent (AUD-12b-1).
 OpFailure classifyOpError(Object error) {
   switch (error) {
     case NetworkException():
@@ -215,17 +249,37 @@ OpFailure classifyOpError(Object error) {
     case UntrustedPeerException():
       return const GiveUp('untrusted_peer');
     case GroupException():
-      return GiveUp(
-        error.reason == GroupFailure.notAMember
-            ? 'not_a_member'
-            : 'group_${error.reason.name}',
-      );
+      switch (error.reason) {
+        case GroupFailure.notAMember:
+          return const GiveUp('not_a_member');
+        case GroupFailure.notAllowed:
+          return const GiveUp('group_not_allowed');
+        case GroupFailure.badLink:
+          return const GiveUp('group_bad_link');
+        case GroupFailure.badMention:
+          return const GiveUp('group_bad_mention');
+        case GroupFailure.noGroupKey:
+          return const RetryLater('group_key_not_here_yet');
+        case GroupFailure.versionConflict:
+          return const RetryLater('group_state_moved');
+      }
+    case NoSessionException():
+      // The pair's session is gone (a restore, or another engine wiped it
+      // mid-queue). The next attempt starts one; a message op waits on the
+      // age limit, which is the same bound the transport has.
+      return const RetryLater('no_session');
     case CryptoV2Exception():
       return const GiveUp('crypto');
     case ApiException():
       if (error.code == ErrorCode.deviceRevoked) return const DeviceRevoked();
       if (error.code == ErrorCode.deviceListStale) {
         return const RetryLater('device_list_stale');
+      }
+      if (error.code == ErrorCode.versionConflict) {
+        // An optimistic write that lost the race: the next attempt reads the
+        // newer state. This is how the server answers a group state write that
+        // moved under us, and giving up on it is AUD-12b-1.
+        return const RetryLater('version_conflict');
       }
       if (error.isRetryable ||
           error.isUnauthenticated ||

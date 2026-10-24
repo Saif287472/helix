@@ -13,20 +13,27 @@ import 'package:helix_remote_engine/src/settings_keys.dart';
 /// - **Housekeeping** (every `maintenanceInterval`, and [runOnce]): expired
 ///   deferred actions, processed-envelope ids past the replay window,
 ///   expired messages, and, when due, prekey upkeep and a refresh of the
-///   own device list.
+///   own device list. Whatever the other features pass in `_extraWork` runs at
+///   the end of the same pass, each on its own guard.
 ///
 /// Prekey and device-list refreshes need the network; their failures are
 /// swallowed and retried on the next tick.
 final class MaintenanceService {
-  MaintenanceService(this._ctx, this._keys, this._devices, {this._extraWork});
+  MaintenanceService(
+    this._ctx,
+    this._keys,
+    this._devices, {
+    this._extraWork = const [],
+  });
 
   final EngineContext _ctx;
   final KeyMaintenance _keys;
   final DeviceService _devices;
 
-  /// Other features' housekeeping (the backup feature's schedule), run at the
-  /// end of every pass. Must not throw.
-  final Future<void> Function()? _extraWork;
+  /// Other features' housekeeping (the backup schedule, the group key duties),
+  /// run at the end of every pass. Each is guarded separately: one that throws
+  /// must not stop the others.
+  final List<Future<void> Function()> _extraWork;
 
   Timer? _tick;
   Timer? _expiry;
@@ -71,8 +78,9 @@ final class MaintenanceService {
           _ctx.config.prekeyCheckInterval.inMilliseconds) {
         await _guarded(_devices.refresh);
       }
-      final extra = _extraWork;
-      if (extra != null) await _guarded(extra);
+      for (final extra in _extraWork) {
+        await _guarded(extra);
+      }
     } on Object {
       // The database closed under us, or a table is mid-wipe.
       return;

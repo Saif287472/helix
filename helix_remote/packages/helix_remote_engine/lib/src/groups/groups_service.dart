@@ -427,8 +427,8 @@ final class GroupsService {
   /// Rotates the group master key now (an admin's action; a removal does it
   /// by itself).
   Future<void> rotateKey(String groupId) async {
-    await _requireAdmin(groupId);
-    await _outbox.enqueueRekey(groupId);
+    final details = await _requireAdmin(groupId);
+    await _outbox.enqueueRekey(groupId, details.group.epoch);
   }
 
   // ------------------------------------------------------------ invites
@@ -596,10 +596,12 @@ final class GroupsService {
   // ------------------------------------------------------------ internals
 
   Future<void> _afterRemoval(String groupId, String account) async {
-    await _roster.refresh(groupId);
+    final update = await _roster.refresh(groupId);
     await _senderKeys.forgetMember(groupId, account);
     // The server bumped the epoch: the group key changes with it.
-    await _outbox.enqueueRekey(groupId);
+    if (update != null) {
+      await _outbox.enqueueRekey(groupId, update.group.epoch);
+    }
   }
 
   Future<GroupDetails> _require(String groupId) async {

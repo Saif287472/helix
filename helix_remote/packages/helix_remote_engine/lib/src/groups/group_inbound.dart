@@ -563,7 +563,10 @@ final class GroupInbound {
     if (joiners.isEmpty) return;
     final selfJoin = actor != null && event.members.contains(actor);
     if (!selfJoin && actor != null) return; // The actor shares the key.
-    if (!await _isFirstAdmin(event.groupId, exclude: event.members.toSet())) {
+    if (!await _keys.isFirstAdmin(
+      event.groupId,
+      exclude: event.members.toSet(),
+    )) {
       return;
     }
     await _keys.share(event.groupId, joiners, epoch: epoch);
@@ -571,29 +574,18 @@ final class GroupInbound {
 
   /// After a removal the server bumped the epoch: the remover rotates the
   /// group key when it made the call; for a leave or a server-side removal
-  /// the first admin by account id does.
+  /// the first admin by account id does. If that op is lost,
+  /// [GroupKeyDistributor.reconcileRekeyDuties] asks again from the state.
   Future<void> _rekeyDuty(RosterChangeEvent event) async {
     final actor = event.actor;
     // A member who removed someone (this device included) rotates the key.
     if (actor != null && !event.members.contains(actor)) return;
-    if (!await _isFirstAdmin(event.groupId, exclude: event.members.toSet())) {
+    if (!await _keys.isFirstAdmin(
+      event.groupId,
+      exclude: event.members.toSet(),
+    )) {
       return;
     }
-    await _outbox.enqueueRekey(event.groupId);
-  }
-
-  Future<bool> _isFirstAdmin(
-    String groupId, {
-    required Set<String> exclude,
-  }) async {
-    final self = _ctx.identity.accountId;
-    final admins = [
-      for (final m in await _db.groupsDao.members(groupId))
-        if ((m.role == GroupRole.owner.wire ||
-                m.role == GroupRole.admin.wire) &&
-            !exclude.contains(m.accountId))
-          m.accountId,
-    ]..sort();
-    return admins.isNotEmpty && admins.first == self;
+    await _outbox.enqueueRekey(event.groupId, event.epoch);
   }
 }

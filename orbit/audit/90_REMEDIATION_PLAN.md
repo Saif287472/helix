@@ -1031,8 +1031,60 @@ update to be protected.
   Follow-up this step deliberately left open: the sender still cannot answer
   for an action — `_resend` looks the target up with `messagesDao.find(id,
   sender: self)` and actions are not stored as rows, so a quiet edit, delete,
-  reaction or vote now gets a new session but no re-send. That is S3, and it is
-  the same missing piece as AUD-12i-1.
+  reaction or vote now gets a new session but no re-send. That is AUD-12i-1,
+  and it is the same missing piece the finding names there.
+- S3 (AUD-12b-1) — two halves, because the retry alone does not save a duty op.
+  **Classification:** `classifyOpError` read the error *class* only, so every
+  `GroupException` was a give-up — including `versionConflict` and `noGroupKey`
+  — and the server's `version_conflict` reached the same branch once
+  `GroupKeyDistributor.rekey()` had spent its own `GroupLimits.stateRetries`
+  loop (it rethrows the raw `ApiException`). One lost race therefore marked the
+  post-removal rotation dead for good: the removed member kept the epoch key and
+  `_updateState` then fails with `noGroupKey` for *every* member, so the group
+  could never be renamed again — silently, and with nothing to retry, because a
+  rekey op has no message row for a "retry" button to sit on. Now the reason
+  decides: `notAMember`, `notAllowed`, `badLink` and `badMention` (facts no
+  retry changes) give up; `noGroupKey` and `versionConflict`, and the API's
+  `version_conflict`, retry; and `NoSessionException`, which the
+  `CryptoV2Exception` case was swallowing into `crypto`, retries, since the
+  session is one bundle fetch away.
+  **Re-derivation:** a duty that gives up still has no UI, so housekeeping reads
+  it back from the state. `OutboxService.enqueueRekey(groupId, epoch)` is now the
+  only way a rekey enters the queue (the roster envelope, `GroupsService.rotateKey`
+  and `_afterRemoval` all call it) and keys it `rekey:<group>:<epoch>`, so a
+  double ask is one op and a failed one is put back.
+  `GroupKeyDistributor.reconcileRekeyDuties()`, run by `MaintenanceService`
+  (which now takes a *list* of extra passes; `engine.dart` adds the reconciler
+  beside the backup schedule), asks only where the rotation demonstrably has not
+  landed — the same "the stored blob opens under this device's key for the
+  current epoch" test `rekey()` uses to decide the duty is done — and only of the
+  account that owes it (`isFirstAdmin`, moved out of `GroupInbound` so the two
+  paths cannot drift). The finding's own signal ("re-enqueue when the group's
+  epoch has no held key") is not usable: `rekey()` stores the epoch key *before*
+  it writes the state, so a rotation that crashed halfway has a key and a blob
+  that does not open — which is exactly why the check reads the sealed state.
+  Bounded by `GroupLimits.rekeyDutyRetries` re-asks, then
+  the row stays failed for an admin to trigger: a pass that re-asked a hopeless
+  duty every five minutes forever would be its own unbounded cost. An explicit
+  ask (a roster change, `rotateKey`) is never bounded.
+  Tests: `groups_test.dart` "a rotation the state keeps moving under is retried,
+  not dropped", "a rotation that gave up is asked for again by housekeeping" and
+  "a rotation that keeps failing is asked for a bounded number of times". Each
+  bites: without the `version_conflict` retry the first leaves the op failed;
+  without the reconciler in `extraWork` the second never re-asks; without the
+  bound the third re-asks past it.
+  Note for the next test in this area: `FakeServer.callsTo(route)` compares the
+  recorded `PUT /v1/groups/<id>/state` against the route's *template* path, so it
+  is always 0 for a parameterised route — a count-through-the-server assertion
+  there passes vacuously. The bound test counts the op row's `attempts` instead.
+  Gate: engine suite **319 green**, `dart analyze lib test` clean, and
+  `server/test/client/engine/groups_test.dart` green against Postgres. No schema
+  and no wire change (the policy rides the outbox's existing columns), so no APK
+  is needed for this step. Docs: engine MODULE.md gains the classification rules
+  and the duty re-derivation, and the "Known limits" line about a lost rotation.
+  Left open: a `session_reset` duty op that gives up is still not re-derived —
+  narrower than it looks, since the next undecryptable envelope from that sender
+  asks again — and the sender still cannot answer for an action (AUD-12i-1).
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

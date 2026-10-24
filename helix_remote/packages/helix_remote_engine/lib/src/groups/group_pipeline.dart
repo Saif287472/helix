@@ -62,6 +62,10 @@ final class GroupPipeline implements GroupOutbox {
   late final GroupInbound inbound;
   late final GroupsService service;
 
+  /// The post-removal rotation duty re-derived from state; housekeeping runs
+  /// it (AUD-12b-1).
+  Future<void> reconcileRekeyDuties() => keys.reconcileRekeyDuties();
+
   @override
   Future<void> sendContent(SendGroupContentPayload payload, String requestId) =>
       sender.send(

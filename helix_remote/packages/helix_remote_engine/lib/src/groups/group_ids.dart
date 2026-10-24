@@ -40,6 +40,11 @@ abstract final class GroupLimits {
   /// Versions conflicts retried when writing the group state.
   static const stateRetries = 4;
 
+  /// Times housekeeping may put a given-up rotation back in the queue before
+  /// it leaves it for an admin to trigger by hand. A duty whose state keeps
+  /// refusing would otherwise be re-asked every maintenance pass forever.
+  static const rekeyDutyRetries = 5;
+
   /// The `state_version` a group starts at on the server (a create stores
   /// the sealed state as version 1; every accepted write adds one).
   static const initialStateVersion = 1;

@@ -164,4 +164,70 @@ final class GroupKeyDistributor {
       }
     }
   }
+
+  /// Whether this account is the one that owes a group its key work: the first
+  /// admin (or owner) by account id, ignoring [exclude] - whoever a roster
+  /// change is about, before the local roster has caught up. One rule for the
+  /// duty a roster envelope triggers and the one maintenance re-derives.
+  Future<bool> isFirstAdmin(
+    String groupId, {
+    required Set<String> exclude,
+  }) async {
+    final self = _ctx.identity.accountId;
+    final admins = [
+      for (final m in await _db.groupsDao.members(groupId))
+        if ((m.role == GroupRole.owner.wire ||
+                m.role == GroupRole.admin.wire) &&
+            !exclude.contains(m.accountId))
+          m.accountId,
+    ]..sort();
+    return admins.isNotEmpty && admins.first == self;
+  }
+
+  /// The rotation duty re-derived from state (AUD-12b-1). A removal bumps the
+  /// epoch and one device rotates the key and re-seals the group's state under
+  /// it; when that op is lost - given up before the retry policy existed,
+  /// dropped by a crash at the wrong moment, or never queued because this
+  /// device was not running when the roster envelope arrived - the group's name
+  /// and picture stay unwriteable for every member and the state the removed
+  /// member can still read is never replaced.
+  ///
+  /// So the duty is read back from what it is supposed to achieve: a group
+  /// whose stored state does not open under a key this device holds for the
+  /// current epoch, and which this account owes, is asked for a rotation again.
+  /// [OutboxService.enqueueRekey] keys the duty by group and epoch, so a pass
+  /// that finds it queued changes nothing and one that finds it failed puts it
+  /// back; when the rotation lands the state opens and the pass stops asking.
+  /// A duty that keeps failing is re-asked [GroupLimits.rekeyDutyRetries]
+  /// times and then left for an admin, so a server that refuses this account
+  /// costs one request per pass up to that bound instead of forever. Archived
+  /// groups count too: archiving is this device's list, not the roster.
+  Future<void> reconcileRekeyDuties() async {
+    for (final archived in [false, true]) {
+      for (final group in await _db.groupsDao.all(archived: archived)) {
+        final blob = group.state;
+        // Nothing has ever been sealed: the name is the server's plain column
+        // and no reader is holding a key that has to be replaced.
+        if (blob == null) continue;
+        final key = await _keyring.keyFor(group.id, group.epoch);
+        if (key != null &&
+            await _keyring.tryOpen(
+                  group.id,
+                  blob,
+                  group.epoch,
+                  group.stateVersion,
+                  key,
+                ) !=
+                null) {
+          continue; // Rotated and sealed: the duty is done.
+        }
+        if (!await isFirstAdmin(group.id, exclude: const {})) continue;
+        await _outbox.enqueueRekey(
+          group.id,
+          group.epoch,
+          reaskMaxAttempts: GroupLimits.rekeyDutyRetries,
+        );
+      }
+    }
+  }
 }
