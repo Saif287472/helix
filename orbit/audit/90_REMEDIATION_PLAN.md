@@ -556,7 +556,7 @@ start-up failure: **check the production `.env` before deploying**, because the
 node will refuse to start with the value that today silently fails per request.
 Wire: none; a replay simply carries more headers.
 
-**Landing log (in progress):**
+**Landing log (2026-10-25):**
 - S1 (AUD-1a-1) — `BodyBudget` takes `idleGap` (10 s) and `deadline` (30 s) and
   `_readBody` applies both: `Stream.timeout` on the chunk stream, and an elapsed
   check per chunk so a body that dribbles one byte every second cannot dodge the
@@ -808,6 +808,23 @@ Wire: none; a replay simply carries more headers.
   it. `HELIX_LOG_MAX_BYTES_PER_DAY` is new and optional: the default needs no
   `.env` line, so production changes only if the operator wants a smaller day.
   No wire change.
+- Next: B5 waits on Q6, so B6. B4's steps: S1 `88fdae1`, S2 `fb0a1c1`,
+  S3 `2c8e1eb`, S4 `408a556` (plus `a47cd52`, the single-flight hole its own
+  gate found), S5 `793440f`, S6 `07c3668`. B4's gate: **501 tests green** on
+  Postgres at `--concurrency=3`, with the two `messaging_test.dart` timing
+  flakes already listed in `AGENTS.md` (both green, with the platform trio, on
+  the solo re-run straight after), and `dart analyze server tool` clean; the
+  S5 gate ran the clients too (protocol 120, engine 313, api 205, db 140,
+  cli 13, orbit_ui 230, app 1022) against the tightened decode.
+  One finding closed as not a bug (AUD-1a-2) and one deliberately left as a
+  cost bound rather than an ordering fix (AUD-6-2: a signature cannot be
+  checked before the peer's key is known).
+  **Owner-facing, whole batch:** production owes **platform migrations 3, 4 and
+  5** at the next start (`bin/migrate.dart` or the node's own migration), and a
+  malformed `HELIX_S3_ENDPOINT` now fails start-up instead of failing per
+  request — Helix Global runs `HELIX_BLOB_STORE=local`, so it is not affected.
+  One optional new env line, `HELIX_LOG_MAX_BYTES_PER_DAY`. No wire change
+  anywhere in the batch, so no APK is needed for any of it.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**
