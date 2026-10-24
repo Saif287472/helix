@@ -54,11 +54,11 @@ certificate.
   the config timeout (5 s) applied to the whole read and to the gap between two
   chunks. A peer that exceeds either is `PeerUnavailable`, which is what relays
   already requeue on and `_verify` already answers 401.
-- **Concurrent lookups:** one fetch per domain at a time, its result and its
-  cache write shared by every caller that asks while it runs, and at most 16
-  domains fetched at once. A signature can only be checked after an unknown
-  domain's key has been fetched, so an S2S request that fails to verify is
-  refused on the *shared* cost of that lookup, not at one fetch per request.
+- **Concurrent lookups:** one lookup per domain at a time - its cache read, its
+  fetch, its cache write - shared by every caller that asks while it runs, and
+  at most 16 domains looked up at once. A signature can only be checked after an
+  unknown domain's key has been fetched, so an S2S request that fails to verify
+  is refused on the *shared* cost of that lookup, not at one fetch per request.
 - **Re-fetching:** a signature that fails is re-fetched once, at most every
   10 minutes per domain, for key rotation. A changed key is logged
   (`peer_key_changed`).

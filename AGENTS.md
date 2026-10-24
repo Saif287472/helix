@@ -285,7 +285,10 @@ the push-observability gate, each green when rerun alone: the same
 `test/modules/messaging_test.dart` send, `test/modules/availability_test.dart`
 ("a spent stored budget refuses group sends") and
 `test/client/engine/security_test.dart` ("a texted account needs a fresh phone
-verification"). When another agent session is editing the server while a suite
+verification"). Seen 2026-10-25 in the B4 S5 gate, each green when rerun alone:
+`test/modules/messaging_test.dart` ("every wake-up says what became of it" - the
+`no_token` push line is not in the log yet) and the same `messaging_test.dart`
+send again. When another agent session is editing the server while a suite
 runs, whole files can also fail to *load* on a compile error that is already
 gone by the time the report is read - re-`dart analyze` the file before treating
 a load failure as a result.

@@ -724,6 +724,21 @@ Wire: none; a replay simply carries more headers.
   the point of it. No migration, no `.env` line, no wire change: every limit is
   receive-side, an over-limit body already means "quarantine this envelope" on
   the engine path and `invalid_field` on the server path.
+- S4 follow-up — the S5 server gate gave S4's own single-flight test three
+  identity fetches instead of one. `resolve` checked `_lookups`, then awaited
+  the cache read, and registered only after more awaits, so every caller could
+  pass the "is one running?" gate before the first reached it; and a caller
+  whose cache read was slower than the 300 ms fetch it should have joined woke
+  to a `_lookups` the winner had already removed and a `cached` it had read as
+  null, so it fetched again. The lookup shared by `_lookups` is now the whole
+  operation - cache read, fetch, save - joined synchronously with no await
+  before the map is read and written. The refresh rate limit and the one-minute
+  down marker moved inside it (one decision per domain per burst, same values);
+  `checkAllowed` still runs per caller, so a refused address never joins.
+  Federation's 21 tests pass alone with the assertions unchanged
+  (`identityHits == 1`, forged headers "under four"); the four load flakes of
+  that gate each passed alone and are noted in AGENTS.md. No migration, no
+  `.env` line, no wire change.
 
 ## B5 — A stranded account must be repairable without deleting history
 **A · ~4–5 days · no migration, no wire · depends on Q6**

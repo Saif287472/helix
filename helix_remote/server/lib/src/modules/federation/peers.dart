@@ -113,8 +113,9 @@ final class PeerDirectory {
   static const maxConcurrentLookups = 16;
 
   /// Lookups running at once, by domain: concurrent requests for one domain
-  /// share the fetch *and* its cache write, so the second request never reads
-  /// a cache the first has not filled yet.
+  /// share the whole lookup - its cache read, its fetch and its cache write -
+  /// so no request can act on a cache read that started before another fetch
+  /// filled it.
   final Map<String, Future<Peer>> _lookups = {};
   int _lookupCount = 0;
 
@@ -134,13 +135,33 @@ final class PeerDirectory {
   /// With [refresh], re-fetches (rate-limited) even if cached.
   Future<Peer> resolve(String domain, {bool refresh = false}) async {
     checkAllowed(domain);
-    // Join the lookup already running for this domain *before* reading the
-    // cache: its answer is fresher than anything stored, and a caller that
-    // reads an empty cache a moment after a fetch finished would otherwise
-    // start that same fetch again - which is how twenty forged requests became
-    // twenty peer lookups.
+    // Join, or become, the one lookup this domain has running. Nothing is
+    // awaited before [_lookupShared] reads and writes [_lookups], so within
+    // this node there is no window in which two callers can both decide to
+    // fetch.
+    return _lookupShared(domain, refresh: refresh);
+  }
+
+  /// The domain's cache read, document fetch and cache write, done once
+  /// however many callers ask at the same time, and refused outright once
+  /// [maxConcurrentLookups] domains are being looked up.
+  Future<Peer> _lookupShared(String domain, {required bool refresh}) {
     final running = _lookups[domain];
     if (running != null) return running;
+    if (_lookupCount >= maxConcurrentLookups) {
+      return Future.error(const PeerUnavailable('too many peer lookups'));
+    }
+    _lookupCount++;
+    late final Future<Peer> lookup;
+    lookup = _resolve(domain, refresh: refresh).whenComplete(() {
+      _lookupCount--;
+      if (identical(_lookups[domain], lookup)) _lookups.remove(domain);
+    });
+    _lookups[domain] = lookup;
+    return lookup;
+  }
+
+  Future<Peer> _resolve(String domain, {required bool refresh}) async {
     final cached = await store.peer(db, domain);
     final fresh =
         cached != null &&
@@ -161,7 +182,10 @@ final class PeerDirectory {
     }
     final Peer fetched;
     try {
-      fetched = await _lookupShared(domain);
+      fetched = await _fetch(domain);
+      // Written inside the shared lookup: a second request for this domain
+      // must not read an empty cache while the first is still saving.
+      await store.savePeer(db, fetched);
     } on PeerUnavailable {
       if (cached != null) return cached;
       await ephemeral.put('fed:down:$domain', '1', downGap);
@@ -179,34 +203,6 @@ final class PeerDirectory {
       log.warn('peer_key_changed', {'peer': domain});
     }
     return fetched;
-  }
-
-  /// The domain's document, fetched and cached once however many callers ask
-  /// for it at the same time, and refused outright once
-  /// [maxConcurrentLookups] domains are being looked up.
-  ///
-  /// The cache write is inside the shared future deliberately: two requests
-  /// that both read an empty cache must still cost one fetch, not one each.
-  Future<Peer> _lookupShared(String domain) {
-    final running = _lookups[domain];
-    if (running != null) return running;
-    if (_lookupCount >= maxConcurrentLookups) {
-      return Future.error(const PeerUnavailable('too many peer lookups'));
-    }
-    _lookupCount++;
-    late final Future<Peer> lookup;
-    lookup = _lookup(domain).whenComplete(() {
-      _lookupCount--;
-      if (identical(_lookups[domain], lookup)) _lookups.remove(domain);
-    });
-    _lookups[domain] = lookup;
-    return lookup;
-  }
-
-  Future<Peer> _lookup(String domain) async {
-    final peer = await _fetch(domain);
-    await store.savePeer(db, peer);
-    return peer;
   }
 
   Future<Peer> _fetch(String domain) async {
