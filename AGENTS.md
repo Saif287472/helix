@@ -280,7 +280,15 @@ blocked you pays nothing" - the token bucket refills under it during a
 talking at once never corrupt a session" - proved pre-existing by reverting the
 step's source files and rerunning at `c04bc84`: same shape, different position),
 and the engine two-server group test in `test/client/engine/groups_test.dart`
-(fails inside a multi-file run, passes alone in 6 s).
+(fails inside a multi-file run, passes alone in 6 s). Seen again 2026-10-24 in
+the push-observability gate, each green when rerun alone: the same
+`test/modules/messaging_test.dart` send, `test/modules/availability_test.dart`
+("a spent stored budget refuses group sends") and
+`test/client/engine/security_test.dart` ("a texted account needs a fresh phone
+verification"). When another agent session is editing the server while a suite
+runs, whole files can also fail to *load* on a compile error that is already
+gone by the time the report is read - re-`dart analyze` the file before treating
+a load failure as a result.
 
 Add any failure you confirm is pre-existing here, with the date.
 
