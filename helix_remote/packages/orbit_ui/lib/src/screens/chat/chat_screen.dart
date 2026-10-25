@@ -1804,59 +1804,65 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _emojiPanel(OrbitTokens t) => Container(
-    height: 260,
-    decoration: BoxDecoration(
-      color: t.surface,
-      border: Border(top: BorderSide(color: t.line2)),
-    ),
-    child: Column(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.line2)),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(
-              children: [
-                for (final (i, k) in _emoji.keys.indexed) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  OrbitChip(
-                    label: k,
-                    on: k == _emojiTab,
-                    onTap: () => setState(() => _emojiTab = k),
-                  ),
+  Widget _emojiPanel(OrbitTokens t) {
+    // With the panel open this is the bottom strip, so it is the panel that
+    // keeps its last row clear of the Android navigation buttons - the
+    // composer drops the same inset for exactly as long.
+    final navBar = MediaQuery.viewPaddingOf(context).bottom;
+    return Container(
+      height: 260 + navBar,
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border(top: BorderSide(color: t.line2)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: t.line2)),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  for (final (i, k) in _emoji.keys.indexed) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    OrbitChip(
+                      label: k,
+                      on: k == _emojiTab,
+                      onTap: () => setState(() => _emojiTab = k),
+                    ),
+                  ],
                 ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 8,
+              padding: EdgeInsets.fromLTRB(8, 6, 8, 20 + navBar),
+              childAspectRatio: (412 - 16) / 8 / 44,
+              children: [
+                for (final e in _emoji[_emojiTab]!.split(' '))
+                  Semantics(
+                    button: true,
+                    label: e,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _insertEmoji(e),
+                      child: Center(
+                        child: Text(e, style: t.font.style(size: 26)),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
-        Expanded(
-          child: GridView.count(
-            crossAxisCount: 8,
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 20),
-            childAspectRatio: (412 - 16) / 8 / 44,
-            children: [
-              for (final e in _emoji[_emojiTab]!.split(' '))
-                Semantics(
-                  button: true,
-                  label: e,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _insertEmoji(e),
-                    child: Center(
-                      child: Text(e, style: t.font.style(size: 26)),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _CachedRow {

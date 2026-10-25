@@ -251,6 +251,10 @@ class OrbitPick extends StatelessWidget {
 
 /// `.bottom-bar`: the action strip under a page, on `--surface` over a
 /// `--line-2` rule, 10px 16px 30px in, its parts 10px apart.
+///
+/// The 30px is paid to the screen edge, so the strip adds the Android
+/// navigation-bar inset below it: a phone with the three buttons would
+/// otherwise draw them over the action.
 class OrbitBottomBar extends StatelessWidget {
   const OrbitBottomBar({super.key, required this.children});
 
@@ -259,12 +263,16 @@ class OrbitBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
+    // The 30px reaches the screen edge, so on a phone driven by the three
+    // navigation buttons the action it carries sits under that bar: the strip
+    // grows by the inset, the way the dock and the composer do.
+    final navBar = MediaQuery.viewPaddingOf(context).bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         OrbitSpace.gutter,
         10,
         OrbitSpace.gutter,
-        30,
+        30 + navBar,
       ),
       decoration: BoxDecoration(
         color: t.surface,

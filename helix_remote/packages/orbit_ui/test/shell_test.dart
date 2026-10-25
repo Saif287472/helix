@@ -384,6 +384,59 @@ void main() {
     });
   });
 
+  group('OrbitBottomBar', () {
+    Future<void> bar(WidgetTester tester, {double navBar = 0}) =>
+        tester.pumpWidget(
+          MaterialApp(
+            theme: OrbitTheme.of(themes['orbit']!),
+            home: MediaQuery(
+              data: MediaQueryData(
+                viewPadding: EdgeInsets.only(bottom: navBar),
+              ),
+              child: Scaffold(
+                body: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: OrbitBottomBar(
+                    children: [
+                      Expanded(
+                        child: OrbitButton(
+                          label: 'Send to 2 chats',
+                          block: true,
+                          onPressed: () {},
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('lifts its action clear of the navigation bar', (tester) async {
+      await bar(tester);
+      final plain = tester.getSize(find.byType(OrbitBottomBar)).height;
+      await bar(tester, navBar: 48);
+      final screenBottom = tester.getBottomLeft(find.byType(Scaffold)).dy;
+      expect(tester.getSize(find.byType(OrbitBottomBar)).height, plain + 48);
+      expect(
+        tester.getBottomLeft(find.byType(OrbitButton)).dy,
+        closeTo(screenBottom - 30 - 48, 0.5),
+      );
+    });
+
+    testWidgets('a gesture-navigation phone keeps the strip as it was', (
+      tester,
+    ) async {
+      await bar(tester);
+      final screenBottom = tester.getBottomLeft(find.byType(Scaffold)).dy;
+      expect(
+        tester.getBottomLeft(find.byType(OrbitButton)).dy,
+        closeTo(screenBottom - 30, 0.5),
+      );
+    });
+  });
+
   test('a CSS angle runs the gradient the way CSS does', () {
     const g = OrbitCssGradient(
       angle: 90,

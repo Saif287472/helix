@@ -97,6 +97,10 @@ class OrbitComposerActions {
 ///
 /// [recording] replaces the field with the recording strip; [disabled]
 /// replaces the whole composer with the reason a message cannot be sent.
+///
+/// The 26px is paid to the screen edge, so the box adds the Android
+/// navigation-bar inset below it: a phone with the three buttons would
+/// otherwise draw them over the field.
 class OrbitComposer extends StatefulWidget {
   const OrbitComposer({
     super.key,
@@ -219,6 +223,13 @@ class _OrbitComposerState extends State<OrbitComposer> {
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final w = widget;
+    // A phone driven by the three navigation buttons draws that bar over the
+    // bottom of every window, so the box - which is where a thumb reaches for
+    // the field - rides above it, the way the dock does. `viewPadding` and not
+    // `padding`: the app already lifts everything above the keyboard, and an
+    // inset that moves with it would lift the field twice. With the emoji panel
+    // open the composer is not the bottom strip and the panel pays for the bar.
+    final navBar = w.emojiOpen ? 0.0 : MediaQuery.viewPaddingOf(context).bottom;
     final reason = w.disabled;
     if (reason != null) {
       final style = t.font.style(
@@ -227,7 +238,7 @@ class _OrbitComposerState extends State<OrbitComposer> {
         height: 1.45,
       );
       return Container(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 30),
+        padding: EdgeInsets.fromLTRB(18, 14, 18, 30 + navBar),
         decoration: BoxDecoration(
           color: t.surface,
           border: Border(top: BorderSide(color: t.line2)),
@@ -261,7 +272,7 @@ class _OrbitComposerState extends State<OrbitComposer> {
       _ => _recording(t),
     };
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 26),
+      padding: EdgeInsets.fromLTRB(8, 8, 8, 26 + navBar),
       decoration: BoxDecoration(
         color: t.surface,
         border: Border(top: BorderSide(color: t.line2)),
@@ -287,8 +298,11 @@ class _OrbitComposerState extends State<OrbitComposer> {
             ],
           ),
           if (w.recording == OrbitRecording.hold)
-            // `.lock-pill`: 12px from the right, 96px up from the composer's
-            // bottom edge, which is 26px below this box's.
+            // `.lock-pill`: 12px from the right and 96px up from the bottom
+            // edge, which the box's own 26px padding puts above the field -
+            // measured from the field rather than from that edge, so on a
+            // phone with navigation buttons the pill rises with the row
+            // instead of settling against the bar.
             Positioned(right: 12 - 8, bottom: 96 - 26, child: _LockPill()),
         ],
       ),

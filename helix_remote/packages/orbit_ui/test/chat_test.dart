@@ -222,6 +222,59 @@ void main() {
     expect(find.byType(OrbitComposer), findsNothing);
   });
 
+  group('the bottom of a chat on a three-button phone', () {
+    Future<void> showWith(
+      WidgetTester tester, {
+      required double navBar,
+      bool emoji = false,
+    }) async {
+      // Android draws its navigation buttons over the bottom of the window, so
+      // the composer keeps the field clear of them; with the emoji panel open
+      // the panel is the bottom strip and takes the inset instead.
+      tester.view.physicalSize = const Size(412, 866);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OrbitTheme.of(orbit),
+          home: MediaQuery(
+            data: MediaQueryData(viewPadding: EdgeInsets.only(bottom: navBar)),
+            child: Scaffold(
+              body: ChatScreen(
+                model: nadia(),
+                start: ChatStart(emoji: emoji),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('the field rises above the bar', (tester) async {
+      await showWith(tester, navBar: 0);
+      final plain = tester.getSize(find.byType(OrbitComposer)).height;
+      await showWith(tester, navBar: 48);
+      expect(tester.getSize(find.byType(OrbitComposer)).height, plain + 48);
+      final screenBottom = tester.getBottomLeft(find.byType(Scaffold)).dy;
+      expect(
+        tester.getBottomLeft(find.byType(TextField)).dy,
+        lessThanOrEqualTo(screenBottom - 48),
+      );
+    });
+
+    testWidgets('an open emoji panel takes the bar, not the composer', (
+      tester,
+    ) async {
+      await showWith(tester, navBar: 0, emoji: true);
+      final composer = tester.getSize(find.byType(OrbitComposer)).height;
+      final grid = tester.getSize(find.byType(GridView)).height;
+      await showWith(tester, navBar: 48, emoji: true);
+      expect(tester.getSize(find.byType(OrbitComposer)).height, composer);
+      expect(tester.getSize(find.byType(GridView)).height, grid + 48);
+    });
+  });
+
   group('the app\'s hooks', () {
     HelixMessageItem text(String id, String body, {bool out = false}) =>
         HelixMessageItem(
