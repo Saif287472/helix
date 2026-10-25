@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/engine/backup_policy.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/platform/app_info.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
@@ -150,7 +151,7 @@ final class HelixRuntime {
     HelixApi build() => HelixApi(
       baseUrl: serverUrl,
       sessions: DbSessionTokenStore(db),
-      clientName: config.deviceName,
+      clientName: appClientName(config.platform),
       sockets: pinned ? pinning.socketFactory : defaultSocketFactory,
       onRequestFailed: AnomalyLog.request,
       onSessionPersistFailed: (error, _) => AnomalyLog.state(
@@ -356,6 +357,14 @@ DevicePlatform get currentDevicePlatform => switch (defaultTargetPlatform) {
   TargetPlatform.windows => DevicePlatform.windows,
   _ => DevicePlatform.other,
 };
+
+/// The value this app sends as `x-helix-client`, e.g. `android/2.0.0`.
+///
+/// The header is for compatibility gating and support, which asks for the
+/// platform and the app build, not the device name: that one names this phone
+/// in the account's device list.
+String appClientName(DevicePlatform platform) =>
+    '${platform.wire}/$kAppVersion';
 
 /// [EngineConfig] for this device: its name and platform go to the server so
 /// the account's other devices can say which phone this is.

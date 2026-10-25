@@ -31,24 +31,20 @@ abstract interface class RuntimeFactory {
 /// The real factory: keystore, encrypted file on disk, live network.
 final class DeviceRuntimeFactory implements RuntimeFactory {
   DeviceRuntimeFactory({
+    required Future<EngineConfig> Function() config,
     SecureKeyStore? keys,
     PhoneBook? phoneBook,
-    Future<EngineConfig> Function()? config,
   }) : _keys = keys ?? SecureKeyStore(),
        _phoneBook = phoneBook ?? const DevicePhoneBook(),
-       _config = config ?? _defaultEngineConfig;
+       _config = config;
 
   final SecureKeyStore _keys;
   final PhoneBook _phoneBook;
-  final Future<EngineConfig> Function() _config;
 
-  /// Used when no configuration is injected. The real device name comes from
-  /// `engineConfigProvider`, which needs the platform plugin; this is the
-  /// fallback for a host without one.
-  static Future<EngineConfig> _defaultEngineConfig() async => engineConfigFor(
-    deviceName: 'Helix device',
-    platform: currentDevicePlatform,
-  );
+  /// The device name and platform the engine registers with. Required: a
+  /// fallback here would name the device `Helix device` and lose the model in
+  /// a way nothing would notice.
+  final Future<EngineConfig> Function() _config;
 
   @override
   Future<HelixRuntime> open({
@@ -72,6 +68,7 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
 
 final runtimeFactoryProvider = Provider<RuntimeFactory>(
   (ref) => DeviceRuntimeFactory(
+    config: () => ref.read(engineConfigProvider.future),
     phoneBook: DevicePhoneBook(
       access: ref.watch(contactsAccessProvider),
       country: ref.watch(phoneCountryProvider),

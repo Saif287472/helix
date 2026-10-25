@@ -1879,6 +1879,28 @@ upload pairs with B7's chunk protocol but does not require it.
   on Postgres**, `flutter analyze` clean. No wire change, no migration. The
   app's group-picture reader changed too, so a new APK would carry that half;
   the engine, server and transfer fixes need no APK.
+- S6 (AUD-14a-4) — the app sent `EngineConfig.deviceName` as `x-helix-client`,
+  and the runtime factory was built without the configuration provider, so
+  every app request and socket handshake carried the constant `Helix device`
+  (the documented value is `<platform>/<app version>`), while the CLI and the
+  console sent theirs correctly.
+  **What changed:** `HelixRuntime` names the client from the platform and the
+  app version (`appClientName`, e.g. `android/2.0.0`, the version constant the
+  About page already uses) instead of the device name; the realtime client
+  inherits it through `transport.clientName`. `DeviceRuntimeFactory` now
+  *requires* the config callback — a fallback was the way the constant
+  slipped in — and `runtimeFactoryProvider` supplies
+  `engineConfigProvider`, so the engine also registers with the real device
+  name it reports at sign-in. The push background keeps its own config (it
+  cannot touch providers) but now sends the same platform/version header.
+  Tests: new `app/test/client_identity_test.dart` — the helper's values, and a
+  real headless runtime's request through a loopback server carries
+  `android/2.0.0` (not the model in its config), with the socket's client
+  name the same; the runtime path is the one the factory opens, and the
+  factory's config is now a required argument.
+  Gate: the full app suite **1028 green** (2 new), `flutter analyze` clean on
+  the workspace. No wire change, no migration, no server change. A new APK
+  carries it.
 
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**
