@@ -1042,6 +1042,192 @@ void main() {
       expect(model.status, ListStatus.failed);
     });
   });
+
+  group('the offer probe', () {
+    /// [count] signed theme packs, their ids sorting in the order they are made.
+    Future<List<HostedPack>> folder(int count) async {
+      final packs = <HostedPack>[];
+      for (var i = 0; i < count; i++) {
+        packs.add(
+          await signedPack(
+            by: publisherKey,
+            id: 'pack${i.toString().padLeft(2, '0')}',
+            name: 'Pack $i',
+          ),
+        );
+      }
+      return packs;
+    }
+
+    test(
+      'a full folder is read a few manifests at a time, never more',
+      () async {
+        final packs = await folder(12);
+        final source = FakePackSource(packs);
+        const delay = Duration(milliseconds: 50);
+        source.manifestDelay = delay;
+        final ids = [for (final pack in packs) pack.manifest.id];
+
+        final clock = Stopwatch()..start();
+        final offered = await hostedPacks(source, 'theme', trusted);
+        clock.stop();
+
+        expect(offered.rows.map((offer) => offer.id), ids);
+        expect(offered.unverified, 0);
+        expect(source.manifests, hasLength(ids.length));
+        expect(source.manifests.toSet(), {for (final id in ids) '$id@1'});
+        // More than one read at a time is what makes this not the old loop; the
+        // bound is what keeps opening More themes from being a burst of 64.
+        expect(source.peakInFlight, greaterThan(1));
+        expect(
+          source.peakInFlight,
+          lessThanOrEqualTo(hostedPackProbeConcurrency),
+        );
+        expect(source.inFlight, 0);
+        // Twelve serialized reads take twelve delays; this is two waves of six.
+        expect(clock.elapsed, lessThan(delay * 6));
+      },
+    );
+
+    test(
+      'a second visit reads none of the manifests it already verified',
+      () async {
+        final source = FakePackSource([await signedPack(by: publisherKey)]);
+        final verified = <String, String>{};
+
+        final first = await hostedPacks(
+          source,
+          'theme',
+          trusted,
+          verified: verified,
+        );
+        expect(first.rows.single.id, 'synthwave');
+        expect(verified, {'synthwave@1': 'theme'});
+        expect(source.manifests, ['synthwave@1']);
+
+        final second = await hostedPacks(
+          source,
+          'theme',
+          trusted,
+          verified: verified,
+        );
+        expect(source.manifests, ['synthwave@1']);
+        expect(
+          second.rows.map((offer) => offer.id),
+          first.rows.map((offer) => offer.id),
+        );
+        expect(second.unverified, 0);
+      },
+    );
+
+    test(
+      'a revision the host adds is read, and the known one is not',
+      () async {
+        final source = FakePackSource([await signedPack(by: publisherKey)]);
+        final verified = <String, String>{};
+        await hostedPacks(source, 'theme', trusted, verified: verified);
+
+        source.packs.add(
+          await signedPack(by: publisherKey, revision: 2, name: 'Synthwave 2'),
+        );
+        final offered = await hostedPacks(
+          source,
+          'theme',
+          trusted,
+          verified: verified,
+        );
+        expect(source.manifests, ['synthwave@1', 'synthwave@2']);
+        expect(offered.rows.single.revision, 2);
+      },
+    );
+
+    test(
+      'the kind a manifest named is remembered, whichever page asks',
+      () async {
+        final source = FakePackSource([
+          await signedSoundPack(by: publisherKey),
+        ]);
+        final verified = <String, String>{};
+
+        var themes = await hostedPacks(
+          source,
+          'theme',
+          trusted,
+          verified: verified,
+        );
+        expect(themes.rows, isEmpty);
+        expect(themes.unverified, 1);
+        expect(verified, {'chime@1': 'sound'});
+        expect(source.manifests, ['chime@1']);
+
+        themes = await hostedPacks(
+          source,
+          'theme',
+          trusted,
+          verified: verified,
+        );
+        expect(source.manifests, ['chime@1']);
+        expect(themes.unverified, 1);
+
+        // The Ringtones page reads the same row as its own: the kind was proved
+        // once, so it costs nothing the second time.
+        final sounds = await hostedPacks(
+          source,
+          'sound',
+          trusted,
+          verified: verified,
+        );
+        expect(source.manifests, ['chime@1']);
+        expect(sounds.rows.single.id, 'chime');
+      },
+    );
+
+    test(
+      'one pack the host will not answer for does not hide the others, and is '
+      'asked again',
+      () async {
+        final source = FakePackSource([
+          await signedPack(by: publisherKey, id: 'alpha', name: 'Alpha'),
+          await signedPack(by: publisherKey, id: 'beta', name: 'Beta'),
+        ]);
+        source.failing = {'alpha'};
+        final verified = <String, String>{};
+
+        final offered = await hostedPacks(
+          source,
+          'theme',
+          trusted,
+          verified: verified,
+        );
+        expect(offered.rows.map((offer) => offer.id), ['beta']);
+        expect(offered.unverified, 1);
+        // Only the pack that answered was remembered: an outage is not a fact
+        // about the pack, so alpha is asked again.
+        expect(verified, {'beta@1': 'theme'});
+
+        await hostedPacks(source, 'theme', trusted, verified: verified);
+        expect(source.manifests, ['alpha@1', 'beta@1', 'alpha@1']);
+      },
+    );
+
+    test('leaving More themes and coming back asks the host nothing', () async {
+      final source = FakePackSource([await signedPack(by: publisherKey)]);
+      final container = libraryContainer(source: source);
+
+      final page = container.listen(hostedPacksProvider, (_, _) {});
+      await container.read(hostedPacksProvider.future);
+      expect(source.manifests, ['synthwave@1']);
+
+      // The page closes: its autoDispose provider goes away, the session's
+      // verified kinds do not.
+      page.close();
+      await container.pump();
+      expect(container.exists(hostedPacksProvider), isFalse);
+
+      await container.read(hostedPacksProvider.future);
+      expect(source.manifests, ['synthwave@1']);
+    });
+  });
   group('storage', () {
     test('theme packs are counted as themselves, not as media', () async {
       final base = await AppPaths.appDirectory();

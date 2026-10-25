@@ -191,6 +191,20 @@ final class FakePackSource implements PackSource {
   final List<HostedPack> packs;
   final List<String> fetched = [];
 
+  /// Every manifest read, as `id@revision`, in the order the reads began.
+  final List<String> manifests = [];
+
+  /// How long each manifest read takes; the probe's scheduling is measured
+  /// against it.
+  Duration manifestDelay = Duration.zero;
+
+  /// Manifest reads in flight, and the most that ever were at once.
+  int inFlight = 0;
+  int peakInFlight = 0;
+
+  /// Ids whose manifest read throws instead of answering.
+  Set<String> failing = const {};
+
   HostedPack _one(String id, int revision) => packs.firstWhere(
     (p) => p.manifest.id == id && p.manifest.revision == revision,
     orElse: () => throw StateError('the host holds no $id r$revision'),
@@ -202,8 +216,20 @@ final class FakePackSource implements PackSource {
   ];
 
   @override
-  Future<List<int>> manifest(String id, int revision) async =>
-      _one(id, revision).manifestBytes;
+  Future<List<int>> manifest(String id, int revision) async {
+    manifests.add('$id@$revision');
+    inFlight++;
+    if (inFlight > peakInFlight) peakInFlight = inFlight;
+    try {
+      if (manifestDelay > Duration.zero) {
+        await Future<void>.delayed(manifestDelay);
+      }
+      if (failing.contains(id)) throw StateError('no answer for $id');
+      return _one(id, revision).manifestBytes;
+    } finally {
+      inFlight--;
+    }
+  }
 
   @override
   Future<List<int>> file(String id, int revision, String digest) async {

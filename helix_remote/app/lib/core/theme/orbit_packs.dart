@@ -720,6 +720,22 @@ final class PackOffers {
 /// market. What is past it is simply not offered.
 const hostedPackProbe = 64;
 
+/// How many manifest reads [hostedPacks] has in flight at once.
+///
+/// Parallel enough that a folder is not walked one server round trip at a time,
+/// small enough that opening More themes is not a burst of 64 requests at a
+/// phone's link.
+const hostedPackProbeConcurrency = 6;
+
+/// The kinds this session has verified, by `id@revision` - [hostedPacks]'
+/// `verified` map.
+///
+/// A manifest is signed and a revision is immutable, so the answer cannot
+/// change while the app runs. Kept outside the pages' `autoDispose` providers
+/// on purpose: leaving More themes and coming back asks only about revisions
+/// this session has not seen, not the whole folder again.
+final verifiedPackKindsProvider = Provider<Map<String, String>>((ref) => {});
+
 /// Every pack [source] offers that this app could use, of the [contents] kind.
 ///
 /// The list route says nothing about what a row *is* - `contents` lives inside
@@ -729,14 +745,20 @@ const hostedPackProbe = 64;
 /// the word comes from the publisher's signature, not from a server's guess, and
 /// a row that cannot be verified is not offered at all rather than offered and
 /// refused after a tap. Nothing here downloads a file, so the cost is one small
-/// read per pack id.
+/// read per pack id, a few at a time.
 ///
-/// [publishers] is this build's anchor; [hostedPackProbe] bounds the reads.
+/// [publishers] is this build's anchor; [hostedPackProbe] bounds the reads and
+/// [hostedPackProbeConcurrency] how many run at once. [verified] is the
+/// session's memory of manifests already checked: a hit for the same
+/// `id@revision` answers without a request. Only a manifest that fully verified
+/// is remembered - a timeout or a refusal is asked again next visit, because an
+/// outage is not a fact about the pack.
 Future<PackOffers> hostedPacks(
   PackSource source,
   String contents,
-  Map<String, List<int>> publishers,
-) async {
+  Map<String, List<int>> publishers, {
+  Map<String, String>? verified,
+}) async {
   final newest = <String, OrbitPackEntry>{};
   for (final entry in await source.list()) {
     final best = newest[entry.id];
@@ -745,27 +767,52 @@ Future<PackOffers> hostedPacks(
     }
   }
   final ids = newest.values.map((e) => e.id).toList()..sort();
-  final listed = ids.take(hostedPackProbe).length;
-  final rows = <PackOffer>[];
-  var unverified = 0;
-  for (final id in ids.take(hostedPackProbe)) {
-    final entry = newest[id]!;
-    try {
-      final check = await checkOrbitPackManifest(
-        manifestBytes: await source.manifest(entry.id, entry.revision),
-        trustedPublishers: publishers,
-      );
-      final manifest = check.manifest;
-      if (manifest != null && manifest.contents == contents) {
-        rows.add(PackOffer(entry: entry, contents: contents));
-      } else {
-        unverified++;
+  final probed = ids.take(hostedPackProbe).toList();
+  final kinds = List<String?>.filled(probed.length, null);
+  var cursor = 0;
+
+  Future<void> probe() async {
+    while (cursor < probed.length) {
+      final index = cursor++;
+      final entry = newest[probed[index]]!;
+      final key = '${entry.id}@${entry.revision}';
+      final known = verified?[key];
+      if (known != null) {
+        kinds[index] = known;
+        continue;
       }
-    } on Object {
-      unverified++; // One pack the host will not answer for is not an offer.
+      try {
+        final check = await checkOrbitPackManifest(
+          manifestBytes: await source.manifest(entry.id, entry.revision),
+          trustedPublishers: publishers,
+        );
+        final manifest = check.manifest;
+        if (manifest == null) continue;
+        kinds[index] = manifest.contents;
+        verified?[key] = manifest.contents;
+      } on Object {
+        // One pack the host will not answer for is not an offer, and an
+        // outage is asked again next visit.
+      }
     }
   }
-  return PackOffers(rows: rows, unverified: unverified + ids.length - listed);
+
+  await Future.wait([
+    for (var i = 0; i < hostedPackProbeConcurrency && i < probed.length; i++)
+      probe(),
+  ]);
+
+  final rows = <PackOffer>[];
+  var unverified = ids.length - probed.length;
+  for (var i = 0; i < probed.length; i++) {
+    final entry = newest[probed[i]]!;
+    if (kinds[i] == contents) {
+      rows.add(PackOffer(entry: entry, contents: contents));
+    } else {
+      unverified++;
+    }
+  }
+  return PackOffers(rows: rows, unverified: unverified);
 }
 
 /// The host lists no pack with this id (or no such revision).

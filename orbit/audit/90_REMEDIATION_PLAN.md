@@ -2118,6 +2118,37 @@ packs only.
   group-create picture test caught the sibling-merge side effect before the
   `container: true` fix), `flutter analyze` clean on the workspace. No wire
   change, no migration, no server change. A new APK carries the change.
+- S5 (AUD-14j-2) — `hostedPacks` read one signed manifest per pack id in a
+  serial `await` under the 64-id cap, inside an `autoDispose` provider: a full
+  folder cost 64 round trips per visit to More themes and the whole sum again
+  on every revisit, with the page on "loading" for the duration and the host
+  absorbing the reads. Nothing was remembered between calls.
+  **What changed:** the probe runs through a small worker pool
+  (`hostedPackProbeConcurrency = 6`), so twelve ids take two waves instead of
+  twelve round trips while the cap stays the market bound. A session-level
+  [verifiedPackKindsProvider](file:///J:/Projects/helix/helix_remote/app/lib/core/theme/orbit_packs.dart#L737)
+  (`Provider<Map<String, String>>`, deliberately outside the pages'
+  autoDispose providers) remembers the kind a manifest verified as, keyed
+  `id@revision`; `hostedPacks` takes that map as `verified`, answers a hit
+  without a request, and writes only a manifest that fully verified - an
+  outage or a refusal is asked again next visit, because it is not a fact about
+  the pack. Both pages pass the same map, so a kind proved for More themes is
+  free for Ringtones. Rows are still assembled in id order and the
+  cap/`unverified` accounting is unchanged, so what is offered does not change.
+  Tests: `app/test/settings/theme_packs_test.dart` — twelve signed packs with a
+  50 ms manifest delay: all twelve offered from one read each, peak in-flight
+  between 2 and 6, none left in flight, finished inside six delays (two
+  waves); a second call with the same map reads nothing and returns the same
+  rows; a revision the host adds reads only `synthwave@2`; a sound pack is
+  counted unverified on the themes page and offered on the sounds page with no
+  second read; one failing id still offers the other, and only the answered
+  pack is remembered; and closing the autoDispose page provider and reopening
+  it issues no manifest request. The fake host gained `manifests`,
+  `manifestDelay`, `inFlight`/`peakInFlight` and a `failing` id set.
+  Gate: the app's theme-pack file **51 green** (45 before), the sounds file
+  **20 green**, the full app **1038 green** (1032 before), `flutter analyze`
+  clean on the workspace. No wire change, no migration, no server change. A
+  new APK carries the change.
 
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**

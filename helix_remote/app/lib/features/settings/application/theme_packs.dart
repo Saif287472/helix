@@ -73,6 +73,7 @@ final hostedPacksProvider = FutureProvider.autoDispose<PackOffers>(
     ref.watch(packSourceProvider),
     'theme',
     ref.watch(packPublishersProvider),
+    verified: ref.watch(verifiedPackKindsProvider),
   ),
 );
 

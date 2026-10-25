@@ -52,6 +52,7 @@ final hostedSoundsProvider = FutureProvider.autoDispose<PackOffers>(
     ref.watch(packSourceProvider),
     'sound',
     ref.watch(packPublishersProvider),
+    verified: ref.watch(verifiedPackKindsProvider),
   ),
 );
 
