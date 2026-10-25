@@ -220,13 +220,6 @@ final class GroupRosterSync {
     final avatar = content == null
         ? existing?.avatar
         : _avatarBytes(content.avatar);
-    final oldMeta = await _keyring.meta(groupId);
-    final meta = GroupMeta(
-      settings: group.settings,
-      description: content == null ? oldMeta.description : content.description,
-      homeServer: group.homeServer,
-      avatar: content == null ? oldMeta.avatar : content.avatar,
-    );
     final now = _ctx.now();
     final conversation = GroupIds.conversationId(groupId);
     final rows = [
@@ -246,20 +239,38 @@ final class GroupRosterSync {
     var applied = false;
     final unconfirmed = <String>[];
     await _db.transaction(() async {
+      final current = await _db.groupsDao.byId(groupId);
+      // Both guards are re-read inside the transaction that writes them
+      // (AUD-12e-2): the row read before it can be stale by now, and a
+      // concurrent `setState` must not be replaced by an older state, title
+      // or description. A newer roster than this answer belongs to another
+      // apply or a roster change that landed meanwhile; this answer adds
+      // nothing to it.
+      if (current != null && group.epoch < current.epoch) {
+        applied = false;
+        return;
+      }
+      final keepStored =
+          current != null &&
+          current.state != null &&
+          (rolledBack || current.stateVersion > group.stateVersion);
+      final storedTitle = keepStored ? current.title : title;
+      final storedAvatar = keepStored ? current.avatar : avatar;
       await _db.groupsDao.upsert(
         GroupsCompanion.insert(
           id: groupId,
-          title: title,
-          avatar: Value(avatar),
+          title: storedTitle,
+          avatar: Value(storedAvatar),
           role: me.role.wire,
-          epoch: existing == null ? Value(group.epoch) : const Value.absent(),
-          state: rolledBack
+          epoch: current == null ? Value(group.epoch) : const Value.absent(),
+          state: keepStored
               ? const Value.absent()
               : Value(Uint8List.fromList(group.encryptedState)),
-          stateVersion: rolledBack
+          stateVersion: keepStored
               ? const Value.absent()
               : Value(group.stateVersion),
-          createdAt: existing?.createdAt ?? group.createdAt,
+          createdAt:
+              current?.createdAt ?? existing?.createdAt ?? group.createdAt,
         ),
       );
       applied = await _db.groupsDao.replaceRoster(
@@ -270,15 +281,28 @@ final class GroupRosterSync {
       if (!applied) return;
       await _db.conversationsDao.ensureGroup(
         conversation,
-        title: title.isEmpty ? null : title,
-        avatar: avatar,
+        title: storedTitle.isEmpty ? null : storedTitle,
+        avatar: storedAvatar,
         now: now,
       );
       await _db.conversationsDao.setMembers(conversation, [
         for (final m in group.members)
           if (m.account != self) m.account,
       ]);
-      await _keyring.saveMeta(groupId, meta);
+      await _keyring.saveServerMeta(
+        groupId,
+        settings: group.settings,
+        homeServer: group.homeServer,
+      );
+      // The state's fields are only as new as the blob opened above; a
+      // state written concurrently already saved its own.
+      if (content != null && !keepStored) {
+        await _keyring.saveContentMeta(
+          groupId,
+          description: content.description,
+          avatar: content.avatar,
+        );
+      }
       // Members the server added that nothing explains are held back in the
       // same transaction as the roster: no send can run in between.
       if (existing != null && previous.isNotEmpty) {
@@ -429,15 +453,10 @@ final class GroupRosterSync {
       avatar: avatar,
       now: _ctx.now(),
     );
-    final meta = await _keyring.meta(groupId);
-    await _keyring.saveMeta(
+    await _keyring.saveContentMeta(
       groupId,
-      GroupMeta(
-        settings: meta.settings,
-        description: content.description,
-        homeServer: meta.homeServer,
-        avatar: content.avatar,
-      ),
+      description: content.description,
+      avatar: content.avatar,
     );
   }
 

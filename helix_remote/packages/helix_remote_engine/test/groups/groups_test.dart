@@ -169,13 +169,12 @@ void main() {
           .toList();
       expect(asked, hasLength(1));
       final groupId = asked.single.split('/').last;
-      final stored = await alice.db.settingsDao.get(
-        Setting<String?>('group.keys.$groupId', null),
+      final stored = await alice.db.settingsDao.entriesWithPrefix(
+        'group.key.$groupId.',
       );
-      // Compared as a boolean, so that a failure cannot print key material.
       expect(
-        stored == null,
-        isTrue,
+        stored,
+        isEmpty,
         reason: 'the key went with the group that is not there',
       );
     });

@@ -548,10 +548,17 @@ void main() {
           expect((await g.alice.db.groupsDao.byId(g.id))!.epoch, 1);
           // Both hold the key of epoch 1 (the rotation ran and was shared).
           for (final user in [g.alice, g.bob]) {
-            final keys = await user.db.settingsDao.get(
-              Setting<String?>('group.keys.${g.id}', null),
+            final keys = await user.db.settingsDao.entriesWithPrefix(
+              'group.key.${g.id}.',
             );
-            expect(keys, contains('"1"'), reason: user.name);
+            expect(
+              [
+                for (final key in keys.keys)
+                  key.substring('group.key.${g.id}.'.length),
+              ],
+              contains('1'),
+              reason: user.name,
+            );
           }
         });
         await g.alice.engine.groups.rename(g.id, 'Two of us');

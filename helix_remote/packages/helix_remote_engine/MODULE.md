@@ -614,7 +614,7 @@ direct chats. Supersedes the Groups bullet of "Not here yet".
 
 ```
 group_ids.dart          GroupIds (conversation id `group:<id>`), GroupLimits, notice kinds
-group_keyring.dart      group master keys per epoch + GroupMeta (settings, description) in `settings`;
+group_keyring.dart      group master keys per epoch + GroupMeta, one `settings` row per entry;
                         sealing and opening the state blob (SealedBlobCipher.groupState)
 sender_key_store.dart   SenderKeyStore over `sender_keys`; commits GroupCryptoWrites
 group_roster.dart       GroupRosterSync: server roster -> groups / group_members / conversation;
@@ -639,9 +639,15 @@ group this account left or was removed from: read-only history. `groups.avatar`
 and `conversations.avatar` hold the picture's `MediaPointer` JSON until the
 transfer queue and the app resolve it.
 
-**State kept in `settings`** (no schema change): `group.keys.<id>` (epoch to
-group master key, newest 4 epochs) and `group.meta.<id>` (the plain
-`GroupSettings`, the decrypted description and picture pointer, home server).
+**State kept in `settings`** (no schema change): one row per entry, so a write
+is an upsert or a delete of exactly the entry it is about - `group.key.<id>.<epoch>`
+(the group master keys, newest 4 epochs), `group.pending.<id>.<account>` (the
+reason a member waits) and `group.explained.<id>.<account>`, and
+`group.meta.<id>.{settings,description,home_server,avatar}` (the plain
+`GroupSettings` and home server from the roster, the decrypted description
+and picture pointer from the state). The whole-document shapes these replaced
+(`group.keys.<id>`, `group.pending.<id>`, `group.explained.<id>`,
+`group.meta.<id>`) are migrated on first read and dropped.
 
 **Roster.** The server is the authority. `GroupRosterSync.refresh` reads
 `GET /v1/groups/{id}` and replaces the roster in one transaction;
@@ -658,6 +664,25 @@ member's sender keys are dropped, and `GroupMembershipLost` /
 `GroupJoinRequested` are emitted. Removal, leave, ban and delete forget the
 group (roster, keys, sender keys) and keep the chat. Bans are known only to the
 device that made them: the server has no ban list to read.
+
+**Writes that cannot drop each other** (AUD-12e-2). The per-entry rows above
+exist because a confirm, an explanation, a roster apply and a rotation all
+wrote the same documents. `confirm` read the pending map, a roster apply
+inserted a member it held back, and the confirm then wrote the map it had
+read: the member was released, permanently - the hold-back only marks accounts
+new to the previous roster, so no later refresh re-holds them, and that gate is
+the only defence against a server adding someone silently. Two rotations could
+likewise lose an epoch key (the state sealed under it unreadable here), and
+two metadata writers could restore an old description. Now each marker and
+each key is its own row, and the metadata is split so the fields the server
+states and the fields the state carries are written by disjoint rows. The
+roster apply additionally re-reads the group row *inside* the transaction that
+writes it: a state, title or description is only written when it is not older
+than the stored one (a `setState` that landed in between wins), and a roster
+older than the stored epoch writes nothing. A legacy-document migration that
+interleaves with a live write can re-insert an entry it read before the
+release landed; that errs toward withholding (the member waits again), never
+toward releasing.
 
 **Sending.** `ChatsService` writes the optimistic row and a
 `send_group_content` op (`conversation_id = group:<id>`, so the chat's ops stay
@@ -791,7 +816,8 @@ reasoning and the open items):
 - **Groups**: a stored state is never replaced by an older `stateVersion`
   (`RosterUpdate.stateRolledBack`); the version is in the state blob's AAD.
   Members the server adds that nothing explains are *pending*
-  (`GroupTrust`, settings keys `group.pending.<id>` / `group.explained.<id>`):
+  (`GroupTrust`, settings rows `group.pending.<id>.<account>` /
+  `group.explained.<id>.<account>`):
   `GroupsService.pendingMembers`, `watchPendingMembers`, `confirmMember`;
   `GroupMemberUnconfirmed` event; `member_unconfirmed` notice (suggested
   text: "X was added by the server roster"; `fields.reason` is `unattributed`

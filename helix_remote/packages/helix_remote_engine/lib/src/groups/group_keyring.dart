@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:helix_remote_crypto/v2.dart';
@@ -62,36 +63,95 @@ final class GroupMeta {
 /// sealed under the epoch it was last written in, so after a removal bumps
 /// the epoch the blob can still be under the old key until a member re-seals
 /// it: opening tries the held epochs from the newest down. Keys live in
-/// `settings` as `group.keys.<group id>` (epoch to key); only the newest
-/// [GroupLimits.keptEpochKeys] are kept. The database is SQLCipher-protected
-/// like every other key here.
+/// `settings` one row per epoch, `group.key.<group id>.<epoch>`; only the
+/// newest [GroupLimits.keptEpochKeys] are kept. The per-field rows make a
+/// key write one upsert, so two rotations cannot drop each other's epoch
+/// (AUD-12e-2), and the same holds for the group's metadata below. The
+/// database is SQLCipher-protected like every other key here.
 final class GroupKeyring {
   GroupKeyring(this._ctx);
 
   final EngineContext _ctx;
 
-  static Setting<String?> _keys(String groupId) =>
+  static String _keyPrefix(String groupId) => 'group.key.$groupId.';
+
+  static String _metaPrefix(String groupId) => 'group.meta.$groupId.';
+
+  /// The whole-map document written before AUD-12e-2.
+  static Setting<String?> _legacyKeys(String groupId) =>
       Setting<String?>('group.keys.$groupId', null);
 
-  static Setting<String?> _meta(String groupId) =>
+  /// The one-document metadata written before AUD-12e-2.
+  static Setting<String?> _metaDoc(String groupId) =>
       Setting<String?>('group.meta.$groupId', null);
+
+  static Setting<String?> _keyRow(String groupId, int epoch) =>
+      Setting<String?>('${_keyPrefix(groupId)}$epoch', null);
+
+  static Setting<String?> _metaSettings(String groupId) =>
+      Setting<String?>('${_metaPrefix(groupId)}settings', null);
+
+  static Setting<String?> _metaDescription(String groupId) =>
+      Setting<String?>('${_metaPrefix(groupId)}description', null);
+
+  static Setting<String?> _metaHomeServer(String groupId) =>
+      Setting<String?>('${_metaPrefix(groupId)}home_server', null);
+
+  static Setting<String?> _metaAvatar(String groupId) =>
+      Setting<String?>('${_metaPrefix(groupId)}avatar', null);
+
+  SettingsDao get _settings => _ctx.db.settingsDao;
+
+  static String? _decodeString(String stored) {
+    try {
+      final json = jsonDecode(stored);
+      return json is String ? json : null;
+    } on FormatException {
+      return null;
+    }
+  }
 
   // ---------------------------------------------------------------- keys
 
-  /// The held keys of [groupId], by epoch.
-  Future<Map<int, Uint8List>> keys(String groupId) async {
-    final stored = await _ctx.db.settingsDao.get(_keys(groupId));
-    if (stored == null) return {};
+  /// Moves the pre-AUD-12e-2 epoch map into rows, then drops it.
+  Future<void> _migrateKeys(String groupId) async {
+    final stored = await _settings.get(_legacyKeys(groupId));
+    if (stored == null) return;
     try {
       final json = (jsonDecode(stored) as Map).cast<String, Object?>();
-      return {
-        for (final e in json.entries)
-          if (int.tryParse(e.key) != null && e.value is String)
-            int.parse(e.key): decodeBytes(e.value! as String),
-      };
+      final now = _ctx.now();
+      for (final entry in json.entries) {
+        final epoch = int.tryParse(entry.key);
+        if (epoch == null || entry.value is! String) continue;
+        await _settings.set(
+          _keyRow(groupId, epoch),
+          entry.value! as String,
+          now: now,
+        );
+      }
     } on Object {
-      return {};
+      // A corrupt document holds no key, exactly as the old parser read it.
     }
+    await _settings.reset(_legacyKeys(groupId));
+  }
+
+  /// The held keys of [groupId], by epoch.
+  Future<Map<int, Uint8List>> keys(String groupId) async {
+    await _migrateKeys(groupId);
+    final prefix = _keyPrefix(groupId);
+    final rows = await _settings.entriesWithPrefix(prefix);
+    final held = <int, Uint8List>{};
+    for (final row in rows.entries) {
+      final epoch = int.tryParse(row.key.substring(prefix.length));
+      final encoded = _decodeString(row.value);
+      if (epoch == null || encoded == null) continue;
+      try {
+        held[epoch] = decodeBytes(encoded);
+      } on FormatException {
+        // A corrupt row holds no key; it must not fail every reader.
+      }
+    }
+    return held;
   }
 
   Future<Uint8List?> keyFor(String groupId, int epoch) async =>
@@ -99,33 +159,139 @@ final class GroupKeyring {
 
   /// Stores the key of [epoch], dropping the oldest beyond the kept count.
   Future<void> put(String groupId, int epoch, List<int> key) async {
-    final all = await keys(groupId);
-    all[epoch] = Uint8List.fromList(key);
-    final epochs = all.keys.toList()..sort();
-    while (epochs.length > GroupLimits.keptEpochKeys) {
-      all.remove(epochs.removeAt(0));
-    }
-    await _ctx.db.settingsDao.set(
-      _keys(groupId),
-      jsonEncode({
-        for (final e in all.entries) '${e.key}': encodeBytes(e.value),
-      }),
+    await _migrateKeys(groupId);
+    await _settings.set(
+      _keyRow(groupId, epoch),
+      encodeBytes(key),
       now: _ctx.now(),
     );
+    final epochs = (await keys(groupId)).keys.toList()..sort();
+    final excess = max(0, epochs.length - GroupLimits.keptEpochKeys);
+    for (final stale in epochs.take(excess)) {
+      await _settings.reset(_keyRow(groupId, stale));
+    }
   }
 
   Future<void> forget(String groupId) async {
-    await _ctx.db.settingsDao.reset(_keys(groupId));
-    await _ctx.db.settingsDao.reset(_meta(groupId));
+    await _settings.resetWithPrefix(_keyPrefix(groupId));
+    await _settings.reset(_legacyKeys(groupId));
+    await _settings.resetWithPrefix(_metaPrefix(groupId));
+    await _settings.reset(_metaDoc(groupId));
   }
 
   // ---------------------------------------------------------------- meta
 
-  Future<GroupMeta> meta(String groupId) async =>
-      GroupMeta.decode(await _ctx.db.settingsDao.get(_meta(groupId)));
+  /// Moves the pre-AUD-12e-2 metadata document into rows, then drops it.
+  /// Fields that already have a row are kept: a write that landed while the
+  /// migration ran is newer than the document.
+  Future<void> _migrateMeta(String groupId) async {
+    final raw = await _settings.get(_metaDoc(groupId));
+    if (raw == null) return;
+    final meta = GroupMeta.decode(raw);
+    final now = _ctx.now();
+    if (await _settings.get(_metaSettings(groupId)) == null) {
+      await _settings.set(
+        _metaSettings(groupId),
+        jsonEncode(meta.settings.toJson()),
+        now: now,
+      );
+    }
+    if (meta.description != null &&
+        await _settings.get(_metaDescription(groupId)) == null) {
+      await _settings.set(
+        _metaDescription(groupId),
+        meta.description!,
+        now: now,
+      );
+    }
+    if (meta.homeServer != null &&
+        await _settings.get(_metaHomeServer(groupId)) == null) {
+      await _settings.set(_metaHomeServer(groupId), meta.homeServer!, now: now);
+    }
+    if (meta.avatar != null &&
+        await _settings.get(_metaAvatar(groupId)) == null) {
+      await _settings.set(
+        _metaAvatar(groupId),
+        jsonEncode(meta.avatar),
+        now: now,
+      );
+    }
+    await _settings.reset(_metaDoc(groupId));
+  }
 
-  Future<void> saveMeta(String groupId, GroupMeta meta) => _ctx.db.settingsDao
-      .set(_meta(groupId), jsonEncode(meta.toJson()), now: _ctx.now());
+  Future<GroupMeta> meta(String groupId) async {
+    await _migrateMeta(groupId);
+    return GroupMeta(
+      settings: _decodeSettings(await _settings.get(_metaSettings(groupId))),
+      description: await _settings.get(_metaDescription(groupId)),
+      homeServer: await _settings.get(_metaHomeServer(groupId)),
+      avatar: _decodeMap(await _settings.get(_metaAvatar(groupId))),
+    );
+  }
+
+  /// The fields the server states in plain form (they arrive with every
+  /// roster read, so they are the server's to set, not the state's).
+  Future<void> saveServerMeta(
+    String groupId, {
+    required GroupSettings settings,
+    String? homeServer,
+  }) async {
+    await _migrateMeta(groupId);
+    final now = _ctx.now();
+    await _settings.set(
+      _metaSettings(groupId),
+      jsonEncode(settings.toJson()),
+      now: now,
+    );
+    if (homeServer == null) {
+      await _settings.reset(_metaHomeServer(groupId));
+    } else {
+      await _settings.set(_metaHomeServer(groupId), homeServer, now: now);
+    }
+  }
+
+  /// The fields that come from the decrypted state. Null clears the stored
+  /// value: the state, which only members can read, says there is none.
+  ///
+  /// Separate from [saveServerMeta] so a roster read and a state re-open
+  /// write disjoint rows rather than read-modify-writing one document
+  /// (AUD-12e-2: the loser restored an old description).
+  Future<void> saveContentMeta(
+    String groupId, {
+    String? description,
+    JsonMap? avatar,
+  }) async {
+    await _migrateMeta(groupId);
+    final now = _ctx.now();
+    if (description == null) {
+      await _settings.reset(_metaDescription(groupId));
+    } else {
+      await _settings.set(_metaDescription(groupId), description, now: now);
+    }
+    if (avatar == null) {
+      await _settings.reset(_metaAvatar(groupId));
+    } else {
+      await _settings.set(_metaAvatar(groupId), jsonEncode(avatar), now: now);
+    }
+  }
+
+  static GroupSettings _decodeSettings(String? stored) {
+    if (stored == null) return const GroupSettings();
+    try {
+      return GroupSettings.fromJson(JsonReader.decode(stored));
+    } on FormatException {
+      return const GroupSettings();
+    }
+  }
+
+  static JsonMap? _decodeMap(String? stored) {
+    if (stored == null) return null;
+    try {
+      return JsonReader.decode(stored).json;
+    } on FormatException {
+      return null;
+    }
+  }
 
   // --------------------------------------------------------------- state
 

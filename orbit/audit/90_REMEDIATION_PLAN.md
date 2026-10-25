@@ -1221,6 +1221,60 @@ update to be protected.
   (it is where the approval and two-server key paths actually run). No schema
   and no wire change; no APK needed for this step on its own.
 
+- S7 (AUD-12e-2) — the group's trust and key state were JSON documents in
+  `settings` read-modify-written by four actors with no CAS. A roster apply
+  held a member back inside its transaction; a `confirmMember` that had read
+  the pending map before it then wrote the map it held, and the member the
+  apply had just withheld was released — permanently, because the hold-back
+  only marks accounts new to the previous roster, so no later refresh re-holds
+  them, and that gate is the only defence against a server silently adding
+  someone. The same shape could drop an epoch key (the state sealed under it
+  unreadable on that device) and restore an old description.
+  **What changed:** every entry is one settings row — `group.key.<id>.<epoch>`,
+  `group.pending.<id>.<account>`, `group.explained.<id>.<account>` — and the
+  metadata is one row per field, split between the fields the server states
+  (`settings`, `home_server`) and the fields the decrypted state carries
+  (`description`, `avatar`), so a write is an upsert or a delete of exactly the
+  entry it is about and two writers cannot lose each other's. `SettingsDao`
+  gained prefix read/watch/reset/prune helpers and a `remove` that reports
+  whether the row was there (confirm and takeExplained are consumes).
+  `explain` prunes the markers by row age instead of the old FIFO list; `put`
+  writes its epoch and drops only epochs beyond `GroupLimits.keptEpochKeys`.
+  The four legacy documents are migrated on first read and dropped; a
+  migration that interleaves with a live write can re-insert an entry it read
+  before the release landed, which errs toward withholding, never toward
+  releasing.
+  **The state write:** `_apply` compared `stateVersion` with a row read
+  *before* its transaction and then wrote the state, title and avatar
+  unconditionally. It now re-reads the group row inside the transaction: a
+  roster older than the stored epoch writes nothing, and a stored state newer
+  than this answer (`rolledBack`, or a `setState` that landed meanwhile) keeps
+  its blob, version, title and avatar, with the state-derived metadata not
+  written at all.
+  Not done from the sketch: a `GroupStateStore` owning every write. With the
+  entries as rows there is no shared document left to lose, and the lock the
+  sketch warned about (taking `GroupRosterSync`'s non-reentrant lock inside
+  `_apply`) is not needed: `_apply` and `attributeAdded` already run under it,
+  and the writers left outside it (`confirm`, `explain`) only delete or upsert
+  their own rows.
+  Tests: `test/groups/group_store_test.dart`, seven tests over the stores
+  directly, where the interleaving is deterministic: "a confirm cannot drop a
+  member the roster holds back at the same time" and "two explanations landing
+  at once are both remembered" fail on the document shape (the first leaves
+  `{}`; the second loses one explanation), "two epoch keys stored at once both
+  survive" fails on the whole-map `put` (`[1, 3]` for `[1, 2, 3]`), and the
+  other four cover the retention bound and the four migrations. Two assertions
+  elsewhere read the old `group.keys.<id>` layout
+  (`packages/helix_remote_engine/test/groups/groups_test.dart` and
+  `server/test/client/engine/groups_test.dart`) and now read the per-entry row,
+  so they cannot pass vacuously.
+  Gate: engine suite **333 green**, db suite **140 green**, `dart analyze lib
+  test` clean in both, and `server/test/client/engine/groups_test.dart` **16
+  green** against Postgres. No schema change (the settings table carried it
+  all) and no wire change; no APK needed. Docs: engine MODULE.md "State kept in
+  settings", "Writes that cannot drop each other" and the pending-members
+  bullet.
+
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**
 
