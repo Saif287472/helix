@@ -3029,6 +3029,38 @@ the migration and dump that go with it).
   `version` column's doc comment, which drift copies). No schema, wire or
   server change; the app and CLI get it from the packages, and the phone needs
   a new APK to see it.
+- S5 (AUD-10-4) — `enqueueStandalone` looked its `purpose` up and returned
+  the existing id untouched, so a reused purpose kept the first call's path,
+  kind and state - `done` included, so the new file (a changed group picture,
+  the next backup blob) never went up - and two racing callers could each
+  insert a row. Its test asserted the stale path as the contract. Still no
+  production caller (only its own tests), so this is latent; S1 already chose
+  the "make reuse an update" side of the audit's either/or by adding the
+  unique index on `purpose`.
+  **What changed:** [`enqueueStandalone`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/daos/transfers_dao.dart)
+  is one `INSERT … ON CONFLICT (purpose) DO UPDATE`, so racing callers leave one
+  row. Asking again replaces what the job moves: the new kind and path, no
+  progress, no server object, no attempts, no error or lease, pending now -
+  and a fresh `created_at`, which the audit's sketch did not name but which
+  matters: the worker gives up on a job older than `maxAge` (30 days), so a
+  purpose reused a month later would have given up on its first retryable
+  failure. The revision is raised too, so a worker still moving the old file
+  loses its claim (S4) and its writes change nothing. The old file is not
+  deleted: it is the caller's. The doc comment and `MODULE.md` say all of
+  this.
+  Tests: the pinned test now expects the second path. A new group in
+  [`transfers_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/test/transfers_test.dart):
+  a purpose finished after a failure and some progress, asked for again 40
+  days later, is pending with the new path, offset 0, no server object, no
+  attempts, the new `created_at`, and is claimable; one asked for again while
+  a worker holds it is pending and unleased with the new path, the old
+  claim's `markDone` and renewal are refused, and the next claim gets the new
+  file; two purposes are two jobs. The first three fail on the code before
+  this step (the old path, still `done`, still in flight). The cross-engine
+  race is covered by the statement's shape, not a two-connection test.
+  Gate: db **157 green** (154 before), `dart analyze` and `dart format` clean.
+  Nothing outside the db package calls it, so no other suite is affected. No
+  schema, wire or server change.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

@@ -65,26 +65,44 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
   );
 
   /// Queues a transfer that is not an attachment (a group avatar, a backup
-  /// blob), or returns the existing job for the same [purpose].
+  /// blob). There is one job per [purpose] (a unique index), and asking again
+  /// replaces what it moves (AUD-10-4): the new file, from nothing - no
+  /// progress, no server object, no attempts, a fresh `created_at` for the
+  /// give-up age - pending now, whatever state the job was in. A job a worker
+  /// is still running for the purpose is taken back (a new revision), so the
+  /// attempt moving the old file changes nothing.
+  ///
+  /// One upsert, so two callers racing for the same purpose leave one job.
+  /// The file the job named before is not deleted: it is the caller's.
   Future<int> enqueueStandalone({
     required String kind,
     required String purpose,
     required String localPath,
     required DateTime now,
-  }) async {
-    final existing = await byPurpose(purpose);
-    if (existing != null) return existing.id;
-    return into(transferJobs).insert(
-      TransferJobsCompanion.insert(
-        kind: kind,
-        purpose: Value(purpose),
-        localPath: Value(localPath),
-        state: TransferState.pending,
-        nextAttemptAt: now,
-        createdAt: now,
-      ),
+  }) => transaction(() async {
+    final at = Variable.withInt(now.millisecondsSinceEpoch);
+    await customInsert(
+      'INSERT INTO transfer_jobs '
+      '(kind, purpose, local_path, state, next_attempt_at, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?) '
+      'ON CONFLICT (purpose) DO UPDATE SET kind = excluded.kind, '
+      'local_path = excluded.local_path, media_id = NULL, size = 0, '
+      '"offset" = 0, state = excluded.state, attempts = 0, '
+      'next_attempt_at = excluded.next_attempt_at, lease_until = NULL, '
+      'last_error = NULL, created_at = excluded.created_at, '
+      'version = version + 1',
+      variables: [
+        Variable.withString(kind),
+        Variable.withString(purpose),
+        Variable.withString(localPath),
+        Variable.withString(TransferState.pending.name),
+        at,
+        at,
+      ],
+      updates: {transferJobs},
     );
-  }
+    return (await byPurpose(purpose))!.id;
+  });
 
   Future<int> _enqueue({
     required String kind,

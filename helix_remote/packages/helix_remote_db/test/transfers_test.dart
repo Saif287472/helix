@@ -138,9 +138,107 @@ void main() {
         expect(b, a);
         final standalone = (await transfers.byPurpose('group_avatar'))!;
         expect(standalone.attachmentRowid, isNull);
-        expect(standalone.localPath, 'media/avatar.bin');
+        expect(
+          standalone.localPath,
+          'media/avatar2.bin',
+          reason: 'asking again moves the new file (AUD-10-4)',
+        );
       },
     );
+
+    /// A reused purpose used to return the first job untouched: its old path,
+    /// its old state - `done`, so the new file never went up (AUD-10-4).
+    group('a standalone purpose asked for again', () {
+      Future<int> avatar(String path, {DateTime? now}) =>
+          transfers.enqueueStandalone(
+            kind: 'upload',
+            purpose: 'group_avatar',
+            localPath: path,
+            now: now ?? t0,
+          );
+
+      test('after it finished, moves the new file from nothing', () async {
+        final id = await avatar('media/avatar.bin');
+        final held = (await transfers.claim(
+          at(1),
+          lease: const Duration(seconds: 30),
+        ))!;
+        await transfers.setProgress(
+          id,
+          version: held.version,
+          offset: 4096,
+          mediaId: 'srv-1',
+        );
+        await transfers.fail(
+          id,
+          version: held.version,
+          code: 'network',
+          now: at(2),
+          backoff: Duration.zero,
+        );
+        final again = (await transfers.claim(
+          at(3),
+          lease: const Duration(seconds: 30),
+        ))!;
+        expect(await transfers.markDone(id, version: again.version), isTrue);
+
+        expect(await avatar('media/avatar2.bin', now: at(40 * 86400)), id);
+        final job = (await transfers.byId(id))!;
+        expect(
+          (job.kind, job.localPath, job.state, job.offset, job.mediaId),
+          ('upload', 'media/avatar2.bin', TransferState.pending, 0, null),
+        );
+        expect((job.attempts, job.lastError, job.leaseUntil), (0, null, null));
+        expect(
+          job.createdAt,
+          at(40 * 86400),
+          reason: 'its give-up age starts with the new file',
+        );
+        expect(
+          (await transfers.claim(
+            at(40 * 86400),
+            lease: const Duration(seconds: 30),
+          ))!.id,
+          id,
+        );
+      });
+
+      test('while a worker moves the old file, takes the job back', () async {
+        final id = await avatar('media/avatar.bin');
+        final held = (await transfers.claim(
+          at(1),
+          lease: const Duration(seconds: 30),
+        ))!;
+        await avatar('media/avatar2.bin', now: at(2));
+        final job = (await transfers.byId(id))!;
+        expect(
+          (job.state, job.leaseUntil, job.localPath),
+          (TransferState.pending, null, 'media/avatar2.bin'),
+        );
+        expect(await transfers.markDone(id, version: held.version), isFalse);
+        expect(
+          await transfers.renewLease(id, version: held.version, until: at(60)),
+          isFalse,
+        );
+        final next = (await transfers.claim(
+          at(2),
+          lease: const Duration(seconds: 30),
+        ))!;
+        expect((next.id, next.localPath), (id, 'media/avatar2.bin'));
+      });
+
+      test('other purposes are their own jobs', () async {
+        final a = await avatar('media/avatar.bin');
+        final b = await transfers.enqueueStandalone(
+          kind: 'upload',
+          purpose: 'full_backup',
+          localPath: 'backup/blob.bin',
+          now: t0,
+        );
+        expect(b, isNot(a));
+        expect(await transfers.pending(), hasLength(2));
+      });
+    });
 
     test('deleting the attachment deletes its job', () async {
       final id = await upload();

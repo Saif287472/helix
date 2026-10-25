@@ -192,7 +192,9 @@ No schema change; DAO methods only.
   the answer, and `wasMissed` is true only for an unanswered incoming call.
 - `TransfersDao`: `enqueueUpload`, `enqueueDownload` (one job per attachment;
   asking again returns the same job and leaves an in-flight one in flight),
-  `enqueueStandalone` (one per `purpose`), `byId`/`byAttachment`/`byPurpose`,
+  `enqueueStandalone` (one per `purpose`, by a unique index and one upsert;
+  asking again moves the new file from nothing and takes the job back from a
+  worker still on the old one, AUD-10-4), `byId`/`byAttachment`/`byPurpose`,
   `pending`/`watchPending`, `due`, `claim(now, lease:)` (oldest due job under a
   lease; an expired lease is claimable again and keeps its `offset`),
   `setProgress` (null keeps the stored value), `markDone`, `fail` (linear
