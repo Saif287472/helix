@@ -66,6 +66,11 @@ final class CliHome {
     }
     final key = DatabaseKey.generate();
     directory.createSync(recursive: true);
+    // Created empty and made private before the key goes in, so it is never
+    // readable by anyone else even for a moment (AUD-13-6). `chmod` is a
+    // POSIX tool; on Windows the file lives in the user's own profile.
+    keyFile.createSync();
+    if (!Platform.isWindows) Process.runSync('chmod', ['600', keyFile.path]);
     keyFile.writeAsStringSync(
       key.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
     );

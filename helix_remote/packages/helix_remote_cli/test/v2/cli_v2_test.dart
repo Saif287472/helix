@@ -67,6 +67,17 @@ void main() {
       expect(fileOnly.key(create: false), created);
     });
 
+    test(
+      'the key file is private to its owner (AUD-13-6)',
+      () {
+        final home = CliHome(dir);
+        home.key(create: true);
+        final mode = home.keyFile.statSync().mode & 511; // the 0777 bits
+        expect(mode, 384, reason: 'rw------- (0600)');
+      },
+      skip: Platform.isWindows ? 'POSIX file modes only' : false,
+    );
+
     test('a bad key is refused without echoing it', () {
       final home = CliHome(dir, env: {CliHome.keyEnvName: 'not-hex-at-all'});
       try {
@@ -142,6 +153,60 @@ void main() {
         expect(badIo.stderrLines.join(), contains('URL'));
       },
     );
+
+    /// Nothing secret crosses the network in the clear (AUD-13-1): the CLI
+    /// applies the same rule as the app, before any request is made.
+    test('plain http is refused unless it is local development', () async {
+      final home = ['--home', dir.path];
+      for (final server in [
+        'http://helix.example.org',
+        'http://192.168.1.5:8080',
+        'http://localhost.evil.example',
+        'https://user:pw@helix.example.org',
+        'ftp://helix.example.org',
+      ]) {
+        final (code, io) = await run([...home, '--server', server, 'chats']);
+        expect(code, 2, reason: server);
+        expect(io.stderrLines.join(), isNotEmpty);
+      }
+      final (code, io) = await run(
+        [...home, '--server', 'http://helix.example.org', 'chats'],
+        env: {'HELIX_SERVER': 'http://helix.example.org'},
+      );
+      expect(code, 2);
+      expect(io.stderrLines.join(), contains('https'));
+
+      // Local development must ask for it, and only for this machine.
+      expect(
+        (await run([...home, '--server', 'http://127.0.0.1:9', 'chats'])).$1,
+        2,
+      );
+      expect(
+        (await run(
+          [...home, '--server', 'http://127.0.0.1:9', 'chats'],
+          env: {'HELIX_ALLOW_LOCAL_HTTP': '1'},
+        )).$1,
+        1,
+        reason: 'past the address rule: "not signed in"',
+      );
+      expect(
+        (await run(
+          [...home, '--server', 'http://helix.example.org', 'chats'],
+          env: {'HELIX_ALLOW_LOCAL_HTTP': '1'},
+        )).$1,
+        2,
+        reason: 'the switch is for this machine only',
+      );
+      expect(
+        (await run([
+          ...home,
+          '--server',
+          'https://helix.example.org',
+          'chats',
+        ])).$1,
+        1,
+      );
+    });
 
     test('commands that need an account say so', () async {
       final (code, io) = await run([

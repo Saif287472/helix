@@ -27,7 +27,14 @@ final class ConsoleIo implements CliIo {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen(_onLine, onDone: _onDone);
-    ProcessSignal.sigint.watch().first.then((_) => _interrupted.complete());
+    // Kept for the life of the process: `.first` cancelled the watch after
+    // one signal. The first Ctrl-C completes [interrupted]; a second one
+    // while the command is still winding down ends the process, as Ctrl-C
+    // does everywhere (AUD-13-4).
+    ProcessSignal.sigint.watch().listen((_) {
+      if (_interrupted.isCompleted) exit(130);
+      _interrupted.complete();
+    });
   }
 
   late final StreamSubscription<String> _lines;
@@ -122,5 +129,12 @@ class BufferIo implements CliIo {
   }
 
   @override
-  Future<void> get interrupted => Completer<void>().future;
+  Future<void> get interrupted => _interrupted.future;
+
+  final Completer<void> _interrupted = Completer<void>();
+
+  /// Presses Ctrl-C (tests).
+  void interrupt() {
+    if (!_interrupted.isCompleted) _interrupted.complete();
+  }
 }

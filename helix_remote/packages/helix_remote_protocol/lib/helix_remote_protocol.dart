@@ -28,4 +28,5 @@ export 'src/modules/people.dart';
 export 'src/paging.dart';
 export 'src/realtime.dart';
 export 'src/routes.dart';
+export 'src/server_address.dart';
 export 'src/sealed.dart';

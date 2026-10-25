@@ -67,7 +67,9 @@ Messages (PEER: +E164, ~name, a contact name or an id prefix)
   chat PEER                        Interactive: lines you type are sent,
                                    incoming messages are printed. /quit exits.
   read PEER [--limit N]            Show the newest messages and mark them read.
-  react PEER MESSAGE_ID EMOJI      React to a message.
+  react PEER MESSAGE_ID EMOJI [--all]
+                                   React to a message (the newest 200 are
+                                   searched; --all searches the whole chat).
   fetch [--show]                   Download and decrypt waiting messages.
   watch [--count N] [--timeout S]  Print incoming messages as they arrive.
 
@@ -75,6 +77,9 @@ Devices
   devices                          List this account's devices.
   devices revoke ID                Revoke a device (an id prefix works).
   devices revoke-others            Revoke every device but this one.
+
+The server must be https://. For one on this machine while developing, set
+HELIX_ALLOW_LOCAL_HTTP=1 to allow http:// to localhost.
 
 The database key comes from HELIX_DB_KEY (64 hex characters) or the file
 db.key in the home directory (created on first use). Nothing prints it.
@@ -178,8 +183,34 @@ db.key in the home directory (created on first use). Nothing prints it.
         '--server needs a URL like https://helix.example.org',
       );
     }
+    // The same rule as the app: nothing in the clear. Plain http to this
+    // machine is for development only, and has to be asked for (AUD-13-1).
+    final problem = ServerAddressRule.check(
+      uri,
+      allowDevelopmentHttp: io.env[allowLocalHttpEnv] == '1',
+    );
+    if (problem != null) {
+      throw CliUsageError(switch (problem) {
+        ServerUrlProblem.notAUrl =>
+          '--server needs a URL like https://helix.example.org',
+        ServerUrlProblem.notHttps =>
+          'the server must be https:// (your password key and tokens would '
+              'cross the network in the clear). For a server on this machine '
+              'while developing, set $allowLocalHttpEnv=1.',
+        ServerUrlProblem.unusual =>
+          'the server address must be a plain https://host[:port], with no '
+              'user name, query or fragment',
+        ServerUrlProblem.lookalikeHost =>
+          'the server host must be plain ASCII letters, digits, dots and '
+              'dashes',
+      });
+    }
     return uri;
   }
+
+  /// Set to `1` to allow plain `http://` to `localhost`, `127.0.0.1` and
+  /// `10.0.2.2` (development only).
+  static const allowLocalHttpEnv = 'HELIX_ALLOW_LOCAL_HTTP';
 
   /// Opens the database, the API client and the engine, runs [body] and
   /// closes everything. Commands that start by creating the account pass
@@ -532,13 +563,22 @@ db.key in the home directory (created on first use). Nothing prints it.
     final row = await engine.chats.sendText(chat.id, text);
     await engine.drainOutbox();
     final status = (await engine.chats.message(row.localRowid))!.status;
+    final failed = status == MessageStatus.failed;
     _print(
       {'id': row.messageId, 'status': status.name, 'conversation': chat.id},
-      status == MessageStatus.pending
-          ? 'queued (the server could not be reached; it will go out on the '
-                'next run)'
-          : 'sent',
+      switch (status) {
+        MessageStatus.pending =>
+          'queued (the server could not be reached; it will go out on the '
+              'next run)',
+        MessageStatus.failed =>
+          'not sent: the server refused it (the person may have blocked '
+              'you, or the message could not be sent)',
+        _ => 'sent',
+      },
     );
+    // A message that did not go must not exit 0: a script would read it as
+    // delivered (AUD-13-2).
+    if (failed) throw CliError('the message was not sent');
   }
 
   Future<void> _chat(Engine engine, CliArgs args) async {
@@ -557,7 +597,11 @@ db.key in the home directory (created on first use). Nothing prints it.
     io.err('chatting with $label; /quit to leave');
     try {
       while (true) {
-        final line = await io.readLine('>');
+        final next = io.readLine('>');
+        final line = await Future.any<String?>([
+          next,
+          io.interrupted.then<String?>((_) => null),
+        ]);
         if (line == null || line.trim() == '/quit') break;
         if (line.trim().isEmpty) continue;
         await engine.chats.sendText(chat.id, line);
@@ -623,16 +667,28 @@ db.key in the home directory (created on first use). Nothing prints it.
     }
     final account = await _resolvePeer(engine, args.positional.first);
     final prefix = args.positional[1];
-    final page = await engine.chats.pageOlder(
-      directConversationId(account),
-      limit: 200,
-    );
-    final matches = page.messages
-        .where((m) => m.messageId.startsWith(prefix))
-        .toList();
+    final conversation = directConversationId(account);
+    // The newest 200 messages by default; --all walks the whole chat back.
+    var page = await engine.chats.pageOlder(conversation, limit: 200);
+    final matches = <MessageRow>[];
+    while (true) {
+      matches.addAll(
+        page.messages.where((m) => m.messageId.startsWith(prefix)),
+      );
+      if (matches.isNotEmpty || !args.flag('all') || !page.hasMore) break;
+      page = await engine.chats.pageOlder(
+        conversation,
+        before: page.oldestSortKey,
+        limit: 200,
+      );
+    }
     if (matches.length != 1) {
       throw CliError(
-        matches.isEmpty ? 'no such message' : 'ambiguous message id',
+        matches.isEmpty
+            ? (args.flag('all')
+                  ? 'no such message'
+                  : 'no such message in the newest 200 (try --all)')
+            : 'ambiguous message id',
       );
     }
     await engine.chats.react(matches.single.localRowid, args.positional[2]);
@@ -739,8 +795,11 @@ db.key in the home directory (created on first use). Nothing prints it.
           throw CliUsageError('devices revoke ID');
         }
         final prefix = args.positional[1];
+        // Refreshed first: a fresh home has no device list until one is
+        // fetched, and "no such device" for a device that exists is wrong
+        // (AUD-13-3).
         final matches = [
-          for (final d in await engine.devices.list())
+          for (final d in await engine.devices.refresh())
             if (d.deviceId.startsWith(prefix)) d,
         ];
         if (matches.length != 1) {

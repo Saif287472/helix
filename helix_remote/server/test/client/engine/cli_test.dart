@@ -44,7 +44,13 @@ void main() {
       Map<String, String> env = const {},
       List<String> input = const [],
     }) async {
-      final io = _Io(h, phone, env: env, input: input);
+      // The test server is plain http on this machine: development only.
+      final io = _Io(
+        h,
+        phone,
+        env: {'HELIX_ALLOW_LOCAL_HTTP': '1', ...env},
+        input: input,
+      );
       final code = await HelixCli(io).run([
         '--home',
         '${root.path}/$name',
@@ -152,12 +158,19 @@ void main() {
         final chats = await ok('alice', ['--json', 'chats']);
         expect(
           (lastJson(chats)['chats']! as List).single,
-          containsPair('name', 'Bobby'),
+          allOf(containsPair('name', 'Bobby'), containsPair('unread', 0)),
+          reason:
+              'Alice read what Bob answered (the old check was a string '
+              'against a list of maps and could not fail)',
         );
-        expect(lastJson(chats)['chats'], isNot(contains('unread: 1')));
 
         // Bob links a second CLI device: it shows a code, Bob approves it.
-        final linkIo = _Io(h, null, env: const {}, input: ['y']);
+        final linkIo = _Io(
+          h,
+          null,
+          env: const {'HELIX_ALLOW_LOCAL_HTTP': '1'},
+          input: ['y'],
+        );
         final linking = HelixCli(linkIo).run([
           '--home',
           '${root.path}/bob2',
@@ -228,6 +241,65 @@ void main() {
       },
     );
 
+    /// A message the outbox marked failed is not "sent" (AUD-13-2): a script
+    /// reading exit 0 and "sent" would take a blocked message for delivered.
+    test('a blocked recipient is told as a failure, not as sent', () async {
+      await run('alice', [
+        'register',
+        '--phone',
+        aliceNumber,
+      ], phone: aliceNumber);
+      await run('bob', ['register', '--phone', bobNumber], phone: bobNumber);
+      final (found, _) = await run('alice', [
+        'contacts',
+        'add',
+        bobNumber,
+        '--name',
+        'Bobby',
+      ]);
+      expect(found, 0);
+      final (bobFound, _) = await run('bob', [
+        'contacts',
+        'add',
+        aliceNumber,
+        '--name',
+        'Al',
+      ]);
+      expect(bobFound, 0);
+      expect((await run('bob', ['block', 'Al'])).$1, 0);
+
+      final (code, io) = await run('alice', ['--json', 'send', 'Bobby', 'hi']);
+      expect(lastJson(io)['status'], 'failed');
+      expect(code, 1, reason: 'a message that did not go is not exit 0');
+      expect(io.stderrLines.join(), contains('not sent'));
+    });
+
+    /// Ctrl-C leaves an interactive chat (AUD-13-4): the loop was waiting on
+    /// the next line and never looked at `interrupted`.
+    test('chat ends when the person interrupts it', () async {
+      await run('alice', [
+        'register',
+        '--phone',
+        aliceNumber,
+      ], phone: aliceNumber);
+      await run('bob', ['register', '--phone', bobNumber], phone: bobNumber);
+      await run('alice', ['contacts', 'add', bobNumber, '--name', 'Bobby']);
+      final io = _HangingIo(h)..env['HELIX_ALLOW_LOCAL_HTTP'] = '1';
+      final chat = HelixCli(io).run([
+        '--home',
+        '${root.path}/alice',
+        '--server',
+        h.server.baseUri.toString(),
+        'chat',
+        'Bobby',
+      ]);
+      await settle(
+        () async => expect(io.stderrLines.join(), contains('chatting')),
+      );
+      io.interrupt();
+      expect(await chat.timeout(const Duration(seconds: 20)), 0);
+    });
+
     test('commands refuse politely when signed out or misused', () async {
       final (code, io) = await run('nobody', ['chats']);
       expect(code, 1);
@@ -254,6 +326,15 @@ void main() {
       expect(badIo.stderrLines.join(), contains('invalid_credentials'));
     });
   });
+}
+
+/// A terminal that never types anything: the next line never comes.
+final class _HangingIo extends BufferIo {
+  _HangingIo(Harness h) : super(env: {});
+
+  @override
+  Future<String?> readLine(String prompt, {bool secret = false}) =>
+      Completer<String?>().future;
 }
 
 /// A [BufferIo] that answers the "code" prompt with the SMS code the test

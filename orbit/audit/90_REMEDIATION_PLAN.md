@@ -3827,6 +3827,43 @@ passing after the move.
 shared policy must land in the same commit as the app's import change, or the
 app's rule would exist in two places for the length of a release.
 
+- S1 (AUD-13-1 to -13-7) — the CLI obeys the client rules; one step.
+  **13-1 (P2):** the app's server-address rule moved into
+  `helix_remote_protocol` as `ServerAddressRule` (and `ServerUrlProblem`); the
+  app's `ServerPolicy.check` now delegates to it in the same commit, so the
+  rule lives in one place, and the CLI's `_server` applies it after choosing
+  between `--server`, `HELIX_SERVER` and `config.json`. `http://` is refused
+  with an explanation; `HELIX_ALLOW_LOCAL_HTTP=1` allows plain http to
+  `localhost`/`127.0.0.1`/`10.0.2.2` only (the end-to-end tests set it).
+  **13-2 (P2):** `send` maps all of `MessageStatus`: pending is "queued", failed
+  prints "not sent: …" and **exits 1**, with `status: failed` in `--json`.
+  **13-3:** `devices revoke` refreshes the list before matching a prefix.
+  **13-4:** the SIGINT watch is a standing listener (a second Ctrl-C while the
+  command winds down exits 130) and the chat loop races the next line with
+  `interrupted`. **13-5:** `react` searches the newest 200 messages, or walks
+  back through the whole chat with `--all` (the flag was already declared).
+  **13-6:** `db.key` is created empty, `chmod 600`, then written (POSIX; on
+  Windows the file is in the user's own profile). **13-7:** the e2e assertion
+  that compared a string against a list of maps and could not fail now checks
+  `unread: 0` on Alice's chat row. `BufferIo` gained `interrupt()`. Tests:
+  CLI unit tests refuse five bad addresses (and the environment's), allow
+  local http only with the switch and only for this machine, and keep https;
+  e2e: a blocked recipient's `send` exits 1 with `failed`, and an interactive
+  `chat` that never receives a line ends when interrupted (both fail on the
+  old CLI, as does the address test). **Not proven here:** the key file's mode
+  (the test runs on POSIX only and this machine is Windows, so it was skipped
+  and `chmod` was not exercised), 13-3 (a second device with an empty local
+  list would be needed; the call is one `refresh`) and the deep path of
+  `react --all` (over 200 messages). Gate: CLI 14 green (1 skipped), server
+  `cli_test` 4 green on Postgres, protocol 289, app server-link tests 24,
+  `flutter analyze` clean workspace-wide.
+  **Batch report.** B19's seven findings are closed. **Owner-facing:** the CLI
+  now needs `https://`; anything scripted against an `http://` server must
+  switch or set `HELIX_ALLOW_LOCAL_HTTP=1` for localhost. The phone needs a new
+  APK only for the shared rule moving (its behaviour is unchanged); no server
+  change.
+- Next: B20 (the app's own gate and lifecycle), then B21 onward.
+
 ## B20 — The app's own gate and lifecycle answer again
 **A · ~1–1.5 days · no migration, no wire**
 
