@@ -814,6 +814,35 @@ void main() {
       expect(mine.body, 'mine');
     });
 
+    test('an edit or delete dated before its message is refused', () async {
+      final target = await say('keep me');
+      final ref = MessageRef(id: target.messageId, author: alice.account);
+      // A modified client can date an action when it likes; a negative
+      // difference used to pass both windows.
+      peers.clock.now = target.sentAt.add(const Duration(days: 3));
+      Future<void> backdated(ContentBody body) async {
+        await alice.engine.debugSend(
+          ContentMessage(
+            id: Uuid.v7(),
+            sentAt: target.sentAt.subtract(const Duration(hours: 1)),
+            conversation: DirectConversation(to: bob.account),
+            body: body,
+          ),
+          audience: [bob.account],
+        );
+        await alice.engine.drainOutbox();
+        await bob.sync();
+      }
+
+      await backdated(EditBody(target: ref, text: 'backdated'));
+      await backdated(DeleteBody(target: ref));
+
+      final row = (await bob.messages(alice)).single;
+      expect(row.body, 'keep me');
+      expect(row.editedAt, isNull);
+      expect(row.deletedAt, isNull);
+    });
+
     test('reactions: the newest wins when they arrive out of order, and a '
         'removal needs a newer time too', () async {
       final target = await say('react');

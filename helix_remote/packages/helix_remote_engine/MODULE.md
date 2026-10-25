@@ -145,9 +145,11 @@ Rules:
   retries three times and then quarantines (`internal_error`).
 - **Authorship is the server-attested sender.** Edits and deletes apply only
   when the sender is the target's author, within 15 minutes / 2 days of the
-  target; the newest edit and the newest reaction win; a message cannot claim
-  a time more than a minute in the future; content addressed to someone else
-  (`conv.to` is not this account) is dropped.
+  target, and never when the action's own time is dated before the target (a
+  negative difference would otherwise pass both windows - AUD-12c-2); the
+  newest edit and the newest reaction win; a message cannot claim a time more
+  than a minute in the future; content addressed to someone else (`conv.to` is
+  not this account) is dropped.
 - **Actions wait for their message** up to 7 days (`deferred_actions`).
 - **Ephemeral envelopes** (typing) are decrypted (the ratchet moves and is
   committed), reported through `TypingEvent`, and never stored or acked.

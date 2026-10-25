@@ -1346,6 +1346,25 @@ update to be protected.
   clean in both. No schema change and no wire change; no app change; no APK
   needed. Docs: engine MODULE.md outbound pipeline and db MODULE.md rules and
   `OutboxDao` list.
+- S10 (AUD-12c-2) — the edit and delete windows compared the action's own
+  sender-chosen time with the target's, and a time earlier than the target
+  gave a negative difference that passed every `>` check: a modified peer
+  could edit or retract a message of any age, indefinitely (and the local
+  `editedAt` moved backwards).
+  **What changed:** `_inWindow` in `messaging/apply.dart` requires the action
+  time to fall after the target and within the window; an edit or delete
+  dated before its message is ignored. Delivery time is deliberately not the
+  bound - an honest action composed in time but delivered after the receiver
+  was offline days still applies, which the existing out-of-order test pins.
+  Tests: `test/inbound_test.dart` "an edit or delete dated before its message
+  is refused" - a forged edit and a forged delete dated an hour before the
+  target, applied three days later, leave the text, `editedAt` and
+  `deletedAt` untouched (before this change both applied). The existing
+  "only the author may edit or delete, within the windows" still covers the
+  upper bounds and late delivery.
+  Gate: engine suite **341 green**, `dart analyze` clean; the db package is
+  untouched (its **140 green** is the S9 gate). No schema change, no wire
+  change, no app change; no APK needed. Docs: engine MODULE.md inbound rules.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

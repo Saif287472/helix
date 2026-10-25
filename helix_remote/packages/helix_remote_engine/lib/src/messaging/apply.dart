@@ -211,6 +211,13 @@ final class ContentApplier {
     return sentAt.isAfter(limit) ? limit : sentAt;
   }
 
+  /// An action's own time ([at], chosen by its sender) must fall after the
+  /// target and within [window] of it. Without the lower bound a negative
+  /// difference passes every `>` check, so a forged action could rewrite or
+  /// retract any message of any age (AUD-12c-2).
+  static bool _inWindow(DateTime at, DateTime targetSentAt, Duration window) =>
+      !at.isBefore(targetSentAt) && at.difference(targetSentAt) <= window;
+
   // ---------------------------------------------------- visible messages
 
   Future<ApplyResult> _insertMessage(
@@ -508,7 +515,7 @@ final class ContentApplier {
     if (target.sender != editor || target.deletedAt != null) {
       return _Action.ignore;
     }
-    if (at.difference(target.sentAt) > ContentLimits.editWindow) {
+    if (!_inWindow(at, target.sentAt, ContentLimits.editWindow)) {
       return _Action.ignore;
     }
     if (target.editedAt != null && !at.isAfter(target.editedAt!)) {
@@ -542,7 +549,7 @@ final class ContentApplier {
     if ((target.sender != deleter && !byAdmin) || target.deletedAt != null) {
       return _Action.ignore;
     }
-    if (at.difference(target.sentAt) > ContentLimits.deleteWindow) {
+    if (!_inWindow(at, target.sentAt, ContentLimits.deleteWindow)) {
       return _Action.ignore;
     }
     await _db.messagesDao.deleteForEveryone(target.localRowid, deletedAt: now);
