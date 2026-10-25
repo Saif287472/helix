@@ -1901,6 +1901,38 @@ upload pairs with B7's chunk protocol but does not require it.
   Gate: the full app suite **1028 green** (2 new), `flutter analyze` clean on
   the workspace. No wire change, no migration, no server change. A new APK
   carries it.
+  **Batch report.** All six B9 findings are closed. B9's steps: S1 `b6e72f1`,
+  S2 `321bbc0`, S3 `26989ca`, S4 `0acbde2`, S5 `e8938f9`, S6 `b5b1bfc`.
+  B9's gate: **514 server tests** on Postgres at `--concurrency=3`, 513 green;
+  the one failure is the `messaging_test.dart` token-bucket timing flake
+  already listed in `AGENTS.md`, and it was green alone in 3 s straight after.
+  The client packages, each run at the step that last changed it and none
+  touched afterwards: protocol **121**, api **215**, crypto **75**, engine
+  **349**; the full app suite **1028**; `flutter analyze` clean on the
+  workspace and `dart analyze server tool` clean. No server code, schema,
+  wire or `.env` changed in this batch (only a server test did).
+  **Residual, deliberate:** the in-memory session is now authoritative and
+  persistence best-effort, so a full disk can still lose a refreshed session
+  at restart - one sign-in - but the running app never presents a
+  rotated-out refresh token, which the server treats as theft; the failed
+  write is reported through the diagnostic seam instead. The bulk deadline
+  is an inactivity limit, not a total one: a peer that keeps dribbling bytes
+  can hold a bulk request as long as its route allows, the same bound any
+  long download has. Transfer segments stay sealed at the default 64 KiB
+  chunk size (so receivers read what older devices already uploaded), which
+  is why every whole-object reader must bound a body by the *smallest* legal
+  chunk size - `AttachmentCrypto.maxCiphertextLength` is that arithmetic and
+  should not be re-derived at a call site. AUD-12r-2 (a transfer offer stuck
+  on an error `translate` does not know) is left to B13, which owns the
+  transfer state machine.
+  **Owner-facing, whole batch:** no deploy, no migration, no `.env` line -
+  the server's code is unchanged and the fixes are in the API package, the
+  engine and the app. A new APK carries the app's half (the `x-helix-client`
+  header and the group-picture cap); the engine and API fixes ride inside any
+  rebuilt client, including the CLI. No wire change.
+- Next: B10 (a theme pack the app cannot draw must be refused before it is
+  chosen), then B11, B12, B13, B16 and the app-only batches after them; B8
+  still waits on Q8/Q9 and B5 on Q6.
 
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**
