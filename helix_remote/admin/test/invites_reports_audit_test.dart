@@ -206,15 +206,22 @@ void main() {
 
       expect(find.text('Spam'), findsOneWidget);
       expect(find.text('Abuse'), findsNothing);
-      // A row names both people and numbers them, so an operator knows who
-      // they are looking at before opening anything (ADR-030).
+      // A row names both people and puts their number under the name, so an
+      // operator knows who they are looking at before opening anything
+      // (ADR-030).
+      expect(find.text('Alice Rahman'), findsOneWidget);
+      expect(find.text('+8801711000001'), findsOneWidget);
+      expect(find.text('Bob Rahman'), findsOneWidget);
+      expect(find.text('+8801711000002'), findsOneWidget);
+      // Under the name, not beside it: a number that wraps is a number an
+      // operator cannot read.
       expect(
-        find.text('Alice Rahman · +8801711000001'),
-        findsAtLeastNWidgets(1),
+        tester.getTopLeft(find.text('+8801711000001')).dy,
+        greaterThan(tester.getTopLeft(find.text('Alice Rahman')).dy),
       );
       expect(
-        find.text('by Bob Rahman · +8801711000002'),
-        findsAtLeastNWidgets(1),
+        tester.getTopLeft(find.text('+8801711000002')).dy,
+        greaterThan(tester.getTopLeft(find.text('Bob Rahman')).dy),
       );
       // The queue is a list of tiles: what a report says and how to work it
       // are inside it, not on the row.
@@ -300,7 +307,14 @@ void main() {
     testWidgets('the reporter name opens the reporter', (tester) async {
       await openReports(tester);
       await h.openReportSheet(tester, 'Spam');
-      expect(find.text('+8801711000002'), findsOneWidget);
+      // The queue row behind the sheet numbers him too, so look inside.
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('+8801711000002'),
+        ),
+        findsOneWidget,
+      );
 
       await tapText(tester, 'Bob Rahman');
       expect(
@@ -322,7 +336,9 @@ void main() {
       await h.openReportSheet(tester, 'Spam');
 
       expect(find.text('acct-1'), findsWidgets);
-      expect(find.text('reporter'), findsOneWidget);
+      // In the row and in the sheet: both name a person by their id when the
+      // server joined nothing.
+      expect(find.text('reporter'), findsWidgets);
       expect(find.text('No number reported'), findsWidgets);
     });
 

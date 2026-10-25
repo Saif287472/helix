@@ -186,31 +186,21 @@ class _ReportTile extends StatelessWidget {
                       color: HelixConsoleColors.text,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _partyLine(
-                      reportSubjectName(report),
-                      reportSubjectPhone(report),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: HelixConsoleColors.textBody,
-                    ),
+                  const SizedBox(height: 4),
+                  _Party(
+                    name: reportSubjectName(report),
+                    phone: reportSubjectPhone(report),
+                    lead: null,
+                    strong: true,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'by ${_partyLine(reportReporterName(report), reportReporterPhone(report))}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: HelixConsoleColors.textBody,
-                    ),
+                  const SizedBox(height: 4),
+                  _Party(
+                    name: reportReporterName(report),
+                    phone: reportReporterPhone(report),
+                    lead: 'by',
+                    strong: false,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 6),
                   Text(
                     formatTime(report.createdAt),
                     style: const TextStyle(
@@ -239,10 +229,68 @@ class _ReportTile extends StatelessWidget {
   }
 }
 
-/// A person and their number as one line: the number is left off when this
-/// server holds none to show.
-String _partyLine(String name, String? phone) =>
-    phone == null ? name : '$name · $phone';
+/// One of the two people in a queue row: the name, and their number under it.
+/// The number is left out when this server has none to show, and [lead] keeps
+/// the reporter apart from the account reported about.
+class _Party extends StatelessWidget {
+  const _Party({
+    required this.name,
+    required this.phone,
+    required this.lead,
+    required this.strong,
+  });
+
+  final String name;
+  final String? phone;
+  final String? lead;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          if (lead != null)
+            Text(
+              '$lead ',
+              style: const TextStyle(
+                fontSize: 12,
+                color: HelixConsoleColors.textBody,
+              ),
+            ),
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
+                color: strong
+                    ? HelixConsoleColors.text
+                    : HelixConsoleColors.textBody,
+              ),
+            ),
+          ),
+        ],
+      ),
+      if (phone != null) ...[
+        const SizedBox(height: 1),
+        Text(
+          phone!,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontFamily: 'monospace',
+            color: HelixConsoleColors.textMuted,
+          ),
+        ),
+      ],
+    ],
+  );
+}
 
 /// One report in full and the two ways to close it. It pops with the outcome
 /// the operator worked it to, so the queue can say what happened.
