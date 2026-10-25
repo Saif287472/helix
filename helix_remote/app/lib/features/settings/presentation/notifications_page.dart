@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,6 +32,8 @@ class NotificationsPage extends ConsumerWidget {
         mutedLoading: muted.isLoading && !muted.hasValue,
         mutedFailed: muted.hasError && !muted.hasValue,
         showRingtone: ref.watch(canChooseRingtoneProvider),
+        showWakeUps: ref.watch(pushAvailableProvider),
+        wakeUps: ref.watch(pushWakeupsProvider).value ?? true,
         ringtone: ref.watch(ringtoneLabelProvider),
         messages: ref.watch(notifyMessagesProvider).value ?? true,
         groups: ref.watch(notifyGroupsProvider).value ?? true,
@@ -56,6 +60,8 @@ class NotificationsPage extends ConsumerWidget {
       actions: orbit.NotificationsActions(
         onChanged: (key, on) {
           switch (key) {
+            case 'wakeups':
+              unawaited(ref.read(pushWakeupsProvider.notifier).set(on));
             case 'messages':
               actions.setNotifyMessages(on);
             case 'groups':

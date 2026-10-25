@@ -61,10 +61,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// what arrived, and a call rings whoever it came for. [pushToken], when
 /// present, is registered first. The running app uses [syncMailbox] false for
 /// a token-only pass.
+///
+/// [unregister] is the opposite of [pushToken]: it tells each account's server
+/// to forget this device's token (the person turned wake-ups off) and does
+/// nothing else.
 Future<void> wakeSignedInAccounts({
   String? except,
   String? pushToken,
   bool syncMailbox = true,
+  bool unregister = false,
 }) async {
   final accounts = await AccountSlotStore().load();
   final keys = SecureKeyStore();
@@ -86,6 +91,7 @@ Future<void> wakeSignedInAccounts({
         alerts: accounts.notifies(account.id),
         pushToken: pushToken,
         syncMailbox: syncMailbox,
+        unregister: unregister,
       );
     } on EngineAlreadyRunning {
       // The running app owns this account's database and fetches the
@@ -111,6 +117,7 @@ Future<void> _wakeAccount(
   String? pushToken,
   bool alerts = true,
   required bool syncMailbox,
+  bool unregister = false,
 }) async {
   final file = await AppPaths.databaseFile(account);
   final key = await keys.keyFor(account, file);
@@ -144,6 +151,14 @@ Future<void> _wakeAccount(
     );
   }
   try {
+    if (unregister) {
+      try {
+        await runtime.engine.push.unregister();
+      } on Object catch (error) {
+        debugPrint('[push] token removal failed: ${error.runtimeType}');
+      }
+      return;
+    }
     if (pushToken != null) {
       try {
         await runtime.engine.push.register(pushToken);

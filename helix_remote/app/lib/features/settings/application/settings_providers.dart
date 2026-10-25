@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/notification_permission.dart';
+export 'package:helix_remote/core/push/push_registration.dart'
+    show pushAvailableProvider, pushWakeupsProvider;
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/profile_image_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';

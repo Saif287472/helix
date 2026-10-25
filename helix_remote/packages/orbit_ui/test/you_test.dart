@@ -297,6 +297,37 @@ void main() {
     expect(changes, [('calls', false)]);
   });
 
+  testWidgets(
+    'notifications: the wake-up switch is shown only where it can act',
+    (tester) async {
+      final changes = <(String, bool)>[];
+      await show(
+        tester,
+        NotificationsScreen(
+          model: const NotificationsModel(),
+          actions: NotificationsActions(
+            onChanged: (k, v) => changes.add((k, v)),
+          ),
+        ),
+      );
+      expect(find.text('Wake this phone for new messages'), findsNothing);
+
+      await show(
+        tester,
+        NotificationsScreen(
+          model: const NotificationsModel(showWakeUps: true),
+          actions: NotificationsActions(
+            onChanged: (k, v) => changes.add((k, v)),
+          ),
+        ),
+      );
+      expect(find.text('Wake this phone for new messages'), findsOneWidget);
+      await tester.tap(find.text('Wake this phone for new messages'));
+      await tester.pump();
+      expect(changes, [('wakeups', false)]);
+    },
+  );
+
   testWidgets('account: sign out asks first, and offers switching', (
     tester,
   ) async {

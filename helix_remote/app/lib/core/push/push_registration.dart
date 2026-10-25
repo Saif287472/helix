@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
+import 'package:helix_remote/core/theme/orbit_app_theme.dart'
+    show FileDeviceSettingsStore;
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 
 /// Sends a push token to the server for the engine that is running now.
@@ -25,9 +29,15 @@ final class PushRegistration {
     required this.current,
     this.onToken,
     this.onWake,
+    this.enabled,
   });
 
   final PushTokens _tokens;
+
+  /// Whether the person lets the server wake this phone (Settings >
+  /// Notifications). Off, no token is sent to any account: the server has
+  /// none to wake. Null means always on.
+  final Future<bool> Function()? enabled;
 
   /// The running engine's registrar, or null when none is running.
   final PushRegistrar? Function() current;
@@ -45,6 +55,7 @@ final class PushRegistration {
 
   /// An engine has just reached running: send every account the current token.
   Future<void> engineRunning() async {
+    if (!await _allowed()) return;
     if (!await _tokens.prepare()) return;
     _refreshes ??= _tokens.refreshes.listen((token) => unawaited(_send(token)));
     final onWake = this.onWake;
@@ -53,7 +64,17 @@ final class PushRegistration {
     if (token != null) await _send(token);
   }
 
+  Future<bool> _allowed() async {
+    try {
+      return await enabled?.call() ?? true;
+    } on Object {
+      return true;
+    }
+  }
+
   Future<void> _send(String token) async {
+    // A rotation that arrives while wake-ups are off is not sent either.
+    if (!await _allowed()) return;
     final register = current();
     if (register != null) {
       try {
@@ -133,6 +154,70 @@ final otherAccountsPassProvider =
 
 final pushTokensProvider = Provider<PushTokens>((ref) => PushTokenSource());
 
+/// Reads whether wake-ups are on. Overridden in tests.
+final pushWakeupsReaderProvider = Provider<Future<bool> Function()>(
+  (ref) => const FileDeviceSettingsStore().readPushWakeups,
+);
+
+/// Stops, for every account signed in here except the one on screen, the
+/// server waking this phone. Overridden in tests.
+final otherAccountsUnregisterProvider = Provider<Future<void> Function()>(
+  (ref) =>
+      () => wakeSignedInAccounts(
+        except: ref.read(activeAccountProvider)?.id,
+        syncMailbox: false,
+        unregister: true,
+      ),
+);
+
+/// Whether this build can be woken by the server at all: the control is shown
+/// only where it could change something. Overridden in tests.
+final pushAvailableProvider = Provider<bool>(
+  (ref) => defaultTargetPlatform == TargetPlatform.android,
+);
+
+/// The "wake this phone" switch (Settings > Notifications, AUD-12j-1 / Q8).
+///
+/// Off, the server is told to forget this device's token - for the account on
+/// screen and for every other account signed in here - so it stops waking the
+/// phone; messages wait on the server until the app is opened. On, the token is
+/// registered again for all of them. The phone's own notification permission is
+/// a separate thing: it decides whether the platform shows what arrives.
+final pushWakeupsProvider = AsyncNotifierProvider<PushWakeups, bool>(
+  PushWakeups.new,
+);
+
+final class PushWakeups extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() => ref.read(pushWakeupsReaderProvider)();
+
+  /// Turns wake-ups on or off. The choice is kept even when the server cannot
+  /// be reached at the moment: an account whose call failed is reached by the
+  /// next start (off: nothing is sent; on: the token goes up again).
+  Future<void> set(bool on) async {
+    state = AsyncData(on);
+    await const FileDeviceSettingsStore().writePushWakeups(on);
+    if (on) {
+      await ref.read(pushRegistrationProvider).engineRunning();
+      return;
+    }
+    final engine = ref.read(runtimeProvider).value?.engine;
+    try {
+      if (engine != null && engine.status == EngineStatus.running) {
+        await engine.push.unregister();
+      }
+    } on Object {
+      // Offline: the server keeps this device's token until it is told, and
+      // the next change of this switch or sign-out tells it again.
+    }
+    try {
+      await ref.read(otherAccountsUnregisterProvider)();
+    } on Object {
+      // The same, for the accounts that are not on screen.
+    }
+  }
+}
+
 /// The running engine's push registration, or null when no engine runs.
 final currentPushRegistrarProvider = Provider<PushRegistrar? Function()>(
   (ref) => () {
@@ -149,6 +234,7 @@ final pushRegistrationProvider = Provider<PushRegistration>((ref) {
   final wakes = ForegroundWakes((pushToken) => pass(pushToken: pushToken));
   final registration = PushRegistration(
     ref.watch(pushTokensProvider),
+    enabled: ref.watch(pushWakeupsReaderProvider),
     current: ref.watch(currentPushRegistrarProvider),
     onToken: (token) => wakes.wake(pushToken: token),
     onWake: () => unawaited(wakes.wake()),

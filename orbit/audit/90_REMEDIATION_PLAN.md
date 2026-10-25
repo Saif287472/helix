@@ -4376,6 +4376,58 @@ transition; the snippet changes only where a cut splits a character.
 | AUD-12l-4 (P3) | The ICE-restart path is unreachable: nothing calls `restartIce`, the adapter drops the offer it would emit, and the wire has no renegotiation signal. | Q9. Delete the dead path, or add a renegotiation kind to the protocol and handle it in the adapter. |
 | AUD-3-13 (Idea) | Every open socket re-authenticates against Postgres every 25 s. | **Declined in B11 S6:** the check is the backstop for a bus hint missed while LISTEN was down, and a cache only widens that window. Batch the check per sweep if scale ever demands it. |
 
+**T4 — done 2026-10-26 (every row decided; nothing left scheduled).**
+- **AUD-12l-3 and AUD-12l-4 (Q9, option 1) — deleted, commit `ab3b2dc`.**
+  The `CallMetricsRequest` DTO, `Routes.callMetrics`, `CallsClient.sendMetrics`,
+  its route-parity row and golden fixture
+  (`calls_call_metrics_request.json`), the server route, its rate limit and
+  90-day sweep, and — new **calls migration 3**, `DROP TABLE IF EXISTS
+  call_metrics` (migration 1 is untouched) — the table with its unbounded
+  `outcome` column: AUD-6-1 closes by removal. In `helix_remote_calls`,
+  `restartIce`, `RemoteRenegotiationOfferEvent` and the `restartingIce` flag
+  are gone, with the app's no-op case. **Kept on purpose:**
+  `RemoteCallQualityEvent` and `CallQualityMetrics`, which drive the call
+  screen's weak-connection indicator on the device; they never left it. The
+  wire loses a route and gains none, so old builds that never called it are
+  unaffected. Docs updated (REST_V2, V2_OPERABILITY, METADATA_INVENTORY,
+  calls MODULE.md). New server test: the table does not exist and
+  `POST /v1/calls/metrics` answers 404. Gate: protocol 288, api 216, calls 5,
+  server calls/architecture/platform 165, all green; analyze clean.
+  **Owner-facing:** production runs migration 3 on the next start (drops an
+  empty table); no `.env` line.
+- **AUD-12j-1 (Q8, option 1) — the control shipped.** Settings >
+  Notifications gets a "Wake this phone for new messages" switch (shown only
+  where the server can wake the device, i.e. Android). It is a choice of the
+  **device**, kept in the device settings file beside the theme and ringtone
+  (`push_wakeups`, on unless turned off), so it holds across sign-outs and
+  covers every account signed in here: one push token serves them all. Off:
+  `PushService.unregister` for the account on screen, and a token-free pass
+  (`wakeSignedInAccounts(unregister: true)`) that opens each other signed-in
+  account and tells its server to forget this device; `PushRegistration` then
+  sends no token to anyone, rotations included, and a new sign-in while off
+  registers nothing. On: the token goes up again to all of them. A server that
+  cannot be reached leaves the choice standing. `orbit_ui`'s
+  `NotificationsModel` gains `showWakeUps`/`wakeUps`. Tests
+  (`push_wakeups_test.dart`, 6; `you_test.dart`, 1): the device choice and its
+  neighbours, registration gating, off unregisters the other accounts and
+  persists, on re-registers, an unreachable server does not undo the choice,
+  and the row shows only where it can act. **Not covered:** the real
+  other-account unregister runs a headless engine per account and was tested
+  through its seam, not against a server; the owner checks on a phone with two
+  accounts that turning it off stops the wake-ups for both.
+- **AUD-12h-3 — recorded as a limitation** in `REST_V2.md` beside the
+  discovery-salt route (no rotation procedure; add the salt version as an
+  additive field first if one is ever needed).
+- **AUD-14f-1 — left as is.** The signed `helix://contact/add` payload codec is
+  dead code behind a link that opens people search; deleting it is a clean-up
+  for whoever next touches `deep_link.dart`, with no behaviour to fix, so no
+  batch.
+- **AUD-3-13 — declined** in B11 S6 (unchanged).
+  Gate for the app and orbit_ui: app **1,118** green except one pre-existing
+  load flake (`theme_packs_test` "a full folder is read a few manifests at a
+  time", green alone), orbit_ui 250, engine 376. **Owner-facing:** a new APK
+  (the Settings switch).
+
 ---
 
 # Cross-cutting constraints

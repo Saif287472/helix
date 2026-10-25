@@ -110,7 +110,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `GET /v1/people/discovery-salt` | — → `DiscoverySalt` | Authenticated in v2 (v1 was public). |
+| `GET /v1/people/discovery-salt` | — → `DiscoverySalt` | Authenticated in v2 (v1 was public). **Limitation (AUD-12h-3):** discovery requests do not carry the salt's version, so rotating the salt on a server would silently stop discovery matching for every client holding the old one. There is no rotation procedure; if one is ever needed, add the version as an additive field on `DiscoverySalt` and on the discovery request first. |
 | `POST /v1/people/discover` | `DiscoverRequest` → `DiscoverResponse` | ≤ 1,000 per call, 5,000 per day; only accounts with `discoverable_by_phone`. The wire hash is `hex(HMAC-SHA256(salt, E.164))` under the public salt; the server stores and matches `HMAC(pepper-derived key, that hash)`, never the salted hash itself. |
 | `GET /v1/people/by-name/{name}` | — → `FindByNameResponse` | Exact match only; only `discoverable_by_name`; rate-limited. |
 | `GET /v1/people/{account}/profile` | — → `EncryptedProfile` | Ciphertext only; readable by anyone with the profile key. |

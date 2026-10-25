@@ -136,6 +136,17 @@ final class FileDeviceSettingsStore implements DeviceSettingsStore {
 
   static const _theme = 'theme';
   static const _ringtone = 'ringtone';
+  static const _pushWakeups = 'push_wakeups';
+
+  /// Whether this phone lets the server wake it (Settings > Notifications).
+  /// On unless the person turned it off; a file that cannot be read is on.
+  /// A choice of the device, not of an account: it holds across sign-outs and
+  /// for every account signed in here, because one push token serves them all.
+  Future<bool> readPushWakeups() async =>
+      (await _read())[_pushWakeups] != false;
+
+  Future<void> writePushWakeups(bool on) =>
+      _write({_pushWakeups: on ? null : false});
 
   @override
   Future<String?> readTheme() async {

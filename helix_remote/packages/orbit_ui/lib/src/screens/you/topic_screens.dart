@@ -758,6 +758,8 @@ class NotificationsModel {
     this.mutedLoading = false,
     this.mutedFailed = false,
     this.showRingtone = true,
+    this.showWakeUps = false,
+    this.wakeUps = true,
     this.messages = true,
     this.groups = true,
     this.calls = true,
@@ -780,6 +782,11 @@ class NotificationsModel {
 
   /// The ringtone row; hidden where a call cannot ring with a chosen sound.
   final bool showRingtone;
+
+  /// The "wake this phone" row; hidden where the server cannot wake the
+  /// device at all.
+  final bool showWakeUps;
+  final bool wakeUps;
   final bool messages;
   final bool groups;
   final bool calls;
@@ -836,6 +843,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   late Map<String, bool> _v = _from(widget.model);
 
   static Map<String, bool> _from(NotificationsModel m) => {
+    'wakeups': m.wakeUps,
     'messages': m.messages,
     'groups': m.groups,
     'calls': m.calls,
@@ -943,6 +951,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           'Turning an alert off still delivers the message. It only stays '
           'quiet until you open Orbit.',
         ),
+        if (m.showWakeUps)
+          OrbitSection(
+            title: 'Wake-ups',
+            footer:
+                'Off, Orbit’s servers do not wake this phone, so nothing '
+                'arrives until you open Orbit. It applies to every account '
+                'signed in on this phone.',
+            rows: [
+              sw(
+                'wakeups',
+                'Wake this phone for new messages',
+                'Lets the server wake Orbit when something arrives',
+                OrbitIcons.bellRinging,
+                3,
+              ),
+            ],
+          ),
         OrbitSection(
           title: 'Sound and lock screen',
           footer:
