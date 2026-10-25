@@ -2000,6 +2000,43 @@ ids issues no manifest requests. `packs_test.dart`
 Neither needs a migration or a wire change. The gate gets stricter for *new*
 packs only.
 
+- S1 (AUD-16-1, AUD-16-3) — `OrbitTokens.fromThemeJson` walked whatever token
+  groups a document happened to have and stored each token under its bare leaf
+  name, so a signed theme missing a token (or a pattern setting the painter
+  reads with `!`) was accepted, offered and choosable; choosing it saved the
+  id, and the first screen that read the token threw above the router on every
+  later launch. Two groups sharing a leaf shadowed one another silently, and a
+  gradient stop naming a missing or non-colour token, an unknown `transform`,
+  or a non-string `name` escaped as `_TypeError`/`ArgumentError` instead of
+  `FormatException` (the read-side consequence is AUD-14j-1, next step).
+  **What changed:** the generator emits `orbitRequiredTokenNames` (111 names,
+  `group.key`) beside the getters, and the parse refuses a document that lacks
+  one, naming it. Tokens stay keyed by short name (no screen call-site churn),
+  but a second group with the same leaf is a `FormatException`; the gradient
+  groups are read in a second pass so a stop can name a colour whatever order
+  the JSON groups are in. The pattern registry gained the settings each painter
+  reads without a fallback (`grain` r/g/b/a/size, `neonGrid` v/va/h/ha/size,
+  `scanlines` colour/a, `contours` stroke/width/size) with their JSON types,
+  checked at load. Every parse failure reachable from a pack is now a
+  `FormatException`: gradient stops, transform names, meta strings, the swatch
+  container, group and token keys, colour hex.
+  Tests: `orbit_tokens_test.dart` — a real theme minus one token is refused
+  naming `colour.accent`; the JSON's `group.key` set equals the generated
+  contract; a colliding `em.accent` is refused; `scanlines` without `colour`,
+  with a string `a`, and `neonGrid` without `size` are refused; a
+  brand-gradient stop naming a length token or a missing one is a
+  `FormatException`; a `wobble` transform and `"name": 42` are refused. The
+  "none invented" test also stopped comparing `MapEntry` stringifications (it
+  had only counted, so a wrong key spelling never showed).
+  `app/test/settings/theme_packs_test.dart` — a signed theme carrying only
+  `colour.accent` still passes the domain gate (it knows nothing about tokens)
+  and installs, but `load()` and `themeTokens()` return nothing, so it can
+  never be offered or chosen; S2 makes the install itself refuse it.
+  Gate: orbit_ui **236 green** (the token file 15, four new), the app's
+  theme-pack file **42 green** (41 before), `flutter analyze` clean on the
+  workspace. No wire change, no migration, no server change. A new APK carries
+  the app half.
+
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**
 

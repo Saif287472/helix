@@ -28,9 +28,13 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
 
   /// Builds tokens from one theme JSON document.
   ///
-  /// Throws [FormatException] when a token is missing or a value has the wrong
-  /// shape, rather than drawing a default: a theme that half-loaded would look
-  /// like a design decision, and it would not be one.
+  /// The document must carry every name in [orbitRequiredTokenNames], every
+  /// pattern param its painter reads without a fallback, and no two tokens that
+  /// share a short name. A theme is chosen and saved, so a gap found at draw
+  /// time would throw on every later launch, above the router; it is refused
+  /// here instead. Anything this cannot read is a [FormatException], never a
+  /// default and never another exception type: a theme that half-loaded would
+  /// look like a design decision, and it would not be one.
   factory OrbitTokens.fromThemeJson(Map<String, Object?> json) {
     final raw = json['tokens'];
     if (raw is! Map) {
@@ -38,19 +42,21 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
     }
     final effects = _effects(json['effects']);
     final values = <String, Object?>{};
+    // Which group each short name came from, so a second group cannot take it.
+    final groups = <String, String>{};
+    final parsed = <String>{};
 
-    Object colour(Object? v, String key) {
+    Color colour(Object? v, String key) {
       if (v is! Map || v['hex'] is! String) {
         throw FormatException('not a colour', '$key: $v');
       }
-      final rgb = int.parse(
-        'ff${(v['hex']! as String).replaceFirst('#', '')}',
-        radix: 16,
-      );
       final alpha = v['alpha'];
       if (alpha is! num) {
         throw FormatException('a colour has no alpha', '$key: $v');
       }
+      final hex = v['hex']! as String;
+      final rgb = int.tryParse('ff${hex.replaceFirst('#', '')}', radix: 16);
+      if (rgb == null) throw FormatException('a colour is not hex', '$key: $v');
       return Color.fromARGB(
         (alpha.toDouble() * 255).round(),
         (rgb >> 16) & 0xff,
@@ -59,12 +65,12 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
       );
     }
 
-    Object shadows(Object? v, String key) {
+    List<BoxShadow> shadows(Object? v, String key) {
       if (v is! List) throw FormatException('not a shadow list', '$key: $v');
       return <BoxShadow>[
         for (final layer in v)
           BoxShadow(
-            color: colour(layer is Map ? layer['colour'] : null, key) as Color,
+            color: colour(layer is Map ? layer['colour'] : null, key),
             offset: Offset(_num(layer, 'dx'), _num(layer, 'dy')),
             blurRadius: orbitCssBlur(_num(layer, 'blur')),
             spreadRadius: _num(layer, 'spread'),
@@ -72,7 +78,7 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
       ];
     }
 
-    Object gradient(Object? v, String key) {
+    LinearGradient gradient(Object? v, String key) {
       if (v is! Map) throw FormatException('not a gradient', '$key: $v');
       final stops = v['stops'];
       if (stops is! List) throw FormatException('no stops', '$key: $v');
@@ -82,11 +88,22 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
         if (s is! Map) throw FormatException('a stop is not a map', '$key: $s');
         // A stop either names a colour outright or refers to another token,
         // which is how `--brand-gradient` is built from the call colours. The
-        // colours are read first because `values` is filled in JSON order.
-        if (s['token'] is String) {
-          colors.add(values[s['token']! as String]! as Color);
+        // gradient group is read after every other group for that reason.
+        if (s.containsKey('token')) {
+          final name = s['token'];
+          if (name is! String) {
+            throw FormatException('a stop token is not a name', '$key: $s');
+          }
+          final ref = values[name];
+          if (ref is! Color) {
+            throw FormatException(
+              'a gradient stop names "$name", which is not a colour token',
+              '$key: $s',
+            );
+          }
+          colors.add(ref);
         } else {
-          colors.add(colour(s['colour'], key) as Color);
+          colors.add(colour(s['colour'], key));
         }
         at.add(s['at'] is num ? (s['at']! as num).toDouble() : 0);
       }
@@ -99,37 +116,80 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
       );
     }
 
-    for (final entry in raw.entries) {
-      final group = entry.key as String;
-      final map = entry.value;
-      if (map is! Map) throw FormatException('not a token group', group);
-      for (final token in map.entries) {
-        final key = '$group.${token.key}';
-        final v = token.value;
-        values[token.key as String] = switch (group) {
-          'colour' => colour(v, key),
-          'shadow' => shadows(v, key),
-          'gradient' || 'gradientRef' => gradient(v, key),
-          'fontStack' => OrbitFontStack._fromJson(v, key),
-          'weight' => _int(v, key),
-          'em' => _double(v, key),
-          'transform' => OrbitTextTransform.values.byName('$v'),
-          'pattern' => OrbitPattern._fromJson(v, key),
-          'patternSize' => OrbitTile._fromJson(v, key),
-          'lengthPx' || 'lengthPct' => _double(v, key),
-          _ => throw FormatException('no Dart type for this group', group),
-        };
+    // Two passes: every other group first, then the gradients, so a stop can
+    // refer to a colour no matter what order the document's groups are in.
+    for (var pass = 0; pass < 2; pass++) {
+      for (final entry in raw.entries) {
+        final group = entry.key;
+        if (group is! String) {
+          throw FormatException('a token group is not a name', '$group');
+        }
+        final map = entry.value;
+        if (map is! Map) throw FormatException('not a token group', group);
+        final isGradient = group == 'gradient' || group == 'gradientRef';
+        if (isGradient != (pass == 1)) continue;
+        for (final token in map.entries) {
+          final name = token.key;
+          if (name is! String) {
+            throw FormatException('a token is not a name', '$group: $name');
+          }
+          final key = '$group.$name';
+          final was = groups[name];
+          if (was != null) {
+            throw FormatException(
+              'token "$name" is in both "$was" and "$group", and the getters '
+              'read it by its short name, so one would shadow the other',
+              key,
+            );
+          }
+          final v = token.value;
+          values[name] = switch (group) {
+            'colour' => colour(v, key),
+            'shadow' => shadows(v, key),
+            'gradient' || 'gradientRef' => gradient(v, key),
+            'fontStack' => OrbitFontStack._fromJson(v, key),
+            'weight' => _int(v, key),
+            'em' => _double(v, key),
+            'transform' => _transform(v, key),
+            'pattern' => OrbitPattern._fromJson(v, key),
+            'patternSize' => OrbitTile._fromJson(v, key),
+            'lengthPx' || 'lengthPct' => _double(v, key),
+            _ => throw FormatException('no Dart type for this group', group),
+          };
+          groups[name] = group;
+          parsed.add(key);
+        }
       }
     }
     final meta = _meta(json, effects);
+    for (final name in orbitRequiredTokenNames) {
+      if (!parsed.contains(name)) {
+        throw FormatException(
+          'theme "${meta.id}" is missing token "$name", which every theme is '
+          'drawn with; a theme that half-loads would look like a design '
+          'decision, and it would not be one',
+          name,
+        );
+      }
+    }
     final pattern = values['chat-pattern'];
     if (pattern is OrbitPattern) {
       OrbitEffects.validate(meta.id, [
         for (final e in effects) e.kind,
       ], pattern.kind);
+      OrbitEffects.validatePatternParams(meta.id, pattern.kind, pattern.params);
     }
     final motion = OrbitMotion.fromThemeJson(json);
     return OrbitTokens._(Map.unmodifiable(values), meta, motion);
+  }
+
+  static OrbitTextTransform _transform(Object? v, String key) {
+    if (v is String) {
+      for (final t in OrbitTextTransform.values) {
+        if (t.name == v) return t;
+      }
+    }
+    throw FormatException('not a text transform', '$key: $v');
   }
 
   static double _num(Object? layer, String field) {
@@ -156,7 +216,17 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
     Map<String, Object?> json,
     List<OrbitEffect> effects,
   ) {
-    String? str(String k) => json[k] as String?;
+    String? str(String k) {
+      final v = json[k];
+      if (v == null) return null;
+      if (v is! String) throw FormatException('not a string', '$k: $v');
+      return v;
+    }
+
+    final swatches = json['swatches'];
+    if (swatches != null && swatches is! List) {
+      throw FormatException('swatches is not a list', '$swatches');
+    }
     return OrbitThemeMeta(
       id: str('id') ?? '',
       name: str('name') ?? '',
@@ -165,7 +235,7 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
       icon: str('icon') ?? '',
       effects: effects,
       swatches: [
-        for (final s in (json['swatches'] as List?) ?? const [])
+        for (final s in swatches as List? ?? const [])
           if (s is String && s.startsWith('#') && s.length == 7)
             Color(0xFF000000 | int.parse(s.substring(1), radix: 16)),
       ],
@@ -196,10 +266,11 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
   /// How this theme moves.
   final OrbitMotion motion;
 
-  /// One token by its generated name, or by `group.key` as the JSON has it.
+  /// One token by the short name the generated getters use (`chat-bg`).
   ///
-  /// Throws when the token is not in this theme, because a screen that reads a
-  /// token no theme defines is a bug in the screen, not a default to invent.
+  /// A loaded theme carries every name in [orbitRequiredTokenNames], so a
+  /// missing token here is a screen asking for a name no generator emitted -
+  /// a bug in the screen, not a default to invent.
   T value<T>(String name) {
     final v = _values[name];
     if (v == null) {
@@ -215,7 +286,8 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
     return v as T;
   }
 
-  /// Every token, by the JSON's own `group.key` spelling. For tests and tools.
+  /// Every token, by short name; [orbitRequiredTokenNames] has the JSON's
+  /// `group.key` spelling. For tests and tools.
   Map<String, Object?> get values => _values;
 
   /// The tokens of the context's theme.

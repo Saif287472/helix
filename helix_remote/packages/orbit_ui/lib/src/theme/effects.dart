@@ -141,4 +141,66 @@ abstract final class OrbitEffects {
       );
     }
   }
+
+  /// The params each pattern's painter reads without a fallback.
+  ///
+  /// The painters in `pattern_painter.dart` read these with `!`; a theme that
+  /// omitted one used to be accepted and then throw during `paint`, after the
+  /// theme had been chosen and saved - so on every later launch as well.
+  static const _patternParams = <String, Map<String, _PatternParam>>{
+    'none': {},
+    'grain': {
+      'r': _PatternParam.num,
+      'g': _PatternParam.num,
+      'b': _PatternParam.num,
+      'a': _PatternParam.num,
+      'size': _PatternParam.tile,
+    },
+    'hearts': {},
+    'neonGrid': {
+      'v': _PatternParam.hex,
+      'va': _PatternParam.num,
+      'h': _PatternParam.hex,
+      'ha': _PatternParam.num,
+      'size': _PatternParam.tile,
+    },
+    'scanlines': {'colour': _PatternParam.hex, 'a': _PatternParam.num},
+    'contours': {
+      'stroke': _PatternParam.hex,
+      'width': _PatternParam.num,
+      'size': _PatternParam.tile,
+    },
+  };
+
+  /// Throws when [params] lacks a setting the painter for [kind] reads without
+  /// a fallback, or gives it the wrong JSON type.
+  ///
+  /// Run after [validate], which refuses a kind this build does not ship.
+  static void validatePatternParams(
+    String theme,
+    String kind,
+    Map<Object?, Object?> params,
+  ) {
+    final wanted = _patternParams[kind];
+    if (wanted == null) return;
+    for (final entry in wanted.entries) {
+      final v = params[entry.key];
+      final ok = switch (entry.value) {
+        _PatternParam.num => v is num,
+        _PatternParam.hex => v is String && v.startsWith('#'),
+        _PatternParam.tile =>
+          v is List && v.length == 2 && v[0] is num && v[1] is num,
+      };
+      if (!ok) {
+        throw FormatException(
+          'theme "$theme" draws chat pattern "$kind" without a usable '
+          '"${entry.key}" (${entry.value.name}); its painter reads it '
+          'without a fallback.',
+        );
+      }
+    }
+  }
 }
+
+/// The JSON type a pattern param must have.
+enum _PatternParam { num, hex, tile }

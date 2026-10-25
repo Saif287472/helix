@@ -38,6 +38,19 @@ void main() {
   Future<OrbitTokens> load(String id) async =>
       OrbitTokens.fromThemeJson(await loadJson(id));
 
+  /// A theme document to break one thing in: the nested groups are fresh on
+  /// every call, so a test cannot leak a mutation into the next one.
+  Future<Map<String, Object?>> mutable(String id) async =>
+      Map.of(await loadJson(id));
+
+  Map<Object?, Object?> groupOf(Map<String, Object?> doc, String group) =>
+      (doc['tokens']! as Map)[group] as Map<Object?, Object?>;
+
+  Map<Object?, Object?> paramsOf(Map<String, Object?> doc) =>
+      (groupOf(doc, 'pattern')['chat-pattern']
+              as Map<Object?, Object?>)['params']
+          as Map<Object?, Object?>;
+
   test('every built-in theme loads', () async {
     for (final id in ids) {
       final tokens = await load(id);
@@ -66,10 +79,19 @@ void main() {
       final inJson = {
         for (final group in raw.entries)
           for (final token in (group.value! as Map).keys)
-            '$group.${token as String}',
+            '${group.key}.${token as String}',
       };
-      // The JSON is keyed `group.key`; `values` is keyed by the bare name, so
-      // the counts must match even though the spellings differ.
+      // The contract the generator writes and the parse enforces: every theme
+      // carries exactly the same tokens, spelled `group.key`.
+      expect(
+        inJson,
+        orbitRequiredTokenNames,
+        reason:
+            '$id: the JSON and the generated contract disagree; regenerate '
+            'with tools/gen_orbit_tokens.py',
+      );
+      // `values` is keyed by the bare name, so the counts must match even
+      // though the spellings differ.
       expect(
         tokens.values.length,
         inJson.length,
@@ -206,50 +228,58 @@ void main() {
     );
   });
 
-  test('a theme that is missing a token fails instead of defaulting', () {
-    // The loader is data-driven, so it cannot know which tokens a theme ought
-    // to have. What it can do is refuse to invent one: reading a token the
-    // theme does not carry is an error, not a default.
-    final thin = OrbitTokens.fromThemeJson({
-      'id': 'thin',
-      'tokens': {
-        'colour': {
-          'accent': {'hex': '#2563EB', 'alpha': 1},
-        },
-      },
-      'motion': {
-        'duration': {'short': 0.18, 'page': 0.26},
-        'curve': [0.2, 0.7, 0.2, 1.0],
-      },
-    });
-    expect(thin.accent, isNotNull);
+  test('a theme missing a token is refused, not left half-loaded', () async {
+    // A theme is chosen and saved, so a token discovered missing at draw time
+    // would throw above the router on every later launch. The contract the
+    // generator writes is the list every document must carry.
+    final thin = await mutable('orbit');
+    groupOf(thin, 'colour').remove('accent');
     expect(
-      () => thin.value<Color>('r-md'),
-      throwsArgumentError,
-      reason:
-          'a screen reading a token this theme lacks is a bug in the '
-          'screen, not something to paper over',
+      () => OrbitTokens.fromThemeJson(thin),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('colour.accent'),
+        ),
+      ),
     );
-    expect(() => thin.value<Color>('accent'), returnsNormally);
+
+    // A screen that reads a name no token carries is still a bug in the
+    // screen, and reading a token as the wrong type too.
+    final orbit = await load('orbit');
+    expect(() => orbit.value<Color>('no-such-token'), throwsArgumentError);
+    expect(() => orbit.value<Color>('r-md'), throwsArgumentError);
   });
 
-  test('a malformed token value fails the load', () {
-    // A colour with no alpha, and a number where a number should be.
-    final noAlpha = <String, Object?>{
-      'tokens': {
-        'colour': {
-          'accent': {'hex': '#2563EB'},
-        },
-      },
-    };
-    expect(() => OrbitTokens.fromThemeJson(noAlpha), throwsFormatException);
+  test('a malformed token value fails the load', () async {
+    // Each document is a real theme with exactly one thing broken, so the
+    // refusal cannot be the completeness check in disguise.
+    final noAlpha = await mutable('orbit');
+    (groupOf(noAlpha, 'colour')['accent'] as Map).remove('alpha');
+    expect(
+      () => OrbitTokens.fromThemeJson(noAlpha),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('no alpha'),
+        ),
+      ),
+    );
 
-    final notANumber = <String, Object?>{
-      'tokens': {
-        'lengthPx': {'r-md': 'wide'},
-      },
-    };
-    expect(() => OrbitTokens.fromThemeJson(notANumber), throwsFormatException);
+    final notANumber = await mutable('orbit');
+    groupOf(notANumber, 'lengthPx')['r-md'] = 'wide';
+    expect(
+      () => OrbitTokens.fromThemeJson(notANumber),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('not a number'),
+        ),
+      ),
+    );
 
     // And a document with no tokens group at all.
     expect(() => OrbitTokens.fromThemeJson({'id': 'x'}), throwsFormatException);
@@ -257,21 +287,11 @@ void main() {
 
   test('an effect this build has not got is refused, not ignored', () async {
     // Only data is ever downloaded, so a pack cannot bring an effect type.
-    final future = <String, Object?>{
-      'id': 'from-a-pack',
-      'tokens': {
-        'pattern': {
-          'chat-pattern': {'kind': 'none', 'params': <String, Object?>{}},
-        },
-      },
-      'motion': {
-        'duration': {'short': 0.18, 'page': 0.26},
-        'curve': [0.2, 0.7, 0.2, 1.0],
-      },
-      'effects': [
-        {'kind': 'discoBall', 'params': <String, Object?>{}},
-      ],
-    };
+    final future = await mutable('orbit');
+    future['id'] = 'from-a-pack';
+    future['effects'] = [
+      {'kind': 'discoBall', 'params': <String, Object?>{}},
+    ];
     expect(
       () => OrbitTokens.fromThemeJson(future),
       throwsA(
@@ -284,34 +304,132 @@ void main() {
     );
   });
 
-  test('themes cross-fade colours and lengths, and switch the rest', () {
-    final orbit = OrbitTokens.fromThemeJson({
-      'id': 'a',
-      'tokens': {
-        'colour': {
-          'accent': {'hex': '#000000', 'alpha': 1},
-        },
-        'lengthPx': {'r-md': 10},
-      },
-      'motion': {
-        'duration': {'short': 0.18, 'page': 0.26},
-        'curve': [0.2, 0.7, 0.2, 1.0],
-      },
-    });
-    final night = OrbitTokens.fromThemeJson({
-      'id': 'b',
-      'dark': true,
-      'tokens': {
-        'colour': {
-          'accent': {'hex': '#FFFFFF', 'alpha': 1},
-        },
-        'lengthPx': {'r-md': 20},
-      },
-      'motion': {
-        'duration': {'short': 0.18, 'page': 0.26},
-        'curve': [0.2, 0.7, 0.2, 1.0],
-      },
-    });
+  test('two groups may not share a token name', () async {
+    // The getters look a token up by its short name, so a second group with
+    // the same leaf would shadow the first silently (AUD-16-3).
+    final collided = await mutable('orbit');
+    groupOf(collided, 'em')['accent'] = 0.1;
+    expect(
+      () => OrbitTokens.fromThemeJson(collided),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('accent'), contains('colour'), contains('em')),
+        ),
+      ),
+    );
+  });
+
+  test(
+    'a pattern is refused when a setting its painter reads is missing',
+    () async {
+      // `pattern_painter.dart` reads these with `!`: a theme accepted without
+      // one throws during paint, after it has been chosen and saved.
+      final noColour = await mutable('terminal');
+      paramsOf(noColour).remove('colour');
+      expect(
+        () => OrbitTokens.fromThemeJson(noColour),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('scanlines'), contains('colour')),
+          ),
+        ),
+      );
+
+      final badAlpha = await mutable('terminal');
+      paramsOf(badAlpha)['a'] = 'lots';
+      expect(() => OrbitTokens.fromThemeJson(badAlpha), throwsFormatException);
+
+      final noTile = await mutable('arcade');
+      paramsOf(noTile).remove('size');
+      expect(
+        () => OrbitTokens.fromThemeJson(noTile),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('size'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test('a gradient stop that names no colour is refused', () async {
+    // A stop may refer to another token; a reference to a token this document
+    // does not carry, or to a non-colour, used to be a TypeError that escaped
+    // as a crashed folder read rather than a refused theme.
+    final wrongType = await mutable('orbit');
+    final stops =
+        (groupOf(wrongType, 'gradientRef')['brand-gradient'] as Map)['stops']
+            as List;
+    (stops.first as Map)['token'] = 'r-md';
+    expect(
+      () => OrbitTokens.fromThemeJson(wrongType),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('not a colour token'),
+        ),
+      ),
+    );
+
+    final absent = await mutable('orbit');
+    final absentStops =
+        (groupOf(absent, 'gradientRef')['brand-gradient'] as Map)['stops']
+            as List;
+    (absentStops.first as Map)['token'] = 'no-such-colour';
+    expect(() => OrbitTokens.fromThemeJson(absent), throwsFormatException);
+  });
+
+  test(
+    'a transform or a meta field this build cannot read is a FormatException',
+    () async {
+      final transform = await mutable('orbit');
+      groupOf(transform, 'transform')['display-transform'] = 'wobble';
+      expect(
+        () => OrbitTokens.fromThemeJson(transform),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('transform'),
+          ),
+        ),
+      );
+
+      final meta = await mutable('orbit');
+      meta['name'] = 42;
+      expect(
+        () => OrbitTokens.fromThemeJson(meta),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('not a string'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test('themes cross-fade colours and lengths, and switch the rest', () async {
+    final a = await mutable('orbit');
+    final b = await mutable('orbit');
+    (groupOf(a, 'colour')['accent'] as Map)
+      ..['hex'] = '#000000'
+      ..['alpha'] = 1;
+    (groupOf(b, 'colour')['accent'] as Map)
+      ..['hex'] = '#FFFFFF'
+      ..['alpha'] = 1;
+    groupOf(a, 'lengthPx')['r-md'] = 10;
+    groupOf(b, 'lengthPx')['r-md'] = 20;
+    final orbit = OrbitTokens.fromThemeJson(a);
+    final night = OrbitTokens.fromThemeJson(b);
 
     final half = orbit.lerp(night, 0.5);
     expect(half.accent, isNot(orbit.accent));

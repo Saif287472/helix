@@ -190,6 +190,26 @@ void main() {
       );
     });
 
+    test('a theme that parses but is missing tokens is not a theme', () async {
+      // AUD-16-1: a signed document can pass the gate and still not be
+      // drawable. The store's own words are that drawing needs every token,
+      // so that is checked when the pack is read - before it can be chosen
+      // and saved, and throw above the router on every later launch.
+      final thin = themed(id: 'synthwave', name: 'Synthwave');
+      final tokens = thin['tokens']! as Map;
+      for (final group in tokens.keys.toList()) {
+        if (group != 'colour' && group != 'pattern') tokens.remove(group);
+      }
+      (tokens['colour'] as Map).removeWhere((name, _) => name != 'accent');
+
+      final store = ThemePackStore(trustedPublishers: trusted);
+      final pack = await signedPack(by: publisherKey, theme: thin);
+      await store.install(FakePackSource([pack]), 'synthwave');
+
+      expect(await store.load('synthwave'), isNull);
+      expect(await store.themeTokens(), isEmpty);
+    });
+
     test('a pack the host does not list is not installed', () async {
       final store = ThemePackStore(trustedPublishers: trusted);
       await expectLater(
