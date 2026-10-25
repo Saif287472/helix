@@ -1185,6 +1185,42 @@ void main() {
       },
     );
 
+    /// A failed upload's staging is a whole copy of its ciphertext. Its source
+    /// is still there, so a retry encrypts again and nothing is lost by
+    /// dropping the copy (AUD-12o-2).
+    test(
+      'a failed upload gives back its ciphertext, and a retry works',
+      () async {
+        media.quotaBytes = 100;
+        await start(
+          transfers: testTransfers.copyWith(
+            sweepGrace: const Duration(minutes: 10),
+          ),
+        );
+        final sent = await sendDoc(patterned(9000));
+        await alice.engine.drainTransfers();
+        expect((await jobOf(alice, sent)).state, TransferState.failed);
+
+        alice.blobs.age(const Duration(minutes: 11));
+        expect(await alice.engine.media.sweep(), 1, reason: 'the staging copy');
+        expect(alice.blobs.pathsIn(BlobArea.staging), isEmpty);
+        final att = (await alice.attachments(sent)).single;
+        expect(
+          alice.blobs.exists(att.localPath!),
+          isTrue,
+          reason: 'the source',
+        );
+
+        media.quotaBytes = 1024 * 1024;
+        await alice.engine.chats.retrySend(sent.localRowid);
+        await alice.engine.drainTransfers();
+        await alice.engine.drainOutbox();
+        expect(world.server.sends, hasLength(1));
+        await bob.settle();
+        expect(await receivedBytes(bob, alice), patterned(9000));
+      },
+    );
+
     test('sign-out deletes every file', () async {
       await start();
       await sendDoc(patterned(2000));

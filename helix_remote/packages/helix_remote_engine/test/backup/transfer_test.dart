@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
+import 'package:helix_remote_engine/src/backup/state.dart' show BackupSettings;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
@@ -279,8 +281,9 @@ void main() {
     final e = await failureOf(alice2.backup.acceptOffer(id));
     expect(e.failure, BackupFailure.expired);
     expect(
-      (await alice2.backup.offers()).single.phase,
-      HistoryTransferPhase.failed,
+      await alice2.backup.offers(),
+      isEmpty,
+      reason: 'a Resume could only fail the same way (AUD-12p-1)',
     );
   });
 
@@ -358,6 +361,153 @@ void main() {
     expect(result.added, 5);
     expect(result.existing, 5);
     expect(await historyDigest(alice2), await historyDigest(alice));
+  });
+
+  /// An offer lives only as long as the relay objects it points at, which the
+  /// sender deletes at `relayTtl` (48 h), not for its own seven days
+  /// (AUD-12p-1).
+  test('an offer is dropped when the relay objects it names are', () async {
+    await start();
+    await offer();
+    expect(await alice2.backup.offers(), hasLength(1));
+    world.clock.advance(const Duration(hours: 49));
+    await alice.engine.runMaintenance();
+    await alice2.engine.runMaintenance();
+    expect(world.relay.objects, isEmpty);
+    expect(await alice2.backup.offers(), isEmpty);
+  });
+
+  /// A download that is stopped reports the segments it already holds, so a
+  /// receiving row can show progress and a Resume (AUD-12p-4).
+  test(
+    'the offers list counts the segments fetched while downloading',
+    () async {
+      await start();
+      final id = await offer();
+      final sub = alice2.backup.transferProgress.listen((p) {
+        if (p.phase == HistoryTransferPhase.downloading && p.done == 2) {
+          alice2.backup.pauseTransfer(id);
+        }
+      });
+      await failureOf(alice2.backup.acceptOffer(id));
+      await sub.cancel();
+      final paused = (await alice2.backup.offers()).single;
+      expect(paused.phase, HistoryTransferPhase.waiting);
+      expect(paused.done, 2);
+      expect(paused.total, greaterThan(2));
+    },
+  );
+
+  group('with automatic transfers', () {
+    BackupOptions options({bool send = false, bool accept = false}) =>
+        BackupOptions(
+          gzip: null,
+          autoBackup: false,
+          autoTransferToNewDevices: send,
+          autoAcceptTransfers: accept,
+          pageSize: 400,
+          frameBytes: 1000,
+          segmentBytes: 3000,
+          remote: world.remote,
+          relay: world.relay,
+        );
+
+    Future<BackupPeer> link(BackupPeer existing, BackupOptions options) async {
+      final fresh = await world.create('alice2', options: options);
+      final link = await fresh.engine.account.beginLink();
+      final done = link.complete(confirm: (_) async => true);
+      await existing.engine.devices.approveLink(link.code);
+      await done;
+      return fresh;
+    }
+
+    /// The paused offer is the person's: nothing starts it again by itself,
+    /// not a ledger write and not a maintenance pass (AUD-12p-3).
+    test('a paused transfer stays paused until it is accepted', () async {
+      world = BackupWorld(
+        segmentBytes: 3000,
+        frameBytes: 1000,
+        compress: false,
+      );
+      alice = await world.register('alice', phone: '+8801711000001');
+      alice2 = await link(alice, options(accept: true));
+      alice2.backup.start(); // the engine's workers do this in an app
+      await addHistory(alice, bobId, 60, prefix: 'transfer text');
+      final id = await alice.backup.sendHistory();
+      await alice.engine.drainOutbox();
+      final paused = Completer<void>();
+      final sub = alice2.backup.transferProgress.listen((p) {
+        if (p.phase == HistoryTransferPhase.importing &&
+            p.done == 2 &&
+            !paused.isCompleted) {
+          paused.complete();
+          alice2.backup.pauseTransfer(id);
+        }
+      });
+      await alice2.engine.syncOnce(); // the offer arrives and is accepted
+      await paused.future;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await sub.cancel();
+      final held = await HistoryStore(alice2.db).messageCount();
+      expect(held, lessThan(60));
+
+      await alice2.engine.runMaintenance();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(await HistoryStore(alice2.db).messageCount(), held);
+      expect(
+        (await alice2.backup.offers()).single.phase,
+        HistoryTransferPhase.waiting,
+      );
+
+      final result = await alice2.backup.acceptOffer(id);
+      expect(result.added, 60 - held);
+    });
+
+    /// The cursor moves when the offer is out, not before it (AUD-12p-2).
+    test('a failed automatic offer is tried again, not forgotten', () async {
+      world = BackupWorld(
+        segmentBytes: 3000,
+        frameBytes: 1000,
+        compress: false,
+      );
+      alice = await world.create('alice', options: options(send: true));
+      final challenge = await alice.engine.account.requestPhoneCode(
+        '+8801711000001',
+      );
+      final verified = await alice.engine.account.verifyPhone(
+        challenge.challengeId,
+        '123456',
+      );
+      await alice.engine.account.register(
+        verificationToken: verified.verificationToken,
+        phoneNumber: '+8801711000001',
+      );
+      alice.backup.start(); // the engine's workers do this in an app
+      await addHistory(alice, bobId, 20, prefix: 'transfer text');
+
+      world.relay.failUploadsAfter = 0; // the relay is down
+      alice2 = await world.link(alice, 'alice2');
+      await alice.engine.syncOnce();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(await alice2.backup.offers(), isEmpty);
+      expect(
+        await alice.db.settingsDao.get(BackupSettings.offerCursor),
+        isNull,
+        reason: 'nothing was offered, so the new device is still new',
+      );
+
+      world.relay.failUploadsAfter = null; // and back
+      final alice3 = await world.link(alice, 'alice3');
+      await alice.engine.syncOnce();
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await alice.engine.drainOutbox();
+      await alice2.engine.syncOnce();
+      await alice3.engine.syncOnce();
+      // Each device that joined while the relay was down is offered the
+      // history once it works (alice2 may also hear of the second offer).
+      expect(await alice2.backup.offers(), isNotEmpty);
+      expect(await alice3.backup.offers(), hasLength(1));
+    });
   });
 
   group('who may offer', () {

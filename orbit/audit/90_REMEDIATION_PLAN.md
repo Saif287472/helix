@@ -3189,6 +3189,45 @@ the migration and dump that go with it).
   untested. Gate: engine **363 green** (361 before), server `media_test` and
   `backup_test` 19 green on Postgres, analyze and format clean. No schema,
   wire or server change; the phone needs a new APK to see it.
+- S9 (AUD-12o-2, AUD-12p-1 to -4) — the failed-upload staging and the
+  device-to-device offer bookkeeping.
+  **12o-2:** the janitor no longer keeps the staging file of a *failed upload*
+  (`up-<jobId>`, a whole copy of the ciphertext): its source is still in the
+  media area, so a retry encrypts again. It still keeps a failed download's
+  bytes (a re-download is dearer than a re-encrypt) and the source path of
+  every live job. **12p-1:** a receiving offer ages out at
+  `min(offerTtl, relayTtl)` - the sender deletes the relay objects at 48 h, so
+  the offer no longer looks live for five more days - and an accept that finds
+  the relay objects gone (`expired`) removes the offer instead of leaving a
+  failed row whose Resume could only fail again. **12p-2:** in
+  `_offerToNewDevices` the designated sender moves the cursor only after
+  `send` returns, so a failed send (offline, relay down) leaves the new device
+  "new" for the next `OwnDevicesChanged`; devices that are not the sender still
+  move it at once; an `_offering` flag keeps two events from sending twice.
+  **12p-3:** `IncomingOffer` gains a persisted `paused` flag, set when the
+  person pauses and cleared by accepting, and "fresh" (what `_resumeOffers`
+  starts by itself) now means never started - waiting, no error, not paused,
+  no manifest, nothing imported - so neither a ledger write nor a maintenance
+  pass restarts a paused transfer under `autoAcceptTransfers`. **12p-4:**
+  `IncomingOffer` also gains `fetched`, written as segments land, and
+  `watchOffers` reports it as `done` while downloading or paused, so a
+  receiving row shows progress and a Resume. Stored offers from before read
+  both fields as 0/false. No schema change (the ledger is JSON in settings).
+  Tests ([`transfer_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/test/backup/transfer_test.dart),
+  `transfer_worker_test.dart`): an offer is dropped when its relay objects are
+  (49 h); the offers list counts fetched segments after a pause mid-download; a
+  paused transfer under auto-accept stays paused through a maintenance pass and
+  only `acceptOffer` resumes it; a failed automatic offer leaves the cursor
+  unset and the offer arrives after the relay recovers; a failed upload gives
+  back its ciphertext on the sweep while its source stays and a retry
+  succeeds. The expired-accept test and the server's
+  `backup_test.dart` now expect the offer gone. All five new tests fail on the
+  code before this step. Backup hooks run only in a started engine, so the two
+  automatic tests call `backup.start()` as the app's workers do.
+  Gate: engine **368 green** (363 before), server `backup_test` green on
+  Postgres (`restore_test` and `media_test` green too; one `restore_test`
+  case failed once under load and passed alone), analyze and format clean.
+  The phone needs a new APK to see it; no server change.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

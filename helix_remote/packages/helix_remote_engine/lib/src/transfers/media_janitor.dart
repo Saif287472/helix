@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:helix_remote_db/helix_remote_db.dart' show TransferState;
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/transfers/blob_store.dart';
 import 'package:helix_remote_engine/src/transfers/transfer_config.dart';
@@ -77,7 +78,12 @@ final class MediaJanitor {
       final db = _ctx.db;
       final kept = <String>{...await db.messagesDao.attachmentPaths()};
       for (final job in await db.transfersDao.live()) {
-        kept.addAll(await TransferFiles.allFor(_blobs, job.id));
+        // A failed upload's staging is a whole copy of its ciphertext, and
+        // its source is still in the media area, so a retry encrypts again:
+        // it is kept only while the job can still run (AUD-12o-2). A failed
+        // download's bytes cost a re-download, so those are kept.
+        final dead = job.kind == 'upload' && job.state == TransferState.failed;
+        if (!dead) kept.addAll(await TransferFiles.allFor(_blobs, job.id));
         final path = job.localPath;
         if (path != null) kept.add(path);
       }

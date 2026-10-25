@@ -344,8 +344,9 @@ void main() {
         );
         expect(await HistoryStore(laptop.db).messageCount(), 0);
         expect(
-          (await laptop.engine.backup.offers()).single.phase,
-          HistoryTransferPhase.failed,
+          await laptop.engine.backup.offers(),
+          isEmpty,
+          reason: 'an expired offer is removed, not left to Resume (AUD-12p-1)',
         );
 
         // Sending again gives a fresh transfer, which completes.

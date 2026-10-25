@@ -259,7 +259,9 @@ final class BackupService {
               fromDevice: o.fromDevice,
               receivedAt: o.receivedAt,
               phase: o.phase,
-              done: o.phase == HistoryTransferPhase.importing ? o.imported : 0,
+              done: o.phase == HistoryTransferPhase.importing
+                  ? o.imported
+                  : o.fetched,
               total: o.total,
               failure: BackupFailure.values.asNameMap()[o.error],
             ),
@@ -350,8 +352,15 @@ final class BackupService {
     if (!_options.autoAcceptTransfers || !_ctx.isSignedIn) return;
     try {
       for (final offer in (await _ledger.incoming()).values) {
+        // "Fresh" is never started: a paused offer (or one with its manifest
+        // or some segments already) is waiting for the person, not new
+        // (AUD-12p-3).
         final fresh =
-            offer.phase == HistoryTransferPhase.waiting && offer.error == null;
+            offer.phase == HistoryTransferPhase.waiting &&
+            offer.error == null &&
+            !offer.paused &&
+            offer.segments == null &&
+            offer.imported == 0;
         final retry =
             retryFailed &&
             offer.phase == HistoryTransferPhase.waiting &&
@@ -392,18 +401,35 @@ final class BackupService {
       final newest = fresh
           .map((r) => r.linkedAt!.millisecondsSinceEpoch)
           .reduce((a, b) => a > b ? a : b);
-      await _ctx.db.settingsDao.set(
+      Future<void> moveCursor() => _ctx.db.settingsDao.set(
         BackupSettings.offerCursor,
         newest,
         now: _ctx.now(),
       );
       final freshIds = {for (final r in fresh) r.deviceId};
       final senders = rows.where((r) => !freshIds.contains(r.deviceId));
-      if (senders.isEmpty || !senders.first.isThisDevice) return;
-      await _transfer.send(to: freshIds.toList());
+      if (senders.isEmpty || !senders.first.isThisDevice) {
+        // Someone else sends: this device has nothing to retry.
+        await moveCursor();
+        return;
+      }
+      // The sender's cursor moves only once the offer is out (AUD-12p-2): a
+      // send that fails (offline, the relay erroring) leaves the new device
+      // "new" for the next `OwnDevicesChanged`, instead of offering it
+      // nothing for ever. The flag keeps two events from sending twice.
+      if (_offering) return;
+      _offering = true;
+      try {
+        await _transfer.send(to: freshIds.toList());
+        await moveCursor();
+      } finally {
+        _offering = false;
+      }
     } on Object {
-      // No network, nothing to send, or no other device: the user can still
-      // send history by hand.
+      // No network, nothing to send, or no other device: the next device
+      // change tries again, and the user can still send history by hand.
     }
   }
+
+  bool _offering = false;
 }

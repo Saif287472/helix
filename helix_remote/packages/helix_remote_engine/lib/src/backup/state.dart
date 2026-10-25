@@ -140,6 +140,8 @@ final class IncomingOffer {
     this.phase = HistoryTransferPhase.waiting,
     this.segments,
     this.imported = 0,
+    this.fetched = 0,
+    this.paused = false,
     this.error,
   });
 
@@ -158,6 +160,14 @@ final class IncomingOffer {
   /// How many segments (in order) have been applied to the database.
   final int imported;
 
+  /// How many segments have been fetched from the relay (AUD-12p-4); while
+  /// importing, [imported] is the progress.
+  final int fetched;
+
+  /// The person paused this offer (AUD-12p-3): automatic acceptance leaves it
+  /// alone until they accept it again. It survives a restart.
+  final bool paused;
+
   /// The last failure, a [BackupFailure] name.
   final String? error;
 
@@ -167,6 +177,8 @@ final class IncomingOffer {
     HistoryTransferPhase? phase,
     List<MediaPointer>? segments,
     int? imported,
+    int? fetched,
+    bool? paused,
     String? error,
     bool clearError = false,
   }) => IncomingOffer(
@@ -177,6 +189,8 @@ final class IncomingOffer {
     phase: phase ?? this.phase,
     segments: segments ?? this.segments,
     imported: imported ?? this.imported,
+    fetched: fetched ?? this.fetched,
+    paused: paused ?? this.paused,
     error: clearError ? null : error ?? this.error,
   );
 
@@ -190,6 +204,8 @@ final class IncomingOffer {
         ? null
         : [for (final s in segments!) s.toJson()],
     'imported': imported,
+    'fetched': fetched,
+    'paused': paused ? true : null,
     'error': error,
   });
 
@@ -205,6 +221,8 @@ final class IncomingOffer {
         ? r.objects('segments', MediaPointer.fromJson)
         : null,
     imported: r.optInt('imported') ?? 0,
+    fetched: r.optInt('fetched') ?? 0,
+    paused: r.flag('paused'),
     error: r.optString('error'),
   );
 }

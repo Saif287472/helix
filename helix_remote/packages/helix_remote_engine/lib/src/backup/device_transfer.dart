@@ -361,6 +361,13 @@ final class DeviceTransferJob {
           await _db.transfersDao.missingSequences(id) ??
           [for (var i = 0; i < total; i++) i];
       var have = total - missing.length;
+      if (have != offer!.fetched) {
+        offer = await _ledger.updateIncoming(
+          id,
+          (o) => o.copyWith(fetched: have),
+          now: _ctx.now(),
+        );
+      }
       for (final seq in missing) {
         await _checkLive(id, token);
         final plain = await _fetchSegment(segments[seq], token);
@@ -370,6 +377,11 @@ final class DeviceTransferJob {
           payload: plain,
           total: total,
           isFinal: seq == total - 1,
+          now: _ctx.now(),
+        );
+        offer = await _ledger.updateIncoming(
+          id,
+          (o) => o.copyWith(fetched: have + 1),
           now: _ctx.now(),
         );
         progress(HistoryTransferPhase.downloading, ++have, total);
@@ -432,10 +444,15 @@ final class DeviceTransferJob {
       final code = failure is BackupException ? failure.failure : null;
       if (code == BackupFailure.cancelled && _paused.remove(id)) {
         // The user paused: keep the chunks and what was applied.
+        // `paused` is what keeps automatic acceptance from starting it again
+        // (AUD-12p-3): without it a paused offer looks like a new one.
         await _ledger.updateIncoming(
           id,
-          (o) =>
-              o.copyWith(phase: HistoryTransferPhase.waiting, clearError: true),
+          (o) => o.copyWith(
+            phase: HistoryTransferPhase.waiting,
+            paused: true,
+            clearError: true,
+          ),
           now: _ctx.now(),
         );
         progress(
@@ -469,6 +486,11 @@ final class DeviceTransferJob {
         );
         if (!transient) {
           await _db.transfersDao.dropTransfer(id);
+          // The relay no longer has it: a Resume could only fail the same
+          // way, so the offer goes (AUD-12p-1). The sender can send again.
+          if (code == BackupFailure.expired) {
+            await _ledger.removeIncoming(id, now: _ctx.now());
+          }
           final from = offer?.fromDevice;
           if (from != null) {
             await _enqueue(
@@ -502,7 +524,7 @@ final class DeviceTransferJob {
     HistoryTransferPhase phase,
   ) async => (await _ledger.updateIncoming(
     id,
-    (o) => o.copyWith(phase: phase, clearError: true),
+    (o) => o.copyWith(phase: phase, paused: false, clearError: true),
     now: _ctx.now(),
   ))!;
 
@@ -643,11 +665,15 @@ final class DeviceTransferJob {
         HistoryTransferPhase.declined ||
         HistoryTransferPhase.cancelled => age > const Duration(days: 1),
         HistoryTransferPhase.failed => age > const Duration(days: 2),
-        _ => age > _options.offerTtl,
+        // An offer outlives neither its own ttl nor the relay objects it
+        // points at, which the sender deletes at `relayTtl` (AUD-12p-1).
+        _ => age > _minDuration(_options.offerTtl, _options.relayTtl),
       };
       if (stale) await _ledger.removeIncoming(o.transferId, now: now);
     }
   }
+
+  static Duration _minDuration(Duration a, Duration b) => a < b ? a : b;
 
   /// This account's devices in the order that decides who sends an
   /// automatic offer: the longest-linked device first.
