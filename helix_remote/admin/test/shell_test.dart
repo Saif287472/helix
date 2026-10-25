@@ -55,4 +55,25 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Configuration is a screen of its own on the phone', (
+    tester,
+  ) async {
+    await h.startPhone(tester);
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    // Inside Configuration there is no place switcher: the operator came here
+    // to work on the server, and the screen is theirs until they leave it.
+    expect(find.byType(ConsoleDock), findsNothing);
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    // Back returns to the place the gear was tapped from, switcher and all.
+    expect(find.byType(ConsoleDock), findsOneWidget);
+    expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+  });
 }

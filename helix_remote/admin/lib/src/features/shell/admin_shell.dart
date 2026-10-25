@@ -60,6 +60,9 @@ class _AdminShellState extends State<AdminShell> {
   late final ServerController _server;
   AdminPlace _place = AdminPlace.overview;
 
+  /// The place the header gear was tapped from, so Configuration has a way back.
+  AdminPlace _returnTo = AdminPlace.overview;
+
   @override
   void initState() {
     super.initState();
@@ -94,7 +97,14 @@ class _AdminShellState extends State<AdminShell> {
     return ready.ready ? HelixConsoleColors.ok : HelixConsoleColors.warn;
   }
 
-  void _goTo(AdminPlace place) => setState(() => _place = place);
+  void _goTo(AdminPlace place) => setState(() {
+    // Configuration is a screen of its own on the phone, so it needs one way
+    // back to wherever the gear was tapped from.
+    if (place == AdminPlace.config && _place != AdminPlace.config) {
+      _returnTo = _place;
+    }
+    _place = place;
+  });
 
   Widget _screen() {
     final ctx = widget.adminContext;
@@ -191,19 +201,24 @@ class _AdminShellState extends State<AdminShell> {
                   ],
                 ),
                 actions: [
-                  if (mobile)
+                  // Configuration is a screen of its own on the phone: the gear
+                  // takes the operator in, an arrow takes them back to wherever
+                  // they were. Nothing else about the shell changes.
+                  if (mobile && place == AdminPlace.config)
+                    IconButton(
+                      tooltip: 'Back',
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => _goTo(_returnTo),
+                    )
+                  else if (mobile)
                     IconButton(
                       tooltip: AdminPlace.config.title,
-                      icon: Icon(
-                        place == AdminPlace.config
-                            ? AdminPlace.config.selectedIcon
-                            : AdminPlace.config.icon,
-                      ),
+                      icon: Icon(AdminPlace.config.icon),
                       onPressed: () => _goTo(AdminPlace.config),
                     ),
                 ],
               ),
-              bottomNavigationBar: mobile
+              bottomNavigationBar: mobile && place != AdminPlace.config
                   ? SafeArea(
                       top: false,
                       child: Padding(
