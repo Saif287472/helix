@@ -21,7 +21,7 @@ all open it. May depend only on `helix_remote_domain` and
 - `DatabaseKey.toString()` is redacted; the key lives in the platform
   keystore and is never logged.
 
-## Schema (version 3)
+## Schema (version 5)
 
 Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 
@@ -35,8 +35,9 @@ Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 | Sync | `inbox_cursor` (one row), `processed_envelopes`, `outbox_ops`, `deferred_actions` (actions waiting up to 7 days for their target) |
 | Groups (v2) | `groups` (title, role, roster `epoch`, encrypted state blob, the chat-list summary columns), `group_members` (the server's roster; `devices_json` is the member's device ids as JSON), `group_bans` |
 | Calls (v2) | `call_log` (the fact and timings of a call; never SDP or ICE) |
-| Transfers (v2) | `transfer_jobs` (durable, resumable attachment queue with a lease and a byte `offset`), `transfer_chunks` (device-to-device history chunks) |
+| Transfers (v2) | `transfer_jobs` (durable, resumable attachment queue with a lease, a byte `offset` and a `version` claim token; one row per standalone `purpose`), `transfer_chunks` (device-to-device history chunks) |
 | Settings | `settings` (typed through `Setting<T>`) |
+| Deletions | `delete_tombstones` (kind + target id + author id: what this device deleted, so a restore does not put it back) |
 
 Not here yet, by "tables arrive with the feature" (plan §3.8): `group_settings`
 (a group's settings live in the encrypted `groups.state` blob until a feature
@@ -57,6 +58,13 @@ Existing rows start at 0, which is the revision a first read expects.
 Schema 4 does the same for `sender_keys.version` (`from3To4`, the same kind of
 `ALTER TABLE`): this device's own sending key in a group gets the revision
 sessions have.
+
+Schema 5 is the queue's claim token and the record of local deletions
+(`from4To5`): an `ALTER TABLE transfer_jobs ADD COLUMN version INTEGER NOT
+NULL DEFAULT 0`, the unique index on `transfer_jobs.purpose`, and the new
+`delete_tombstones` table with its own index entities created from the frozen
+version-5 schema. `test/drift/helix/migration_test.dart` has the data-integrity
+test; see "Added for schema 5" below for what each is for.
 
 ## Two engines, one database file
 
@@ -206,6 +214,45 @@ No schema change; DAO methods only.
   chat whoever wrote it (a group read receipt names messages of several
   authors).
 
+## Added for schema 5 (review batch B13)
+
+One step, three shapes, so the queue and the backup importer do not each ask
+for a migration:
+
+- **`transfer_jobs.version`** is the queue's claim token, the same shape as
+  `sessions.version` and `sender_keys.version` and for the same reason: two
+  engines over one file. `claim` raises it and hands it to the worker; the
+  worker's writes go `WHERE id = ? AND version = ?`, so a job that became
+  something else while the worker held it cannot be completed by that worker.
+  Rows written before schema 5 sit at 0 and the first claim moves them to 1.
+  The column is here now; the DAO starts compare-and-setting it in this
+  batch's AUD-10-3 step.
+- **`transfer_jobs_purpose`** is a unique index on `purpose`. A standalone job
+  (a group avatar, a backup blob) is the only one of its kind, so two racing
+  calls cannot both queue it. Attachment jobs leave `purpose` null, and SQLite
+  counts nulls as distinct in a unique index, so they are untouched. Existing
+  databases gain the index safely: `enqueueStandalone` has never inserted a
+  second row for a reused purpose, it returns the one it found, which is the
+  stale-path bug this batch's AUD-10-4 step fixes.
+- **`delete_tombstones`** keeps `(kind, target id, author id)` for what this
+  device deleted — `message` (with the sender as author) or `conversation`
+  (empty author). Importing a backup cannot tell "this device never saw that
+  message" from "this device deleted it"; without the row the importer puts
+  the message back. Two choices are deliberate: tombstones are **never aged
+  out**, because any backup can be of any date and dropping old tombstones
+  could resurrect a deletion the person made years ago (the table is three
+  text columns and grows only with what the person actually deletes), and
+  there is **no timestamp or extra index**, since a lookup is always by the
+  primary key. They are written by the engine's delete-for-me, clear-chat and
+  delete-chat paths, not inside `MessagesDao.removeMessages` — that is shared
+  with the disappearing-message sweep and with replacing a placeholder row,
+  neither of which is a user choosing to delete something.
+
+`test/drift/helix/migration_test.dart` proves the step keeps every job at
+revision 0, refuses a second row for a purpose, and starts the tombstone table
+empty; `test/wipe_test.dart` proves a new table cannot be left out of
+`wipeAll`.
+
 ## Regenerating
 
 Generated code is committed: the `*.g.dart` parts, the schema dumps in
@@ -264,3 +311,11 @@ calls the app's `hardWipe` hook (`Engine(hardWipe: ...)`) after `wipeAll`.
 encrypted file never shows plaintext) to prove that a deleted marker is gone
 after delete and checkpoint, after `wipeAll`, and that the same steps without
 `secure_delete` would leave it.
+
+`wipeAll` deletes from a hand-written list of tables, because drift's
+`allTables` cannot be truncated in one go; a table added to the schema can
+therefore be missing from the list and keep its rows - key material, message
+bodies - through a sign-out. The last test in `test/wipe_test.dart` reads the
+list back out of `database.dart` and compares it with `db.allTables`, so that
+cannot happen quietly. (`messages_fts` is the one table the list does not name:
+the triggers on `messages` empty it as `messages` itself is deleted.)

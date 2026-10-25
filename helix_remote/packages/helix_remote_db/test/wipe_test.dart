@@ -136,4 +136,34 @@ void main() {
     expect(File('${file.path}-shm').existsSync(), isFalse);
     await destroyDatabaseFiles(file);
   });
+
+  /// `wipeAll` walks a hand-written list, so a table added to the schema can
+  /// be left out of it and keep its rows — key material, message bodies —
+  /// through a sign-out. Schema 5's `delete_tombstones` is exactly such a
+  /// table: rows of what this device deleted, meaningless to the next account
+  /// on the phone.
+  test('wipeAll names every table the database declares', () async {
+    final wiped = RegExp(
+      r'for \(final table in <TableInfo<Table, Object\?>>\[(.*?)\]\)',
+      dotAll: true,
+    ).firstMatch(File('lib/src/database.dart').readAsStringSync());
+    expect(wiped, isNotNull, reason: 'wipeAll still walks a list of tables');
+    String tableOf(String getter) => getter
+        .replaceAllMapped(RegExp('([A-Z])'), (m) => '_${m[1]!.toLowerCase()}')
+        .toLowerCase();
+    final listed = {
+      for (final id in RegExp(
+        r'[A-Za-z][A-Za-z0-9]*',
+      ).allMatches(wiped!.group(1)!))
+        tableOf(id.group(0)!),
+    };
+
+    final db = HelixDb.inMemory();
+    addTearDown(db.close);
+    // `messages_fts` is the one table the list does not name: the triggers on
+    // `messages` empty it as `messages` itself is deleted.
+    final declared = {for (final t in db.allTables) t.entityName}
+      ..remove('messages_fts');
+    expect(listed, declared);
+  });
 }

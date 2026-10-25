@@ -79,6 +79,16 @@ enum TransferState {
   failed,
 }
 
+/// What a local delete removed, and so what the backup importer must not put
+/// back (`tables/tombstones.dart`, AUD-12q-1).
+enum TombstoneKind {
+  /// One message, named by its wire id and its author.
+  message,
+
+  /// A whole chat, cleared or deleted here.
+  conversation,
+}
+
 /// What somebody can do in a group.
 enum GroupRole {
   owner,

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Variable;
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:test/test.dart';
@@ -9,6 +10,7 @@ import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
+import 'generated/schema_v4.dart' as v4;
 
 /// Migration tests against the checked-in schema dumps (plan §6.2: every
 /// migration has a drift_dev test from the first release onward).
@@ -145,6 +147,71 @@ void main() {
       await db.cryptoDao.saveOwnSenderKey(own(), expectedVersion: 0),
       isFalse,
     );
+  });
+
+  test('4 to 5 keeps every job at claim revision 0, makes a purpose unique and '
+      'adds the delete tombstones', () async {
+    final schema = await verifier.schemaAt(4);
+    final old = v4.DatabaseAtV4(schema.newConnection());
+    await old.customStatement(
+      'INSERT INTO transfer_jobs (kind, purpose, state, next_attempt_at, '
+      "created_at) VALUES ('upload', 'group_avatar', 'pending', 1000, 1000)",
+    );
+    await old.close();
+
+    final db = HelixDb.withExecutor(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 5);
+
+    // The job is where it was, and the new column starts where a first claim
+    // expects. Nothing reads it until the claim token is wired (S4).
+    final job = await db.transfersDao.byPurpose('group_avatar');
+    expect(job!.kind, 'upload');
+    expect(job.state, TransferState.pending);
+    expect(job.version, 0);
+
+    Future<void> standalone(String purpose, int at) => db.customInsert(
+      'INSERT INTO transfer_jobs (kind, purpose, state, next_attempt_at, '
+      'created_at) VALUES (?, ?, ?, ?, ?)',
+      variables: [
+        Variable.withString('upload'),
+        Variable.withString(purpose),
+        Variable.withString('pending'),
+        Variable.withInt(at),
+        Variable.withInt(at),
+      ],
+    );
+    await standalone('full_backup', 2000);
+    // One job per purpose, from the step that adds the index onwards.
+    expect(() => standalone('full_backup', 3000), throwsA(anything));
+
+    // The tombstones are new, empty, and keyed by what they name.
+    expect(
+      await db.customSelect('SELECT * FROM delete_tombstones').get(),
+      isEmpty,
+    );
+    Future<void> tomb(String kind, String target, String author) =>
+        db.customInsert(
+          'INSERT INTO delete_tombstones (kind, target_id, author_id) '
+          'VALUES (?, ?, ?)',
+          variables: [
+            Variable.withString(kind),
+            Variable.withString(target),
+            Variable.withString(author),
+          ],
+        );
+    await tomb('message', 'm1', 'bob');
+    await tomb('message', 'm1', 'carol');
+    await tomb('conversation', 'direct:bob', '');
+    expect(
+      ((await db.customSelect('SELECT * FROM delete_tombstones').get())
+          .map((r) => r.data['target_id'])
+          .toList()
+        ..sort()),
+      ['direct:bob', 'm1', 'm1'],
+    );
+    // One message of one author is one fact, not two.
+    expect(() => tomb('message', 'm1', 'bob'), throwsA(anything));
   });
 
   test(

@@ -28,6 +28,7 @@ import 'package:helix_remote_db/src/tables/messages.dart';
 import 'package:helix_remote_db/src/tables/people.dart';
 import 'package:helix_remote_db/src/tables/settings.dart';
 import 'package:helix_remote_db/src/tables/sync.dart';
+import 'package:helix_remote_db/src/tables/tombstones.dart';
 import 'package:helix_remote_db/src/tables/transfers.dart';
 import 'package:helix_remote_db/src/values.dart';
 
@@ -66,6 +67,7 @@ part 'database.g.dart';
     GroupBans,
     CallLog,
     Settings,
+    DeleteTombstones,
   ],
   include: {'fts.drift'},
   daos: [
@@ -91,7 +93,7 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -133,6 +135,25 @@ class HelixDb extends _$HelixDb {
         await m.database.customStatement(
           'ALTER TABLE sender_keys ADD COLUMN version INTEGER NOT NULL DEFAULT 0',
         );
+      },
+      // Schema 5 (batch B13) is the local-maintenance one: a claim token for
+      // transfer jobs, the uniqueness of a standalone job's purpose, and the
+      // tombstones that keep a local delete from coming back through a backup
+      // merge. `version` is one column with a default, exactly like the two
+      // revisions above it, so old rows start where a first claim expects. The
+      // purpose index cannot fail on an existing database: `purpose` is only
+      // ever set by `enqueueStandalone`, which no shipped build calls outside
+      // its own tests, so at most one row per purpose exists — and from here
+      // the index keeps it that way. The tombstones are a new, empty table:
+      // a device that deleted nothing before this upgrade deletes nothing it
+      // does not record.
+      from4To5: (m, schema) async {
+        await m.database.customStatement(
+          'ALTER TABLE transfer_jobs ADD COLUMN version INTEGER NOT NULL '
+          'DEFAULT 0',
+        );
+        await m.create(schema.transferJobsPurpose);
+        await m.create(schema.deleteTombstones);
       },
     ),
   );
@@ -183,6 +204,7 @@ class HelixDb extends _$HelixDb {
       groups,
       callLog,
       settings,
+      deleteTombstones,
     ]) {
       await delete(table).go();
     }

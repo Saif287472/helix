@@ -11,6 +11,10 @@ import 'package:helix_remote_db/src/values.dart';
 /// platform that offers it.
 @DataClassName('TransferRow')
 @TableIndex(name: 'transfer_jobs_state', columns: {#state, #nextAttemptAt})
+// One job per standalone purpose (a group avatar, a backup blob), so two
+// racing calls cannot both queue it. Attachment jobs leave `purpose` null,
+// which SQLite treats as distinct, so they are not touched.
+@TableIndex(name: 'transfer_jobs_purpose', columns: {#purpose}, unique: true)
 class TransferJobs extends Table {
   IntColumn get id => integer().autoIncrement()();
 
@@ -48,6 +52,15 @@ class TransferJobs extends Table {
   IntColumn get attempts => integer().withDefault(const Constant(0))();
   IntColumn get nextAttemptAt => integer().map(const EpochMs())();
   IntColumn get leaseUntil => integer().nullable().map(const EpochMs())();
+
+  /// The claim token (AUD-10-3). `claim` raises it and gives it to the worker;
+  /// `markDone`, `fail`, `release` and `setProgress` write
+  /// `WHERE id = ? AND version = ?`, so a worker that held the row as a
+  /// thumbnail cannot complete it after it became a download. The same shape
+  /// as `sessions.version` and `sender_keys.version`, and for the same reason:
+  /// two engines over one file. Rows written before schema 5 sit at 0 and the
+  /// first claim moves them to 1.
+  IntColumn get version => integer().withDefault(const Constant(0))();
 
   /// An error code only, never content.
   TextColumn get lastError => text().nullable()();

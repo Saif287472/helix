@@ -11322,6 +11322,18 @@ class $TransferJobsTable extends TransferJobs
         type: DriftSqlType.int,
         requiredDuringInsert: false,
       ).withConverter<DateTime?>($TransferJobsTable.$converterleaseUntiln);
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _lastErrorMeta = const VerificationMeta(
     'lastError',
   );
@@ -11357,6 +11369,7 @@ class $TransferJobsTable extends TransferJobs
     attempts,
     nextAttemptAt,
     leaseUntil,
+    version,
     lastError,
     createdAt,
   ];
@@ -11432,6 +11445,12 @@ class $TransferJobsTable extends TransferJobs
       context.handle(
         _attemptsMeta,
         attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
     if (data.containsKey('last_error')) {
@@ -11511,6 +11530,10 @@ class $TransferJobsTable extends TransferJobs
           data['${effectivePrefix}lease_until'],
         ),
       ),
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
       lastError: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}last_error'],
@@ -11571,6 +11594,15 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
   final DateTime nextAttemptAt;
   final DateTime? leaseUntil;
 
+  /// The claim token (AUD-10-3). `claim` raises it and gives it to the worker;
+  /// `markDone`, `fail`, `release` and `setProgress` write
+  /// `WHERE id = ? AND version = ?`, so a worker that held the row as a
+  /// thumbnail cannot complete it after it became a download. The same shape
+  /// as `sessions.version` and `sender_keys.version`, and for the same reason:
+  /// two engines over one file. Rows written before schema 5 sit at 0 and the
+  /// first claim moves them to 1.
+  final int version;
+
   /// An error code only, never content.
   final String? lastError;
   final DateTime createdAt;
@@ -11588,6 +11620,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
     required this.attempts,
     required this.nextAttemptAt,
     this.leaseUntil,
+    required this.version,
     this.lastError,
     required this.createdAt,
   });
@@ -11629,6 +11662,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
         $TransferJobsTable.$converterleaseUntiln.toSql(leaseUntil),
       );
     }
+    map['version'] = Variable<int>(version);
     if (!nullToAbsent || lastError != null) {
       map['last_error'] = Variable<String>(lastError);
     }
@@ -11667,6 +11701,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
       leaseUntil: leaseUntil == null && nullToAbsent
           ? const Value.absent()
           : Value(leaseUntil),
+      version: Value(version),
       lastError: lastError == null && nullToAbsent
           ? const Value.absent()
           : Value(lastError),
@@ -11695,6 +11730,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
       attempts: serializer.fromJson<int>(json['attempts']),
       nextAttemptAt: serializer.fromJson<DateTime>(json['nextAttemptAt']),
       leaseUntil: serializer.fromJson<DateTime?>(json['leaseUntil']),
+      version: serializer.fromJson<int>(json['version']),
       lastError: serializer.fromJson<String?>(json['lastError']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -11718,6 +11754,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
       'attempts': serializer.toJson<int>(attempts),
       'nextAttemptAt': serializer.toJson<DateTime>(nextAttemptAt),
       'leaseUntil': serializer.toJson<DateTime?>(leaseUntil),
+      'version': serializer.toJson<int>(version),
       'lastError': serializer.toJson<String?>(lastError),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -11737,6 +11774,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
     int? attempts,
     DateTime? nextAttemptAt,
     Value<DateTime?> leaseUntil = const Value.absent(),
+    int? version,
     Value<String?> lastError = const Value.absent(),
     DateTime? createdAt,
   }) => TransferRow(
@@ -11755,6 +11793,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
     attempts: attempts ?? this.attempts,
     nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
     leaseUntil: leaseUntil.present ? leaseUntil.value : this.leaseUntil,
+    version: version ?? this.version,
     lastError: lastError.present ? lastError.value : this.lastError,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -11779,6 +11818,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
       leaseUntil: data.leaseUntil.present
           ? data.leaseUntil.value
           : this.leaseUntil,
+      version: data.version.present ? data.version.value : this.version,
       lastError: data.lastError.present ? data.lastError.value : this.lastError,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -11800,6 +11840,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
           ..write('attempts: $attempts, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('leaseUntil: $leaseUntil, ')
+          ..write('version: $version, ')
           ..write('lastError: $lastError, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -11821,6 +11862,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
     attempts,
     nextAttemptAt,
     leaseUntil,
+    version,
     lastError,
     createdAt,
   );
@@ -11841,6 +11883,7 @@ class TransferRow extends DataClass implements Insertable<TransferRow> {
           other.attempts == this.attempts &&
           other.nextAttemptAt == this.nextAttemptAt &&
           other.leaseUntil == this.leaseUntil &&
+          other.version == this.version &&
           other.lastError == this.lastError &&
           other.createdAt == this.createdAt);
 }
@@ -11859,6 +11902,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
   final Value<int> attempts;
   final Value<DateTime> nextAttemptAt;
   final Value<DateTime?> leaseUntil;
+  final Value<int> version;
   final Value<String?> lastError;
   final Value<DateTime> createdAt;
   const TransferJobsCompanion({
@@ -11875,6 +11919,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
     this.attempts = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
     this.leaseUntil = const Value.absent(),
+    this.version = const Value.absent(),
     this.lastError = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -11892,6 +11937,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
     this.attempts = const Value.absent(),
     required DateTime nextAttemptAt,
     this.leaseUntil = const Value.absent(),
+    this.version = const Value.absent(),
     this.lastError = const Value.absent(),
     required DateTime createdAt,
   }) : kind = Value(kind),
@@ -11912,6 +11958,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
     Expression<int>? attempts,
     Expression<int>? nextAttemptAt,
     Expression<int>? leaseUntil,
+    Expression<int>? version,
     Expression<String>? lastError,
     Expression<int>? createdAt,
   }) {
@@ -11929,6 +11976,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
       if (attempts != null) 'attempts': attempts,
       if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
       if (leaseUntil != null) 'lease_until': leaseUntil,
+      if (version != null) 'version': version,
       if (lastError != null) 'last_error': lastError,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -11948,6 +11996,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
     Value<int>? attempts,
     Value<DateTime>? nextAttemptAt,
     Value<DateTime?>? leaseUntil,
+    Value<int>? version,
     Value<String?>? lastError,
     Value<DateTime>? createdAt,
   }) {
@@ -11965,6 +12014,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
       attempts: attempts ?? this.attempts,
       nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
       leaseUntil: leaseUntil ?? this.leaseUntil,
+      version: version ?? this.version,
       lastError: lastError ?? this.lastError,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -12018,6 +12068,9 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
         $TransferJobsTable.$converterleaseUntiln.toSql(leaseUntil.value),
       );
     }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
     if (lastError.present) {
       map['last_error'] = Variable<String>(lastError.value);
     }
@@ -12045,6 +12098,7 @@ class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
           ..write('attempts: $attempts, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('leaseUntil: $leaseUntil, ')
+          ..write('version: $version, ')
           ..write('lastError: $lastError, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -15189,6 +15243,284 @@ class SettingsCompanion extends UpdateCompanion<SettingRow> {
   }
 }
 
+class $DeleteTombstonesTable extends DeleteTombstones
+    with TableInfo<$DeleteTombstonesTable, DeleteTombstoneRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeleteTombstonesTable(this.attachedDatabase, [this._alias]);
+  @override
+  late final GeneratedColumnWithTypeConverter<TombstoneKind, String> kind =
+      GeneratedColumn<String>(
+        'kind',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<TombstoneKind>($DeleteTombstonesTable.$converterkind);
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<String> targetId = GeneratedColumn<String>(
+    'target_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _authorIdMeta = const VerificationMeta(
+    'authorId',
+  );
+  @override
+  late final GeneratedColumn<String> authorId = GeneratedColumn<String>(
+    'author_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [kind, targetId, authorId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'delete_tombstones';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DeleteTombstoneRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetIdMeta);
+    }
+    if (data.containsKey('author_id')) {
+      context.handle(
+        _authorIdMeta,
+        authorId.isAcceptableOrUnknown(data['author_id']!, _authorIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {kind, targetId, authorId};
+  @override
+  DeleteTombstoneRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeleteTombstoneRow(
+      kind: $DeleteTombstonesTable.$converterkind.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}kind'],
+        )!,
+      ),
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_id'],
+      )!,
+      authorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author_id'],
+      )!,
+    );
+  }
+
+  @override
+  $DeleteTombstonesTable createAlias(String alias) {
+    return $DeleteTombstonesTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<TombstoneKind, String, String> $converterkind =
+      const EnumNameConverter<TombstoneKind>(TombstoneKind.values);
+}
+
+class DeleteTombstoneRow extends DataClass
+    implements Insertable<DeleteTombstoneRow> {
+  final TombstoneKind kind;
+
+  /// The message's wire id, or the conversation's id.
+  final String targetId;
+
+  /// The message's author, so a tombstone names one person's message and not
+  /// another's that happens to share its id. Empty for a conversation.
+  final String authorId;
+  const DeleteTombstoneRow({
+    required this.kind,
+    required this.targetId,
+    required this.authorId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    {
+      map['kind'] = Variable<String>(
+        $DeleteTombstonesTable.$converterkind.toSql(kind),
+      );
+    }
+    map['target_id'] = Variable<String>(targetId);
+    map['author_id'] = Variable<String>(authorId);
+    return map;
+  }
+
+  DeleteTombstonesCompanion toCompanion(bool nullToAbsent) {
+    return DeleteTombstonesCompanion(
+      kind: Value(kind),
+      targetId: Value(targetId),
+      authorId: Value(authorId),
+    );
+  }
+
+  factory DeleteTombstoneRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeleteTombstoneRow(
+      kind: $DeleteTombstonesTable.$converterkind.fromJson(
+        serializer.fromJson<String>(json['kind']),
+      ),
+      targetId: serializer.fromJson<String>(json['targetId']),
+      authorId: serializer.fromJson<String>(json['authorId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'kind': serializer.toJson<String>(
+        $DeleteTombstonesTable.$converterkind.toJson(kind),
+      ),
+      'targetId': serializer.toJson<String>(targetId),
+      'authorId': serializer.toJson<String>(authorId),
+    };
+  }
+
+  DeleteTombstoneRow copyWith({
+    TombstoneKind? kind,
+    String? targetId,
+    String? authorId,
+  }) => DeleteTombstoneRow(
+    kind: kind ?? this.kind,
+    targetId: targetId ?? this.targetId,
+    authorId: authorId ?? this.authorId,
+  );
+  DeleteTombstoneRow copyWithCompanion(DeleteTombstonesCompanion data) {
+    return DeleteTombstoneRow(
+      kind: data.kind.present ? data.kind.value : this.kind,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      authorId: data.authorId.present ? data.authorId.value : this.authorId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeleteTombstoneRow(')
+          ..write('kind: $kind, ')
+          ..write('targetId: $targetId, ')
+          ..write('authorId: $authorId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(kind, targetId, authorId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeleteTombstoneRow &&
+          other.kind == this.kind &&
+          other.targetId == this.targetId &&
+          other.authorId == this.authorId);
+}
+
+class DeleteTombstonesCompanion extends UpdateCompanion<DeleteTombstoneRow> {
+  final Value<TombstoneKind> kind;
+  final Value<String> targetId;
+  final Value<String> authorId;
+  final Value<int> rowid;
+  const DeleteTombstonesCompanion({
+    this.kind = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.authorId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DeleteTombstonesCompanion.insert({
+    required TombstoneKind kind,
+    required String targetId,
+    this.authorId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : kind = Value(kind),
+       targetId = Value(targetId);
+  static Insertable<DeleteTombstoneRow> custom({
+    Expression<String>? kind,
+    Expression<String>? targetId,
+    Expression<String>? authorId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (kind != null) 'kind': kind,
+      if (targetId != null) 'target_id': targetId,
+      if (authorId != null) 'author_id': authorId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DeleteTombstonesCompanion copyWith({
+    Value<TombstoneKind>? kind,
+    Value<String>? targetId,
+    Value<String>? authorId,
+    Value<int>? rowid,
+  }) {
+    return DeleteTombstonesCompanion(
+      kind: kind ?? this.kind,
+      targetId: targetId ?? this.targetId,
+      authorId: authorId ?? this.authorId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (kind.present) {
+      map['kind'] = Variable<String>(
+        $DeleteTombstonesTable.$converterkind.toSql(kind.value),
+      );
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<String>(targetId.value);
+    }
+    if (authorId.present) {
+      map['author_id'] = Variable<String>(authorId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeleteTombstonesCompanion(')
+          ..write('kind: $kind, ')
+          ..write('targetId: $targetId, ')
+          ..write('authorId: $authorId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$HelixDb extends GeneratedDatabase {
   _$HelixDb(QueryExecutor e) : super(e);
   $HelixDbManager get managers => $HelixDbManager(this);
@@ -15258,6 +15590,9 @@ abstract class _$HelixDb extends GeneratedDatabase {
   late final $GroupBansTable groupBans = $GroupBansTable(this);
   late final $CallLogTable callLog = $CallLogTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
+  late final $DeleteTombstonesTable deleteTombstones = $DeleteTombstonesTable(
+    this,
+  );
   late final Index peoplePhoneHash = Index(
     'people_phone_hash',
     'CREATE INDEX people_phone_hash ON people (phone_hash)',
@@ -15281,6 +15616,10 @@ abstract class _$HelixDb extends GeneratedDatabase {
   late final Index transferJobsState = Index(
     'transfer_jobs_state',
     'CREATE INDEX transfer_jobs_state ON transfer_jobs (state, next_attempt_at)',
+  );
+  late final Index transferJobsPurpose = Index(
+    'transfer_jobs_purpose',
+    'CREATE UNIQUE INDEX transfer_jobs_purpose ON transfer_jobs (purpose)',
   );
   late final Index transferChunksTransfer = Index(
     'transfer_chunks_transfer',
@@ -15350,12 +15689,14 @@ abstract class _$HelixDb extends GeneratedDatabase {
     groupBans,
     callLog,
     settings,
+    deleteTombstones,
     peoplePhoneHash,
     processedEnvelopesAt,
     outboxOpsDue,
     deferredActionsTarget,
     deferredActionsExpiry,
     transferJobsState,
+    transferJobsPurpose,
     transferChunksTransfer,
     groupsList,
     groupMembersAccount,
@@ -22487,6 +22828,7 @@ typedef $$TransferJobsTableCreateCompanionBuilder =
       Value<int> attempts,
       required DateTime nextAttemptAt,
       Value<DateTime?> leaseUntil,
+      Value<int> version,
       Value<String?> lastError,
       required DateTime createdAt,
     });
@@ -22505,6 +22847,7 @@ typedef $$TransferJobsTableUpdateCompanionBuilder =
       Value<int> attempts,
       Value<DateTime> nextAttemptAt,
       Value<DateTime?> leaseUntil,
+      Value<int> version,
       Value<String?> lastError,
       Value<DateTime> createdAt,
     });
@@ -22602,6 +22945,11 @@ class $$TransferJobsTableFilterComposer
         column: $table.leaseUntil,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<String> get lastError => $composableBuilder(
     column: $table.lastError,
@@ -22707,6 +23055,11 @@ class $$TransferJobsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get lastError => $composableBuilder(
     column: $table.lastError,
     builder: (column) => ColumnOrderings(column),
@@ -22792,6 +23145,9 @@ class $$TransferJobsTableAnnotationComposer
         builder: (column) => column,
       );
 
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
   GeneratedColumn<String> get lastError =>
       $composableBuilder(column: $table.lastError, builder: (column) => column);
 
@@ -22863,6 +23219,7 @@ class $$TransferJobsTableTableManager
                 Value<int> attempts = const Value.absent(),
                 Value<DateTime> nextAttemptAt = const Value.absent(),
                 Value<DateTime?> leaseUntil = const Value.absent(),
+                Value<int> version = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => TransferJobsCompanion(
@@ -22879,6 +23236,7 @@ class $$TransferJobsTableTableManager
                 attempts: attempts,
                 nextAttemptAt: nextAttemptAt,
                 leaseUntil: leaseUntil,
+                version: version,
                 lastError: lastError,
                 createdAt: createdAt,
               ),
@@ -22897,6 +23255,7 @@ class $$TransferJobsTableTableManager
                 Value<int> attempts = const Value.absent(),
                 required DateTime nextAttemptAt,
                 Value<DateTime?> leaseUntil = const Value.absent(),
+                Value<int> version = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
                 required DateTime createdAt,
               }) => TransferJobsCompanion.insert(
@@ -22913,6 +23272,7 @@ class $$TransferJobsTableTableManager
                 attempts: attempts,
                 nextAttemptAt: nextAttemptAt,
                 leaseUntil: leaseUntil,
+                version: version,
                 lastError: lastError,
                 createdAt: createdAt,
               ),
@@ -24965,6 +25325,175 @@ typedef $$SettingsTableProcessedTableManager =
       SettingRow,
       PrefetchHooks Function()
     >;
+typedef $$DeleteTombstonesTableCreateCompanionBuilder =
+    DeleteTombstonesCompanion Function({
+      required TombstoneKind kind,
+      required String targetId,
+      Value<String> authorId,
+      Value<int> rowid,
+    });
+typedef $$DeleteTombstonesTableUpdateCompanionBuilder =
+    DeleteTombstonesCompanion Function({
+      Value<TombstoneKind> kind,
+      Value<String> targetId,
+      Value<String> authorId,
+      Value<int> rowid,
+    });
+
+class $$DeleteTombstonesTableFilterComposer
+    extends Composer<_$HelixDb, $DeleteTombstonesTable> {
+  $$DeleteTombstonesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnWithTypeConverterFilters<TombstoneKind, TombstoneKind, String>
+  get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get authorId => $composableBuilder(
+    column: $table.authorId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DeleteTombstonesTableOrderingComposer
+    extends Composer<_$HelixDb, $DeleteTombstonesTable> {
+  $$DeleteTombstonesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get authorId => $composableBuilder(
+    column: $table.authorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DeleteTombstonesTableAnnotationComposer
+    extends Composer<_$HelixDb, $DeleteTombstonesTable> {
+  $$DeleteTombstonesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumnWithTypeConverter<TombstoneKind, String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get authorId =>
+      $composableBuilder(column: $table.authorId, builder: (column) => column);
+}
+
+class $$DeleteTombstonesTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $DeleteTombstonesTable,
+          DeleteTombstoneRow,
+          $$DeleteTombstonesTableFilterComposer,
+          $$DeleteTombstonesTableOrderingComposer,
+          $$DeleteTombstonesTableAnnotationComposer,
+          $$DeleteTombstonesTableCreateCompanionBuilder,
+          $$DeleteTombstonesTableUpdateCompanionBuilder,
+          (
+            DeleteTombstoneRow,
+            BaseReferences<
+              _$HelixDb,
+              $DeleteTombstonesTable,
+              DeleteTombstoneRow
+            >,
+          ),
+          DeleteTombstoneRow,
+          PrefetchHooks Function()
+        > {
+  $$DeleteTombstonesTableTableManager(
+    _$HelixDb db,
+    $DeleteTombstonesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeleteTombstonesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeleteTombstonesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeleteTombstonesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<TombstoneKind> kind = const Value.absent(),
+                Value<String> targetId = const Value.absent(),
+                Value<String> authorId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeleteTombstonesCompanion(
+                kind: kind,
+                targetId: targetId,
+                authorId: authorId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required TombstoneKind kind,
+                required String targetId,
+                Value<String> authorId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeleteTombstonesCompanion.insert(
+                kind: kind,
+                targetId: targetId,
+                authorId: authorId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DeleteTombstonesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $DeleteTombstonesTable,
+      DeleteTombstoneRow,
+      $$DeleteTombstonesTableFilterComposer,
+      $$DeleteTombstonesTableOrderingComposer,
+      $$DeleteTombstonesTableAnnotationComposer,
+      $$DeleteTombstonesTableCreateCompanionBuilder,
+      $$DeleteTombstonesTableUpdateCompanionBuilder,
+      (
+        DeleteTombstoneRow,
+        BaseReferences<_$HelixDb, $DeleteTombstonesTable, DeleteTombstoneRow>,
+      ),
+      DeleteTombstoneRow,
+      PrefetchHooks Function()
+    >;
 
 class $HelixDbManager {
   final _$HelixDb _db;
@@ -25021,4 +25550,6 @@ class $HelixDbManager {
       $$CallLogTableTableManager(_db, _db.callLog);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
+  $$DeleteTombstonesTableTableManager get deleteTombstones =>
+      $$DeleteTombstonesTableTableManager(_db, _db.deleteTombstones);
 }

@@ -2691,7 +2691,7 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   designable.
 
 ## B13 — Local maintenance must survive a large history
-**A · ~1–2 days · no schema change**
+**A · ~1–2 days · drift schema 5**
 
 **Closes:**
 - AUD-10-1 — bulk maintenance deletes bind every row id in one statement;
@@ -2843,6 +2843,60 @@ duplicate still changes nothing.
 step migration, regenerated dump and codegen (`tool/codegen.dart`, CI
 `--check`); the delete tombstones take the same schema step (one table, plus
 the migration and dump that go with it).
+- S1 (the shape AUD-10-3, AUD-10-4 and AUD-12q-1 need — one schema step, not
+  three) — the queue had no way to notice that the row it was writing was no
+  longer the row it claimed, `transfer_jobs.purpose` had no constraint so two
+  standalone jobs of one kind could live, and a local delete left no trace for
+  the backup importer to honour.
+  **What changed:** `HelixDb.schemaVersion` is **5** and `from4To5`
+  ([`database.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/database.dart))
+  carries all three shapes: `ALTER TABLE transfer_jobs ADD COLUMN version
+  INTEGER NOT NULL DEFAULT 0` (a step migration cannot alter a table, so this
+  is the same raw statement `from2To3` and `from3To4` use for the crypto
+  revisions), `m.create(schema.transferJobsPurpose)` and
+  `m.create(schema.deleteTombstones)`. [`transfers.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/tables/transfers.dart)
+  gains the `version` column and a second `@TableIndex` on `purpose`, unique
+  (`uniqueKeys` renders a table constraint, which cannot be created by a step;
+  a `@TableIndex` can, and attachment jobs leave `purpose` null, which SQLite
+  counts as distinct, so they are untouched). [`tables/tombstones.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/tables/tombstones.dart)
+  is new: `(kind, target_id, author_id)` as the key, `kind` from the new
+  `TombstoneKind` in [`values.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/values.dart).
+  `wipeAll`'s list gains `deleteTombstones`. Codegen re-run: the v5 dump,
+  `database.steps.dart`, `database.g.dart` and the test schema helpers, with
+  `dart run tool/codegen.dart --check` clean.
+  **Two deliberate deviations from the audit's sketch.** The tombstones get
+  **no timestamp and are never aged out**: any backup can be of any date, so
+  dropping old tombstones could resurrect a deletion the person made years
+  ago, and the table is three text columns growing only with what is actually
+  deleted. And they will be written by the **engine's** three delete paths, not
+  inside `MessagesDao.removeMessages`: that method is shared with the
+  disappearing-message sweep and with replacing a placeholder row, neither of
+  which is a user choosing to delete something.
+  Tests: `migration_test.dart`'s pair loop grows from 6 paths to 10 (one per
+  earlier version into 5) and a new step test seeds a raw v4 `transfer_jobs`
+  row (`purpose = 'group_avatar'`), migrates to 5, and asserts the job sits at
+  revision 0 and is still readable by purpose, that a `full_backup` row is
+  accepted next to it while a **second** `full_backup` is refused, that
+  `delete_tombstones` arrives empty, that one message can be tombstoned once
+  per author (`m1` by bob and by carol are two facts) while a repeat of the
+  same `(message, m1, bob)` throws. A new
+  [`wipe_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/test/wipe_test.dart)
+  test reads `wipeAll`'s hand-written list out of `database.dart` and compares
+  it with `db.allTables`, so the table it just added cannot be the one left out
+  of a sign-out; it names `messages_fts` as the deliberate exception (its
+  triggers empty it as `messages` is deleted). That test is non-vacuous by
+  construction: the set it compares against comes from the live database, which
+  now declares `delete_tombstones`, so the test could only pass because the
+  list gained it.
+  Gate: db **146 green** (140 before), engine **352 green**, `dart analyze`
+  clean on db and engine, `flutter analyze` clean on the workspace apart from
+  another session's in-flight app files, `dart format` clean. **Nothing reads
+  or writes the new column or table yet**, so behaviour is unchanged until this
+  batch's AUD-10-3, AUD-10-4 and AUD-12q-1 steps wire them. Local schema only
+  — no server migration, no wire change; the app and CLI pick it up from the
+  package, and a phone database opened by a new build migrates up on open (a
+  downgrade is refused, as with schema 3 and 4). `MODULE.md` records the step,
+  the table and the wipe-list test.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**
