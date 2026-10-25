@@ -22,6 +22,10 @@ final class _LockableStorage implements ObjectStorage {
   final LocalObjectStorage inner;
   final Set<String> locked = {};
 
+  /// Runs after each successful delete; the sweep tests move a fake clock
+  /// here so that "slow" is a time step, not a sleep.
+  void Function()? onDelete;
+
   @override
   bool get supportsPresign => inner.supportsPresign;
 
@@ -46,6 +50,7 @@ final class _LockableStorage implements ObjectStorage {
       throw FileSystemException('locked by another process', key);
     }
     await inner.delete(key);
+    onDelete?.call();
   }
 
   @override
@@ -88,6 +93,18 @@ void main() {
     MessagingModule messaging() =>
         h.server.modules.whereType<MessagingModule>().single;
     String objects() => '${h.env.platform.schemas.of('media')}.objects';
+    String usage() => '${h.env.platform.schemas.of('media')}.account_usage';
+
+    Future<({int bytes, int objects})?> usageRow(String account) async {
+      final row = await h.env.platform.db.queryOne(
+        'SELECT bytes, objects FROM ${usage()} '
+        "WHERE account_id = @a:uuid AND kind = 'attachment'",
+        {'a': account},
+      );
+      return row == null
+          ? null
+          : (bytes: row.integer('bytes'), objects: row.integer('objects'));
+    }
 
     Future<String> upload(List<int> bytes) async {
       final r = await h.api.call(
@@ -163,6 +180,67 @@ void main() {
       await purge({'account': alice.accountId});
       expect(await rowExists(kept), isFalse);
       expect(await blobExists(kept), isFalse);
+    });
+
+    test('an expire sweep stops at its budget, and the next run continues '
+        'where it left off', () async {
+      final ids = [
+        for (var i = 0; i < 4; i++) await upload([i]),
+      ];
+      await h.env.platform.db.execute(
+        "UPDATE ${objects()} SET expires_at = now() - interval '1 minute'",
+      );
+      var now = DateTime.utc(2026, 10, 25, 12);
+      final sweep = media();
+      sweep.sweepClock = () => now;
+      sweep.expireBudget = const Duration(minutes: 1);
+      // Each blob delete costs two minutes of the one-minute budget.
+      blobs.onDelete = () => now = now.add(const Duration(minutes: 2));
+
+      await sweep.expire();
+      expect(await rowExists(ids.first), isFalse);
+      expect(await rowExists(ids[1]), isTrue, reason: 'the budget stopped it');
+      expect(await usageRow(alice.accountId), (bytes: 3, objects: 3));
+
+      blobs.onDelete = null;
+      await sweep.expire();
+      for (final id in ids) {
+        expect(await rowExists(id), isFalse);
+        expect(await blobExists(id), isFalse);
+      }
+      expect(await usageRow(alice.accountId), (bytes: 0, objects: 0));
+    });
+
+    test('a purge stops at its budget with what it deleted kept, and the '
+        'retry finishes the rest', () async {
+      final ids = [
+        for (var i = 0; i < 4; i++) await upload([i]),
+      ];
+      var now = DateTime.utc(2026, 10, 25, 12);
+      final module = media();
+      module.sweepClock = () => now;
+      module.purgeBudget = const Duration(minutes: 1);
+      blobs.onDelete = () => now = now.add(const Duration(minutes: 2));
+      final purge = module.jobs[MediaModule.purgeJob]!;
+
+      await expectLater(
+        purge({'account': alice.accountId}),
+        throwsA(isA<StateError>()),
+        reason: 'the job retries the rest',
+      );
+      expect(await rowExists(ids.first), isFalse);
+      expect(await rowExists(ids.last), isTrue);
+      expect(
+        await usageRow(alice.accountId),
+        (bytes: 3, objects: 3),
+        reason: 'the usage row stays for the rows that remain',
+      );
+
+      blobs.onDelete = null;
+      await purge({'account': alice.accountId});
+      expect(await rowExists(ids.last), isFalse);
+      expect(await blobExists(ids.last), isFalse);
+      expect(await usageRow(alice.accountId), isNull);
     });
 
     test('the weekly sweep deletes blobs with no row once they are a day '

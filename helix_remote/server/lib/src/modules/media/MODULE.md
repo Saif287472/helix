@@ -44,7 +44,15 @@ expiring an object gives both back.
   objects and uploads abandoned for a day. Account deletion enqueues
   `media.purge_account`. Both delete each blob before its row: a blob that
   cannot be deleted keeps its row for the next try (the purge job throws, so
-  the outbox retries it). `media.sweep_orphans` (weekly) lists the store
+  the outbox retries it). Both also run in keyset batches of 500 under a
+  deadline - `expireBudget` (4 minutes, below the periodic scheduler's
+  timeout) for the sweep, `purgeBudget` (45 seconds, below the outbox job
+  timeout) for the purge - because each blob delete is an unbounded store
+  call: a slow store used to stretch one run past the timeout and get it
+  killed mid-sweep (AUD-5-3). A sweep that runs out of budget returns with
+  every finished object committed; a purge that does throws, with its
+  finished objects committed and the usage row kept, so the retry deletes
+  only what is left. `media.sweep_orphans` (weekly) lists the store
   (`ObjectStorage.list`) and deletes blobs under a kind's prefix whose id has
   no row and that are older than a day (`orphanGrace`).
 - **What the server never learns:** which message uses an object

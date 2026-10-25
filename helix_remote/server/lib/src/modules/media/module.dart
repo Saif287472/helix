@@ -47,6 +47,28 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   /// kind, keeps a normal library far below it.
   static const maxObjectsPerKind = 100000;
 
+  /// How many rows one sweep batch reads. Small enough that a batch is a
+  /// pause between deadline checks, not an unbounded run.
+  static const sweepBatch = 500;
+
+  static const _noId = '00000000-0000-0000-0000-000000000000';
+
+  /// How long one expire sweep may run before it stops and leaves the rest
+  /// to the next tick. Below the periodic scheduler's timeout for this job,
+  /// so the sweep ends itself cleanly instead of being killed mid-delete.
+  /// Each object's blob and row commit before the next starts, so a stopped
+  /// run still made progress (AUD-5-3).
+  Duration expireBudget = const Duration(minutes: 4);
+
+  /// The account purge's budget: below the outbox runner's 60-second job
+  /// timeout. A purge with rows left at its budget throws - progress is
+  /// committed and the job retries the rest (AUD-5-3).
+  Duration purgeBudget = const Duration(seconds: 45);
+
+  /// Where the sweeps read their deadline from. Null is the module's clock;
+  /// a test replaces it to move time without sleeping.
+  DateTime Function()? sweepClock;
+
   static const presignTtl = Duration(minutes: 15);
 
   static Duration? retention(MediaKind kind) => switch (kind) {
@@ -133,7 +155,12 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
 
   @override
   List<PeriodicJob> get periodic => [
-    PeriodicJob('media.expire', const Duration(minutes: 30), _expire),
+    PeriodicJob(
+      'media.expire',
+      const Duration(minutes: 30),
+      expire,
+      timeout: const Duration(minutes: 5),
+    ),
     PeriodicJob(
       'media.sweep_orphans',
       const Duration(days: 7),
@@ -429,43 +456,80 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
     {'a': account, 'k': kind.wire, 'n': size},
   );
 
+  DateTime _sweepNow() => (sweepClock ?? context.clock.now)();
+
   /// Expired objects, and uploads abandoned for a day. Each blob goes
   /// before its row (review A-10): a blob that cannot be deleted (a file an
   /// antivirus scan holds open) keeps its row, so the next run tries again
   /// instead of forgetting the file.
-  Future<void> _expire() async {
-    var after = '00000000-0000-0000-0000-000000000000';
+  ///
+  /// Keyset batches with a deadline (AUD-5-3): one blob delete per object
+  /// against a store with no answer would otherwise run past the scheduler's
+  /// timeout and be killed mid-sweep. The run stops at [expireBudget] with
+  /// every finished object committed, and the next run starts at the rows
+  /// that are left (public for tests).
+  Future<void> expire() async {
+    final deadline = _sweepNow().add(expireBudget);
+    var after = _noId;
+    var deleted = 0;
     var failed = 0;
     while (true) {
       final rows = await context.db.query(
         'SELECT id, owner_account, kind, size FROM $s.objects WHERE id > @after:uuid AND '
         "(expires_at < now() OR (completed_at IS NULL AND created_at < now() - interval '1 day')) "
-        'ORDER BY id LIMIT 500',
+        'ORDER BY id LIMIT $sweepBatch',
         {'after': after},
       );
-      if (rows.isEmpty) break;
       for (final r in rows) {
-        if (!await _deleteObject(r)) failed++;
+        if (_sweepNow().isAfter(deadline)) {
+          log.info('media_expire_stopped', {
+            'deleted': deleted,
+            'failed': failed,
+          });
+          return;
+        }
+        if (await _deleteObject(r)) {
+          deleted++;
+        } else {
+          failed++;
+        }
       }
+      if (rows.length < sweepBatch) break;
       after = rows.last.string('id');
     }
     if (failed > 0) log.warn('media_delete_failed', {'count': failed});
   }
 
-  /// Every object of a deleted account, blob before row. Throws when a blob
-  /// could not be deleted, so the job retries the rows that are left.
+  /// Every object of a deleted account, blob before row, in keyset batches.
+  /// Throws when a blob could not be deleted or [purgeBudget] ran out before
+  /// the last row, so the job retries what is left; whatever it did delete
+  /// is committed, and the usage row stays for the rest (AUD-5-3).
   Future<void> _purgeAccount(Map<String, Object?> payload) async {
     final account = payload['account']! as String;
-    final rows = await context.db.query(
-      'SELECT id, owner_account, kind, size FROM $s.objects WHERE owner_account = @a:uuid',
-      {'a': account},
-    );
-    var failed = 0;
-    for (final r in rows) {
-      if (!await _deleteObject(r)) failed++;
-    }
-    if (failed > 0) {
-      throw StateError('$failed media blobs could not be deleted');
+    final deadline = _sweepNow().add(purgeBudget);
+    var after = _noId;
+    while (true) {
+      final rows = await context.db.query(
+        'SELECT id, owner_account, kind, size FROM $s.objects '
+        'WHERE owner_account = @a:uuid AND id > @after:uuid ORDER BY id '
+        'LIMIT $sweepBatch',
+        {'a': account, 'after': after},
+      );
+      if (rows.isEmpty) break;
+      var failed = 0;
+      for (final r in rows) {
+        if (_sweepNow().isAfter(deadline)) {
+          throw StateError(
+            'media purge of $account stopped at its budget with rows left',
+          );
+        }
+        if (!await _deleteObject(r)) failed++;
+      }
+      if (failed > 0) {
+        throw StateError('$failed media blobs could not be deleted');
+      }
+      after = rows.last.string('id');
+      if (rows.length < sweepBatch) break;
     }
     // Every row is gone, so the account has no usage left to count. A
     // deletion that stopped on a blob failure keeps its rows (and counter)

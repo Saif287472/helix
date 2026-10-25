@@ -1486,6 +1486,28 @@ constraint (expand → backfill → migrate → contract). No wire change.
   and backup suites **34 green**; `dart analyze` clean on the changed
   files. Migration 2 (`media_usage`) is new and production owes it. No
   wire change, no app change; no APK needed. Docs: media MODULE.md.
+- S3 (AUD-5-3) — `media.expire` looped until it found no expired rows, one
+  blob delete (each an unbounded store call) per object, and the account
+  purge materialised every row before its first delete. A slow store could
+  hold either past the scheduler's timeout, which kills the run mid-sweep.
+  **What changed:** both work in keyset batches of `sweepBatch` (500) under
+  a deadline taken from the module clock - `expireBudget` (4 minutes,
+  below the periodic scheduler's 5-minute timeout) and `purgeBudget` (45
+  seconds, below the outbox runner's 60-second timeout). Every object's
+  blob and row are committed before the next starts. A sweep that runs out
+  of budget returns with its progress kept and logs
+  `media_expire_stopped`; a purge that runs out throws, so the job retries
+  only the rows that are left, and its usage row stays until the last one
+  is gone.
+  Tests: `test/modules/retention_test.dart` "an expire sweep stops at its
+  budget, and the next run continues where it left off" (a fake clock moves
+  two minutes per blob delete against a one-minute budget: exactly one
+  object goes, its counter is released, the rest remain; a second run
+  finishes) and "a purge stops at its budget with what it deleted kept, and
+  the retry finishes the rest".
+  Gate: retention **10 green**, media/backup **11 green**, availability
+  **6 green**; `dart analyze` clean on the changed files. No schema change,
+  no wire change, no app change; no APK needed. Docs: media MODULE.md.
 
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**
