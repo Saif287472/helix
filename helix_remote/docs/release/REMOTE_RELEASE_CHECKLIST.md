@@ -31,6 +31,13 @@ user asks.
   `--dart-define=HELIX_GLOBAL_PINS=...` (`docs/operations/V2_SERVER_HANDOFF.md`,
   "TLS pinning"); decide per release whether to pin, and if so use the live
   certificate's current key.
+- A build that is to offer downloadable themes or ringtones passes
+  `--dart-define=HELIX_PACK_PUBLISHERS=agiletechbd:4141a2017547d646ecac0af7d4122aeb2bc61354a973da3646096d86732075b2`
+  (`app/lib/core/theme/orbit_packs.dart`, `PackTrust`). The key is public and
+  stable; the seed that makes packs is `helix_remote/secrets/orbit-pack.hex`,
+  gitignored and never in a commit or a log. A build with no define trusts
+  nobody, and its More themes page says nothing on offer is a pack it can use
+  even when the server lists nine - so decide it on every release, like pinning.
 - Android and Windows are the supported release platforms; iOS is explicitly
   excluded by ADR 023 until its platform controls are implemented and reviewed.
 - Remote contains no Local LAN discovery, UDP broadcast, mDNS browsing, or Local
@@ -83,6 +90,13 @@ user asks.
   parity test (`packages/helix_remote_api`).
 - `docs/operations/V2_SERVER_HANDOFF.md` is current: the environment table was
   re-checked against the code and `server/.env.example` is complete.
+- `GET /v1/packs` lists what the release intends to offer. Helix Global has
+  `HELIX_PACKS_DIR=J:\Projects\Servers\helix_server\packs` (live 2026-10-25) and
+  nine theme packs at revision 1 - arcade, bloom, field, jungle, metal, mochi,
+  ocean, papyrus, terminal - staged and published with
+  `dart run tool/theme_pack_tool.dart build …` and `publish …`. A revision is
+  immutable: a theme that changes goes out as `--revision 2`, and `publish`
+  refuses to rewrite the bytes a device already cached.
 - Health, readiness, account export, account deletion, and admin metrics gates
   are covered by tests.
 - No plaintext messages, private media bytes, tokens, keys, backup secrets, or
