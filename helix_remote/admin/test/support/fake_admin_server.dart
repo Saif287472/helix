@@ -360,18 +360,7 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
       final old = reports[index];
       reports = [
         for (final r in reports)
-          if (r.reportId == id)
-            AdminReport(
-              reportId: old.reportId,
-              reporter: old.reporter,
-              subject: old.subject,
-              category: old.category,
-              status: outcome,
-              createdAt: old.createdAt,
-              note: old.note,
-            )
-          else
-            r,
+          if (r.reportId == id) old.copyWith(status: outcome) else r,
       ];
       _record('report.${outcome.wire}', target: id);
       return http.Response('', 204);
@@ -582,6 +571,10 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
     ReportStatus status = ReportStatus.open,
     ReportCategory category = ReportCategory.spam,
     String? note,
+    String? subjectName,
+    String? subjectPhone,
+    String? reporterName,
+    String? reporterPhone,
   }) => AdminReport(
     reportId: id,
     reporter: 'reporter-0000000',
@@ -590,6 +583,10 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
     status: status,
     createdAt: DateTime.utc(2026, 10, 1, 8),
     note: note,
+    subjectName: subjectName,
+    subjectPhone: subjectPhone,
+    reporterName: reporterName,
+    reporterPhone: reporterPhone,
   );
 }
 

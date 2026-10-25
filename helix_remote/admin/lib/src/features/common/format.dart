@@ -36,6 +36,34 @@ String accountPhone(AdminAccount account) {
 String maskedPhone(String? last4) =>
     last4 == null || last4.isEmpty ? 'No phone number' : '•••• $last4';
 
+/// The two people a report is about, for the moderation queue (ADR-030).
+/// The server joins each one's own name and full number onto the row; what
+/// it did not join - an account whose app never reported, or a server with
+/// no `HELIX_PHONE_KEY` - falls back to the id, or to no number at all.
+/// These four are the console's only way in to a report's numbers.
+String reportSubjectName(AdminReport report) =>
+    _reportName(report.subjectName, report.subject);
+
+/// The account that filed the report, named the same way.
+String reportReporterName(AdminReport report) =>
+    _reportName(report.reporterName, report.reporter);
+
+/// The reported account's number, or null when the server has none to show.
+String? reportSubjectPhone(AdminReport report) =>
+    _reportPhone(report.subjectPhone);
+
+/// The reporter's number, or null.
+String? reportReporterPhone(AdminReport report) =>
+    _reportPhone(report.reporterPhone);
+
+String _reportName(String? name, String accountId) {
+  final trimmed = name?.trim() ?? '';
+  return trimmed.isEmpty ? shortId(accountId) : trimmed;
+}
+
+String? _reportPhone(String? number) =>
+    number == null || number.isEmpty ? null : number;
+
 /// "12 MiB".
 String formatBytes(int bytes) {
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];

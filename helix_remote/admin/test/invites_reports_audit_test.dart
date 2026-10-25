@@ -159,10 +159,28 @@ void main() {
   group('reports', () {
     setUp(() {
       h.server.accounts = [
-        FakeAdminServer.account('acct-1', name: 'alice', last4: '1234'),
+        FakeAdminServer.account(
+          'acct-1',
+          name: 'alice',
+          displayName: 'Alice Rahman',
+          last4: '1234',
+        ),
+        FakeAdminServer.account(
+          'reporter-0000000',
+          name: 'bob',
+          displayName: 'Bob Rahman',
+          last4: '0002',
+        ),
       ];
       h.server.reports = [
-        FakeAdminServer.report('rep-1', note: 'sends me spam every day'),
+        FakeAdminServer.report(
+          'rep-1',
+          note: 'sends me spam every day',
+          subjectName: 'Alice Rahman',
+          subjectPhone: '+8801711000001',
+          reporterName: 'Bob Rahman',
+          reporterPhone: '+8801711000002',
+        ),
         FakeAdminServer.report(
           'rep-2',
           category: ReportCategory.abuse,
@@ -188,6 +206,16 @@ void main() {
 
       expect(find.text('Spam'), findsOneWidget);
       expect(find.text('Abuse'), findsNothing);
+      // A row names both people and numbers them, so an operator knows who
+      // they are looking at before opening anything (ADR-030).
+      expect(
+        find.text('Alice Rahman · +8801711000001'),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.text('by Bob Rahman · +8801711000002'),
+        findsAtLeastNWidgets(1),
+      );
       // The queue is a list of tiles: what a report says and how to work it
       // are inside it, not on the row.
       expect(find.text('sends me spam every day'), findsNothing);
@@ -257,13 +285,45 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Resolve'), findsOneWidget);
     });
 
-    testWidgets('a report can open the reported account', (tester) async {
+    testWidgets('a name opens that person, and no button does', (tester) async {
       await openReports(tester);
       await h.openReportSheet(tester, 'Spam');
-      await tapText(tester, 'Open account');
+      // The queue sheet has no "Open account" button any more: the two people
+      // are each a row of their own, and their names are the way in.
+      expect(find.text('Open account'), findsNothing);
 
+      await tapText(tester, 'Alice Rahman');
       expect(find.text('•••• 1234'), findsOneWidget);
       expect(find.text('DEVICES'), findsOneWidget);
+    });
+
+    testWidgets('the reporter name opens the reporter', (tester) async {
+      await openReports(tester);
+      await h.openReportSheet(tester, 'Spam');
+      expect(find.text('+8801711000002'), findsOneWidget);
+
+      await tapText(tester, 'Bob Rahman');
+      expect(
+        h.server.requests,
+        contains('GET /v1/admin/accounts/reporter-0000000'),
+      );
+      expect(find.text('•••• 0002'), findsOneWidget);
+    });
+
+    testWidgets('a row with nothing joined in falls back to the ids', (
+      tester,
+    ) async {
+      // A personal server without HELIX_PHONE_KEY, or an account whose app
+      // never reported: the console says so instead of showing a blank.
+      h.server.reports = [
+        FakeAdminServer.report('rep-1', category: ReportCategory.spam),
+      ];
+      await openReports(tester);
+      await h.openReportSheet(tester, 'Spam');
+
+      expect(find.text('acct-1'), findsWidgets);
+      expect(find.text('reporter'), findsOneWidget);
+      expect(find.text('No number reported'), findsWidgets);
     });
 
     testWidgets('a load failure is an error, not "no reports"', (tester) async {

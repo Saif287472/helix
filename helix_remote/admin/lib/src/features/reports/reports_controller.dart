@@ -38,19 +38,13 @@ final class ReportsController extends PagedController<AdminReport> {
     _resolving.remove(reportId);
     if (problem == null) {
       if (_status == null) {
-        // Everything is listed: show the new state in place.
-        final old = items.firstWhere((r) => r.reportId == reportId);
+        // Everything is listed: show the new state in place, with the two
+        // people still named and numbered on it.
         replaceWhere(
           (r) => r.reportId == reportId,
-          AdminReport(
-            reportId: old.reportId,
-            reporter: old.reporter,
-            subject: old.subject,
-            category: old.category,
-            status: outcome,
-            createdAt: old.createdAt,
-            note: old.note,
-          ),
+          items
+              .firstWhere((r) => r.reportId == reportId)
+              .copyWith(status: outcome),
         );
       } else {
         removeWhere((r) => r.reportId == reportId);

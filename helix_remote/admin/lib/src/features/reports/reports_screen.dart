@@ -152,8 +152,10 @@ class ReportsView extends StatelessWidget {
   }
 }
 
-/// One report in the queue: what was filed and against whom - enough to pick
-/// which one to work on. Its note and its actions are inside, in the sheet.
+/// One report in the queue: what was filed, against whom and by whom - enough
+/// to pick which one to work on. The two people are named and numbered the way
+/// the account list names them (ADR-030); their note and the ways to work the
+/// report are inside, in the sheet.
 class _ReportTile extends StatelessWidget {
   const _ReportTile({required this.report, required this.onTap});
 
@@ -186,8 +188,21 @@ class _ReportTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Account ${shortId(report.subject)} reported by '
-                    '${shortId(report.reporter)}',
+                    _partyLine(
+                      reportSubjectName(report),
+                      reportSubjectPhone(report),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: HelixConsoleColors.textBody,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'by ${_partyLine(reportReporterName(report), reportReporterPhone(report))}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -224,6 +239,11 @@ class _ReportTile extends StatelessWidget {
   }
 }
 
+/// A person and their number as one line: the number is left off when this
+/// server holds none to show.
+String _partyLine(String name, String? phone) =>
+    phone == null ? name : '$name · $phone';
+
 /// One report in full and the two ways to close it. It pops with the outcome
 /// the operator worked it to, so the queue can say what happened.
 class _ReportSheet extends StatelessWidget {
@@ -247,15 +267,16 @@ class _ReportSheet extends StatelessWidget {
     Navigator.of(context).pop(outcome);
   }
 
-  /// The account this report was filed against, in a sheet over this one.
-  /// Banning or deleting it from there is worth a line here, because the
-  /// account sheet closes and this one is what the operator is looking at.
-  Future<void> _openAccount(BuildContext context) async {
+  /// One of the two people behind this report, in a sheet over this one. The
+  /// name is the link an operator follows to look at the person; banning or
+  /// deleting there is worth a line back here, because that sheet closes and
+  /// this one is what the operator is looking at.
+  Future<void> _openAccount(BuildContext context, String accountId) async {
     final outcome = await showConsoleSheet<String>(
       context: context,
       child: AccountDetailView(
         adminContext: adminContext,
-        accountId: report.subject,
+        accountId: accountId,
         onRemoved: (outcome) => Navigator.of(context).pop(outcome),
       ),
     );
@@ -298,16 +319,20 @@ class _ReportSheet extends StatelessWidget {
                 children: [
                   const ConsoleCardLabel('What was filed'),
                   const SizedBox(height: 12),
-                  ConsoleProperty(
+                  _ReportParty(
                     label: 'Reported account',
-                    value: shortId(report.subject),
-                    copyable: true,
+                    name: reportSubjectName(report),
+                    phone: reportSubjectPhone(report),
+                    accountId: report.subject,
+                    onTap: () => _openAccount(context, report.subject),
                   ),
                   const SizedBox(height: 8),
-                  ConsoleProperty(
+                  _ReportParty(
                     label: 'Filed by',
-                    value: shortId(report.reporter),
-                    copyable: true,
+                    name: reportReporterName(report),
+                    phone: reportReporterPhone(report),
+                    accountId: report.reporter,
+                    onTap: () => _openAccount(context, report.reporter),
                   ),
                   const SizedBox(height: 8),
                   ConsoleProperty(
@@ -331,8 +356,8 @@ class _ReportSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
             if (isOpen) ...[
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -356,21 +381,95 @@ class _ReportSheet extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
             ],
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => _openAccount(context),
-                style: ConsoleButtons.outlined,
-                child: const Text('Open account'),
-              ),
-            ),
           ],
         );
       },
     );
   }
+}
+
+/// One of the two people behind a report: their own name and number (ADR-030),
+/// in a row that opens their account. The name is what an operator recognises,
+/// so the whole row is the link; the id goes to the clipboard for the ticket
+/// they write, and falls back to the id prefix on screen when the server joined
+/// no name in.
+class _ReportParty extends StatelessWidget {
+  const _ReportParty({
+    required this.label,
+    required this.name,
+    required this.phone,
+    required this.accountId,
+    required this.onTap,
+  });
+
+  final String label;
+  final String name;
+  final String? phone;
+  final String accountId;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ConsoleCard(
+    radius: 10,
+    color: HelixConsoleColors.sunken,
+    padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+    onTap: onTap,
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: HelixConsoleColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: HelixConsoleColors.accent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.open_in_new,
+                    size: 14,
+                    color: HelixConsoleColors.textFaint,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                phone ?? 'No number reported',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: HelixConsoleColors.textBody,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ConsoleCopyButton(label: '$label id', value: accountId),
+      ],
+    ),
+  );
 }
 
 /// The status glyph in its coloured circle.

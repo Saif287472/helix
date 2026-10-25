@@ -274,6 +274,13 @@ void main() {
           'phoneNumber',
           'phone_number',
           'PhoneNumber',
+          // A report's two people carry numbers the same way (2026-10-25):
+          // only format.dart reads them, through reportSubjectPhone() and
+          // reportReporterPhone().
+          'subjectPhone',
+          'reporterPhone',
+          'subject_phone',
+          'reporter_phone',
         ]) {
           if (code.contains(needle)) readers.add('$path: $needle');
         }
@@ -281,6 +288,8 @@ void main() {
       expect(readers, isEmpty, reason: 'only format.dart may read a number');
       final code = _code(lib[formatFile]!);
       expect(code, contains('account.phoneNumber'));
+      expect(code, contains('report.subjectPhone'));
+      expect(code, contains('report.reporterPhone'));
       // And it falls back to the last four when the server holds no number.
       expect(code, contains('maskedPhone(account.phoneLast4)'));
       // A hash is the server's own business: no screen needs to compare or

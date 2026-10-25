@@ -33,7 +33,7 @@ user asks;** say whether a new APK is needed instead (see `AGENTS.md`).
 | Overview | server facts, health, maintenance mode, federation switch, feature flags, activity numbers (open sockets, requests, 5xx share, dead jobs, undelivered messages, crash reports) | `config`, `updateConfig`, `featureFlags`, `setFeatureFlag`, `ops.ready`, `metrics` |
 | Accounts | paged list, search by Helix name or last 4 digits, status filter; one account opens as a sheet with its devices; suspend or resume, ban, delete (type `DELETE`), revoke device, recovery code (shown once) | `accounts`, `account`, `suspend`, `unsuspend`, `ban`, `deleteAccount`, `revokeDevice`, `createRecoveryCode` |
 | Invites | only when the server registers by invite; create (code shown once), cancel | `invites`, `createInvite`, `cancelInvite` |
-| Reports | open, resolved, dismissed; the queue is a list of tiles, and one report opens as a sheet with its note and its actions — resolve or dismiss, or open the reported account in a sheet of its own. The Reports item wears how many are open (`50+` when the console has only seen a page). | `reports`, `resolveReport` |
+| Reports | open, resolved, dismissed; the queue is a list of tiles, each naming both people with their numbers, and one report opens as a sheet with its note and its actions — resolve or dismiss. Either person's name in the sheet opens their account in a sheet of its own. The Reports item wears how many are open (`50+` when the console has only seen a page). | `reports`, `resolveReport` |
 | Configuration | one page, top down: a hero card (name, version and sign-up pills, Edit name); a health card (the server's own readiness checks as a meter, then maintenance mode and purge); four quick-access tiles - Network & Sync (federation), Logs & Activity (the live log as a sheet over this page, the audit trail as its own page), Features (flags), Security (App lock, admin password); a grouped list of the facts an operator copies (address, Node ID, attachment limit, signed-in until); a red danger zone with sign out | `updateConfig`, `changePassword`, `purge` |
 | Configuration > Audit | newest first, "Load more" paging | `audit` |
 | Configuration > Logs | recent lines, filter, copy, "Follow live" over the admin WebSocket (polls where a socket is impossible) | `logs`, `logStream` |
@@ -95,12 +95,15 @@ report a failed call, the clock) and never touches widgets.
   no controller keeps them and no list carries them.
 - Phone numbers: an account's own app reports its number once after signing in,
   and the server keeps it sealed (`HELIX_PHONE_KEY`, ADR-030) so the operator
-  can tell an abuse report came from whom and act on it. `accountPhone()` in
-  `lib/src/features/common/format.dart` is the only place that reads it, the
-  accounts list and account detail are the only screens that show it, and it is
-  never copied, stored or logged. Without the key the server sends only the last
-  four digits (`test/accounts_test.dart` covers both answers, and a
-  `rules_test.dart` rule keeps the number in that one file).
+  can tell an abuse report came from whom and act on it.
+  `accountPhone()` in `lib/src/features/common/format.dart` is the only place
+  that reads it, and `reportSubjectPhone()` / `reportReporterPhone()` in the
+  same file are the only places that read the numbers the server joins onto a
+  report row; the accounts list, the account detail and the Reports queue are
+  the only screens that show them, and they are never copied, stored or
+  logged. Without the key the server sends only the last four digits, and a
+  report says "No number reported" (`test/accounts_test.dart` covers both
+  answers, and a `rules_test.dart` rule keeps the numbers in that one file).
 - Imports: only `helix_remote_protocol`, `helix_remote_api` (`v2.dart`) and
   `helix_remote_ui`; no v1 package, no state-management package.
 
