@@ -3228,6 +3228,44 @@ the migration and dump that go with it).
   Postgres (`restore_test` and `media_test` green too; one `restore_test`
   case failed once under load and passed alone), analyze and format clean.
   The phone needs a new APK to see it; no server change.
+- S10 (AUD-12q-2, AUD-12r-2, -3 in part, -4) — the last B13 steps: the cut
+  archive, the cut-off receive, the sender's view and the full ledger.
+  **12q-2:** when the exporter hits its size budget it now ends the archive
+  with a small `{'t': 'end', 'truncated': true}` record (frames keep 512 bytes
+  of the budget free for it; older readers skip an unknown record type, so no
+  format bump). `ImportReport.truncated` captures it and `RestoreResult`
+  gains `truncated`, set by history restore, full restore and device
+  transfer; the app's `RestoreOutcome` carries it. **The screens that word the
+  result do not say it yet** (they are Orbit UI, another session's files in
+  flight); the flag is there to read. **12r-2:** `DeviceTransfer.
+  recoverInterrupted` puts an incoming offer still marked `downloading` or
+  `importing` with no live run of this process back to `waiting` (chunks and
+  `imported` kept), at `BackupService.start()` and every maintenance pass; and
+  an error the classifier maps to nothing now ends the offer as `failed`
+  (error `unexpected`) instead of leaving it showing progress. (`translate`
+  already maps the transport exceptions since B12.) **12r-4:**
+  `recordOffer` evicts the oldest *finished* entry (done, declined, cancelled,
+  failed) before refusing, so twenty failures no longer lock out the retry
+  that would work; live offers are never evicted and a duplicate still
+  changes nothing. **12r-3, the engine half:** `BackupService.watchSent()`
+  streams the outgoing ledger as `SentTransfer` (phase, recipients, who
+  answered), so the sender's view survives a restart.
+  **Left open, deliberately:** (a) a *failed* receive is still reported to the
+  sender as `declined`: a new answer state is a wire change
+  (`DeviceTransferState`, CONTENT_V2) and needs its own decision and fixture;
+  (b) the sender's finished entries are still discarded as soon as everyone
+  answered (`cleanUp`), so `watchSent` shows an offer until then, not for a
+  day after; (c) when the ledger is full of *live* offers a fresh one is still
+  refused without a visible reason; (d) no screen renders `watchSent`, the
+  truncated flag or a failed answer. All four are UI or wire work for a later
+  batch. Tests (`transfer_test.dart`, `history_backup_test.dart`): the trimmed
+  history restores with `truncated` true and a whole one with false; an offer
+  cut off in `importing` waits again after a maintenance pass and finishes; a
+  full ledger of 20 makes room from a finished entry and refuses when all are
+  live; the sender's `watchSent` shows the offer and then the answer. The
+  first and last two rely on API that did not exist; the 12r-2 and 12r-4
+  tests fail on the code before this step by construction (no recovery, no
+  eviction). Gate: see the batch report below.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

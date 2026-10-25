@@ -43,6 +43,10 @@ final class ImportReport {
   /// Messages this device already had (merged, never overwritten).
   int messagesExisting = 0;
 
+  /// The archive said it was cut short (a history over its size budget): the
+  /// oldest messages are not in it (AUD-12q-2).
+  bool truncated = false;
+
   /// Messages this device deleted - for me, or in a chat it cleared or
   /// deleted - and so left out (AUD-12q-1).
   int messagesDeletedHere = 0;
@@ -124,10 +128,11 @@ final class SnapshotExporter {
     var total = 0;
 
     // Returns the frames that fit; sets truncated when one does not.
-    List<ArchiveFrame> admit(List<ArchiveFrame> frames) {
+    List<ArchiveFrame> admit(List<ArchiveFrame> frames, {int reserve = 0}) {
       final out = <ArchiveFrame>[];
       for (final frame in frames) {
-        if (maxBytes != null && total + frame.bytes.length > maxBytes) {
+        if (maxBytes != null &&
+            total + frame.bytes.length > maxBytes - reserve) {
           stats.truncated = true;
           break;
         }
@@ -212,17 +217,34 @@ final class SnapshotExporter {
           );
         }
       }
-      for (final frame in admit(writer.takeFrames())) {
+      // Room is kept back for the end record a cut archive carries.
+      for (final frame in admit(
+        writer.takeFrames(),
+        reserve: _endRecordReserve,
+      )) {
         yield frame;
       }
       if (rows.length < _options.pageSize) break;
     }
     if (!stats.truncated) {
-      for (final frame in admit(writer.finish())) {
+      for (final frame in admit(writer.finish(), reserve: _endRecordReserve)) {
+        yield frame;
+      }
+    }
+    if (stats.truncated) {
+      // A reader that sees this knows the oldest messages are not here
+      // (AUD-12q-2). An older reader skips a record type it does not know.
+      final end = ArchiveWriter(gzip: _options.gzip, frameBytes: frameBytes)
+        ..add({'t': 'end', 'truncated': true});
+      for (final frame in end.finish()) {
         yield frame;
       }
     }
   }
+
+  /// Bytes kept free in a budget for the `end` record (a few dozen bytes, and
+  /// a gzip frame around it).
+  static const _endRecordReserve = 512;
 
   static Map<int, List<T>> _group<T>(Iterable<T> rows, int Function(T) key) {
     final out = <int, List<T>>{};
@@ -510,6 +532,8 @@ final class ImportSession {
         await _conversation(r);
       case 'msg':
         await _message(r, readUpTo, touched);
+      case 'end':
+        if (r.flag('truncated')) report.truncated = true;
       default:
       // A record type from a newer version: skipped, like unknown fields.
     }

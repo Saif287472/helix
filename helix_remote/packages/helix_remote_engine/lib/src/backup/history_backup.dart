@@ -309,6 +309,7 @@ final class HistoryBackupJob {
       added: session.report.messagesAdded,
       existing: session.report.messagesExisting,
       invalid: session.report.invalidRecords,
+      truncated: session.report.truncated,
     );
   }
 

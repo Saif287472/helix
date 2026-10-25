@@ -281,8 +281,12 @@ final class EngineBackupGateway implements BackupGateway {
 
   // ----------------------------------------------------------- mapping
 
-  RestoreOutcome _outcome(engine.RestoreResult r) =>
-      RestoreOutcome(added: r.added, existing: r.existing, invalid: r.invalid);
+  RestoreOutcome _outcome(engine.RestoreResult r) => RestoreOutcome(
+    added: r.added,
+    existing: r.existing,
+    invalid: r.invalid,
+    truncated: r.truncated,
+  );
 
   static BackupProblem? _maybe(engine.BackupFailure? failure) =>
       failure == null ? null : _problem(failure);

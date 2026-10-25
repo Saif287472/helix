@@ -5,7 +5,8 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_engine/src/backup/state.dart' show BackupSettings;
+import 'package:helix_remote_engine/src/backup/state.dart'
+    show BackupSettings, TransferLedger;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
@@ -508,6 +509,85 @@ void main() {
       expect(await alice2.backup.offers(), isNotEmpty);
       expect(await alice3.backup.offers(), hasLength(1));
     });
+  });
+
+  /// A receive cut off by a kill sat in `importing` for ever, with a Pause
+  /// that did nothing (AUD-12r-2).
+  test('an offer cut off mid-import waits again and finishes', () async {
+    await start();
+    final id = await offer();
+    // The process died after the phase was written and before any frame.
+    await TransferLedger(alice2.db).updateIncoming(
+      id,
+      (o) => o.copyWith(phase: HistoryTransferPhase.importing),
+      now: world.clock.now,
+    );
+    expect(
+      (await alice2.backup.offers()).single.phase,
+      HistoryTransferPhase.importing,
+    );
+    await alice2.engine.runMaintenance();
+    expect(
+      (await alice2.backup.offers()).single.phase,
+      HistoryTransferPhase.waiting,
+    );
+    expect((await alice2.backup.acceptOffer(id)).added, 60);
+  });
+
+  /// The twenty-first offer is not lost to twenty finished ones (AUD-12r-4).
+  test(
+    'a full ledger makes room from finished offers, not live ones',
+    () async {
+      await start();
+      final ledger = TransferLedger(alice2.db);
+      final manifest = MediaPointer(
+        id: '00000000-0000-4000-8000-000000000001',
+        key: Uint8List(32),
+        digest: Uint8List(32),
+        size: 100,
+        mime: 'application/octet-stream',
+      );
+      Future<bool> record(int i) => ledger.recordOffer(
+        transferId: 't$i',
+        fromDevice: alice.device,
+        manifest: manifest,
+        now: world.clock.now.add(Duration(seconds: i)),
+      );
+      for (var i = 0; i < TransferLedger.maxOffers; i++) {
+        expect(await record(i), isTrue);
+      }
+      // All live: the next one is refused, and a repeat changes nothing.
+      expect(await record(100), isFalse);
+      expect(await record(0), isFalse);
+      // The oldest finishes: it makes room.
+      await ledger.updateIncoming(
+        't0',
+        (o) => o.copyWith(phase: HistoryTransferPhase.failed),
+        now: world.clock.now,
+      );
+      expect(await record(101), isTrue);
+      final ids = (await ledger.incoming()).keys.toSet();
+      expect(ids, contains('t101'));
+      expect(ids, isNot(contains('t0')));
+      expect(ids, hasLength(TransferLedger.maxOffers));
+    },
+  );
+
+  /// The sender can see what it sent and who answered, and the view survives
+  /// a restart because it reads the ledger (AUD-12r-3).
+  test('the sender watches its offer and the answer', () async {
+    await start();
+    final id = await offer();
+    var sent = (await alice.backup.watchSent().first).single;
+    expect(sent.transferId, id);
+    expect(sent.recipients, [alice2.device]);
+    expect(sent.answered, isEmpty);
+
+    await alice2.backup.acceptOffer(id);
+    await alice2.engine.drainOutbox();
+    await alice.engine.syncOnce();
+    sent = (await alice.backup.watchSent().first).single;
+    expect(sent.answered, [alice2.device]);
   });
 
   group('who may offer', () {

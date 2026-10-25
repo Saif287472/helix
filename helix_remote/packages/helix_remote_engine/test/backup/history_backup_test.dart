@@ -757,6 +757,7 @@ void main() {
       final fresh = await big.link(source, 'big2');
       final restored = await fresh.backup.restoreHistory();
       expect(restored.added, total);
+      expect(restored.truncated, isFalse, reason: 'nothing was left out');
       expect(await historyDigest(fresh), await historyDigest(source));
     });
 
@@ -785,7 +786,8 @@ void main() {
         expect((await source.backup.status()).truncated, isTrue);
 
         final fresh = await small.link(source, 'small2');
-        await fresh.backup.restoreHistory();
+        // The device that restores is told the archive was cut (AUD-12q-2).
+        expect((await fresh.backup.restoreHistory()).truncated, isTrue);
         final restored = await fresh.db.messagesDao.pageOlder(
           directConversationId(bobId),
           limit: 2000,

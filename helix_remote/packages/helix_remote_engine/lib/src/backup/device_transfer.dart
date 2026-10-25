@@ -438,6 +438,7 @@ final class DeviceTransferJob {
         added: session.report.messagesAdded,
         existing: session.report.messagesExisting,
         invalid: session.report.invalidRecords,
+        truncated: session.report.truncated,
       );
     } on Object catch (error) {
       final failure = BackupException.translate(error);
@@ -510,6 +511,20 @@ final class DeviceTransferJob {
           offer?.total ?? 0,
           code,
         );
+      }
+      if (code == null) {
+        // An error nobody classified must not leave the offer showing
+        // progress that never comes: it ends as failed, and the person can
+        // retry or dismiss it (AUD-12r-2).
+        await _ledger.updateIncoming(
+          id,
+          (o) => o.copyWith(
+            phase: HistoryTransferPhase.failed,
+            error: 'unexpected',
+          ),
+          now: _ctx.now(),
+        );
+        progress(HistoryTransferPhase.failed, 0, offer?.total ?? 0);
       }
       if (failure is BackupException) throw failure;
       rethrow;
@@ -608,6 +623,30 @@ final class DeviceTransferJob {
       throw const BackupException(BackupFailure.corrupt, 'relay object size');
     }
     return plain;
+  }
+
+  /// An offer still marked `downloading` or `importing` when no run of this
+  /// process holds it was cut off (the app was killed, or the run died): it
+  /// goes back to `waiting` with its chunks and its `imported` count, so it can
+  /// be accepted again instead of showing progress that can never advance
+  /// (AUD-12r-2). Returns how many.
+  Future<int> recoverInterrupted() async {
+    var recovered = 0;
+    for (final o in (await _ledger.incoming()).values) {
+      final running =
+          o.phase == HistoryTransferPhase.downloading ||
+          o.phase == HistoryTransferPhase.importing;
+      if (!running || _receiving.containsKey(o.transferId)) continue;
+      await _ledger.updateIncoming(
+        o.transferId,
+        (x) => x.phase == o.phase
+            ? x.copyWith(phase: HistoryTransferPhase.waiting)
+            : x,
+        now: _ctx.now(),
+      );
+      recovered++;
+    }
+    return recovered;
   }
 
   /// Declines an offer (the sender may then clean up) and forgets it.

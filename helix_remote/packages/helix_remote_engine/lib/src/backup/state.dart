@@ -346,8 +346,20 @@ final class TransferLedger {
     required DateTime now,
   }) => _db.transaction(() async {
     final offers = {...await incoming()};
-    if (offers.containsKey(transferId) || offers.length >= maxOffers) {
-      return false;
+    if (offers.containsKey(transferId)) return false;
+    if (offers.length >= maxOffers) {
+      // A finished entry (done, declined, cancelled, failed) is only waiting
+      // for `cleanUp`; the oldest goes before a new offer is refused, so a
+      // person who keeps retrying while the other phone fails is not locked
+      // out by the failures (AUD-12r-4). Offers still in play are never
+      // evicted.
+      final finished = [
+        for (final o in offers.values)
+          if (o.phase.isFinished) o,
+      ]..sort((a, b) => a.receivedAt.compareTo(b.receivedAt));
+      if (finished.isEmpty) return false;
+      offers.remove(finished.first.transferId);
+      await _db.transfersDao.dropTransfer(finished.first.transferId);
     }
     offers[transferId] = IncomingOffer(
       transferId: transferId,
@@ -385,8 +397,13 @@ final class TransferLedger {
 
   // ----------------------------------------------------------- outgoing
 
-  Future<Map<String, OutgoingTransfer>> outgoing() async {
-    final text = await _db.settingsDao.get(BackupSettings.outgoing);
+  Stream<Map<String, OutgoingTransfer>> watchOutgoing() =>
+      _db.settingsDao.watch(BackupSettings.outgoing).map(_readOutgoing);
+
+  Future<Map<String, OutgoingTransfer>> outgoing() async =>
+      _readOutgoing(await _db.settingsDao.get(BackupSettings.outgoing));
+
+  static Map<String, OutgoingTransfer> _readOutgoing(String? text) {
     if (text == null) return const {};
     try {
       final r = JsonReader.decode(text);

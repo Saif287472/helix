@@ -106,11 +106,16 @@ final class RestoreOutcome {
     required this.added,
     required this.existing,
     this.invalid = 0,
+    this.truncated = false,
   });
 
   final int added;
   final int existing;
   final int invalid;
+
+  /// The backup was cut at its size budget: the oldest messages are not in it
+  /// (AUD-12q-2). The screen that words the result can say so.
+  final bool truncated;
 }
 
 /// Where a running backup is.

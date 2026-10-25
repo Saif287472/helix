@@ -162,7 +162,13 @@ final class RestoreResult {
     required this.added,
     required this.existing,
     required this.invalid,
+    this.truncated = false,
   });
+
+  /// The archive was cut at its size budget, so the oldest messages are not
+  /// in it and this restore cannot bring them back (AUD-12q-2). The device
+  /// that wrote it still has them.
+  final bool truncated;
 
   /// The server's backup version that was restored.
   final int version;
@@ -217,6 +223,39 @@ enum HistoryTransferPhase {
 
   bool get isFinished =>
       this == done || this == declined || this == cancelled || this == failed;
+}
+
+/// An offer this device made, as the sender sees it (AUD-12r-3).
+@immutable
+final class SentTransfer {
+  const SentTransfer({
+    required this.transferId,
+    required this.createdAt,
+    required this.phase,
+    required this.recipients,
+    required this.answered,
+  });
+
+  final String transferId;
+  final DateTime createdAt;
+  final HistoryTransferPhase phase;
+
+  /// The devices it went to, and the ones that have answered (done or
+  /// declined).
+  final List<String> recipients;
+  final List<String> answered;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SentTransfer &&
+      other.transferId == transferId &&
+      other.phase == phase &&
+      other.recipients.length == recipients.length &&
+      other.answered.length == answered.length;
+
+  @override
+  int get hashCode =>
+      Object.hash(transferId, phase, recipients.length, answered.length);
 }
 
 /// Progress of one device-to-device transfer (`BackupService.transferProgress`

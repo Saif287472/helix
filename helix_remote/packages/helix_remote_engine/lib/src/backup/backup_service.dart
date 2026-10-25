@@ -248,6 +248,29 @@ final class BackupService {
   Future<void> cancelSend(String transferId) =>
       _transfer.cancelSend(transferId);
 
+  /// What this device has sent, newest first (live): how far each offer got,
+  /// who it went to and who has answered. Survives a restart, which the
+  /// progress stream does not (AUD-12r-3).
+  Stream<List<SentTransfer>> watchSent() => _ledger
+      .watchOutgoing()
+      .map(
+        (sent) => [
+          for (final t in sent.values)
+            SentTransfer(
+              transferId: t.transferId,
+              createdAt: t.createdAt,
+              phase: t.phase,
+              recipients: t.recipients,
+              answered: t.answered,
+            ),
+        ]..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+      )
+      .distinct(
+        (a, b) =>
+            a.length == b.length &&
+            [for (var i = 0; i < a.length; i++) a[i] == b[i]].every((e) => e),
+      );
+
   /// Offers from this account's other devices, newest first (live).
   Stream<List<TransferOffer>> watchOffers() => _ledger
       .watchIncoming()
@@ -296,6 +319,10 @@ final class BackupService {
   void start() {
     if (_started) return;
     _started = true;
+    // An offer cut off by a kill is waiting again, not "receiving" for ever.
+    unawaited(
+      _transfer.recoverInterrupted().then<void>((_) {}, onError: (Object _) {}),
+    );
     _subscriptions
       ..add(
         _ctx.events.listen((event) {
@@ -327,6 +354,7 @@ final class BackupService {
     if (!_ctx.isSignedIn) return;
     try {
       await _transfer.cleanUp();
+      await _transfer.recoverInterrupted();
       await _resumeOffers(retryFailed: true);
       final status = await this.status();
       if (!status.autoBackup) return;
