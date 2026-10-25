@@ -102,11 +102,17 @@ device still runs `checkOrbitPack` over the bytes it gets. The layout is what
     <root>/<pack id>/r<revision>/manifest.json
     <root>/<pack id>/r<revision>/files/<sha256 of that file>
 
-- The list is the folder: id, revision, manifest bytes, total bytes, mtime. A
-  revision folder with no manifest is not listed, so an interrupted publish
-  advertises nothing. It carries no display name — the name a device shows comes
-  from the pack's signed theme document, and an unsigned one here could be
-  forged.
+- The list is the folder: id, revision, manifest bytes, total bytes, mtime. One
+  walk answers every request for 10 seconds (`PackHost.defaultListLifetime`),
+  and requests that arrive during a walk share it; a pack published meanwhile
+  appears when the lifetime ends. A folder timestamp is not used instead:
+  Windows updates a directory's mtime for a file added to it but not for a
+  subdirectory, and only to the second, so it would miss a publish. Manifest
+  and file reads always check the disk, so a stale entry can only be a 404,
+  never a wrong byte. A revision folder with no manifest is not listed, so an
+  interrupted publish advertises nothing. It carries no display name — the name
+  a device shows comes from the pack's signed theme document, and an unsigned
+  one here could be forged.
 - The manifest route streams the file exactly as published. The file route
   selects by lowercase-hex SHA-256 rather than by the manifest's path, so there
   is no path to sanitise, a file in two revisions is stored once, and a client

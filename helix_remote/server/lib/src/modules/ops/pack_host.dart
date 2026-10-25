@@ -23,12 +23,42 @@ import 'package:path/path.dart' as p;
 /// number and 64 hex characters: there is no path to escape, and a client asks
 /// for exactly the bytes the manifest promised.
 final class PackHost {
-  const PackHost(this.root);
+  PackHost(
+    this.root, {
+    this.listLifetime = defaultListLifetime,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   /// The pack folder, or null when this server hosts no packs. Every answer
   /// then is the same as an empty folder, so a server without the setting is
   /// healthy and simply has nothing to offer.
   final String? root;
+
+  /// How long one walk of the folder answers the list route.
+  ///
+  /// Short enough that a pack published while the operator is still looking is
+  /// noticed, long enough that a gallery browse is one folder walk per node
+  /// rather than one per request per client. No download depends on it:
+  /// manifest and file reads still check the disk, so a stale entry can only
+  /// be a 404. A folder timestamp is not used to shorten it - Windows updates
+  /// a directory's mtime for a file added to it but not for a subdirectory,
+  /// and at one-second resolution, so it would miss exactly the publish this
+  /// route serves.
+  static const defaultListLifetime = Duration(seconds: 10);
+
+  /// The lifetime above, overridable so a test can hold the clock still.
+  final Duration listLifetime;
+
+  /// The clock that lifetime is measured against: a test passes its own.
+  final DateTime Function() _clock;
+
+  /// The last walk, and when it was taken.
+  List<HostedPack>? _index;
+  DateTime? _indexedAt;
+
+  /// The walk in progress, so concurrent requests share one instead of each
+  /// starting a folder scan of its own.
+  Future<List<HostedPack>>? _building;
 
   /// The same caps as the pack format (`OrbitPackLimits` in
   /// `helix_remote_domain`, `docs/product/THEME_PACK_FORMAT.md`). Nothing
@@ -48,29 +78,46 @@ final class PackHost {
 
   /// Every pack in the folder, sorted by id then revision, so two nodes answer
   /// the same and the list does not move under a client.
+  ///
+  /// The walk is kept: an index younger than [listLifetime] answers from
+  /// memory, and callers that arrive during a walk await the same one. The
+  /// route runs per request on a public path, so the cached case is a clock
+  /// comparison rather than a scan of every revision and every file.
   Future<List<HostedPack>> list() async {
     final directory = root;
     if (directory == null) return const [];
-    final folder = Directory(directory);
-    if (!await folder.exists()) return const [];
-    final packs = <HostedPack>[];
-    await for (final id in folder.list(followLinks: false)) {
-      if (id is! Directory) continue;
-      final slug = p.basename(id.path);
-      if (!_id.hasMatch(slug)) continue;
-      await for (final revision in id.list(followLinks: false)) {
-        if (revision is! Directory) continue;
-        final number = revisionOf(p.basename(revision.path));
-        if (number == null) continue;
-        final pack = await _measure(slug, number, revision.path);
-        if (pack != null) packs.add(pack);
-      }
+    final index = _index;
+    if (index != null && _clock().difference(_indexedAt!) < listLifetime) {
+      return index;
     }
-    packs.sort((a, b) {
-      final byId = a.id.compareTo(b.id);
-      return byId != 0 ? byId : a.revision.compareTo(b.revision);
-    });
-    return packs;
+    return _building ??= _build(directory).whenComplete(() => _building = null);
+  }
+
+  Future<List<HostedPack>> _build(String directory) async {
+    final folder = Directory(directory);
+    final packs = <HostedPack>[];
+    if (await folder.exists()) {
+      await for (final id in folder.list(followLinks: false)) {
+        if (id is! Directory) continue;
+        final slug = p.basename(id.path);
+        if (!_id.hasMatch(slug)) continue;
+        await for (final revision in id.list(followLinks: false)) {
+          if (revision is! Directory) continue;
+          final number = revisionOf(p.basename(revision.path));
+          if (number == null) continue;
+          final pack = await _measure(slug, number, revision.path);
+          if (pack != null) packs.add(pack);
+        }
+      }
+      packs.sort((a, b) {
+        final byId = a.id.compareTo(b.id);
+        return byId != 0 ? byId : a.revision.compareTo(b.revision);
+      });
+    }
+    final index = List<HostedPack>.unmodifiable(packs);
+    _index = index;
+    _indexedAt = _clock();
+    return index;
   }
 
   /// One pack as its folder shows it, or null when the folder holds no

@@ -60,7 +60,7 @@ void main() {
 
   group('the pack host', () {
     test('a server with no pack folder has nothing, and is not broken', () {
-      const host = PackHost(null);
+      final host = PackHost(null);
       expect(host.list(), completes, reason: 'an empty list, not a throw');
       expect(host.manifest('synthwave', 1), completes);
     });
@@ -264,6 +264,59 @@ void main() {
         isA<PackTooBig>(),
         reason: 'a 8 MiB + 1 file is the operator\'s mistake, not a download',
       );
+    });
+  });
+
+  group('the pack host index', () {
+    test('one walk answers every caller until the lifetime ends', () async {
+      var now = DateTime.utc(2026, 10, 25, 12);
+      PublishedPack(id: 'arcade', revision: 1, manifest: '{}').publish(root);
+      final host = PackHost(root.path, clock: () => now);
+
+      final first = await host.list();
+      expect([for (final pack in first) pack.revision], [1]);
+
+      // A revision under an existing id and a whole new id both wait for the
+      // lifetime: inside the window the same index answers, and a caller that
+      // arrives meanwhile cannot see a half-published revision either.
+      PublishedPack(id: 'arcade', revision: 2, manifest: '{}').publish(root);
+      PublishedPack(id: 'bloom', revision: 1, manifest: '{}').publish(root);
+      final second = await host.list();
+      expect(identical(second, first), isTrue);
+
+      now = now.add(PackHost.defaultListLifetime);
+      final third = await host.list();
+      expect(identical(third, first), isFalse);
+      expect(
+        [for (final pack in third) (pack.id, pack.revision)],
+        [('arcade', 1), ('arcade', 2), ('bloom', 1)],
+      );
+    });
+
+    test('concurrent callers wait on one walk', () async {
+      PublishedPack(id: 'arcade', revision: 1, manifest: '{}').publish(root);
+      final host = PackHost(root.path);
+      final answers = await Future.wait([
+        host.list(),
+        host.list(),
+        host.list(),
+      ]);
+      expect(identical(answers[0], answers[1]), isTrue);
+      expect(identical(answers[1], answers[2]), isTrue);
+    });
+
+    test('the index is not what a download checks', () async {
+      PublishedPack(id: 'arcade', revision: 1, manifest: '{}').publish(root);
+      final host = PackHost(root.path);
+      expect((await host.list()).single.revision, 1);
+
+      // Removed after the walk: the list still names it until the lifetime
+      // ends, but the read goes to the folder and misses.
+      Directory(
+        '${root.path}${Platform.pathSeparator}arcade'
+        '${Platform.pathSeparator}r1',
+      ).deleteSync(recursive: true);
+      expect(await host.manifest('arcade', 1), isA<PackMiss>());
     });
   });
 

@@ -2149,6 +2149,34 @@ packs only.
   **20 green**, the full app **1038 green** (1032 before), `flutter analyze`
   clean on the workspace. No wire change, no migration, no server change. A
   new APK carries the change.
+- S6 (AUD-7-4) — `GET /v1/packs` walked the whole folder per request: every
+  pack id, every revision, and every file twice (`length()` and `lastModified`),
+  on a public route, with a fresh `PackHost` built per request so nothing
+  survived between calls. A gallery browse by N clients was N walks, and a
+  folder with many revisions made the list the most expensive thing those
+  addresses could ask for.
+  **What changed:** `PackHost` keeps the walk it made
+  ([`_index`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/ops/pack_host.dart#L56))
+  and answers from it for `defaultListLifetime` (10 s); requests that arrive
+  during a walk await the same one, and the list handed out is unmodifiable.
+  The module now holds one `PackHost` for the node's life instead of
+  constructing one per request. The lifetime is a field with a clock seam, so
+  a test holds time still. A folder mtime is deliberately not the key: probed
+  on this machine, Windows does not move a directory's mtime when a
+  subdirectory is created (only for files) and its timestamps are
+  one-second-resolution, so it would miss exactly the publish this route
+  serves; the bounded lifetime is the honest bound and `ops/MODULE.md` states
+  it. Reads did not change: the manifest and file routes still stat and open
+  the file, so a stale index entry can only be a 404, never a wrong byte.
+  Tests: `server/test/modules/packs_test.dart` — one walk serves identical
+  lists inside the lifetime (a revision and a new id published meanwhile are
+  not seen), the next walk after it sees both; three concurrent callers get
+  the same list instance (one walk); and a revision deleted after the walk
+  still misses its manifest read.
+  Gate: the pack file **19 green** (16 before), `ops_admin_test` +
+  `architecture_test` **32 green**, `dart analyze` clean on the changed files;
+  the batch gate below is the full server suite. No wire change, no migration,
+  no app change, no APK; a server restart (or the next deploy) picks it up.
 
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**

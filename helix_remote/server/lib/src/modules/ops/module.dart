@@ -68,7 +68,10 @@ final class OpsModule extends ModuleBase implements ProvidesMaintenance {
   /// The pack folder. `HELIX_PACKS_DIR` unset is the same as an empty folder:
   /// the list is empty and every file is a 404, so there is nothing to switch
   /// on and no half-configured state to fail in.
-  PackHost get _packs => PackHost(context.config.packsDirectory);
+  ///
+  /// One host for the node's life, not one per request: the host holds the
+  /// list index, and a per-request instance would walk the folder every time.
+  late final PackHost _packs = PackHost(context.config.packsDirectory);
 
   /// Browsing the gallery is a list plus one manifest per pack, so the two
   /// first policies are sized for one page opening, and the third for the
