@@ -15,6 +15,12 @@ import 'package:http/http.dart' as http;
 /// account export pass their own, larger caps.
 const defaultMaxResponseBytes = 4 * 1024 * 1024;
 
+/// A request whose body or declared response cap is larger than this is a
+/// bulk transfer: it gets an inactivity deadline instead of a cap on the whole
+/// transfer, because 4 MiB at the normal 30 s already fails below ~1 Mbps
+/// (AUD-11a-1). Calls at or below it keep the whole-transfer deadline.
+const bulkTransferBytes = defaultMaxResponseBytes;
+
 /// A successful (or explicitly accepted) HTTP response.
 final class ApiResponse {
   const ApiResponse({
@@ -51,7 +57,8 @@ final class ApiResponse {
 /// Builds URLs from the protocol route catalog, attaches the bearer token
 /// for the route's audience (refreshing once on 401), an `Idempotency-Key`
 /// on every unsafe request, an `x-request-id` and an `x-helix-client`;
-/// retries per [RetryPolicy]; enforces a per-attempt [timeout] and
+/// retries per [RetryPolicy]; enforces a per-attempt [timeout] - an
+/// inactivity limit for a bulk call, see [bulkTransferBytes] - and
 /// [CancellationToken]s; and maps error responses to [ApiException].
 ///
 /// It never logs. Tokens and bodies stay out of every exception it throws.
@@ -65,6 +72,7 @@ final class HelixTransport {
     this.clientName,
     this.retry = const RetryPolicy(),
     this.timeout = const Duration(seconds: 30),
+    this.bulkIdleTimeout = const Duration(seconds: 30),
     Future<void> Function(Duration delay)? sleep,
     Random? random,
     String Function()? newId,
@@ -92,6 +100,11 @@ final class HelixTransport {
 
   /// Per attempt, until the whole response body has arrived.
   final Duration timeout;
+
+  /// How long a bulk transfer may stand still. The clock resets on every
+  /// chunk sent or received, so a large body may take as long as it needs
+  /// while it keeps moving, and a dead link still fails.
+  final Duration bulkIdleTimeout;
 
   final http.Client _client;
   final bool _ownsClient;
@@ -173,6 +186,9 @@ final class HelixTransport {
         : bytes == null
         ? null
         : Uint8List.fromList(bytes);
+    final bulk =
+        maxResponseBytes > bulkTransferBytes ||
+        (body?.length ?? 0) > bulkTransferBytes;
 
     var failures = 0;
     var refreshed = false;
@@ -201,8 +217,11 @@ final class HelixTransport {
           body: body,
           followRedirects: followRedirects,
           cancel: cancel,
-          timeout: timeout ?? this.timeout,
+          timeout: bulk
+              ? (timeout ?? bulkIdleTimeout)
+              : (timeout ?? this.timeout),
           maxBytes: maxResponseBytes,
+          idle: bulk,
         );
       } on NetworkException {
         failures++;
@@ -321,25 +340,44 @@ final class HelixTransport {
   /// from `UploadTarget` or a media redirect. Never carries the bearer token
   /// or Helix headers (the URL is its own capability), never retried, never
   /// follows redirects.
+  ///
+  /// [stream] sends the body as it is produced ([contentLength] is then
+  /// required) instead of buffering it first, so a large presigned upload
+  /// never has to hold the whole ciphertext in memory.
   Future<ApiResponse> external(
     String method,
     Uri uri, {
     Map<String, String> headers = const {},
     List<int>? bytes,
+    Stream<List<int>>? stream,
+    int? contentLength,
     Set<int> accept = const {},
     CancellationToken? cancel,
     Duration? timeout,
     int maxResponseBytes = defaultMaxResponseBytes,
   }) async {
+    if (stream != null && bytes != null) {
+      throw ArgumentError('send either bytes or a stream, not both');
+    }
+    if (stream != null && contentLength == null) {
+      throw ArgumentError('a streamed body needs its contentLength');
+    }
+    final length = stream == null ? bytes?.length : contentLength;
+    final bulk =
+        maxResponseBytes > bulkTransferBytes ||
+        (length ?? 0) > bulkTransferBytes;
     final response = await _attempt(
       method: method,
       uri: uri,
       headers: headers,
-      body: bytes == null ? null : Uint8List.fromList(bytes),
+      body: stream == null && bytes != null ? Uint8List.fromList(bytes) : null,
+      bodyStream: stream,
+      bodyLength: contentLength,
       followRedirects: false,
       cancel: cancel,
-      timeout: timeout ?? this.timeout,
+      timeout: bulk ? (timeout ?? bulkIdleTimeout) : (timeout ?? this.timeout),
       maxBytes: maxResponseBytes,
+      idle: bulk,
     );
     final status = response.statusCode;
     if ((status >= 200 && status < 300) || accept.contains(status)) {
@@ -361,27 +399,56 @@ final class HelixTransport {
     required Uri uri,
     required Map<String, String> headers,
     required Uint8List? body,
+    Stream<List<int>>? bodyStream,
+    int? bodyLength,
     required bool followRedirects,
     required CancellationToken? cancel,
     required Duration timeout,
     required int maxBytes,
+    bool idle = false,
   }) async {
     final abort = Completer<_Abort>();
-    final timer = Timer(timeout, () {
-      if (!abort.isCompleted) abort.complete(_Abort.timeout);
-    });
+    Timer? timer;
+    // A normal attempt is capped as a whole; an idle one only while nothing
+    // moves, so the clock is re-armed on every chunk in either direction.
+    void arm() {
+      timer?.cancel();
+      timer = Timer(timeout, () {
+        if (!abort.isCompleted) abort.complete(_Abort.timeout);
+      });
+    }
+
+    void progress() {
+      if (idle) arm();
+    }
+
+    arm();
     unawaited(
       cancel?.whenCancelled.then((_) {
         if (!abort.isCompleted) abort.complete(_Abort.cancelled);
       }),
     );
-    final request = http.AbortableRequest(
-      method,
-      uri,
-      abortTrigger: abort.future,
-    )..followRedirects = followRedirects;
+    final source =
+        bodyStream ?? (idle && body != null ? _slices(body, progress) : null);
+    final http.BaseRequest request;
+    if (source == null) {
+      final buffered = http.AbortableRequest(
+        method,
+        uri,
+        abortTrigger: abort.future,
+      )..followRedirects = followRedirects;
+      if (body != null) buffered.bodyBytes = body;
+      request = buffered;
+    } else {
+      request = _StreamedBodyRequest(
+        method,
+        uri,
+        _paced(source, progress),
+        abortTrigger: abort.future,
+      )..followRedirects = followRedirects;
+      request.contentLength = bodyStream == null ? body!.length : bodyLength!;
+    }
     request.headers.addAll(headers);
-    if (body != null) request.bodyBytes = body;
 
     // Some clients ignore the abort trigger; racing it keeps the timeout and
     // cancellation effective anyway.
@@ -392,7 +459,9 @@ final class HelixTransport {
 
     try {
       final streamed = await race(_client.send(request));
-      final bytes = await race(_readCapped(streamed, maxBytes));
+      final bytes = await race(
+        _readCapped(streamed, maxBytes, onChunk: idle ? progress : null),
+      );
       return http.Response.bytes(
         bytes,
         streamed.statusCode,
@@ -410,8 +479,34 @@ final class HelixTransport {
     } on http.ClientException catch (e) {
       throw NetworkException(cause: e.runtimeType);
     } finally {
-      timer.cancel();
+      timer?.cancel();
       if (!abort.isCompleted) abort.complete(_Abort.done);
+    }
+  }
+
+  /// A buffered body for an idle attempt, handed over one slice at a time so
+  /// a slow link still counts as progress (and the body is never duplicated).
+  static Stream<List<int>> _slices(
+    Uint8List body,
+    void Function() progress,
+  ) async* {
+    const slice = 64 * 1024;
+    for (var start = 0; start < body.length; start += slice) {
+      await Future<void>.delayed(Duration.zero);
+      yield Uint8List.sublistView(body, start, min(start + slice, body.length));
+      progress();
+    }
+  }
+
+  /// Re-arms the idle clock as each chunk is pulled by the client, so the
+  /// timer follows the socket rather than this loop.
+  static Stream<List<int>> _paced(
+    Stream<List<int>> source,
+    void Function() progress,
+  ) async* {
+    await for (final chunk in source) {
+      yield chunk;
+      progress();
     }
   }
 
@@ -420,8 +515,9 @@ final class HelixTransport {
   /// or broken peer cannot make this process buffer an unbounded body.
   Future<Uint8List> _readCapped(
     http.StreamedResponse response,
-    int limit,
-  ) async {
+    int limit, {
+    void Function()? onChunk,
+  }) async {
     final declared = response.contentLength;
     if (declared != null && declared > limit) {
       unawaited(response.stream.listen(null).cancel());
@@ -432,6 +528,7 @@ final class HelixTransport {
     late StreamSubscription<List<int>> subscription;
     subscription = response.stream.listen(
       (chunk) {
+        onChunk?.call();
         if (out.length + chunk.length > limit) {
           unawaited(subscription.cancel());
           if (!done.isCompleted) {
@@ -461,6 +558,24 @@ final class HelixTransport {
   /// Closes the HTTP client if this transport created it.
   void close() {
     if (_ownsClient) _client.close();
+  }
+}
+
+/// A request whose body is produced lazily, so a bulk upload is not copied
+/// into one buffer and its progress can re-arm the idle clock.
+final class _StreamedBodyRequest extends http.StreamedRequest
+    with http.Abortable {
+  _StreamedBodyRequest(super.method, super.url, this.body, {this.abortTrigger});
+
+  final Stream<List<int>> body;
+
+  @override
+  final Future<void>? abortTrigger;
+
+  @override
+  http.ByteStream finalize() {
+    super.finalize();
+    return http.ByteStream(body);
   }
 }
 

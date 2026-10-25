@@ -553,6 +553,75 @@ void main() {
   });
 
   group('timeouts and cancellation', () {
+    /// A response that keeps arriving for longer than the deadline, with each
+    /// gap shorter than it: a whole-transfer deadline gives up, an inactivity
+    /// deadline does not.
+    http.Client drip({required Duration gap, required int chunks}) =>
+        MockClient.streaming((request, body) async {
+          final stream = () async* {
+            for (var i = 0; i < chunks; i++) {
+              await Future<void>.delayed(gap);
+              yield Uint8List(64);
+            }
+          }();
+          return http.StreamedResponse(stream, 200, contentLength: chunks * 64);
+        });
+
+    test('a bulk transfer is deadlined by silence, a small one by its total '
+        'time', () async {
+      final client = drip(gap: const Duration(milliseconds: 50), chunks: 12);
+      final t = HelixTransport(
+        baseUrl: Uri.parse('https://helix.test'),
+        client: client,
+        auth: auth,
+        retry: RetryPolicy.none,
+        timeout: const Duration(milliseconds: 250),
+        bulkIdleTimeout: const Duration(milliseconds: 250),
+      );
+      final bulk = await t.send(
+        Routes.getHistoryBackup,
+        maxResponseBytes: bulkTransferBytes + 1,
+      );
+      expect(bulk.status, 200);
+      expect(bulk.body, hasLength(12 * 64));
+      await expectLater(
+        t.send(Routes.devices),
+        throwsA(
+          isA<NetworkException>().having((e) => e.timedOut, 'timedOut', true),
+        ),
+      );
+    });
+
+    test('a bulk upload counts every slice it sends as progress', () async {
+      var slices = 0;
+      final client = MockClient.streaming((request, body) async {
+        await for (final _ in body) {
+          slices++;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        return http.StreamedResponse(Stream.value(const <int>[]), 204);
+      });
+      final t = HelixTransport(
+        baseUrl: Uri.parse('https://helix.test'),
+        client: client,
+        auth: auth,
+        retry: RetryPolicy.none,
+        timeout: const Duration(milliseconds: 300),
+        bulkIdleTimeout: const Duration(milliseconds: 300),
+      );
+      final started = DateTime.now();
+      await t.empty(
+        Routes.putHistoryBackup,
+        json: {'data': 'a' * (bulkTransferBytes + 1)},
+      );
+      expect(slices, greaterThan(60));
+      expect(
+        DateTime.now().difference(started),
+        greaterThan(const Duration(milliseconds: 300)),
+        reason: 'the body took longer than the whole-transfer deadline',
+      );
+    });
+
     test('a request with no answer times out', () async {
       server.handler = (_) => Completer<http.Response>().future;
       await expectLater(

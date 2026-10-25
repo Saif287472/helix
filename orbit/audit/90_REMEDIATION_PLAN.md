@@ -1740,6 +1740,31 @@ the heartbeat; a runtime built by the app's factory sends
 **Rollout:** app/API package only. The server needs no change. The resumable
 upload pairs with B7's chunk protocol but does not require it.
 
+- S1 (AUD-11a-1) — one 30 s deadline covered every attempt *and the whole body
+  transfer*: a full or history backup (≈22 MiB of JSON), the account export
+  and a presigned whole-object `PUT` all inherited it, so they failed on any
+  link slower than ~6 Mbps, and each retry re-sent the body from byte 0.
+  Nothing widened it except the link long-poll, which passes its own.
+  **What changed:** a request whose body or declared response cap is over
+  `bulkTransferBytes` (4 MiB, the normal JSON cap) is a bulk transfer: its
+  deadline is an *inactivity* limit (`bulkIdleTimeout`, 30 s) that re-arms on
+  every chunk sent or received, while a small call keeps the whole-transfer
+  deadline. A bulk body is handed to the server as a lazily produced stream
+  (`AbortableStreamedRequest` subclass) rather than one buffer, so the clock
+  follows the socket and a presigned upload no longer needs the ciphertext in
+  memory; `external` gained the matching `stream`/`contentLength` form. The
+  detection is automatic, so every existing large-cap caller (backups,
+  export, media downloads and presigned uploads) is covered without touching
+  the clients; a caller may still pass `timeout:` as the idle limit.
+  Tests: `transport_test.dart` "a bulk transfer is deadlined by silence, a
+  small one by its total time" (the same drip-feed response: a 32 MiB-capped
+  call succeeds across 600 ms with 50 ms gaps under a 250 ms limit, while a
+  small route times out), "a bulk upload counts every slice it sends as
+  progress" (a 4 MiB+ JSON body takes longer than the 300 ms total deadline
+  and still succeeds, in 65 slices).
+  Gate: api **207 green** (205 before, +2), `flutter analyze` clean on the
+  package. No wire change, no app change; no APK needed.
+
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**
 
