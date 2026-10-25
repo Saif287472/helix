@@ -2445,6 +2445,30 @@ wedging.
 **Rollout:** wire-adjacent but shape-compatible — valid values are unchanged.
 Server first (it decodes inbound), clients next. An older client that receives
 a new `unknown` error code treats it as non-retryable, which is safe.
+- S1 (AUD-8-2) — an unknown conversation kind was a hard
+  `ProtocolFormatException`, so a message from a newer client was
+  committed-then-quarantined as `bad_content`: a "couldn't decrypt" row in the
+  sender's direct chat that could never resolve, because there is no body to
+  repair. **What changed:** [`ConversationRef.fromJson`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/content_message.dart#L13)
+  now returns [`UnknownConversation`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/content_message.dart#L64)
+  for any kind other than `direct`/`group`, keeping the whole `conv` object so
+  `toJson()` re-encodes it unchanged (the kind itself must still be a string).
+  The engine already resolves a chat only from a direct or group ref
+  (`_chatOf`), so the content is acknowledged and ignored (`misaddressed`) with
+  no row and no reset request - the honest outcome, since this version has no
+  chat to file it in; the group pipeline likewise marks it ignored. No server
+  change: the server never decrypts content.
+  Tests: `content_test.dart` decodes `{"kind":"channel","channel":"c-1",
+  "thread":7}` at `v:2`, asserts the unknown ref carries the kind and that
+  `toJson()['conv']` is the same map; `inbound_test.dart` sends one from Alice
+  (which also proves the outbox payload, decoded through the same
+  `ContentMessage.fromJson`, still sends) and asserts Bob's sync has no notice,
+  no `EnvelopeQuarantined`, no row in Alice's chat, the envelope marked
+  processed and the mailbox empty.
+  Gate: protocol `content_test.dart` **54 green** (53 before), engine
+  `inbound_test.dart` **28 green** (27 before), `flutter analyze` clean on the
+  workspace. No migration; valid wire shapes unchanged; an app needs the new
+  package to stop quarantining such messages.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**

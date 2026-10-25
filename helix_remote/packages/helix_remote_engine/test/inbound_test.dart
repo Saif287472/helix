@@ -239,6 +239,45 @@ void main() {
       expect(peers.server.device(bob.device).mailbox, isEmpty);
     });
 
+    test('an unknown conversation kind is ignored, not quarantined', () async {
+      await alice.engine.debugSend(
+        ContentMessage(
+          id: Uuid.v7(),
+          sentAt: peers.clock.now,
+          conversation: const UnknownConversation(
+            kind: 'channel',
+            raw: {'kind': 'channel', 'channel': 'c-1'},
+          ),
+          body: const TextBody(text: 'from the future'),
+          version: 2,
+        ),
+        audience: [bob.account],
+      );
+      await alice.engine.drainOutbox();
+      final envelope = peers.server.device(bob.device).mailbox.single;
+      final events = <EngineEvent>[];
+      bob.engine.events.listen(events.add);
+
+      final summary = await bob.sync();
+      expect(summary.complete, isTrue);
+      expect(summary.notices, isEmpty);
+      expect(events.whereType<EnvelopeQuarantined>(), isEmpty);
+      expect(
+        await bob.messages(alice),
+        isEmpty,
+        reason: 'there is no chat to file an unknown conversation in',
+      );
+      expect(
+        await bob.db.inboxDao.isProcessed(
+          envelope.id,
+          senderDevice: envelope.from?.device,
+        ),
+        isTrue,
+        reason: 'acked, so it is neither retried nor quarantined',
+      );
+      expect(peers.server.device(bob.device).mailbox, isEmpty);
+    });
+
     test('an envelope the pipeline cannot store is quarantined after a few '
         'tries instead of blocking the stream', () async {
       // Bob crafts a message with the id and time of one of Alice's: both

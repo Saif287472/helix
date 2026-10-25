@@ -190,6 +190,26 @@ void main() {
     expect(message.body, isA<UnknownBody>());
   });
 
+  test(
+    'an unknown conversation kind is kept whole and re-encodes unchanged',
+    () {
+      final conv = {'kind': 'channel', 'channel': 'c-1', 'thread': 7};
+      final message = ContentMessage.fromJson(
+        JsonReader({
+          'v': 2,
+          'id': messageM,
+          'ts': 0,
+          'conv': conv,
+          'type': 'text',
+          'body': {'text': 'hello'},
+        }),
+      );
+      expect(message.conversation, isA<UnknownConversation>());
+      expect((message.conversation as UnknownConversation).kind, 'channel');
+      expect(message.toJson()['conv'], conv);
+    },
+  );
+
   group('every field a peer writes is bounded on decode', () {
     JsonReader body(Map<String, Object?> json) =>
         JsonReader(json, path: 'body');

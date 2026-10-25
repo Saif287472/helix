@@ -10,15 +10,14 @@ sealed class ConversationRef {
 
   JsonMap toJson();
 
-  factory ConversationRef.fromJson(JsonReader json) =>
-      switch (json.string('kind')) {
-        'direct' => DirectConversation(to: json.nonEmpty('to')),
-        'group' => GroupConversation(group: json.nonEmpty('group')),
-        _ => throw ProtocolFormatException(
-          'unknown conversation kind',
-          path: json.path,
-        ),
-      };
+  factory ConversationRef.fromJson(JsonReader json) {
+    final kind = json.string('kind');
+    return switch (kind) {
+      'direct' => DirectConversation(to: json.nonEmpty('to')),
+      'group' => GroupConversation(group: json.nonEmpty('group')),
+      _ => UnknownConversation(kind: kind, raw: json.json),
+    };
+  }
 }
 
 /// A one-to-one chat. [to] is the recipient's account, so the sender's own
@@ -58,6 +57,19 @@ final class GroupConversation extends ConversationRef {
 
   @override
   int get hashCode => group.hashCode;
+}
+
+/// A conversation kind this version does not know, kept whole so the message
+/// decodes and can be acknowledged instead of quarantined as corrupt. No chat
+/// can be resolved from it, so a client ignores it.
+final class UnknownConversation extends ConversationRef {
+  const UnknownConversation({required this.kind, required this.raw});
+
+  final String kind;
+  final JsonMap raw;
+
+  @override
+  JsonMap toJson() => raw;
 }
 
 /// The plaintext of every encrypted message (CONTENT_V2.md §1).
