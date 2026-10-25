@@ -76,6 +76,14 @@ abstract final class AppPaths {
     return File(p.join(dir.path, 'profile_avatar.png'));
   }
 
+  /// `<account folder>/unread.json`: how many messages were waiting the last
+  /// time this account's mailbox was read on this phone (`core/push`), so the
+  /// account lists can show a number for an account whose database is closed.
+  static Future<File> unreadFile(String account) async {
+    final dir = await accountDirectory(account);
+    return File(p.join(dir.path, 'unread.json'));
+  }
+
   /// Settings that belong to this device, not the account (the theme). Kept
   /// when the account is signed out, and only ever plain choices.
   static Future<File> deviceSettingsFile() async {
@@ -153,9 +161,9 @@ abstract final class AppPaths {
   }
 
   /// Deletes what a signed-out account must not leave: the avatar picture (a
-  /// plaintext PNG) and every downloaded attachment. With [includeDatabase],
-  /// the database file and its journal files go too (the destructive reset),
-  /// and so does the account's own folder once it is empty.
+  /// plaintext PNG), every downloaded attachment and its unread count. With
+  /// [includeDatabase], the database file and its journal files go too (the
+  /// destructive reset), and so does the account's own folder once it is empty.
   ///
   /// Works from the paths alone, so it still finishes when the engine, the
   /// database or the keystore cannot be opened. Each file is tried on its own:
@@ -173,6 +181,7 @@ abstract final class AppPaths {
     }
     final targets = <FileSystemEntity>[
       File(p.join(dir.path, 'profile_avatar.png')),
+      File(p.join(dir.path, 'unread.json')),
       Directory(p.join(dir.path, 'attachments')),
       if (includeDatabase)
         for (final suffix in const ['', '-wal', '-shm', '-journal'])

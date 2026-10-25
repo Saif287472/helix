@@ -4,6 +4,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/helix_code.dart';
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/saved_accounts.dart';
+import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_countries.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 
@@ -36,7 +37,10 @@ bool opensSignedInAccount(SavedAccountLine line) =>
 /// and the masking are one thing the widget tests can pin.
 final signInSavedAccountsProvider = Provider<List<SavedAccountLine>>(
   (ref) => [
-    ...signedInAccountLines(ref.watch(accountsProvider).signedIn),
+    ...signedInAccountLines(
+      ref.watch(accountsProvider).signedIn,
+      unread: ref.watch(accountUnreadProvider).value ?? const {},
+    ),
     ...savedAccountLinesForGlobalPage(
       ref.watch(savedAccountsProvider),
       except: ref.watch(accountsProvider).signedIn,
@@ -45,8 +49,16 @@ final signInSavedAccountsProvider = Provider<List<SavedAccountLine>>(
 );
 
 /// The accounts signed in on this device, on any server, most recent first:
-/// "Rahman / +880 ••••• 0001 · signed in".
-List<SavedAccountLine> signedInAccountLines(List<AccountSlot> slots) => [
+/// "Rahman / +880 ••••• 0001 · 3 unread · signed in".
+///
+/// [unread] is what each account's last read mailbox counted: an account that
+/// is not on screen is notified of nothing, so the number is how it says it
+/// has something waiting. An account with nothing waiting says only that it is
+/// signed in.
+List<SavedAccountLine> signedInAccountLines(
+  List<AccountSlot> slots, {
+  Map<String, int> unread = const {},
+}) => [
   for (final s in slots)
     (
       id: '$signedInLinePrefix${s.id}',
@@ -58,6 +70,7 @@ List<SavedAccountLine> signedInAccountLines(List<AccountSlot> slots) => [
       detail: [
         if (s.name.isNotEmpty && s.e164.isNotEmpty) _masked(s.e164),
         if (s.name.isEmpty || s.e164.isEmpty) _serverLabel(s.server),
+        if ((unread[s.id] ?? 0) > 0) '${unread[s.id]} unread',
         'signed in',
       ].join(' · '),
     ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
+import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
@@ -117,12 +118,17 @@ final class ForegroundWakes {
 /// registers a push token for them. Overridden in tests.
 final otherAccountsPassProvider =
     Provider<Future<void> Function({String? pushToken})>(
-      (ref) =>
-          ({String? pushToken}) => wakeSignedInAccounts(
-            except: ref.read(activeAccountProvider)?.id,
-            pushToken: pushToken,
-            syncMailbox: pushToken == null,
-          ),
+      (ref) => ({String? pushToken}) async {
+        await wakeSignedInAccounts(
+          except: ref.read(activeAccountProvider)?.id,
+          pushToken: pushToken,
+          syncMailbox: pushToken == null,
+        );
+        // That pass left a new unread count for each account it read, and it
+        // sends no notification: the number on an account's row is how the
+        // person hears about it.
+        if (ref.mounted) ref.invalidate(accountUnreadProvider);
+      },
     );
 
 final pushTokensProvider = Provider<PushTokens>((ref) => PushTokenSource());

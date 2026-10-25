@@ -372,6 +372,19 @@ void main() {
       expect(c.read(accountsProvider).notificationLabel(first), isNull);
     });
 
+    test('only the account on screen is notified of new messages', () async {
+      final c = container();
+      final (first, second) = await two(c);
+      final slots = c.read(accountsProvider);
+      expect(slots.active, second);
+      expect(slots.notifies(second), isTrue);
+      expect(slots.notifies(first), isFalse);
+      expect(slots.notifies('nobody-here'), isFalse);
+      // Nothing has been on screen - a launch that went straight to the
+      // background: whatever a wake-up read may speak.
+      expect(slots.activate(null).notifies(first), isTrue);
+    });
+
     test('the Accounts page lists the account on screen first', () async {
       final c = container();
       final (first, second) = await two(c);

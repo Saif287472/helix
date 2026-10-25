@@ -14,6 +14,7 @@ import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
+import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
@@ -26,11 +27,15 @@ import 'package:helix_remote_engine/helix_remote_engine.dart'
 /// the app closed. It builds its **own** engine - nothing is shared with the UI
 /// isolate - and, for every account signed in on this device in turn, opens
 /// its encrypted database with its key from the keystore, reads the mailbox
-/// once over REST, applies everything, sends whatever that queued, and raises
-/// a local notification for what arrived.
+/// once over REST, applies everything, sends whatever that queued, leaves the
+/// unread count for the account lists, and raises a local notification for what
+/// arrived - but only for the account this phone was last on. The others are
+/// quiet numbers until they are opened.
 ///
 /// The wake-up does not say which account it is for (the payload carries no
-/// account, by design), and one FCM token serves every account here.
+/// account, by design), and one FCM token serves every account here. That is
+/// why the alert is chosen here, from the accounts this device keeps, and not
+/// by anything the payload could have said.
 ///
 /// It never reads content from the payload. The payload is only a wake-up
 /// (`{t: message}`); the engine decrypts the real message, so nothing that
@@ -51,9 +56,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 /// Opens every account signed in on this device except [except]. A wake-up
-/// reads its mailbox and raises notifications; [pushToken], when present, is
-/// registered first. The running app uses [syncMailbox] false for a token-only
-/// pass.
+/// reads its mailbox and leaves its unread count where the account lists can
+/// read it; only the account this phone was last on raises a notification for
+/// what arrived, and a call rings whoever it came for. [pushToken], when
+/// present, is registered first. The running app uses [syncMailbox] false for
+/// a token-only pass.
 Future<void> wakeSignedInAccounts({
   String? except,
   String? pushToken,
@@ -72,6 +79,11 @@ Future<void> wakeSignedInAccounts({
         uri,
         keys,
         label: accounts.notificationLabel(account.id),
+        // Only the account this phone was last on may raise a notification;
+        // the others are read and counted the same way and stay a number on
+        // their row (see AccountSlots.notifies). A call still rings whoever it
+        // came for.
+        alerts: accounts.notifies(account.id),
         pushToken: pushToken,
         syncMailbox: syncMailbox,
       );
@@ -97,6 +109,7 @@ Future<void> _wakeAccount(
   SecureKeyStore keys, {
   String? label,
   String? pushToken,
+  bool alerts = true,
   required bool syncMailbox,
 }) async {
   final file = await AppPaths.databaseFile(account);
@@ -137,6 +150,14 @@ Future<void> _wakeAccount(
     }
     if (!syncMailbox) return;
     final summary = await runtime.engine.syncOnce();
+    // What is waiting here, for the account lists: they cannot open this
+    // database (the app holds one engine at a time), so this pass - the only
+    // one that reads it while the account is not on screen - leaves the
+    // number behind for them.
+    await const AccountBadgeStore().write(
+      account,
+      (await runtime.engine.chats.watchUnread().first).messages,
+    );
     // Alerts are settings (Settings > Notifications), applied the same way
     // as by the running app (MessageAlerts), per account.
     final settings = runtime.engine.settings;
@@ -157,7 +178,7 @@ Future<void> _wakeAccount(
         'calls': '${summary.pendingCalls.length}',
       },
     );
-    if (audible.isNotEmpty) {
+    if (audible.isNotEmpty && alerts) {
       await LocalNotifications.init();
       // The newest of the run names the notification and gives it its text, so
       // a second message replaces the first instead of blanking the line.

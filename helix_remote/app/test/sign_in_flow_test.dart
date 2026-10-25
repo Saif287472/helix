@@ -714,6 +714,30 @@ void main() {
       expect(opensSignedInAccount(lines.single), isTrue);
     });
 
+    test('an account with messages waiting says how many', () {
+      // An account that is not on screen is notified of nothing, so the line
+      // has to say for itself that something arrived.
+      const slot = AccountSlot(
+        id: 'x1',
+        server: 'https://chat.example.org',
+        signedIn: true,
+      );
+      expect(
+        signedInAccountLines(const [slot]).single.detail,
+        'chat.example.org · signed in',
+      );
+      expect(
+        signedInAccountLines(const [slot], unread: const {'x1': 5}).single
+            .detail,
+        'chat.example.org · 5 unread · signed in',
+      );
+      expect(
+        signedInAccountLines(const [slot], unread: const {'x1': 0}).single
+            .detail,
+        'chat.example.org · signed in',
+      );
+    });
+
     test('Remember me is on until it is turned off', () {
       final container = _container();
       final notifier = container.read(signInControllerProvider.notifier);

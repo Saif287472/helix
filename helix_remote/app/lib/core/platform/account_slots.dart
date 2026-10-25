@@ -166,6 +166,15 @@ final class AccountSlots {
     return 'Number ending ${digits.substring(digits.length - 4)}';
   }
 
+  /// Whether a message that arrived for [id] may raise a notification on this
+  /// phone. Only the account this phone was last on: one FCM token serves every
+  /// account here, and a device with four of them would otherwise be alerted by
+  /// every chat it is not in - the others show a count instead
+  /// (`core/push/account_badges.dart`). A device that has never shown an
+  /// account - a launch that went straight to the background - alerts what it
+  /// woke for, rather than silently dropping it.
+  bool notifies(String id) => active == null || id == active;
+
   /// [slot] in place of the one with its id, or added.
   AccountSlots put(AccountSlot slot, {String? active}) =>
       _with(active ?? this.active, [

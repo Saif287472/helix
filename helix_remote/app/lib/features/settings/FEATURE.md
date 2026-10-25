@@ -71,8 +71,10 @@ the account list and the device app lock live in the keystore. `AccountsPage`
 wipes that account only, after asking. Account > Sign out offers "Switch
 account" (which keeps it) and "Sign out and remove". Sign-in shows the numbers
 this phone remembers; only numbers are saved. `core/push/` keeps every
-account's push token current and raises notifications and calls for the
-accounts not on screen.
+account's push token current: a wake-up reads every account's mailbox, but only
+the account in use is notified of messages - the others leave an unread count
+(`core/push/account_badges.dart`) behind for the rows here and for sign-in, and
+a call still rings whoever it comes for.
 
 ## Deleting the account
 

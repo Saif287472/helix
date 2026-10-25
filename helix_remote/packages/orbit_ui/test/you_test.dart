@@ -398,6 +398,51 @@ void main() {
     expect(did, ['open b', 'add', 'remove b']);
   });
 
+  testWidgets('accounts: the others show what waits', (tester) async {
+    // Only the account in use is notified, so a number is how the others say
+    // they have something; an account with nothing waiting shows no number.
+    await show(
+      tester,
+      const AccountsScreen(
+        model: AccountsModel(
+          accounts: [
+            AccountsEntry(
+              id: 'a',
+              title: 'Hasan',
+              current: true,
+              unread: 4,
+              avatar: HelixAvatarModel(name: 'Hasan'),
+            ),
+            AccountsEntry(
+              id: 'b',
+              title: 'Work',
+              unread: 12,
+              avatar: HelixAvatarModel(name: 'Work'),
+            ),
+            AccountsEntry(
+              id: 'c',
+              title: 'Old',
+              avatar: HelixAvatarModel(name: 'Old'),
+            ),
+          ],
+        ),
+      ),
+    );
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget);
+    expect(find.text('In use'), findsOneWidget);
+    expect(find.byTooltip('Remove Work'), findsOneWidget);
+    expect(
+      find.text(
+        'Each account keeps its own messages and keys. Only the account in '
+        'use is notified of new messages; the others show how many are '
+        'waiting, and a call rings whoever it comes for. The app lock covers '
+        'all of them.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('accounts: nothing starts while one is busy', (tester) async {
     final did = <String>[];
     await show(

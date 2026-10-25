@@ -10,6 +10,7 @@ import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/picker_cleanup.dart';
+import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     show NotificationVisibility;
@@ -56,6 +57,30 @@ void main() {
     });
   });
 
+  group('the unread count of an account', () {
+    test('a pass leaves it and the account lists read it back', () async {
+      AppPaths.isWindows = () => false;
+      const store = AccountBadgeStore();
+      expect(await store.read('nobody'), 0, reason: 'never counted');
+      await store.write(AppPaths.firstAccount, 12);
+      expect(await store.read(AppPaths.firstAccount), 12);
+      await store.write(AppPaths.firstAccount, 0);
+      expect(await store.read(AppPaths.firstAccount), 0);
+      // Written by someone else: no count, and no crash in a list.
+      (await AppPaths.unreadFile(AppPaths.firstAccount)).writeAsStringSync('x');
+      expect(await store.read(AppPaths.firstAccount), 0);
+    });
+
+    test('a second account keeps its own count', () async {
+      AppPaths.isWindows = () => false;
+      const store = AccountBadgeStore();
+      await store.write(AppPaths.firstAccount, 2);
+      await store.write('a1b2c3d4e5f60718', 7);
+      expect(await store.read(AppPaths.firstAccount), 2);
+      expect(await store.read('a1b2c3d4e5f60718'), 7);
+    });
+  });
+
   group('plaintext leftovers (M5)', () {
     Future<File> seed() async {
       AppPaths.isWindows = () => false;
@@ -63,14 +88,14 @@ void main() {
       avatar.writeAsBytesSync([1, 2, 3]);
       final attachments = await AppPaths.attachmentCache(AppPaths.firstAccount);
       File('${attachments.path}/photo.jpg').writeAsBytesSync([9]);
+      await const AccountBadgeStore().write(AppPaths.firstAccount, 3);
       (await AppPaths.databaseFile(
         AppPaths.firstAccount,
       )).writeAsBytesSync([7]);
       return avatar;
     }
 
-    test(
-      'wiping removes the avatar and the attachments, keeps the database',
+    test('wiping removes the avatar and the attachments, keeps the database',
       () async {
         final avatar = await seed();
         await AppPaths.wipeLocalFiles(AppPaths.firstAccount);
@@ -78,6 +103,11 @@ void main() {
         expect(
           (await AppPaths.attachmentCache(AppPaths.firstAccount)).listSync(),
           isEmpty,
+        );
+        expect(
+          (await AppPaths.unreadFile(AppPaths.firstAccount)).existsSync(),
+          isFalse,
+          reason: 'a signed-out account leaves no count on the phone',
         );
         expect(
           (await AppPaths.databaseFile(AppPaths.firstAccount)).existsSync(),

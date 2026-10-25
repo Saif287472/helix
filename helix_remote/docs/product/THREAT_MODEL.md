@@ -160,12 +160,17 @@ metadata). The cryptography has **not been externally reviewed**
   foreground. The list of accounts (ids, servers, numbers and names, no password and no session),
   the numbers sign-in remembers ("Remember me") and the app lock live in the keystore. The app lock
   is one setting for the device and covers every account; it goes with the last account. "Sign out
-  and remove" wipes that account's database, key and files only, the others stay. A notification
-  for an account not on screen names it only when message previews are on, like the text. The push
-  wake-up carries no account; the app reads every account's mailbox for it.
+  and remove" wipes that account's database, key and files only, the others stay. Only the account
+  this phone was last on raises a message notification: a message for another is read, counted and
+  left as a number on that account's row (a call still rings whoever it comes for), so a phone with
+  several accounts is not alerted out of chats it is not in. A notification names its account only
+  when message previews are on, like the text. The push wake-up carries no account; the app reads
+  every account's mailbox for it.
 - **Residual risk**: Every account here registers the same push token, so a server that holds two of
   them can tell they share a phone (a person who needs two unlinkable accounts should keep them on
-  different phones or servers). The numbers in the account list are as readable as the keystore.
+  different phones or servers). The numbers in the account list are as readable as the keystore. The
+  unread counts of the accounts that are closed are plain files in their own folders: a number, with
+  no name, no chat and no content in it.
 
 ### T-12: "Is this number a Helix user?" (the account-status oracle)
 - **Description**: `POST /v1/auth/account-status` answers, to anyone and without a code, whether a

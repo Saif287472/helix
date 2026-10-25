@@ -30,6 +30,7 @@ class AccountsPage extends ConsumerWidget {
         title: line.title,
         detail: line.detail,
         current: line.current,
+        unread: line.unread,
         avatar: orbit.HelixAvatarModel(
           name: line.title,
           colorIndex: orbit.HelixAvatarModel.colorIndexFor(seed),

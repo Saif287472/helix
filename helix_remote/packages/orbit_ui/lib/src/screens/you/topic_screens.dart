@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:orbit_ui/src/brand/orbit_mark.dart';
 import 'package:orbit_ui/src/components/avatar.dart';
 import 'package:orbit_ui/src/components/button.dart';
+import 'package:orbit_ui/src/components/chat_rows.dart';
 import 'package:orbit_ui/src/components/fields.dart';
 import 'package:orbit_ui/src/components/icon_button.dart';
 import 'package:orbit_ui/src/components/list_rows.dart';
@@ -2030,6 +2031,7 @@ class AccountsEntry {
     required this.avatar,
     this.detail = '',
     this.current = false,
+    this.unread = 0,
   });
 
   final String id;
@@ -2043,6 +2045,11 @@ class AccountsEntry {
 
   /// The account on screen.
   final bool current;
+
+  /// The messages waiting in this account: only the account on screen is
+  /// notified, so a number here is how the others say they have something.
+  /// Zero shows nothing.
+  final int unread;
 }
 
 class AccountsModel {
@@ -2117,9 +2124,10 @@ class AccountsScreen extends StatelessWidget {
         OrbitSection(
           title: 'On this phone',
           footer:
-              'Each account keeps its own messages and keys. Messages and '
-              'calls reach every account here, and the app lock covers all '
-              'of them.',
+              'Each account keeps its own messages and keys. Only the account '
+              'in use is notified of new messages; the others show how many '
+              'are waiting, and a call rings whoever it comes for. The app '
+              'lock covers all of them.',
           rows: [
             for (final e in m.accounts)
               OrbitListRow(
@@ -2127,10 +2135,19 @@ class AccountsScreen extends StatelessWidget {
                 title: e.title,
                 sub: e.detail,
                 value: e.current ? 'In use' : '',
-                trailing: OrbitIconButton(
-                  icon: OrbitIcons.userMinus,
-                  tooltip: 'Remove ${e.title}',
-                  onPressed: m.busy ? null : () => remove(e),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (e.unread > 0) ...[
+                      OrbitBadge(count: e.unread),
+                      const SizedBox(width: 6),
+                    ],
+                    OrbitIconButton(
+                      icon: OrbitIcons.userMinus,
+                      tooltip: 'Remove ${e.title}',
+                      onPressed: m.busy ? null : () => remove(e),
+                    ),
+                  ],
                 ),
                 onTap: e.current || m.busy ? null : () => a.onOpen?.call(e.id),
               ),

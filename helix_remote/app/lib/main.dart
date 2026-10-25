@@ -13,6 +13,7 @@ import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote/core/notifications/notification_accounts.dart';
+import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_registration.dart';
 import 'package:helix_remote/core/router/app_router.dart';
@@ -165,8 +166,9 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       unawaited(_restoreServer());
       // These stay alive for the whole run: the anomaly log, the
       // auto-download limits that follow the network, the push token (sent
-      // whenever an engine reaches running) and the message notification
-      // while the app is in the background.
+      // whenever an engine reaches running), the message notification while
+      // the app is in the background and the unread count the account lists
+      // show for the accounts that are not on screen.
       ref.read(anomalyLogInstallProvider);
       ref.read(wipedRuntimeResetProvider);
       ref.read(accountListUpkeepProvider);
@@ -176,6 +178,7 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       // to watch the providers they follow.
       ref.listenManual(pushRegistrationProvider, (_, _) {});
       ref.listenManual(runningAppAlertsProvider, (_, _) {});
+      ref.listenManual(unreadBadgeSyncProvider, (_, _) {});
     });
   }
 
