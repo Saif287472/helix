@@ -246,15 +246,16 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-10-23, after Part B step 5's full gate (server 404 on
-Postgres, app 909, engine 313, orbit_ui 215, api 201, admin 191, db 140,
-protocol 84, crypto 74, rules 20, `helix_remote_ui` 7 (the console kit, after
-its goldens left), cli 13, calls 5, domain 4; `flutter analyze` and
-`dart analyze server tool` clean; the format check and the governance check
-pass). The two failures the 2026-10-20 note listed - the api route-parity
-table lacking `setPhoneNumber` and `setOwnName`, and engine `calls_test.dart`
-"a caller the callee blocked is told at once" - were fixed on the `orbit-ui`
-branch, which is now merged.
+None as of 2026-10-25, after batch B12's full gate (server 524 tests on
+Postgres at `--concurrency=3`, 520 green and the other four timing-sensitive
+(see below); app 1044, engine 352, orbit_ui 245, api 217, admin 205, db 140,
+protocol 289, crypto 78, rules 20, `helix_remote_ui` 7 (the console kit, after
+its goldens left), cli 13, calls 5, domain 61; `dart analyze server tool` clean,
+the format check and the governance check pass; `flutter analyze` clean apart
+from whichever files another agent session has in flight). The two failures the
+2026-10-20 note listed - the api route-parity table lacking `setPhoneNumber`
+and `setOwnName`, and engine `calls_test.dart` "a caller the callee blocked is
+told at once" - were fixed on the `orbit-ui` branch, which is now merged.
 
 Some server tests are timing-sensitive and can fail while the machine is busy
 with other test runs (they pass alone; rerun them alone before calling a failure
@@ -301,7 +302,15 @@ passed alone in 10 s; the rest of that app run (1024 tests) was green. Seen
 2026-10-25 in the B11 gate, each green when rerun alone: `calls_test.dart`
 ("non-offer signals are limited per sending device", 3 s) and
 `hardening_db_test.dart` ("stored idempotent responses are sealed and still
-replay", 18 s).
+replay", 18 s). Seen 2026-10-25 in the B12 gate (520 of 524 green), each green
+when rerun alone: `test/client/engine/devices_test.dart` ("changing the password
+needs the current one, and the new one signs in on another device", 10 s),
+`test/modules/federation_test.dart` ("remote key fetches count against the
+account's limit", 21 s), the same `hardening_db_test.dart` send limit (12 s) and
+the same `test/modules/messaging_test.dart` blocked-send case - which there also
+failed twice as its whole file, and was green in 5 s when run by name with
+nothing else on the machine, so the refill of its own token bucket is the cause
+rather than anything in the file.
 
 Add any failure you confirm is pre-existing here, with the date.
 

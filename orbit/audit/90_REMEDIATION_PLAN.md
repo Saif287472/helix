@@ -2652,6 +2652,43 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   `CONTENT_V2.md` §1's bound list now names the identifier limit. No wire,
   stored or schema change; no migration; the app gets the tightened reads from
   the package.
+  **Batch report.** All six B12 findings are closed. B12's steps: S1 `35adda1`,
+  S2 `741c7c0`, S3 `85e65bf`, S4 `6821362`, S5 `055ca2a`, S6 `32304af`,
+  S7 `64383ea`. B12's gate: the full server suite **524 tests** on Postgres at
+  `--concurrency=3`, **520 green**; all four failures are load flakes this file
+  already lists or now adds — `client/engine/devices_test.dart` ("changing the
+  password needs the current one, and the new one signs in on another device")
+  green alone in 10 s, `modules/federation_test.dart` ("remote key fetches count
+  against the account's limit") in 21 s, `platform/hardening_db_test.dart`
+  ("sends are limited per device and per account") in 12 s, and
+  `modules/messaging_test.dart` ("a send that only reaches people who blocked
+  you pays nothing") in 5 s run by name on an idle machine; that last case also
+  failed twice as its whole file, which is its own token-bucket refill under
+  load rather than a behaviour change. Every other suite green: app **1044**,
+  engine **352**, orbit_ui **245**, api **217**, admin **205**, db **140**,
+  protocol **289** (281 before S7), crypto **78**, rules **20**,
+  `helix_remote_ui` **7**, cli **13**, calls **5**, domain **61**.
+  `dart analyze server tool` clean, the format check and the governance check
+  pass. `flutter analyze` reported 2 issues, both in another agent session's
+  in-flight `app/` files, none in what this batch touched.
+  **Residual, deliberate:** a message for a conversation kind this version does
+  not know (S1) is acknowledged and dropped, not filed — there is no chat for it
+  here, and a "couldn't decrypt" row would have been a lie; when a real kind is
+  added, its clients must learn to render it. An unknown error code (S3) is
+  judged by the status class, so a genuinely retryable *new* 4xx code has to be
+  in the catalog to be retried. A corrupt stored session (S5) costs that peer's
+  ratchet: the record is dropped and a fresh session starts, so a message that
+  was already sent into the damaged chain stays unreadable — the alternative was
+  every later send wedging. The 164 fixtures (S4) pin shapes, not meanings: a
+  field renamed on both sides is caught, a wrong interpretation is not.
+  **Owner-facing, whole batch:** no migration, no new `.env` line and no route
+  change — the server needs nothing, and the CLI, admin and app pick all seven
+  steps up from the packages. The phone needs a new APK to see S1, S2, S3, S5
+  and S6 (the four packages it builds in).
+- Next: B13 (local maintenance must survive a large history), then B14, B15,
+  B16 and the later batches. Nothing waits on a decision: the owner ruled on the
+  open questions in `2f2f889`, so B5, B8, B14, B15, B17, B24 and T4 are all
+  designable.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**
