@@ -118,6 +118,12 @@ and the GHASH key.
   are exported from `helix_remote_db.dart`.
 - `outbox_ops.last_error` holds an error code, never content. Nothing here
   logs.
+- **A removed message takes its queued send with it.** `removeMessages` and
+  `clearConversation` cancel the pending and failed `outbox_ops` for those
+  rows in the same transaction (`OutboxDao.cancelForMessages` /
+  `cancelForConversation`), so a message the person deleted cannot leave
+  later; an in-flight op is left alone, its request may already be on the
+  wire.
 
 ## Added for the engine (Phase C3b)
 
@@ -173,8 +179,10 @@ No schema change; DAO methods only.
 
 - `OutboxDao`: `enqueueHeld` (an op that keeps its place in its chat but is
   due in year 9999), `hold`, `release` (real payload, due now; false if not
-  held), `heldOps`, `isHeld`. A held op blocks later ops of its chat in
-  `claimDueOrdered` like any queued op.
+  held), `heldOps`, `isHeld`; `forConversation`/`watchForConversation`,
+  `discard`, `cancelForMessages` and `cancelForConversation` (AUD-12i-1/-2).
+  A held op blocks later ops of its chat in `claimDueOrdered` like any queued
+  op.
 - `TransfersDao`: `claim(kinds:)`, `renewLease`, `release` (hand a leased job
   back without counting an attempt), `reschedule` (retry later, progress kept,
   never gives up), `resetProgress`, `enqueueThumbnail` (never replaces a

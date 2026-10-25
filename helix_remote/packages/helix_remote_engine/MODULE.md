@@ -223,6 +223,15 @@ discards the superseded failed op first, so a stale failure line cannot
 outlive the redo and its retry cannot re-send what the person has since
 undone.
 
+A message removed on this device takes its queued send with it:
+`deleteForMe`, `clearChat`, `deleteChat` and a disappearing expiry drop the
+message's pending and failed ops in the same transaction
+(`OutboxDao.cancelForMessages`, wired into `MessagesDao.removeMessages` and
+`clearConversation`), and `deleteForMe` also drops queued actions about those
+messages. An in-flight op is left alone - its request may already be on the
+wire. Deleting a pending message is therefore a cancel, never a delayed send
+(AUD-12i-2).
+
 Every visible send, action, edit, delete and `read` receipt also goes to this
 account's own other devices (they get the same content; `conv.to` names the
 peer). `delivered` receipts go to the author only. Retried sends re-encrypt

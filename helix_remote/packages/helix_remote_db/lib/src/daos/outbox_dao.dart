@@ -237,6 +237,32 @@ class OutboxDao extends DatabaseAccessor<HelixDb> with _$OutboxDaoMixin {
   Future<void> discard(int id) =>
       (delete(outboxOps)..where((o) => o.id.equals(id))).go();
 
+  /// Drops the queued (pending or failed) ops that deliver [rowids]: a
+  /// message removed on this device must not leave later (AUD-12i-2). An
+  /// in-flight op is left alone - its request may already be on the wire.
+  Future<void> cancelForMessages(Iterable<int> rowids) async {
+    final ids = rowids.toList();
+    if (ids.isEmpty) return;
+    await (delete(outboxOps)..where(
+          (o) =>
+              o.messageRowid.isIn(ids) &
+              (o.state.equalsValue(OutboxState.pending) |
+                  o.state.equalsValue(OutboxState.failed)),
+        ))
+        .go();
+  }
+
+  /// [cancelForMessages] for every queued op of a chat, its actions about
+  /// those messages included; used when the chat's messages are removed here.
+  Future<void> cancelForConversation(String conversationId) =>
+      (delete(outboxOps)..where(
+            (o) =>
+                o.conversationId.equals(conversationId) &
+                (o.state.equalsValue(OutboxState.pending) |
+                    o.state.equalsValue(OutboxState.failed)),
+          ))
+          .go();
+
   /// The attempt failed and will be retried at [nextAttemptAt]. [errorCode]
   /// is an error code, never content.
   Future<void> reschedule(

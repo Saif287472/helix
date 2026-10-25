@@ -257,6 +257,73 @@ void main() {
     });
   });
 
+  group('removal', () {
+    test(
+      'deleting a message for me cancels a send that has not left',
+      () async {
+        final chat = await alice.engine.chats.openDirect(bob.account);
+        final row = await alice.engine.chats.sendText(chat.id, 'never sent');
+        expect((await opOf(row)).state, OutboxState.pending);
+
+        await alice.engine.chats.deleteForMe([row.localRowid]);
+        expect(await alice.db.messagesDao.byRowid(row.localRowid), isNull);
+        expect(await alice.db.outboxDao.forMessage(row.localRowid), isEmpty);
+
+        await alice.engine.drainOutbox();
+        expect(
+          peers.server.sends.where((s) => s.request.id == row.messageId),
+          isEmpty,
+          reason: 'a message removed here must not leave later',
+        );
+      },
+    );
+
+    test('clearing a chat cancels everything still queued in it', () async {
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'one');
+      await alice.engine.chats.sendText(chat.id, 'two');
+
+      await alice.engine.chats.clearChat(chat.id);
+      expect(await alice.db.outboxDao.forConversation(chat.id), isEmpty);
+      await alice.engine.drainOutbox();
+      expect(peers.server.sends, isEmpty);
+
+      final again = await alice.engine.chats.sendText(chat.id, 'after');
+      await alice.engine.drainOutbox();
+      await bob.sync();
+      expect(await bob.texts(alice), ['after']);
+      expect(await statusOf(again), MessageStatus.sent);
+    });
+
+    test('deleting a chat cancels what was queued in it', () async {
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      final row = await alice.engine.chats.sendText(chat.id, 'gone with it');
+
+      await alice.engine.chats.deleteChat(chat.id);
+      expect(await alice.db.outboxDao.forConversation(chat.id), isEmpty);
+      await alice.engine.drainOutbox();
+      expect(
+        peers.server.sends.where((s) => s.request.id == row.messageId),
+        isEmpty,
+      );
+    });
+
+    test('deleting a message for me drops a failed action about it', () async {
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      final row = await alice.engine.chats.sendText(chat.id, 'react to me');
+      await alice.engine.drainOutbox();
+
+      peers.server.failNext(Routes.sendMessage, code: ErrorCode.forbidden);
+      await alice.engine.chats.react(row.localRowid, '👍');
+      await alice.engine.drainOutbox();
+      expect(await alice.engine.chats.failedActions(chat.id), hasLength(1));
+
+      await alice.engine.chats.deleteForMe([row.localRowid]);
+      expect(await alice.engine.chats.failedActions(chat.id), isEmpty);
+      expect(await alice.db.outboxDao.forConversation(chat.id), isEmpty);
+    });
+  });
+
   group('ordering', () {
     test('later messages of a chat wait for an earlier one that is backing '
         'off; other chats go on', () async {

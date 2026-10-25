@@ -1315,6 +1315,37 @@ update to be protected.
   `server/test/client/engine/groups_test.dart` **16 green** against Postgres.
   No schema change (the target is in the payload) and no wire change; no APK
   needed. Docs: engine MODULE.md outbound pipeline and the `chats` row.
+- S9 (AUD-12i-2) — "delete for me" on a pending message removed the row but
+  left its outbox op, so the message was delivered as soon as the network
+  returned, invisibly, and no later "delete for everyone" could recall it
+  (the row was gone). Clear chat and delete chat had the same shape, and a
+  failed action about a removed row stayed queued for a retry nothing could
+  show.
+  **What changed:** `OutboxDao.cancelForMessages` and
+  `cancelForConversation` delete pending and failed ops (an in-flight op is
+  left alone - its request may already be on the wire), and
+  `MessagesDao.removeMessages` / `clearConversation` call them in the same
+  transaction, which covers delete-for-me, clear chat, delete chat,
+  disappearing expiry and the transfer paths that remove a row.
+  `ChatsService.deleteForMe` also discards queued actions whose payload
+  target is one of the removed rows, and `deleteChat` empties the chat's
+  queue before deleting it. The only removal offered on an unsent message is
+  now a cancel.
+  Not done: stopping the upload itself (and deleting a partly uploaded
+  object) stays with AUD-12l; deleting an unsent media message now cancels
+  its held send at once, and the existing maintenance pass reaps its
+  transfer job.
+  Tests: `packages/helix_remote_engine/test/outbox_test.dart` - "deleting a
+  message for me cancels a send that has not left" (before this change the
+  op survives and the drained outbox sends it), "clearing a chat cancels
+  everything still queued in it", "deleting a chat cancels what was queued in
+  it" and "deleting a message for me drops a failed action about it"; the
+  media housekeeping test in `test/transfers/transfer_worker_test.dart` now
+  also asserts the held send is gone with the row.
+  Gate: engine suite **340 green**, db suite **140 green**, `dart analyze`
+  clean in both. No schema change and no wire change; no app change; no APK
+  needed. Docs: engine MODULE.md outbound pipeline and db MODULE.md rules and
+  `OutboxDao` list.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

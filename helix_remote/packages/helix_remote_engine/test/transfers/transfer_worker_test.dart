@@ -944,6 +944,11 @@ void main() {
 
       // The user deletes the message before it left.
       await alice.engine.chats.deleteForMe([sent.localRowid]);
+      expect(
+        await alice.db.outboxDao.forMessage(sent.localRowid),
+        isEmpty,
+        reason: 'the held send is cancelled with the message',
+      );
       await alice.engine.runMaintenance();
       await alice.engine.drainOutbox();
       expect(world.server.sends.map((s) => s.request.id), [text.messageId]);

@@ -161,7 +161,9 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
   });
 
   /// Removes messages from this device (delete for me, disappearing
-  /// messages) and refreshes the affected summaries.
+  /// messages) and refreshes the affected summaries. A send still queued for
+  /// one of them is cancelled in the same transaction, so a message the
+  /// person removed cannot leave later (AUD-12i-2).
   Future<int> removeMessages(Iterable<int> rowids) => transaction(() async {
     final ids = rowids.toList();
     if (ids.isEmpty) return 0;
@@ -171,6 +173,7 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
               ..where(messages.localRowid.isIn(ids)))
             .map((r) => r.read(messages.conversationId)!)
             .get();
+    await attachedDatabase.outboxDao.cancelForMessages(ids);
     final removed = await (delete(
       messages,
     )..where((m) => m.localRowid.isIn(ids))).go();
@@ -733,7 +736,9 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
 
   /// Removes every message of [conversationId] from this device and resets
   /// the chat's summary (the chat itself stays). Returns how many went.
+  /// Queued sends and actions of the chat are cancelled with it.
   Future<int> clearConversation(String conversationId) => transaction(() async {
+    await attachedDatabase.outboxDao.cancelForConversation(conversationId);
     final removed = await (delete(
       messages,
     )..where((m) => m.conversationId.equals(conversationId))).go();

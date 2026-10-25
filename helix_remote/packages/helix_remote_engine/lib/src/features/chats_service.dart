@@ -474,9 +474,15 @@ final class ChatsService {
     );
   });
 
-  /// Removes messages from this device only.
-  Future<void> deleteForMe(Iterable<int> rowids) =>
-      _db.messagesDao.removeMessages(rowids);
+  /// Removes messages from this device only. A message still queued for
+  /// sending is cancelled with it (AUD-12i-2): deleting is the only removal
+  /// offered on an unsent message, and it must not deliver it later.
+  Future<void> deleteForMe(Iterable<int> rowids) => _db.transaction(() async {
+    final ids = rowids.toSet();
+    if (ids.isEmpty) return;
+    await _discardQueuedActionsAbout(ids);
+    await _db.messagesDao.removeMessages(ids);
+  });
 
   /// Reads everything in the chat: clears the unread count, sends `read`
   /// receipts to the authors (when the setting allows) and to this
@@ -601,9 +607,12 @@ final class ChatsService {
     _onExpiryChanged();
   }
 
-  /// Deletes the chat and its messages from this device.
-  Future<void> deleteChat(String id) =>
-      _db.conversationsDao.deleteConversation(id);
+  /// Deletes the chat and its messages from this device; anything still
+  /// queued for it is cancelled with it.
+  Future<void> deleteChat(String id) => _db.transaction(() async {
+    await _db.outboxDao.cancelForConversation(id);
+    await _db.conversationsDao.deleteConversation(id);
+  });
 
   // ------------------------------------------------------------- internals
 
@@ -744,6 +753,30 @@ final class ChatsService {
       // Actions on a message are not worth waking the recipient's phone.
       urgent: false,
     );
+  }
+
+  /// Drops queued (pending or failed) actions about messages being removed:
+  /// their target will not exist here, so they must neither send nor leave a
+  /// failure line behind.
+  Future<void> _discardQueuedActionsAbout(Set<int> targets) async {
+    final conversations = <String>{};
+    for (final id in targets) {
+      final row = await _db.messagesDao.byRowid(id);
+      if (row != null) conversations.add(row.conversationId);
+    }
+    for (final conversationId in conversations) {
+      for (final op in await _db.outboxDao.forConversation(conversationId)) {
+        if (op.messageRowid != null ||
+            (op.state != OutboxState.pending &&
+                op.state != OutboxState.failed)) {
+          continue;
+        }
+        final target = _actionOf(op)?.targetRowid;
+        if (target != null && targets.contains(target)) {
+          await _db.outboxDao.discard(op.id);
+        }
+      }
+    }
   }
 
   /// A new attempt at the same action replaces an earlier failed one: its
