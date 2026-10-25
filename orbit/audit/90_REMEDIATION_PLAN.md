@@ -2177,6 +2177,37 @@ packs only.
   `architecture_test` **32 green**, `dart analyze` clean on the changed files;
   the batch gate below is the full server suite. No wire change, no migration,
   no app change, no APK; a server restart (or the next deploy) picks it up.
+  **Batch report.** All nine B10 findings are closed. B10's steps: S1
+  `76c7649`, S2 `717b351`, S3 `e0ba939`, S4 `29a1573`, S5 `07fe963`, S6
+  `7a4924f`. B10's gate: the full server suite **518 tests** on Postgres at
+  `--concurrency=3`, 516 green; the two failures are the timing flakes already
+  listed in `AGENTS.md` - `test/client/engine/devices_test.dart` "changing the
+  password needs the current one..." and `messaging_test.dart` "a send that
+  only reaches people who blocked you pays nothing" - and each was green alone
+  straight after (5 s and 3 s). The full app suite **1038 green** (the theme
+  file 51, sounds 20), orbit_ui **240 green**; `flutter analyze` clean on the
+  workspace and `dart analyze server tool` clean. No migration, no wire change.
+  **Residual, deliberate:** the server's pack list is an index with a 10 s
+  lifetime, so a publish appears within it (reads never come from the index,
+  so the worst case is a 404, not a wrong byte); the app's verified-kind map
+  lives for the session, so a cold start re-probes each offered id once (at
+  most 64, six at a time) and a failed probe is asked again next visit because
+  an outage is not a fact about the pack. S1's token contract is the gate
+  getting stricter on purpose: a signed theme missing any of the 111 required
+  tokens, or naming one twice, is refused at install and a stored one is no
+  longer offered - it could never have been drawn, and `remove` still deletes
+  it. Interactive controls that sit beside a merged field now need their own
+  `Semantics(container: true)` (S4's group picture): Flutter's sibling-merge
+  compiler will otherwise absorb the button's node and bounds into the row's.
+  **Owner-facing, whole batch:** no migration and no `.env` line. The server
+  half (the pack list index) is picked up by a restart or the next deploy; the
+  app half needs a new APK (the stricter theme gate, the field label/error
+  semantics, controls that grow at large text, the theme fade fix, and the
+  pack probe's bounded reads and session memory). Any pack published from now
+  on must be built and signed with the current `theme_pack_tool.dart`, because
+  the app now requires every token the generator emits.
+- Next: B11 (realtime), then B12, B13, B16 and the later batches; B8 still
+  waits on Q8/Q9 and B5 on Q6.
 
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**
