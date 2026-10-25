@@ -2083,6 +2083,41 @@ packs only.
   Gate: orbit_ui **237 green** (236 before), the app's settings folder **234
   green**, `flutter analyze` clean on the workspace. No wire change, no
   migration, no server change. A new APK carries the fix.
+- S4 (AUD-16-4, AUD-16-5) — the field's label was drawn as a sibling above the
+  box and the error as a sibling below it, so the editable node announced only
+  the hint (or nothing once text was typed) and an error that appeared after a
+  submit was silent; `OrbitButton` put a deliberately wrapping label inside a
+  fixed `SizedBox(height:)` and `OrbitSegmented` inside a fixed
+  `Container(height: 36/40)`, so at 2× text a second line painted outside the
+  box and `Material` clipped it, with nothing throwing.
+  **What changed:** the input is wrapped in `MergeSemantics` + `Semantics(label:
+  the drawn label, hint: the error while one shows)`, which is what puts the
+  label on the field's own node; the drawn label is `ExcludeSemantics` (it
+  would be read twice), and the eye and paste buttons stay outside the merge,
+  each still its own labeled node. The error row is now
+  `Semantics(container: true, liveRegion: true, label:, excludeSemantics:
+  true)`, so it is announced when it appears rather than waiting to be swiped
+  to. Button and segment heights became `minHeight` constraints with vertical
+  padding (6 px, 4 px): a wrapped label grows the control, while a one-line
+  label stays at the same height; segment labels are `Flexible` so they wrap
+  instead of overflowing. The group-create picture control is now
+  `Semantics(container: true)`: beside the merged name field Flutter's
+  sibling-merge compiler absorbed the 64 px picture button into the row's node
+  (the whole row answered the picture's action, and the app's
+  tap-by-semantics-label test failed) — an interactive control has to be its
+  own semantics boundary.
+  Tests: `orbit_ui/test/primitives_test.dart` — a 40 px `OrbitButton` at 2×
+  text draws a two-line label taller than its minimum and still taps; a
+  segmented control at 2× in 260 px grows past 36 px rather than clipping its
+  label (and is found by `OrbitSegmented<String>`, not the raw generic); an
+  `OrbitTextField` exposes `isTextField` with the label on the editable node
+  and the error as a live region carrying the same words. The semantics handle
+  is disposed in the body, because Flutter checks for a leaked handle before
+  tear-downs run.
+  Gate: orbit_ui **240 green** (237 before), the full app **1032 green** (the
+  group-create picture test caught the sibling-merge side effect before the
+  `container: true` fix), `flutter analyze` clean on the workspace. No wire
+  change, no migration, no server change. A new APK carries the change.
 
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**

@@ -139,6 +139,119 @@ void main() {
       await tester.pumpAndSettle();
       expect(notched, findsNothing);
     });
+
+    testWidgets('a label that wraps at 2x text grows the button, not cut it', (
+      tester,
+    ) async {
+      // AUD-16-5: the box was a fixed 40px and the Material clips, so a second
+      // line was painted outside it and silently cut. The box is a minimum.
+      const label = 'Use a recovery code instead';
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OrbitTheme.of(themes['orbit']!),
+          builder: (context, app) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: app!,
+          ),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 220,
+                child: OrbitButton(
+                  label: label,
+                  height: 40,
+                  onPressed: () => taps++,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final drawn = tester.getSize(find.text(label));
+      expect(drawn.height, greaterThan(40), reason: 'the label did wrap');
+      expect(
+        tester.getSize(find.byType(OrbitButton)).height,
+        greaterThanOrEqualTo(drawn.height),
+      );
+      await tester.tap(find.text(label));
+      expect(taps, 1);
+    });
+  });
+
+  group('OrbitTextField', () {
+    testWidgets('a screen reader hears the label, and an error is announced', (
+      tester,
+    ) async {
+      // AUD-16-4: the label is a sibling above the box and the error a sibling
+      // below it, so the field's own node only knew the hint.
+      final handle = tester.ensureSemantics();
+      const trouble = 'Enter the number you signed up with.';
+      await show(
+        tester,
+        const OrbitTextField(
+          label: 'Phone number',
+          hint: '1711 000001',
+          error: trouble,
+        ),
+      );
+
+      final field = tester.getSemantics(find.byType(TextField));
+      expect(field, isSemantics(isTextField: true));
+      expect(field.label, contains('Phone number'));
+
+      // An error that appears after a submit is a live region, not just text
+      // below the box that a person has to swipe to.
+      expect(
+        tester.getSemantics(find.text(trouble)),
+        isSemantics(isLiveRegion: true, label: trouble),
+      );
+      // Flutter checks for a leaked handle before tear-downs run, so this one
+      // is closed in the body rather than from `addTearDown`.
+      handle.dispose();
+    });
+  });
+
+  group('OrbitSegmented', () {
+    testWidgets('a label that wraps at 2x text grows its segment', (
+      tester,
+    ) async {
+      // AUD-16-5: the drawn pill was a fixed 36/40px inside a container that
+      // clipped it.
+      const option = 'Use a recovery code instead';
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OrbitTheme.of(themes['orbit']!),
+          builder: (context, app) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: app!,
+          ),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 260,
+                child: OrbitSegmented<String>(
+                  options: const [OrbitSegment('recovery', option)],
+                  value: 'recovery',
+                  onChanged: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final drawn = tester.getSize(find.text(option));
+      expect(drawn.height, greaterThan(36), reason: 'the label did wrap');
+      expect(
+        tester.getSize(find.byType(OrbitSegmented<String>)).height,
+        greaterThanOrEqualTo(drawn.height),
+      );
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('OrbitFab', () {

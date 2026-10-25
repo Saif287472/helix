@@ -226,6 +226,21 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
             contentPadding: EdgeInsets.symmetric(vertical: w.big ? 12 : 14),
           ),
     );
+    // A screen reader hears the label a sighted person reads and, when one is
+    // showing, the error - neither of which the input knows on its own: the
+    // label is drawn above the box and the error below it. Merging them into
+    // the field's one node is how Flutter associates an external label with its
+    // field; the eye and paste buttons stay outside the merge, so each is still
+    // its own tappable node.
+    final field = w.label.isEmpty && !hasError
+        ? input
+        : MergeSemantics(
+            child: Semantics(
+              label: w.label.isEmpty ? null : w.label,
+              hint: hasError ? w.error : null,
+              child: input,
+            ),
+          );
     final edge = hasError
         ? t.danger
         : focused
@@ -250,7 +265,7 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
       child: Row(
         children: [
           if (w.prefix.isNotEmpty) _prefix(t),
-          Expanded(child: input),
+          Expanded(child: field),
           if (w.eye)
             OrbitIconButton(
               icon: _shown ? OrbitIcons.eyeSlash : OrbitIcons.eye,
@@ -283,12 +298,16 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
               if (w.label.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 2),
-                  child: OrbitText(
-                    w.label,
-                    style: t.font.style(
-                      size: OrbitType.caption,
-                      weight: 560,
-                      color: t.ink2,
+                  // The label's words are on the field's node; read here too,
+                  // they would be announced twice.
+                  child: ExcludeSemantics(
+                    child: OrbitText(
+                      w.label,
+                      style: t.font.style(
+                        size: OrbitType.caption,
+                        weight: 560,
+                        color: t.ink2,
+                      ),
                     ),
                   ),
                 ),
@@ -297,31 +316,40 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
               box,
               if (hasError) ...[
                 const SizedBox(height: 6),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 1),
-                        child: OrbitIcon(
-                          OrbitIcons.warningCircle,
-                          weight: OrbitIconWeight.fill,
-                          size: 15,
-                          color: t.danger,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: OrbitText(
-                          w.error,
-                          style: t.font.style(
-                            size: OrbitType.caption,
+                // An error that appears after a submit is news: a live region
+                // is what makes a screen reader say it without the person
+                // having to swipe down to where it appeared.
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  label: w.error,
+                  excludeSemantics: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: OrbitIcon(
+                            OrbitIcons.warningCircle,
+                            weight: OrbitIconWeight.fill,
+                            size: 15,
                             color: t.danger,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: OrbitText(
+                            w.error,
+                            style: t.font.style(
+                              size: OrbitType.caption,
+                              color: t.danger,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ] else if (w.helper.isNotEmpty) ...[
@@ -425,7 +453,12 @@ class OrbitSegmented<T> extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: change == null ? null : () => change(o.value),
         child: Container(
-          height: small ? 36 : 40,
+          // A minimum, not a height: a segment's label wraps at large text, and
+          // a fixed 36/40px box would cut the second line off. The padding is
+          // what a wrapped line gets above and below; a one-line segment's text
+          // plus 8px stays under the minimum, so nothing moves at normal size.
+          constraints: BoxConstraints(minHeight: small ? 36 : 40),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             color: on ? t.surface : null,
@@ -449,12 +482,17 @@ class OrbitSegmented<T> extends StatelessWidget {
                 OrbitIcon(o.icon!, size: 17, color: ink),
                 const SizedBox(width: 6),
               ],
-              OrbitText(
-                o.label,
-                style: t.font.style(
-                  size: small ? 12.5 : OrbitType.small,
-                  weight: 560,
-                  color: ink,
+              // Flexible so a label too wide for its segment wraps instead of
+              // overflowing the row at large text sizes.
+              Flexible(
+                child: OrbitText(
+                  o.label,
+                  textAlign: TextAlign.center,
+                  style: t.font.style(
+                    size: small ? 12.5 : OrbitType.small,
+                    weight: 560,
+                    color: ink,
+                  ),
                 ),
               ),
             ],

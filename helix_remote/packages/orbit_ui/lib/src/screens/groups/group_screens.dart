@@ -585,6 +585,10 @@ class NewGroupScreen extends StatelessWidget {
       message: 'Add a group picture',
       excludeFromSemantics: true,
       child: Semantics(
+        // A boundary of its own: the tappable picture sits beside the name
+        // field, and a field merged for its label must not take the picture's
+        // node (and its 64px bounds) into the row's node.
+        container: true,
         button: true,
         label: 'Add a group picture',
         child: GestureDetector(

@@ -107,10 +107,18 @@ class OrbitButton extends StatelessWidget {
           // the prototype's background change on hover.
           hoverColor: hover ?? Colors.transparent,
           highlightColor: Colors.transparent,
-          child: SizedBox(
-            height: height,
+          // The height is a minimum, not a box: at 2x text a label that wraps
+          // needs more than 48px, and the prototype's CSS grows the same way.
+          // The vertical padding keeps a wrapped label off the pill's edge
+          // without moving a one-line button (its line plus 12 stays under the
+          // minimum).
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: height),
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: padding + 1),
+              padding: EdgeInsets.symmetric(
+                horizontal: padding + 1,
+                vertical: 6,
+              ),
               child: Row(
                 mainAxisSize: block ? MainAxisSize.max : MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
