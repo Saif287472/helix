@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -468,6 +469,38 @@ void main() {
         );
       },
     );
+  });
+
+  group('a state this client does not know', () {
+    test('does not cancel a live incoming transfer', () async {
+      await start(messages: 3);
+      final id = await offer();
+      expect(
+        (await alice2.backup.offers()).single.phase,
+        HistoryTransferPhase.waiting,
+      );
+
+      // A newer device's step (say a future `importing`) from the offerer:
+      // no typed body can express it, so the content is crafted.
+      final json = ContentMessage(
+        id: '0192a4f0-0000-7000-8000-00000000f005',
+        sentAt: DateTime.utc(2026, 10, 2),
+        conversation: DirectConversation(to: alice.account),
+        body: DeviceTransferOfferBody(transferId: id),
+      ).toJson();
+      (json['body'] as JsonMap)['state'] = 'importing';
+      await alice.engine.debugSendRaw(
+        Uint8List.fromList(utf8.encode(jsonEncode(json))),
+        audience: [alice.account],
+      );
+      await alice2.engine.syncOnce();
+
+      expect(
+        (await alice2.backup.offers()).single.phase,
+        HistoryTransferPhase.waiting,
+        reason: 'an unknown state is ignored, not read as cancelled',
+      );
+    });
   });
 
   test('with no other device there is nobody to send to', () async {

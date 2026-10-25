@@ -210,6 +210,23 @@ void main() {
     },
   );
 
+  test('an unknown transfer state is not read as a cancellation', () {
+    final body = ContentBody.decode(
+      DeviceTransferOfferBody.typeName,
+      JsonReader({'transfer_id': 't', 'state': 'importing'}),
+    );
+    expect(body, isA<DeviceTransferOfferBody>());
+    expect(
+      (body as DeviceTransferOfferBody).state,
+      DeviceTransferState.unknown,
+    );
+    expect(
+      body.toJson().containsKey('state'),
+      isFalse,
+      reason: 'there is no honest wire value for it',
+    );
+  });
+
   group('every field a peer writes is bounded on decode', () {
     JsonReader body(Map<String, Object?> json) =>
         JsonReader(json, path: 'body');

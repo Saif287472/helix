@@ -1153,7 +1153,12 @@ enum DeviceTransferState implements WireEnum {
   declined('declined'),
 
   /// The sender withdrew the offer; receivers drop what they fetched.
-  cancelled('cancelled');
+  cancelled('cancelled'),
+
+  /// A step a newer device wrote that this client does not know. Ignored,
+  /// never read as [cancelled]; there is no wire value for it, so it encodes
+  /// as absent rather than as an offer or a withdrawal.
+  unknown('unknown');
 
   const DeviceTransferState(this.wire);
 
@@ -1197,7 +1202,10 @@ final class DeviceTransferOfferBody extends ContentBody {
   JsonMap toJson() => compact({
     'transfer_id': transferId,
     'relay_media': relayMedia?.toJson(),
-    'state': state == DeviceTransferState.offer ? null : state.wire,
+    'state': switch (state) {
+      DeviceTransferState.offer || DeviceTransferState.unknown => null,
+      _ => state.wire,
+    },
     'devices': devices,
   });
 
@@ -1211,7 +1219,7 @@ final class DeviceTransferOfferBody extends ContentBody {
             json.optEnum(
               'state',
               DeviceTransferState.values,
-              orElse: DeviceTransferState.cancelled,
+              orElse: DeviceTransferState.unknown,
             ) ??
             DeviceTransferState.offer,
         devices: json.has('devices')

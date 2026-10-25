@@ -2469,6 +2469,30 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   `inbound_test.dart` **28 green** (27 before), `flutter analyze` clean on the
   workspace. No migration; valid wire shapes unchanged; an app needs the new
   package to stop quarantining such messages.
+- S2 (AUD-8-3) — an unknown `state` on a `device_transfer_offer` decoded as
+  `cancelled` (`optEnum(..., orElse: cancelled)`), the one destructive default
+  in the package: a mixed-version pair had its live transfer aborted with no
+  error, because a newer own device wrote a step this client did not know.
+  **What changed:** [`DeviceTransferState.unknown`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies.dart#L1155)
+  is the decode fallback, and
+  [`TransferInbox.apply`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/backup/inbox.dart#L46)
+  ignores it (returns false, so the envelope is recorded as ignored) instead
+  of touching the ledger. `toJson` omits it exactly like `offer`, deliberately:
+  writing a literal `unknown` would be read as `cancelled` by a client that
+  predates this fix - the outcome being removed. Known states are unchanged,
+  and state absent still means offer.
+  Tests: `content_test.dart` decodes `state: "importing"` as `unknown` and
+  asserts no `state` key on re-encode; `transfer_test.dart` offers history
+  from Alice to Alice2, then Alice sends a crafted `device_transfer_offer`
+  with the real transfer id and `state: "importing"` through `debugSendRaw`,
+  and Alice2's offer must stay `waiting`. The engine test was confirmed to
+  fail with the old default restored (the first draft passed for the wrong
+  reason - it used a placeholder transfer id that matched nothing; the test
+  now uses the id `offer()` returned).
+  Gate: protocol `content_test.dart` **55 green** (54 before), engine
+  `transfer_test.dart` **19 green** (18 before), `dart analyze` clean on both
+  changed packages. No migration; no server change; an app needs the new
+  package.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**

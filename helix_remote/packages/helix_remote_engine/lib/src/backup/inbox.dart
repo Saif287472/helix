@@ -52,6 +52,10 @@ abstract final class TransferInbox {
           now: now,
         );
         return updated != null;
+      case DeviceTransferState.unknown:
+        // A newer device's step: nothing here can act on it, and guessing
+        // "cancelled" would abort a live transfer.
+        return false;
     }
   }
 }
