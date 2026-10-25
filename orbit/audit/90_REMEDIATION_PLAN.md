@@ -2224,7 +2224,7 @@ packs only.
   the newest socket. Reproduce first; it is the only `suspected` finding.
 - AUD-3-13 (Idea) — every open socket re-authenticates against Postgres every
   25 s. Decide with this batch: a node-level auth cache is the candidate, not a
-  promise.
+  promise. (S6 decided against the cache; batch the check if scale demands it.)
 
 **Why here:** one of these makes presence lie (3-10), one disables the
 heartbeat after a clock step (3-9), and two are per-socket cost that grows
@@ -2362,6 +2362,22 @@ table at implementation time.
   Gate: the plan test green, the D4 metrics test green, `dart analyze` clean
   on the changed files. No wire change, no migration, no app change, no APK; a
   server restart (or the next deploy) picks it up.
+- S6 (AUD-3-13, Idea) — **decided: no node-level auth cache.** The sweep's
+  per-socket `authenticator.device(token)` is the backstop for a revocation,
+  session cut-off or suspension whose bus hint was missed while the LISTEN
+  connection was down; a cache that lives until the token's `exp` (or until
+  the next resync) widens that window for as long as the listener is down,
+  and the bus's own contract only says a missed hint delays work until the
+  next poll or reconnect. Caching for one sweep interval would not remove a
+  query, so the only cache worth having is one that weakens the backstop. The
+  finding is an Idea on a single-PC server where the sweep is one indexed
+  lookup per socket (and the route CAS stays on the timer regardless); it is
+  not worth that trade. If socket count ever makes the sweep cost matter, the
+  direction is one batched token check per sweep (the same exact
+  re-validation for N sockets in one query), not a cache - recorded in
+  `realtime/MODULE.md` so the next reader does not re-litigate it. No test is
+  owed: there is no cache to prove safe. No wire change, no migration, no app
+  change, no APK.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**
@@ -3119,7 +3135,7 @@ transition; the snippet changes only where a cut splits a character.
 | AUD-14f-1 (Idea) | A `helix://contact/add` link is parsed with a signed payload nothing reads; it opens people search, a leftover of the dropped contact-request design. | Delete the payload codec with the link kind, or wire the payload if contact requests ever return. No batch now. |
 | AUD-12l-3 (P3) | The call-metrics pipeline has a route, a client method and a serializer, but nothing ever sends a sample. | Q9. Delete the pipeline (and close AUD-6-1 by removal), or wire the sampler and bound the field first. |
 | AUD-12l-4 (P3) | The ICE-restart path is unreachable: nothing calls `restartIce`, the adapter drops the offer it would emit, and the wire has no renegotiation signal. | Q9. Delete the dead path, or add a renegotiation kind to the protocol and handle it in the adapter. |
-| AUD-3-13 (Idea) | Every open socket re-authenticates against Postgres every 25 s. | Decided inside B11, because the cache only makes sense with the refresh-sweep fix. |
+| AUD-3-13 (Idea) | Every open socket re-authenticates against Postgres every 25 s. | **Declined in B11 S6:** the check is the backstop for a bus hint missed while LISTEN was down, and a cache only widens that window. Batch the check per sweep if scale ever demands it. |
 
 ---
 

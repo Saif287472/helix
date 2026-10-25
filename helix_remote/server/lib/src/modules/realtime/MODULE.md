@@ -56,7 +56,11 @@ no socket (AUD-3-9); `hello`'s `server_time` is still wall-clock time.
    Ended sessions (`identity.sessions_ended`, with the cut-off) and the 25 s
    refresh re-check the socket's token through identity's authenticator:
    expired or older than the cut-off closes with 4001, so a socket lives at
-   most one access-token lifetime and a fresh sign-in's socket stays.
+   most one access-token lifetime and a fresh sign-in's socket stays. That
+   check is deliberately not cached: it is the backstop for an invalidation
+   whose bus hint was missed while the LISTEN connection was down (AUD-3-13,
+   declined). Should the sweep's cost ever matter, batch the check per sweep;
+   a cache only moves the revocation window.
    Suspension (`identity.account_suspended`, or seen on refresh) closes
    with 4004. Two silent heartbeats close with 4010; shutdown and failed
    delivery close with 4503 (not 1001, which WebSocket libraries refuse).
