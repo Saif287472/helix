@@ -132,6 +132,17 @@ and the GHASH key.
   `cancelForConversation`), so a message the person deleted cannot leave
   later; an in-flight op is left alone, its request may already be on the
   wire.
+- **No unbounded id list in one statement** (review batch B13, AUD-10-1).
+  Drift binds one parameter per element of an `IN (…)`, and past SQLite's
+  per-statement limit (32,766, or 999 in an older build) the statement fails
+  and its transaction rolls back, so a sweep that once grows past it never
+  succeeds again. A set whose size the data decides - `removeMessages` and the
+  `cancelForMessages` inside it, `detachLocalMedia`,
+  `HistoryStore.receiptsFor` - goes through `chunks()` (`lib/src/chunks.dart`,
+  runs of `statementIdLimit`, 500). A sweep that can be one statement stays one
+  (`purgeExpiredDeferred`, `pruneProcessed`); a list bounded by a page or a
+  claim batch (`attachmentsFor`, `reactionsFor`, the outbox claims) needs no
+  chunks.
 
 ## Added for the engine (Phase C3b)
 

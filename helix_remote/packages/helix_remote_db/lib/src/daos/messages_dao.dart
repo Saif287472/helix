@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:helix_remote_db/src/chunks.dart';
 import 'package:helix_remote_db/src/database.dart';
 import 'package:helix_remote_db/src/tables/conversations.dart';
 import 'package:helix_remote_db/src/tables/messages.dart';
@@ -164,19 +165,29 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
   /// messages) and refreshes the affected summaries. A send still queued for
   /// one of them is cancelled in the same transaction, so a message the
   /// person removed cannot leave later (AUD-12i-2).
+  ///
+  /// The ids go through in runs of [statementIdLimit]: `removeExpired` reads
+  /// every due row first, and one `IN (…)` binding tens of thousands of them
+  /// fails at SQLite's per-statement parameter limit and rolls the whole pass
+  /// back (AUD-10-1).
   Future<int> removeMessages(Iterable<int> rowids) => transaction(() async {
     final ids = rowids.toList();
     if (ids.isEmpty) return 0;
-    final conversationIds =
+    final conversationIds = <String>{};
+    var removed = 0;
+    for (final chunk in ids.chunks()) {
+      conversationIds.addAll(
         await (selectOnly(messages, distinct: true)
               ..addColumns([messages.conversationId])
-              ..where(messages.localRowid.isIn(ids)))
+              ..where(messages.localRowid.isIn(chunk)))
             .map((r) => r.read(messages.conversationId)!)
-            .get();
-    await attachedDatabase.outboxDao.cancelForMessages(ids);
-    final removed = await (delete(
-      messages,
-    )..where((m) => m.localRowid.isIn(ids))).go();
+            .get(),
+      );
+      await attachedDatabase.outboxDao.cancelForMessages(chunk);
+      removed += await (delete(
+        messages,
+      )..where((m) => m.localRowid.isIn(chunk))).go();
+    }
     for (final id in conversationIds) {
       await refreshSummary(id);
     }
@@ -598,16 +609,18 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     final found = [
       for (final row in await query.get()) row.readTable(attachments),
     ];
-    if (found.isEmpty) return found;
-    await (update(
-      attachments,
-    )..where((a) => a.id.isIn([for (final a in found) a.id]))).write(
-      const AttachmentsCompanion(
-        localPath: Value(null),
-        thumbnailPath: Value(null),
-        transfer: Value(AttachmentTransfer.remote),
-      ),
-    );
+    // A chat with tens of thousands of downloaded files is a real "free up
+    // space" case, and one `IN (…)` for all of them would fail at SQLite's
+    // parameter limit (AUD-10-1).
+    for (final chunk in found.map((a) => a.id).toList().chunks()) {
+      await (update(attachments)..where((a) => a.id.isIn(chunk))).write(
+        const AttachmentsCompanion(
+          localPath: Value(null),
+          thumbnailPath: Value(null),
+          transfer: Value(AttachmentTransfer.remote),
+        ),
+      );
+    }
     return found;
   });
 

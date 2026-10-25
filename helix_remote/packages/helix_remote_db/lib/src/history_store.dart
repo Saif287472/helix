@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:helix_remote_db/src/chunks.dart';
 import 'package:helix_remote_db/src/database.dart';
 import 'package:helix_remote_db/src/values.dart';
 
@@ -82,15 +83,19 @@ final class HistoryStore {
           .get();
 
   /// Receipts of the given messages, by message row id.
+  ///
+  /// Read in runs of [statementIdLimit]: an export page is small today, and a
+  /// `IN (…)` of every id in a big one would fail at SQLite's per-statement
+  /// parameter limit (AUD-10-1).
   Future<Map<int, List<ReceiptRow>>> receiptsFor(Iterable<int> rowids) async {
-    final ids = rowids.toList();
-    if (ids.isEmpty) return const {};
-    final rows = await (_db.select(
-      _db.messageReceipts,
-    )..where((r) => r.messageRowid.isIn(ids))).get();
     final byRow = <int, List<ReceiptRow>>{};
-    for (final row in rows) {
-      (byRow[row.messageRowid] ??= []).add(row);
+    for (final chunk in rowids.toList().chunks()) {
+      final rows = await (_db.select(
+        _db.messageReceipts,
+      )..where((r) => r.messageRowid.isIn(chunk))).get();
+      for (final row in rows) {
+        (byRow[row.messageRowid] ??= []).add(row);
+      }
     }
     return byRow;
   }

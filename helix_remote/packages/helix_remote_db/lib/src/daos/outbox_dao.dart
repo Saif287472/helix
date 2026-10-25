@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:helix_remote_db/src/chunks.dart';
 import 'package:helix_remote_db/src/database.dart';
 import 'package:helix_remote_db/src/tables/sync.dart';
 import 'package:helix_remote_db/src/values.dart';
@@ -240,16 +241,19 @@ class OutboxDao extends DatabaseAccessor<HelixDb> with _$OutboxDaoMixin {
   /// Drops the queued (pending or failed) ops that deliver [rowids]: a
   /// message removed on this device must not leave later (AUD-12i-2). An
   /// in-flight op is left alone - its request may already be on the wire.
+  ///
+  /// In runs of [statementIdLimit], because the caller's set can be a whole
+  /// sweep of due messages (AUD-10-1).
   Future<void> cancelForMessages(Iterable<int> rowids) async {
-    final ids = rowids.toList();
-    if (ids.isEmpty) return;
-    await (delete(outboxOps)..where(
-          (o) =>
-              o.messageRowid.isIn(ids) &
-              (o.state.equalsValue(OutboxState.pending) |
-                  o.state.equalsValue(OutboxState.failed)),
-        ))
-        .go();
+    for (final chunk in rowids.toList().chunks()) {
+      await (delete(outboxOps)..where(
+            (o) =>
+                o.messageRowid.isIn(chunk) &
+                (o.state.equalsValue(OutboxState.pending) |
+                    o.state.equalsValue(OutboxState.failed)),
+          ))
+          .go();
+    }
   }
 
   /// [cancelForMessages] for every queued op of a chat, its actions about

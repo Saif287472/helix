@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Variable;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ReceiptKind;
@@ -187,6 +188,56 @@ void main() {
       final preview = (await conversation()).lastMessagePreview!;
       expect(preview.runes.length, MessagesDao.previewLength);
       expect(preview, '😀' * 100);
+    });
+
+    test('a due set past the statement limit is still removed', () async {
+      // SQLite's default build binds 32,766 host parameters per statement
+      // (999 in an older one), and drift renders an `IN (…)` with one per id,
+      // so a sweep of 40,000 due messages used to fail outright and roll its
+      // whole transaction back — every pass after it too, since the due set
+      // only grows (AUD-10-1).
+      const due = 40000;
+      await messages.insertMessage(textMessage(chat, 'keep', sentAt: at(9)));
+      await db.customStatement(
+        'WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n '
+        'WHERE i < ?) '
+        'INSERT INTO messages (message_id, conversation_id, sender, outgoing, '
+        'sort_key, sent_at, received_at, kind, body, status, expires_at) '
+        "SELECT 'bob' || i, ?, 'bob', 0, "
+        "printf('%012x:bob%d', ? + i * 1000, i), "
+        "? + i * 1000, ? + i * 1000, 'text', 'gone ' || i, 'received', ? "
+        'FROM n',
+        [
+          due,
+          chat,
+          t0.millisecondsSinceEpoch,
+          t0.millisecondsSinceEpoch,
+          t0.millisecondsSinceEpoch,
+          t0.millisecondsSinceEpoch,
+        ],
+      );
+
+      // And that this build really has the limit the chunking exists for, so
+      // the sweep below is not proving nothing: one statement naming every id
+      // is refused.
+      await expectLater(
+        db
+            .customSelect(
+              'SELECT 1 WHERE 1 IN (${List.filled(due, '?').join(', ')})',
+              variables: [for (var i = 0; i < due; i++) Variable.withInt(i)],
+            )
+            .get(),
+        throwsA(anything),
+      );
+
+      expect(await messages.removeExpired(t0), due);
+      final left = await db
+          .customSelect('SELECT count(*) AS n FROM messages')
+          .getSingle();
+      expect(left.read<int>('n'), 1, reason: 'the un-timed message stays');
+      final c = await conversation();
+      expect(c.lastMessageSortKey, SortKey.of(at(9), 'keep'));
+      expect(c.unreadCount, 1);
     });
   });
 

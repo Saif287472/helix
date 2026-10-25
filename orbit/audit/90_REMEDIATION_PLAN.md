@@ -2897,6 +2897,53 @@ the migration and dump that go with it).
   package, and a phone database opened by a new build migrates up on open (a
   downgrade is refused, as with schema 3 and 4). `MODULE.md` records the step,
   the table and the wipe-list test.
+- S2 (AUD-10-1) — `MessagesDao.removeExpired` read every due row and handed
+  the whole list to `removeMessages`, which bound it into three `IN (…)`
+  statements (the conversation lookup, the outbox cancel and the delete). Past
+  SQLite's per-statement parameter limit the first of them fails with "too many
+  SQL variables" and the transaction rolls back; the due set only grows, so
+  every later pass failed the same way. And `MaintenanceService.runOnce` ran its
+  duties in one `try` whose `catch` returned before `rescheduleExpiry()`, so
+  that failure also skipped the deferred-action and processed-envelope sweeps,
+  the key and device upkeep and the other features' duties, and left the
+  disappearing-message timer un-armed by the pass.
+  **What changed:** the new
+  [`chunks.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/chunks.dart)
+  holds `statementIdLimit` (500: under even the old 999 limit, with room for a
+  statement's other parameters) and `List.chunks()`, which yields nothing for an
+  empty list, so a loop over it never builds `IN ()`.
+  [`removeMessages`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/daos/messages_dao.dart)
+  runs the lookup, the cancel and the delete per chunk inside its one
+  transaction and refreshes each touched summary once at the end;
+  `OutboxDao.cancelForMessages`, `detachLocalMedia` ("free up space" over a chat
+  with tens of thousands of files) and `HistoryStore.receiptsFor` chunk the same
+  way. The package's other `isIn` lists are bounded by a page or a claim batch,
+  and its other sweeps are single statements; `MODULE.md`'s rules now say which
+  is which. In the engine,
+  [`runOnce`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/maintenance.dart)
+  guards every duty on its own (the prekey and device upkeep moved into
+  `_refreshKeysAndDevices`, itself guarded) and re-arms the expiry timer in a
+  `finally`. The expiry timer's own callback still does not re-arm after a
+  failing sweep, deliberately: the rows are still due, so it would fire again in
+  50 ms and spin; the next tick re-arms through `runOnce`.
+  Tests: `messages_test.dart` "a due set past the statement limit is still
+  removed" inserts 40,000 due messages in one recursive CTE, first proves this
+  SQLite build refuses a 40,000-parameter statement (so the test cannot pass
+  vacuously on a build with a higher limit), then sweeps them, keeping the one
+  untimed message and its chat summary. `media_transfers_test.dart` "a chat
+  holding more files than one statement binds" detaches 40,000 attachments. The
+  new engine
+  [`maintenance_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/test/maintenance_test.dart)
+  proves that a pass whose second duty throws (a dropped `deferred_actions`)
+  still prunes old processed envelopes, and that such a pass still re-arms the
+  timer, which then sweeps a message due 500 ms later while one due in an hour
+  stays. All four fail on the code before this step (the db tests with "too
+  many SQL variables", the engine tests on their expectations) and pass on it.
+  Gate: db **148 green** (146 before), engine **354 green** (352 before),
+  `dart analyze` clean on db and engine, `flutter analyze` clean on the
+  workspace, `dart format` clean on the changed files. No schema, wire or
+  server change; the app and CLI get it from the packages, and the phone needs
+  a new APK to see it.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

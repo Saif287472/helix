@@ -58,41 +58,51 @@ final class MaintenanceService {
   }
 
   /// One pass of everything. Safe to call at any time.
+  ///
+  /// Every duty is guarded on its own and the expiry timer is re-armed in a
+  /// `finally`: one sweep that throws - the database closed under us, a table
+  /// mid-wipe - must not stop the duties after it, or end the disappearing
+  /// message timers for the rest of this engine's life (AUD-10-1).
   Future<void> runOnce() async {
     try {
       final now = _ctx.now();
-      await _ctx.db.messagesDao.removeExpired(now);
-      await _ctx.db.inboxDao.purgeExpiredDeferred(now);
-      await _ctx.db.inboxDao.pruneProcessed(
-        now.subtract(_ctx.config.processedRetention),
+      await _guarded(() => _ctx.db.messagesDao.removeExpired(now));
+      await _guarded(() => _ctx.db.inboxDao.purgeExpiredDeferred(now));
+      await _guarded(
+        () => _ctx.db.inboxDao.pruneProcessed(
+          now.subtract(_ctx.config.processedRetention),
+        ),
       );
-      final last = await _ctx.db.settingsDao.get(EngineState.lastPrekeyCheck);
-      final due =
-          now.millisecondsSinceEpoch - last >=
-          _ctx.config.prekeyCheckInterval.inMilliseconds;
-      if (due) await _guarded(_keys.run);
-      final refreshed = await _ctx.db.settingsDao.get(
-        EngineState.lastOwnDevicesRefresh,
-      );
-      if (now.millisecondsSinceEpoch - refreshed >=
-          _ctx.config.prekeyCheckInterval.inMilliseconds) {
-        await _guarded(_devices.refresh);
-      }
+      await _guarded(() => _refreshKeysAndDevices(now));
       for (final extra in _extraWork) {
         await _guarded(extra);
       }
-    } on Object {
-      // The database closed under us, or a table is mid-wipe.
-      return;
+    } finally {
+      rescheduleExpiry();
     }
-    rescheduleExpiry();
   }
 
-  Future<void> _guarded(Future<void> Function() action) async {
+  Future<void> _refreshKeysAndDevices(DateTime now) async {
+    final last = await _ctx.db.settingsDao.get(EngineState.lastPrekeyCheck);
+    final due =
+        now.millisecondsSinceEpoch - last >=
+        _ctx.config.prekeyCheckInterval.inMilliseconds;
+    if (due) await _guarded(_keys.run);
+    final refreshed = await _ctx.db.settingsDao.get(
+      EngineState.lastOwnDevicesRefresh,
+    );
+    if (now.millisecondsSinceEpoch - refreshed >=
+        _ctx.config.prekeyCheckInterval.inMilliseconds) {
+      await _guarded(_devices.refresh);
+    }
+  }
+
+  Future<void> _guarded(Future<Object?> Function() action) async {
     try {
       await action();
     } on Object {
-      // Offline or signed out: the next tick tries again.
+      // Offline or signed out, or this duty's own failure: the next tick tries
+      // again, and the duties after it in this pass still run.
     }
   }
 
@@ -119,6 +129,9 @@ final class MaintenanceService {
       try {
         await _ctx.db.messagesDao.removeExpired(_ctx.now());
       } on Object {
+        // The rows are still due, so re-arming now would fire again in 50 ms
+        // and spin on a sweep that keeps failing. The next tick re-arms
+        // through `runOnce`.
         return;
       }
       rescheduleExpiry();

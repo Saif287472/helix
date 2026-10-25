@@ -417,4 +417,56 @@ void main() {
       },
     );
   });
+
+  group('freeing local media', () {
+    test('a chat holding more files than one statement binds', () async {
+      // "Free up space" runs over a chat's whole media set at once, and a
+      // single `IN (…)` of those ids fails past SQLite's per-statement
+      // parameter limit (32,766 in this build, 999 in one compiled with the
+      // older default) - which would leave the files counted but never freed
+      // (AUD-10-1). `messages_test` checks that this build refuses 40,000.
+      const count = 40000;
+      final chat = (await directChat(db, 'bob')).id;
+      final message = await db.messagesDao.insertMessage(
+        MessagesCompanion.insert(
+          messageId: 'bulk',
+          conversationId: chat,
+          sender: 'me',
+          outgoing: true,
+          sortKey: SortKey.of(at(1), 'bulk'),
+          sentAt: at(1),
+          receivedAt: at(1),
+          kind: 'media',
+          status: MessageStatus.read,
+        ),
+      );
+      await db.customStatement(
+        'WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n '
+        'WHERE i < ? - 1) '
+        'INSERT INTO attachments (message_rowid, position, kind, media_id, '
+        'media_key, digest, mime, size, local_path, thumbnail_path, transfer) '
+        "SELECT ?, i, 'image', '', zeroblob(32), zeroblob(32), 'image/jpeg', "
+        "1000, 'media/bulk-' || i || '.jpg', 'media/bulk-' || i || '.thumb', "
+        "'ready' FROM n",
+        [count, message.localRowid],
+      );
+
+      final detached = await db.messagesDao.detachLocalMedia(
+        chat,
+        kinds: {'image'},
+      );
+      expect(detached, hasLength(count));
+      final rows = await db.messagesDao.attachmentsFor([message.localRowid]);
+      expect(rows, hasLength(count), reason: 'none was skipped');
+      expect(
+        rows.every(
+          (a) =>
+              a.transfer == AttachmentTransfer.remote &&
+              a.localPath == null &&
+              a.thumbnailPath == null,
+        ),
+        isTrue,
+      );
+    });
+  });
 }
