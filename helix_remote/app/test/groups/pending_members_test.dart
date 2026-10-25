@@ -10,7 +10,8 @@ import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/presentation/group_info_screen.dart';
 import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:orbit_ui/orbit_ui.dart' show OrbitButton, OrbitDialogPanel;
+import 'package:orbit_ui/orbit_ui.dart'
+    show OrbitAvatar, OrbitButton, OrbitDialogPanel;
 
 import '../chat_logic_test.dart' show row;
 import '../support/chat_harness.dart' as chat;
@@ -415,6 +416,42 @@ void main() {
       expect(port.calls, contains('confirm bob'));
       expect(find.text('Confirm Bob?'), findsNothing);
       await tester.pump(const Duration(seconds: 3));
+    });
+
+    chat.chatTest("a member's picture opens their profile", (
+      tester,
+      gateway,
+    ) async {
+      await tester.runAsync(() async {
+        await gateway.db.conversationsDao.ensureGroup(
+          'group:g1',
+          title: 'Book club',
+          now: chat.testNow,
+        );
+        await gateway.incoming('group:g1', 'Chapter 4 tonight', sender: 'bob');
+      });
+      final port = FakeGroupsPort(group: testGroup());
+      await tester.pumpWidget(
+        chat.chatApp(
+          gateway,
+          const ConversationScreen(conversationId: 'group:g1'),
+          overrides: groupOverrides(port: port, names: testNames),
+          routes: [
+            GoRoute(
+              path: '/home/people/:id',
+              builder: (context, state) =>
+                  Scaffold(body: Text('person:${state.pathParameters['id']}')),
+            ),
+          ],
+        ),
+      );
+      await chat.settle(tester, rounds: 10);
+
+      await tester.tap(
+        find.byWidgetPredicate((w) => w is OrbitAvatar && w.size == 30),
+      );
+      await chat.settle(tester);
+      expect(find.text('person:bob'), findsOneWidget);
     });
 
     chat.chatTest('a direct chat has no prompt', (tester, gateway) async {

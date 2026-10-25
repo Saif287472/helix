@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/people/people_names.dart';
@@ -278,11 +279,13 @@ class TestChatGateway extends ChatGateway {
 
 /// A scope with the test gateway, a fixed clock and in-memory settings
 /// ([settings], e.g. "Enter key sends"), around [home] in the Orbit theme.
+/// With [routes], [home] is `/` of a router that has them too.
 Widget chatApp(
   TestChatGateway gateway,
   Widget home, {
   List<Override> overrides = const [],
   FakeLocalSettings? settings,
+  List<RouteBase> routes = const [],
 }) => ProviderScope(
   overrides: [
     chatGatewayProvider.overrideWith((ref) => gateway),
@@ -292,11 +295,22 @@ Widget chatApp(
     clockProvider.overrideWithValue(() => testNow),
     ...overrides,
   ],
-  child: MaterialApp(
-    theme: orbitTestTheme(),
-    builder: orbitTestBuilder,
-    home: home,
-  ),
+  child: routes.isEmpty
+      ? MaterialApp(
+          theme: orbitTestTheme(),
+          builder: orbitTestBuilder,
+          home: home,
+        )
+      : MaterialApp.router(
+          theme: orbitTestTheme(),
+          builder: orbitTestBuilder,
+          routerConfig: GoRouter(
+            routes: [
+              GoRoute(path: '/', builder: (_, _) => home),
+              ...routes,
+            ],
+          ),
+        ),
 );
 
 /// Takes the app out of the tree and lets drift's stream clean-up timers

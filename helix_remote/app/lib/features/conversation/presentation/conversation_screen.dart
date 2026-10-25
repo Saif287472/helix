@@ -17,6 +17,7 @@ import 'package:helix_remote/features/conversation/application/read_tracker.dart
 import 'package:helix_remote/features/conversation/application/timeline_builder.dart';
 import 'package:helix_remote/features/conversation/application/timeline_provider.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
+import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote/shared/pending_members.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -554,6 +555,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         onRemoveMember: group == null
             ? null
             : (account) => members.remove(group, account),
+        onOpenAuthor: group == null
+            ? null
+            : (account) => context.push(PeoplePaths.person(account)),
         onQuote: _quote,
         onOpenLink: _openLink,
         onTapMedia: _tapMedia,

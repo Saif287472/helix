@@ -236,6 +236,7 @@ class ChatActions {
     this.onToggleAudio,
     this.onAudioSpeed,
     this.onAudioSeek,
+    this.onOpenAuthor,
     this.onLoadOlder,
     this.onLoadNewer,
     this.onScrollToLatest,
@@ -313,6 +314,10 @@ class ChatActions {
   final ValueChanged<String>? onToggleAudio;
   final ValueChanged<String>? onAudioSpeed;
   final void Function(String id, double fraction)? onAudioSeek;
+
+  /// A group bubble's author picture was tapped: the author's id
+  /// ([HelixMessage.authorId]).
+  final ValueChanged<String>? onOpenAuthor;
 
   /// Scrolled near the oldest (or, after a jump, the newest) loaded item.
   final VoidCallback? onLoadOlder;
@@ -545,7 +550,13 @@ class _ChatScreenState extends State<ChatScreen> {
       onAudioSeek: a.onAudioSeek == null
           ? null
           : (id, f) => widget.actions.onAudioSeek?.call(id, f),
+      onAuthor: a.onOpenAuthor == null ? null : _openAuthor,
     );
+  }
+
+  void _openAuthor(String messageId) {
+    final author = _find(messageId)?.authorId;
+    if (author != null) widget.actions.onOpenAuthor?.call(author);
   }
 
   static bool _sameHooks(OrbitBubbleActions a, OrbitBubbleActions b) =>
@@ -557,7 +568,8 @@ class _ChatScreenState extends State<ChatScreen> {
       (a.onViewOnce == null) == (b.onViewOnce == null) &&
       (a.onAudioToggle == null) == (b.onAudioToggle == null) &&
       (a.onAudioSpeed == null) == (b.onAudioSpeed == null) &&
-      (a.onAudioSeek == null) == (b.onAudioSeek == null);
+      (a.onAudioSeek == null) == (b.onAudioSeek == null) &&
+      (a.onAuthor == null) == (b.onAuthor == null);
 
   HelixMessage? _find(String id) {
     for (final it in widget.model.items) {

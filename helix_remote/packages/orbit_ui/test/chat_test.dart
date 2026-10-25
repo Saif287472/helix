@@ -53,6 +53,29 @@ void main() {
     pendingMembers: pending,
   );
 
+  testWidgets("a group author's picture opens their profile", (tester) async {
+    String? opened;
+    await show(
+      tester,
+      ChatModel(
+        conversationId: 'group:family',
+        title: 'Family',
+        avatar: OrbitFakes.nadia.avatar,
+        subtitle: '4 members',
+        isGroup: true,
+        showCallButtons: false,
+        items: OrbitFakes.conversations['group:family']!,
+      ),
+      actions: ChatActions(onOpenAuthor: (author) => opened = author),
+    );
+    final abbu = find.byWidgetPredicate(
+      (w) => w is OrbitAvatar && w.size == 30 && w.avatar.name == 'Abbu',
+    );
+    expect(abbu, findsWidgets);
+    await tester.tap(abbu.last);
+    expect(opened, 'abbu');
+  });
+
   testWidgets('the header shows the name and status and places calls', (
     tester,
   ) async {

@@ -299,6 +299,9 @@ a load failure as a result. On the app side,
 `test/media/voice_composer_test.dart` ("holding and letting go sends the note
 and deletes the file") failed once in a full `flutter test` on 2026-10-25 and
 passed alone in 10 s; the rest of that app run (1024 tests) was green. Seen
+2026-10-25 in a full app run (1050 green), and green when rerun alone:
+`test/settings/theme_packs_test.dart` ("a full folder is read a few manifests
+at a time, never more" - it counts concurrent reads, which load skews). Seen
 2026-10-25 in the B11 gate, each green when rerun alone: `calls_test.dart`
 ("non-offer signals are limited per sending device", 3 s) and
 `hardening_db_test.dart` ("stored idempotent responses are sealed and still

@@ -34,6 +34,7 @@ class OrbitBubbleActions {
     this.onAudioToggle,
     this.onAudioSpeed,
     this.onAudioSeek,
+    this.onAuthor,
   });
 
   /// Swiped 56px towards the middle (theirs right, yours left).
@@ -60,6 +61,9 @@ class OrbitBubbleActions {
 
   /// The waveform was tapped or dragged, at a fraction 0..1 of the note.
   final void Function(String id, double fraction)? onAudioSeek;
+
+  /// The author's picture beside a group bubble was tapped.
+  final ValueChanged<String>? onAuthor;
 
   static const none = OrbitBubbleActions();
 }
@@ -668,6 +672,17 @@ class OrbitMessageBubble extends StatelessWidget {
   /// the swipe to reply.
   final OrbitBubbleActions actions;
 
+  Widget _authorPicture(Widget picture, String? author) {
+    final open = actions.onAuthor;
+    if (open == null) return picture;
+    return Semantics(
+      button: true,
+      label: author == null ? 'Open profile' : "Open $author's profile",
+      excludeSemantics: true,
+      child: _tappable(() => open(message.id), picture, target: true),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -752,14 +767,17 @@ class OrbitMessageBubble extends StatelessWidget {
                 Positioned(
                   left: 0,
                   bottom: 0,
-                  child: OrbitAvatar(
-                    avatar:
-                        m.authorAvatar ??
-                        HelixAvatarModel(
-                          name: author ?? '',
-                          colorIndex: m.authorColorIndex,
-                        ),
-                    size: 30,
+                  child: _authorPicture(
+                    OrbitAvatar(
+                      avatar:
+                          m.authorAvatar ??
+                          HelixAvatarModel(
+                            name: author ?? '',
+                            colorIndex: m.authorColorIndex,
+                          ),
+                      size: 30,
+                    ),
+                    author,
                   ),
                 ),
             ],
@@ -814,6 +832,9 @@ class OrbitMessageBubble extends StatelessWidget {
           if (m.reactions.isNotEmpty && a.onReactions != null)
             const CustomSemanticsAction(label: 'Show reactions'): () =>
                 a.onReactions!(m.id),
+          if (withAv && a.onAuthor != null)
+            const CustomSemanticsAction(label: 'Open profile'): () =>
+                a.onAuthor!(m.id),
         },
         child: controls ? body : ExcludeSemantics(child: body),
       );
