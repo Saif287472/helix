@@ -2238,122 +2238,135 @@ class _MessageActions extends StatelessWidget {
             ),
           ),
           // A window keeps it to the middle 560px (`.win .msg-actions`).
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: align,
-                  children: [
-                    if (showReactions)
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: align,
+                    children: [
+                      if (showReactions)
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: t.surface,
+                            border: Border.all(color: t.line),
+                            borderRadius: BorderRadius.circular(99),
+                            boxShadow: t.shadowFloat,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final (i, e) in _reactionSet.indexed) ...[
+                                if (i > 0) const SizedBox(width: 2),
+                                _ReactButton(
+                                  mine: currentReaction == e,
+                                  label: 'React with $e',
+                                  onTap: () {
+                                    close();
+                                    onReact(e);
+                                  },
+                                  child: Text(e, style: t.font.style(size: 24)),
+                                ),
+                              ],
+                              const SizedBox(width: 2),
+                              _ReactButton(
+                                label: 'More reactions',
+                                onTap: () {
+                                  close();
+                                  Timer(
+                                    const Duration(milliseconds: 60),
+                                    onMore,
+                                  );
+                                },
+                                child: OrbitIcon(
+                                  OrbitIcons.plus,
+                                  weight: OrbitIconWeight.bold,
+                                  size: 20,
+                                  color: t.ink3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 10),
+                      // A long message gives way, scrolling in what is left,
+                      // so the reactions and the actions always fit.
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: IgnorePointer(
+                            child: OrbitMessageBubble(
+                              message: message,
+                              position: position,
+                              group: group,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.all(5),
+                        constraints: const BoxConstraints(minWidth: 220),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: t.surface,
                           border: Border.all(color: t.line),
-                          borderRadius: BorderRadius.circular(99),
+                          borderRadius: BorderRadius.circular(18),
                           boxShadow: t.shadowFloat,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (final (i, e) in _reactionSet.indexed) ...[
-                              if (i > 0) const SizedBox(width: 2),
-                              _ReactButton(
-                                mine: currentReaction == e,
-                                label: 'React with $e',
-                                onTap: () {
-                                  close();
-                                  onReact(e);
-                                },
-                                child: Text(e, style: t.font.style(size: 24)),
-                              ),
-                            ],
-                            const SizedBox(width: 2),
-                            _ReactButton(
-                              label: 'More reactions',
-                              onTap: () {
-                                close();
-                                Timer(const Duration(milliseconds: 60), onMore);
-                              },
-                              child: OrbitIcon(
-                                OrbitIcons.plus,
-                                weight: OrbitIconWeight.bold,
-                                size: 20,
-                                color: t.ink3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    IgnorePointer(
-                      child: OrbitMessageBubble(
-                        message: message,
-                        position: position,
-                        group: group,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      constraints: const BoxConstraints(minWidth: 220),
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: t.surface,
-                        border: Border.all(color: t.line),
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: t.shadowFloat,
-                      ),
-                      child: IntrinsicWidth(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final (icon, label, danger, run) in items)
-                              Material(
-                                type: MaterialType.transparency,
-                                borderRadius: BorderRadius.circular(12),
-                                clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: () {
-                                    close();
-                                    run();
-                                  },
-                                  hoverColor: t.field,
-                                  splashFactory: NoSplash.splashFactory,
-                                  child: SizedBox(
-                                    height: 46,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          OrbitIcon(
-                                            icon,
-                                            size: 19,
-                                            color: danger ? t.danger : t.ink3,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Text(
-                                            label,
-                                            style: t.font.style(
-                                              size: 14.5,
-                                              color: danger ? t.danger : t.ink,
+                        child: IntrinsicWidth(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final (icon, label, danger, run) in items)
+                                Material(
+                                  type: MaterialType.transparency,
+                                  borderRadius: BorderRadius.circular(12),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: () {
+                                      close();
+                                      run();
+                                    },
+                                    hoverColor: t.field,
+                                    splashFactory: NoSplash.splashFactory,
+                                    child: SizedBox(
+                                      height: 46,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            OrbitIcon(
+                                              icon,
+                                              size: 19,
+                                              color: danger ? t.danger : t.ink3,
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              label,
+                                              style: t.font.style(
+                                                size: 14.5,
+                                                color: danger
+                                                    ? t.danger
+                                                    : t.ink,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

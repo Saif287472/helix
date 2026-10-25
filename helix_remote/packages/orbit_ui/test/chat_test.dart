@@ -127,6 +127,46 @@ void main() {
     expect(find.text('Message info'), findsNothing);
   });
 
+  testWidgets('a long message keeps its reactions and actions on screen', (
+    tester,
+  ) async {
+    final long = HelixMessageItem(
+      HelixMessage(
+        id: 'long',
+        outgoing: true,
+        content: HelixTextContent('A line that goes on and on. ' * 200),
+        timeLabel: '21:10',
+        authorId: 'me',
+        authorColorIndex: 5,
+        sentAtMs: 370000,
+        status: HelixDeliveryStatus.read,
+      ),
+    );
+    await show(
+      tester,
+      ChatModel(
+        conversationId: 'direct:nadia',
+        title: 'Nadia Rahman',
+        avatar: OrbitFakes.nadia.avatar,
+        subtitle: 'online',
+        isGroup: false,
+        showCallButtons: true,
+        items: [long],
+      ),
+      start: const ChatStart(actionsFor: 'long'),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    final screen = tester.getRect(find.byType(ChatScreen));
+    for (final shown in [
+      find.bySemanticsLabel('React with 👍'),
+      find.text('Reply'),
+      find.text('Delete for everyone'),
+    ]) {
+      expect(screen.contains(tester.getCenter(shown)), isTrue);
+    }
+  });
+
   testWidgets("their message has no Edit, Message info or delete for all", (
     tester,
   ) async {
