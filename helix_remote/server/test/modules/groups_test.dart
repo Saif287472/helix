@@ -441,6 +441,37 @@ void main() {
       },
     );
 
+    /// Everyone added in one transaction shares `joined_at`, so the order of
+    /// the roster and the heir of a leaving owner were whatever Postgres
+    /// returned. `joined_seq` is the order they were added in (AUD-4c-3).
+    test('the roster has one order and the oldest member inherits', () async {
+      for (var i = 0; i < 6; i++) {
+        final g = await create([bob.accountId, carol.accountId]);
+        Future<Group> view() async => Group.fromJson(
+          (await h.api.call(
+            Routes.group,
+            params: {'group_id': g.groupId},
+            bearer: bob.bearer,
+          )).json,
+        );
+        final order = [for (final m in (await view()).members) m.account];
+        expect(order, [alice.accountId, bob.accountId, carol.accountId]);
+        expect([for (final m in (await view()).members) m.account], order);
+        await h.api.call(
+          Routes.removeGroupMember,
+          params: {'group_id': g.groupId, 'account': alice.accountId},
+          bearer: alice.bearer,
+        );
+        expect(
+          (await view()).members
+              .firstWhere((m) => m.role == GroupRole.owner)
+              .account,
+          bob.accountId,
+          reason: 'run $i',
+        );
+      }
+    });
+
     test('absurd times and sizes in a request are a clean 4xx, not a 500, '
         'and the server keeps working', () async {
       final g = await create([bob.accountId]);

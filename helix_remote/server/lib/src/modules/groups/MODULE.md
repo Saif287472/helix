@@ -24,7 +24,10 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
   otherwise a way to hold it.
 - **Removal, leaving and bans** bump the `epoch` (members rotate their
   sender keys and the group master key). When the owner leaves, the
-  oldest admin (or else the oldest member) becomes owner. An empty group
+  oldest admin (or else the oldest member) becomes owner; "oldest" is the
+  order of `joined_seq` (migration 5, assigned as members are inserted), not
+  `joined_at`, which everyone added in one transaction shares (AUD-4c-3). The
+  roster is listed in `(joined_at, joined_seq, account)` order. An empty group
   is deleted.
 - **Invite links:** the token goes in the link, and only its SHA-256 is
   stored. Previews return the member count and an encrypted preview
@@ -155,7 +158,14 @@ receiving server's frame (`Frame`): bare ids for that server's accounts,
 
 - **Cached groups:** `remote_groups` holds the latest snapshot per remote
   group. Older `roster_version`s are ignored. `remote_members` lists the
-  local accounts in it.
+  local accounts in it. A sync takes a per-group advisory lock
+  (`GroupStore.lockRemoteGroup`) before it reads the cached version, so
+  overlapping syncs apply one at a time and the cache ends at the newest
+  version in whatever order they arrive (AUD-4c-1).
+- **An S2S action's `actorDevice`** must be well-formed, not a device of this
+  server and not reported for another account; otherwise the action is
+  refused 403 (AUD-4c-4). Deleting a group forgets the reported devices of its
+  remote members that are in no other group here (AUD-4c-2).
 - **Routes:** group routes for a remote group are proxied to its home as
   actions. `GET` fetches the group from the home and falls back to the
   snapshot when the home is down. Preview and join use the home named in

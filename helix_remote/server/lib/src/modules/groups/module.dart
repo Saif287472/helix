@@ -162,6 +162,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     Migration(2, 'group_federation', GroupStore.federation),
     Migration(3, 'group_federation_hardening', GroupStore.hardening),
     Migration(4, 'invite_link_creator', GroupStore.linkCreator),
+    Migration(5, 'group_member_order', GroupStore.memberOrder),
   ];
 
   @override
@@ -659,7 +660,14 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
         throw const ApiError(ErrorCode.forbidden);
       }
       await _announce(tx, id, RosterChangeKind.deleted, actor: me);
+      final remote = [
+        for (final m in await _store.members(tx, id))
+          if (m.account.contains('@')) m.account,
+      ];
       await _store.deleteGroup(tx, id);
+      for (final account in remote) {
+        await _store.forgetRemoteDevicesIfUnused(tx, account);
+      }
     });
     return noContent();
   }

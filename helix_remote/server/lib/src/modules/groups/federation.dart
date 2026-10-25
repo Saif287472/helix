@@ -184,6 +184,22 @@ extension on GroupsModule {
       if (op == null || !Uuid.isValid(groupId)) {
         throw const ApiError(ErrorCode.badRequest, message: 'unknown action');
       }
+      final device = action.actorDevice;
+      if (device != null &&
+          (!Uuid.isValid(device) ||
+              await identity.device(context.db, device) != null ||
+              await _store.remoteDeviceTaken(
+                context.db,
+                device,
+                account: '${actor.id}@$domain',
+              ))) {
+        // A device of this server, or one already reported for someone else,
+        // cannot be the sending device of a remote member (AUD-4c-4).
+        throw const ApiError(
+          ErrorCode.forbidden,
+          message: 'the actor device is not the actor\'s',
+        );
+      }
       response = await op(
         _Actor('${actor.id}@$domain', action.actorDevice),
         Frame.of(home, domain),
@@ -272,6 +288,7 @@ extension on GroupsModule {
       );
     }
     return context.db.tx((tx) async {
+      await _store.lockRemoteGroup(tx, groupId);
       final cached = await _store.remoteGroup(tx, groupId);
       if (cached != null && cached.home != domain) {
         throw const ApiError(

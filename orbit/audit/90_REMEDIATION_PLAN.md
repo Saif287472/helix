@@ -3535,6 +3535,34 @@ retries to completion.
 check is stricter but wire-compatible (it refuses what was never valid). No
 app change.
 
+- S1 (AUD-4c-1, -4c-2, -4c-3, -4c-4) — the group store's races and lifetimes,
+  server only, groups migration 5. **4c-1:** `_receiveSync` read the cached
+  roster version outside any lock and upserted without a version predicate, so
+  two overlapping syncs could leave the older one cached and re-add a removed
+  member to the local fan-out. A sync now takes a per-group transaction-level
+  advisory lock (`GroupStore.lockRemoteGroup`; not `FOR UPDATE`, since the
+  first sync has no row) before it reads the version, so syncs of one group
+  apply one at a time. **4c-4:** an S2S action's `actorDevice` must be a
+  well-formed id that is not a device of this server and not already reported
+  for another account (the predicate the `devices` action already used), or
+  the action is refused 403. **4c-2:** deleting a group calls
+  `forgetRemoteDevicesIfUnused` for each remote member it had. **4c-3:**
+  `members.joined_seq bigserial` (existing rows numbered by `joined_at`, then
+  group and account) and the roster ordered `(joined_at, joined_seq,
+  account)`, so "the oldest admin" is what MODULE.md says. Tests: an action
+  naming a home device or a non-id is 403 while the actor's own device and none
+  pass; deleting a group leaves no `remote_devices` row for its remote member;
+  twelve overlapping syncs with versions 1001-1012 leave the cache at 1012 and
+  the newest roster (no Carol) in force; six groups created with the same
+  three members always list them in the same order and hand ownership to the
+  first-added. The first three fail on the code before this step; **the
+  ordering test passes on the old code too** (single-row inserts happen to come
+  back in order), so it pins the guarantee rather than proving the fix. Gate:
+  group_federation and groups tests 31 green on Postgres, analyze and format
+  clean. **Rollout:** groups migration 5 (additive, runs at start; the
+  `bigserial` backfill of an existing members table is one statement); no
+  `.env` line, no app change.
+
 ## B17 — Sign-in and backup: the copy and the code must agree
 **A · ~2–3 days · no migration · depends on Q4, Q5**
 

@@ -450,6 +450,124 @@ void main() {
       expect(sent.status, 200, reason: sent.body);
     });
 
+    /// A member's server names the device a remote member acts from. It may
+    /// not name a device of the home server, or one already reported for
+    /// another account (AUD-4c-4).
+    test(
+      'an action cannot name a device that belongs to someone else',
+      () async {
+        final g = await create([onB(bob)]);
+        Future<S2SGroupActionResult> act(String? device) async =>
+            S2SGroupActionResult.fromJson(
+              (await b.federation.client.call(
+                a.domain,
+                'POST',
+                Routes.s2sGroupActions.expand({'group_id': g.groupId}),
+                body: S2SGroupAction(
+                  actor: onB(bob),
+                  actorDevice: device,
+                  action: 'devices',
+                  body: {
+                    'devices': [bob.id],
+                  },
+                ).toJson(),
+              ))!,
+            );
+        expect((await act(alice.id)).status, 403, reason: 'a home device');
+        expect((await act('not a uuid')).status, 403);
+        expect((await act(bob.id)).status, 204, reason: 'the actor own device');
+        expect((await act(null)).status, 204);
+      },
+    );
+
+    /// A group's deletion forgets the devices a remote member's server
+    /// reported for it, when that member is in no other group here
+    /// (AUD-4c-2).
+    test(
+      'deleting a group forgets the devices of its remote members',
+      () async {
+        final g = await create([onB(bob)]);
+        final devices = '${a.env.platform.schemas.of('groups')}.remote_devices';
+        Future<int> rows() async => (await a.env.platform.db.queryOne(
+          'SELECT count(*)::int8 AS n FROM $devices WHERE account = @a:text',
+          {'a': onB(bob)},
+        ))!.integer('n');
+        expect(await rows(), greaterThan(0));
+        final r = await a.api.call(
+          Routes.deleteGroup,
+          params: {'group_id': g.groupId},
+          bearer: alice.bearer,
+        );
+        expect(r.status, 204, reason: r.body);
+        expect(await rows(), 0);
+      },
+    );
+
+    /// Syncs of one group are applied one at a time, so the cache ends at the
+    /// newest version whatever order they arrive in (AUD-4c-1). Carol is
+    /// "removed" in the newest snapshot; an older one that lands last must not
+    /// bring her back.
+    test('overlapping syncs never leave an older roster cached', () async {
+      final g = await create([onB(bob), onB(carol)]);
+      final cache = '${b.env.platform.schemas.of('groups')}.remote_groups';
+      Future<void> sync(int version, {required bool withCarol}) async {
+        final snapshot = Group(
+          groupId: g.groupId,
+          epoch: 0,
+          stateVersion: 1,
+          encryptedState: bytes(4),
+          settings: const GroupSettings(),
+          members: [
+            GroupMember(
+              account: onA(alice),
+              role: GroupRole.owner,
+              joinedAt: DateTime.utc(2026),
+            ),
+            GroupMember(
+              account: bob.accountId,
+              role: GroupRole.member,
+              joinedAt: DateTime.utc(2026),
+            ),
+            if (withCarol)
+              GroupMember(
+                account: carol.accountId,
+                role: GroupRole.member,
+                joinedAt: DateTime.utc(2026),
+              ),
+          ],
+          createdAt: DateTime.utc(2026),
+          homeServer: a.domain,
+        );
+        await a.federation.client.call(
+          b.domain,
+          'POST',
+          Routes.s2sGroupSync.expand({'group_id': g.groupId}),
+          body: S2SGroupSync(
+            rosterVersion: version,
+            group: snapshot,
+            notify: const [],
+          ).toJson(),
+        );
+      }
+
+      await Future.wait([
+        for (var v = 1; v <= 12; v++) sync(1000 + v, withCarol: v != 12),
+      ]);
+      final row = (await b.env.platform.db.queryOne(
+        'SELECT roster_version FROM $cache WHERE group_id = @g:uuid',
+        {'g': g.groupId},
+      ))!;
+      expect(row.integer('roster_version'), 1012);
+      final members = GroupList.fromJson(
+        (await b.api.call(Routes.myGroups, bearer: carol.bearer)).json,
+      );
+      expect(
+        members.groups.any((x) => x.groupId == g.groupId),
+        isFalse,
+        reason: 'the newest roster has no Carol',
+      );
+    });
+
     test('only the home server may push a group', () async {
       final g = await create([onB(bob)]);
       // A third server claiming the same group is refused by B.

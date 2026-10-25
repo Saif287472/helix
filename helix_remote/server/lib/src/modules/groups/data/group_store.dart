@@ -104,6 +104,25 @@ CREATE INDEX remote_joins_account ON $s.remote_joins (account_id);
 CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
 ''';
 
+  /// A total order of joining (AUD-4c-3): `joined_at` is the transaction's
+  /// time, so everyone added in one transaction shares it, and "the oldest
+  /// admin" was whichever of them Postgres returned first. `joined_seq` is
+  /// assigned in insert order; existing rows are numbered by `joined_at`, then
+  /// account, which is as good an order as they ever had.
+  static String memberOrder(String s) =>
+      '''
+ALTER TABLE $s.members ADD COLUMN joined_seq bigserial;
+UPDATE $s.members m SET joined_seq = n.rn
+FROM (
+  SELECT group_id, account_id,
+         row_number() OVER (ORDER BY joined_at, group_id, account_id) AS rn
+  FROM $s.members
+) n
+WHERE n.group_id = m.group_id AND n.account_id = m.account_id;
+SELECT setval(pg_get_serial_sequence('$s.members', 'joined_seq'),
+              greatest(1, coalesce((SELECT max(joined_seq) FROM $s.members), 1)));
+''';
+
   /// Who made each invite link (expand only: older links have none).
   static String linkCreator(String s) =>
       'ALTER TABLE $s.invite_links ADD COLUMN created_by text;';
@@ -151,7 +170,8 @@ CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
 
   Future<List<GroupMember>> members(SqlSession db, String groupId) async {
     final rows = await db.query(
-      'SELECT account_id, role, joined_at FROM $s.members WHERE group_id = @g:uuid ORDER BY joined_at',
+      'SELECT account_id, role, joined_at FROM $s.members WHERE group_id = @g:uuid '
+      'ORDER BY joined_at, joined_seq, account_id',
       {'g': groupId},
     );
     return [
@@ -519,6 +539,15 @@ CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
     );
     return r?.string('home_domain');
   }
+
+  /// Takes this group's cache lock for the rest of the transaction. Syncs of
+  /// one group are applied one at a time, so the version read afterwards is
+  /// the version the write replaces (AUD-4c-1). An advisory lock rather than
+  /// `FOR UPDATE`, because the first sync has no row to lock yet.
+  Future<void> lockRemoteGroup(Tx tx, String groupId) => tx.execute(
+    'SELECT pg_advisory_xact_lock(hashtextextended(@g:text, 7))',
+    {'g': 'remote_group:$groupId'},
+  );
 
   /// Replaces the cached group and its local members.
   Future<void> saveRemoteGroup(
