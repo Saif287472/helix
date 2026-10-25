@@ -230,7 +230,7 @@ class ConfigView extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   const Text(
-                    'Public node identity shown to people who sign up',
+                    'Shown to people who sign up',
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.35,
@@ -314,9 +314,7 @@ class ConfigView extends StatelessWidget {
           const SizedBox(height: 8),
           ConsoleSettingRow(
             title: 'Server maintenance mode',
-            subtitle:
-                'Apps get 503 Service Unavailable while it is on. '
-                'This console keeps working',
+            subtitle: 'Apps get 503; this console keeps working',
             trailing: Switch(
               value: config?.maintenance ?? false,
               onChanged: config == null || server.isBusy('maintenance')
@@ -327,9 +325,7 @@ class ConfigView extends StatelessWidget {
           const Divider(height: 28),
           ConsoleSettingRow(
             title: 'Purge dead jobs',
-            subtitle:
-                'Clears failed background jobs and expired sign-in '
-                'rows. Nothing a person can see is removed',
+            subtitle: 'Failed jobs and expired sign-in rows only',
             trailing: OutlinedButton(
               onPressed: server.isBusy('purge') ? null : () => _purge(context),
               style: ConsoleButtons.pillTone(
@@ -367,7 +363,7 @@ class ConfigView extends StatelessWidget {
           icon: Icons.article_outlined,
           accent: HelixConsoleColors.violet,
           title: 'Logs & Activity',
-          subtitle: 'What the server and this console did',
+          subtitle: 'Server and console activity',
           body: _activityTile(context),
         ),
         _tile(
@@ -381,7 +377,7 @@ class ConfigView extends StatelessWidget {
           icon: Icons.lock_outline,
           accent: HelixConsoleColors.onWarn,
           title: 'Security',
-          subtitle: 'This device and the admin password',
+          subtitle: 'Device lock and password',
           body: _securityTile(context),
         ),
       ];
@@ -459,7 +455,7 @@ class ConfigView extends StatelessWidget {
       children: [
         ConsoleSettingRow(
           title: 'Worldwide Network Mode',
-          subtitle: 'Talk to other Helix servers (federation)',
+          subtitle: 'Federate with other servers',
           trailing: Switch(
             value: config?.federationEnabled ?? false,
             onChanged: config == null || server.isBusy('federation')
@@ -481,7 +477,7 @@ class ConfigView extends StatelessWidget {
     children: [
       ConsoleSettingRow(
         title: 'Live log',
-        subtitle: 'What the server is saying now',
+        subtitle: 'Right now',
         trailing: OutlinedButton(
           onPressed: () => _showLog(context),
           style: ConsoleButtons.pill,
@@ -491,7 +487,7 @@ class ConfigView extends StatelessWidget {
       const Divider(height: 28),
       ConsoleSettingRow(
         title: 'Audit trail',
-        subtitle: 'What this console has done on the server',
+        subtitle: 'What this console did',
         trailing: OutlinedButton(
           onPressed: () => _openAudit(context),
           style: ConsoleButtons.pill,
@@ -536,9 +532,7 @@ class ConfigView extends StatelessWidget {
     children: [
       ConsoleSettingRow(
         title: 'Device biometric / PIN lock',
-        subtitle:
-            "Ask for this device's screen lock when the console "
-            'opens',
+        subtitle: 'Ask on every open',
         trailing: Switch(
           value: AdminSessionScope.read(context).appLockEnabled,
           onChanged: (on) => _appLock(context, on),
@@ -547,7 +541,7 @@ class ConfigView extends StatelessWidget {
       const Divider(height: 28),
       ConsoleSettingRow(
         title: 'Admin password',
-        subtitle: 'Changing it signs out every other admin session',
+        subtitle: 'Signs out other sessions',
         trailing: OutlinedButton(
           onPressed: () => _changePassword(context),
           style: ConsoleButtons.pill,
@@ -624,10 +618,7 @@ class ConfigView extends StatelessWidget {
           title: 'Sign out of this server',
           titleColor: HelixConsoleColors.onDanger,
           subtitleColor: HelixConsoleColors.danger,
-          subtitle:
-              'Ends every admin session on the server and clears '
-              'it from this device. You will need the admin '
-              'password to sign back in',
+          subtitle: 'Ends every admin session here',
           trailing: FilledButton(
             onPressed: () => confirmAndSignOut(context),
             style: ConsoleButtons.pillFilledTone(HelixConsoleColors.danger),
