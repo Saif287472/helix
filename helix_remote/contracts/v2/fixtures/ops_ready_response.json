@@ -1,0 +1,8 @@
+{
+  "ready": true,
+  "checks": {
+    "database": true,
+    "event_bus": true,
+    "storage": false
+  }
+}

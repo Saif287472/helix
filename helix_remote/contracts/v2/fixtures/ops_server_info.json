@@ -1,0 +1,13 @@
+{
+  "name": "Helix Global",
+  "version": "2.4.0",
+  "registration": "phone",
+  "max_attachment_bytes": 4294967296,
+  "terms_version": "2026-10",
+  "privacy_version": "2026-10",
+  "federation_domain": "helix.agiletechbd.com",
+  "features": {
+    "calls": true,
+    "federation": false
+  }
+}

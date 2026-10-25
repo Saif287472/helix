@@ -1,0 +1,33 @@
+{
+  "account": {
+    "account_id": "0192a4f0-0000-7000-8000-00000000000b",
+    "status": "active",
+    "created_at": 1773576000000,
+    "active_devices": 2,
+    "helix_name": "bob",
+    "phone_last4": "0000",
+    "phone_number": "+8801700000000",
+    "display_name": "Bob Rahman",
+    "last_seen_on": 1790852400000
+  },
+  "devices": [
+    {
+      "device_id": "0192a4f0-0000-7000-8000-0000000000b1",
+      "name": "Bob phone",
+      "platform": "android",
+      "active": true,
+      "created_at": 1773576000000,
+      "last_seen_on": 1790852400000
+    },
+    {
+      "device_id": "0192a4f0-0000-7000-8000-0000000000b2",
+      "name": "Bob old tablet",
+      "platform": "other",
+      "active": false,
+      "created_at": 1764936000000,
+      "revoked_at": 1788264000000
+    }
+  ],
+  "has_password": true,
+  "open_reports": 2
+}

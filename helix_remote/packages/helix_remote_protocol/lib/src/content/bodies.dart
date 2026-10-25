@@ -103,6 +103,36 @@ final class MessageRef {
 sealed class ContentBody {
   const ContentBody();
 
+  /// Every content type string [decode] understands, in the order the decode
+  /// switch names them. Tests enumerate it so a new type cannot ship without
+  /// a golden fixture (`contracts/v2/fixtures/`).
+  static const List<String> knownTypes = [
+    'text',
+    'media',
+    'sticker',
+    'location',
+    'live_location',
+    'contact',
+    'poll',
+    'event',
+    'system',
+    'call_log',
+    'reaction',
+    'edit',
+    'delete',
+    'poll_vote',
+    'rsvp',
+    'receipt',
+    'typing',
+    'sender_key_distribution',
+    'group_key',
+    'profile_key_update',
+    'decryption_error',
+    'resend_request',
+    'contact_sync',
+    'device_transfer_offer',
+  ];
+
   String get type;
 
   /// Shown as its own bubble in the chat (as opposed to acting on another

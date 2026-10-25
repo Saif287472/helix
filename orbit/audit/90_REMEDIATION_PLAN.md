@@ -2510,6 +2510,28 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   a 204 passes) and on 400 (one attempt, thrown with `isRetryable` false).
   Gate: `transport_test.dart` **46 green** (44 before), `dart analyze` clean on
   the package. No wire change, no migration; an app needs the new package.
+- S4 (AUD-8-5) — the golden fixtures pinned 9 shapes while every other DTO had
+  only self-consistent round-trip tests, which cannot notice both sides of the
+  wire moving together: a field renamed in the DTO and its test still passes,
+  while the server and an older client disagree.
+  **What changed:** [`fixtures_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/test/fixtures_test.dart#L154)
+  now holds **164 fixtures** (nine unchanged, 155 new): every content type, the
+  server and client realtime frames plus an unknown server frame, all top-level
+  request/response DTOs of identity, keys, messaging, people, groups, calls,
+  media, backup, ops, admin and federation, and the WebSocket close-code map
+  written out so renumbering one fails. Each file is generated from its
+  constructor (`HELIX_UPDATE_FIXTURES=1`) and re-decoded in the same test, so
+  the stored bytes stay the contract. Three completeness tests make a new shape
+  fail until it has a fixture:
+  [`ContentBody.knownTypes`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies.dart#L109)
+  (additive; the decode switch's 24 types, each checked to reach a real body
+  decoder rather than `UnknownBody`), the frame table, and the close codes.
+  Deliberately not fixtures: `AccountAddress` (no JSON codec), `Page<T>` (not
+  a DTO class), and value types pinned inside their parents. No wire or stored
+  change; the nine existing fixture files are byte-identical.
+  Gate: `fixtures_test.dart` **167 green** (9 before), full protocol suite
+  **281 green**, `dart analyze` and `dart format` clean. No migration; no
+  server or app change (both already speak these shapes).
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**

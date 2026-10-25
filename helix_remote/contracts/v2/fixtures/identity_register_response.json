@@ -1,0 +1,11 @@
+{
+  "session": {
+    "account_id": "0192a4f0-0000-7000-8000-00000000000a",
+    "device_id": "0192a4f0-0000-7000-8000-0000000000a1",
+    "access_token": "access.jwt.example",
+    "access_expires_at": 1790856900000,
+    "refresh_token": "refresh.jwt.example",
+    "refresh_expires_at": 1796040000000
+  },
+  "replaced_existing": true
+}

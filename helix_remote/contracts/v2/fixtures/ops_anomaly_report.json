@@ -1,0 +1,17 @@
+{
+  "app_version": "2.4.0 (42)",
+  "platform": "windows",
+  "debug": false,
+  "entries": [
+    {
+      "at": 1790855940000,
+      "kind": "request",
+      "where": "POST /v1/messages",
+      "message": "upstream unavailable",
+      "stack": "#0 ApiClient.send (api.dart:210)",
+      "fields": {
+        "status": "503"
+      }
+    }
+  ]
+}

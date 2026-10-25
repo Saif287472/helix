@@ -1,0 +1,6 @@
+{
+  "lines": [
+    "{\"level\":\"info\",\"msg\":\"server ready\"}",
+    "{\"level\":\"warn\",\"msg\":\"slow send\"}"
+  ]
+}

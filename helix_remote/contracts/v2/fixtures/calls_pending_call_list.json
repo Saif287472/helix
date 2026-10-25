@@ -1,0 +1,14 @@
+{
+  "calls": [
+    {
+      "call_id": "0192a4f0-0000-7000-8000-0000000000e9",
+      "from": {
+        "account": "0192a4f0-0000-7000-8000-00000000000b",
+        "device": "0192a4f0-0000-7000-8000-0000000000b1"
+      },
+      "created_at": 1790856000000,
+      "expires_at": 1790856060000,
+      "payload": "V15lbHN6gYiPlp2kq7K5wMfO1dzj6vH4_wYNFBsiKTA3PkVMU1phaG92fYSLkpmgp661vMPK0djf5u30-wIJEBceJSwzOkFIT1ZdZGtyeYCHjpWco6qxuL_GzdTb4unw9_4FDBMaISgvNj1ES1JZYGdudXyDipGYn6attLvCydDX3uXs8_oBCA8WHSQrMjlAR05VXGNqcXh_ho2Um6KpsLe-xczT2uHo7_b9BAsSGSAnLjU8Q0pRWF9mbXR7gomQl56lrLO6wcjP1t3k6_L5AAcOFRwjKjE4P0ZNVFtiaXB3foWMk5qhqK-2vcTL0tng5-71_AMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-rx-P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoKeutbzDytHY3-bt9PsCCRA"
+    }
+  ]
+}

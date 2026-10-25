@@ -1,0 +1,17 @@
+{
+  "id": "0192a4f0-0000-7000-8000-00000000000d",
+  "sender": "0192a4f0-0000-7000-8000-00000000000a@helix-a.example",
+  "sender_device": "0192a4f0-0000-7000-8000-0000000000a1",
+  "payload": "X2ZtdHuCiZCXnqWss7rByM_W3eTr8vkABw4VHCMqMTg_Rk1UW2JpcHd-hYyTmqGor7a9xMvS2eDn7vX8AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dzj6vH4_wYNFBsiKTA3PkVMU1phaG92fYSLkpmgp661vMPK0djf5u30-wIJEBceJSwzOkFIT1ZdZGtyeYCHjpWco6qxuL_GzdTb4unw9_4FDBMaISgvNj1ES1JZYGdudXyDipGYn6attLvCydDX3uXs8_oBCA8WHSQrMjlAR05VXGNqcXh_ho2Um6KpsLe-xczT2uHo",
+  "devices": [
+    "0192a4f0-0000-7000-8000-0000000000b1"
+  ],
+  "distributions": [
+    {
+      "device": "0192a4f0-0000-7000-8000-0000000000b1",
+      "payload": "Nz5FTFNaYWhvdn2Ei5KZoKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnmAh46VnKOqsbi_xs3U2-Lp8Pf-BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ"
+    }
+  ],
+  "urgent": true,
+  "ephemeral": false
+}

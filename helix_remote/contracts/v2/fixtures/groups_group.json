@@ -1,0 +1,25 @@
+{
+  "group_id": "0192a4f0-0000-7000-8000-00000000000c",
+  "epoch": 3,
+  "state_version": 4,
+  "encrypted_state": "Nj1ES1JZYGdudXyDipGYn6attLvCydDX3uXs8_oBCA8WHSQrMjlAR05VXGNqcXh_ho2Um6KpsLe-xczT2uHo7_b9BAsSGSAnLjU8Q0pRWF8",
+  "settings": {
+    "add_members": "everyone",
+    "edit_info": "admins",
+    "send_messages": "everyone"
+  },
+  "members": [
+    {
+      "account": "0192a4f0-0000-7000-8000-00000000000a",
+      "role": "owner",
+      "joined_at": 1788264000000
+    },
+    {
+      "account": "0192a4f0-0000-7000-8000-00000000000b",
+      "role": "member",
+      "joined_at": 1790683200000
+    }
+  ],
+  "created_at": 1788264000000,
+  "home_server": "helix-a.example"
+}

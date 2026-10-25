@@ -1,0 +1,19 @@
+{
+  "envelopes": [
+    {
+      "id": "0192a4f0-0000-7000-8000-0000000000e1",
+      "kind": "message",
+      "sent_at": 1790856000000,
+      "seq": 1042,
+      "from": {
+        "account": "0192a4f0-0000-7000-8000-00000000000b",
+        "device": "0192a4f0-0000-7000-8000-0000000000b1"
+      },
+      "payload": "T1ZdZGtyeYCHjpWco6qxuL_GzdTb4unw9_4FDBMaISgvNj1ES1JZYGdudXyDipGYn6attLvCydDX3uXs8_oBCA8WHSQrMjlAR05VXGNqcXh_ho2Um6KpsLe-xczT2uHo7_b9BAsSGSAnLjU8Q0pRWF9mbXR7gomQl56lrLO6wcjP1t3k6_L5AAcOFRwjKjE4P0ZNVFtiaXB3foWMk5qhqA",
+      "urgent": true
+    }
+  ],
+  "last_seq": 1042,
+  "more": true,
+  "seq_head": 1050
+}

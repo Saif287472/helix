@@ -1,0 +1,51 @@
+{
+  "account_id": "0192a4f0-0000-7000-8000-00000000000a",
+  "identity_key": "PENKUVhfZm10e4KJkJeepayzusHIz9bd5Ovy-QAHDhU",
+  "device": {
+    "device_id": "0192a4f0-0000-7000-8000-0000000000a1",
+    "name": "Pixel 9",
+    "platform": "android",
+    "identity_key": "KC82PURLUllgZ251fIOKkZifpq20u8LJ0Nfe5ezz-gE",
+    "signing_key": "KTA3PkVMU1phaG92fYSLkpmgp661vMPK0djf5u30-wI",
+    "certificate": {
+      "created_at": 1790856000000,
+      "signature": "KjE4P0ZNVFtiaXB3foWMk5qhqK-2vcTL0tng5-71_AMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4w"
+    },
+    "proof": "KzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09rh6O_2_QQLEhkgJy41PENKUVhfZm10e4KJkJeepayzusHIz9bd5A"
+  },
+  "prekeys": {
+    "signed_prekey": {
+      "id": 7,
+      "public_key": "LDM6QUhPVl1ka3J5gIeOlZyjqrG4v8bN1Nvi6fD3_gU",
+      "signature": "LTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dzj6vH4_wYNFBsiKTA3PkVMU1phaG92fYSLkpmgp661vMPK0djf5g"
+    },
+    "one_time_prekeys": [
+      {
+        "id": 1,
+        "public_key": "LjU8Q0pRWF9mbXR7gomQl56lrLO6wcjP1t3k6_L5AAc"
+      },
+      {
+        "id": 2,
+        "public_key": "LzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ197l7PP6AQg"
+      }
+    ]
+  },
+  "verification_token": "verify-token",
+  "password": {
+    "kdf": {
+      "alg": "argon2id",
+      "memory_kib": 19456,
+      "iterations": 2,
+      "parallelism": 1,
+      "length": 64
+    },
+    "salt": "MDc-RUxTWmFob3Z9hIuSmQ",
+    "auth_key": "MTg_Rk1UW2JpcHd-hYyTmqGor7a9xMvS2eDn7vX8Awo",
+    "wrapped_identity_key": {
+      "nonce": "MjlAR05VXGNqcXh_",
+      "ciphertext": "MzpBSE9WXWRrcnmAh46VnKOqsbi_xs3U2-Lp8Pf-BQwTGiEoLzY9REtSWWBnbnV8"
+    }
+  },
+  "terms_version": "2026-10",
+  "replace_existing": true
+}

@@ -1,0 +1,7 @@
+{
+  "name": "StateError",
+  "fields": {
+    "route": "/chats",
+    "stage": "build"
+  }
+}

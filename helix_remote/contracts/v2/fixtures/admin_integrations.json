@@ -1,0 +1,14 @@
+{
+  "push": {
+    "configured": true,
+    "provider": "fcm"
+  },
+  "sms": {
+    "configured": true,
+    "provider": "bulksmsbd"
+  },
+  "turn": {
+    "configured": true,
+    "count": 2
+  }
+}

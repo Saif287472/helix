@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "id": "0192a4f0-0000-7000-8000-0000000000e2",
+  "ts": 1790856000000,
+  "conv": {
+    "kind": "direct",
+    "to": "0192a4f0-0000-7000-8000-00000000000b"
+  },
+  "type": "sticker",
+  "body": {
+    "pack_id": "orbit-basics",
+    "sticker_id": "wave-01",
+    "media": {
+      "id": "0192a4f0-0000-7000-8000-0000000000f0",
+      "key": "BAsSGSAnLjU8Q0pRWF9mbXR7gomQl56lrLO6wcjP1t0",
+      "digest": "BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ194",
+      "size": 18840,
+      "mime": "image/webp",
+      "name": "wave-01.webp"
+    },
+    "emoji": "👋"
+  },
+  "profile_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+}

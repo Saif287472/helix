@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "0192a4f0-0000-7000-8000-0000000000e4",
+  "ts": 1790856000000,
+  "conv": {
+    "kind": "direct",
+    "to": "0192a4f0-0000-7000-8000-00000000000b"
+  },
+  "type": "live_location",
+  "body": {
+    "session_id": "0192a4f0-0000-7000-8000-0000000000e4",
+    "state": "update",
+    "lat_e7": 237778000,
+    "lng_e7": 904010000,
+    "accuracy_m": 8,
+    "expires_at": 1790856900000
+  },
+  "profile_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+}

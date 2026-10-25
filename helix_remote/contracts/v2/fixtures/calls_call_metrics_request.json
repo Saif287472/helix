@@ -1,0 +1,10 @@
+{
+  "call_id": "0192a4f0-0000-7000-8000-0000000000e9",
+  "setup_ms": 850,
+  "duration_s": 95,
+  "reconnects": 1,
+  "packet_loss_pct": 1.5,
+  "rtt_ms": 42,
+  "relayed": false,
+  "outcome": "answered"
+}

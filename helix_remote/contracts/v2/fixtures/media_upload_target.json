@@ -1,0 +1,11 @@
+{
+  "media_id": "0192a4f0-0000-7000-8000-0000000000d6",
+  "url": "/v1/media/0192a4f0-0000-7000-8000-0000000000d6/content",
+  "method": "PUT",
+  "headers": {
+    "upload-offset": "0",
+    "content-type": "application/octet-stream"
+  },
+  "expires_at": 1790857800000,
+  "resumable": false
+}

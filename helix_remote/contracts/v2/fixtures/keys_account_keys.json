@@ -1,0 +1,24 @@
+{
+  "account": "0192a4f0-0000-7000-8000-00000000000b",
+  "identity_key": "SlFYX2ZtdHuCiZCXnqWss7rByM_W3eTr8vkABw4VHCM",
+  "devices": [
+    {
+      "device_id": "0192a4f0-0000-7000-8000-0000000000b1",
+      "identity_key": "S1JZYGdudXyDipGYn6attLvCydDX3uXs8_oBCA8WHSQ",
+      "signing_key": "TFNaYWhvdn2Ei5KZoKeutbzDytHY3-bt9PsCCRAXHiU",
+      "certificate": {
+        "created_at": 1789128000000,
+        "signature": "TVRbYmlwd36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEYHyYtNDtCSVBXXmVsc3qBiI-WnaSrsrnAx87V3OPq8fj_Bg"
+      },
+      "signed_prekey": {
+        "id": 8,
+        "public_key": "Rk1UW2JpcHd-hYyTmqGor7a9xMvS2eDn7vX8AwoRGB8",
+        "signature": "R05VXGNqcXh_ho2Um6KpsLe-xczT2uHo7_b9BAsSGSAnLjU8Q0pRWF9mbXR7gomQl56lrLO6wcjP1t3k6_L5AA"
+      },
+      "one_time_prekey": {
+        "id": 9,
+        "public_key": "TlVcY2pxeH-GjZSboqmwt77FzNPa4ejv9v0ECxIZICc"
+      }
+    }
+  ]
+}

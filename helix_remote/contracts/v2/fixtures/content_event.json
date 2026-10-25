@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "0192a4f0-0000-7000-8000-0000000000e7",
+  "ts": 1790856000000,
+  "conv": {
+    "kind": "direct",
+    "to": "0192a4f0-0000-7000-8000-00000000000b"
+  },
+  "type": "event",
+  "body": {
+    "title": "Team dinner",
+    "starts_at": 1791115200000,
+    "ends_at": 1791122400000,
+    "time_zone": "Asia/Dhaka",
+    "location_text": "Gulshan 2",
+    "plus_one_allowed": true
+  },
+  "profile_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+}

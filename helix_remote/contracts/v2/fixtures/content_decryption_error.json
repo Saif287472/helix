@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "0192a4f0-0000-7000-8000-0000000000f5",
+  "ts": 1790856000000,
+  "conv": {
+    "kind": "direct",
+    "to": "0192a4f0-0000-7000-8000-00000000000b"
+  },
+  "type": "decryption_error",
+  "body": {
+    "message_id": "0192a4f0-0000-7000-8000-00000000000d",
+    "sender_device": "0192a4f0-0000-7000-8000-0000000000b1"
+  },
+  "profile_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+}

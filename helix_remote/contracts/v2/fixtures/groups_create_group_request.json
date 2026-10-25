@@ -1,0 +1,12 @@
+{
+  "group_id": "0192a4f0-0000-7000-8000-00000000000c",
+  "encrypted_state": "VFtiaXB3foWMk5qhqK-2vcTL0tng5-71_AMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-rx-P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnmAh46V",
+  "members": [
+    "0192a4f0-0000-7000-8000-00000000000b"
+  ],
+  "settings": {
+    "add_members": "everyone",
+    "edit_info": "admins",
+    "send_messages": "everyone"
+  }
+}

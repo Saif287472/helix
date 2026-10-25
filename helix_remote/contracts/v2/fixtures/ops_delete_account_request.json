@@ -1,0 +1,9 @@
+{
+  "confirmation": "DELETE",
+  "verification_token": "verified-token",
+  "device_proof": {
+    "challenge_id": "0192a4f0-0000-7000-8000-0000000000d2",
+    "challenge": "XGNqcXh_ho2Um6KpsLe-xczT2uHo7_b9BAsSGSAnLjU",
+    "signature": "XWRrcnmAh46VnKOqsbi_xs3U2-Lp8Pf-BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ197l7PP6AQgPFg"
+  }
+}

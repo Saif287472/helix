@@ -1,0 +1,10 @@
+{
+  "unauthorized": 4001,
+  "device_revoked": 4003,
+  "suspended": 4004,
+  "superseded": 4008,
+  "rate_limited": 4029,
+  "idle_timeout": 4010,
+  "protocol_error": 4400,
+  "going_away": 4503
+}

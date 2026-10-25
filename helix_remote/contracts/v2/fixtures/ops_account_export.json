@@ -1,0 +1,20 @@
+{
+  "account_id": "0192a4f0-0000-7000-8000-00000000000a",
+  "exported_at": 1790856000000,
+  "sections": {
+    "identity": {
+      "account_id": "0192a4f0-0000-7000-8000-00000000000a",
+      "has_password": true,
+      "helix_name": "alice"
+    },
+    "messaging": {
+      "mailbox_envelopes": 0
+    },
+    "devices": [
+      {
+        "device_id": "0192a4f0-0000-7000-8000-0000000000a1",
+        "platform": "android"
+      }
+    ]
+  }
+}

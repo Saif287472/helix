@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "id": "0192a4f0-0000-7000-8000-0000000000f9",
+  "ts": 1790856000000,
+  "conv": {
+    "kind": "direct",
+    "to": "0192a4f0-0000-7000-8000-00000000000b"
+  },
+  "type": "text",
+  "body": {
+    "text": "@Bob the build is green",
+    "mentions": [
+      {
+        "account": "0192a4f0-0000-7000-8000-00000000000b",
+        "start": 0,
+        "length": 4
+      }
+    ],
+    "link_preview": {
+      "url": "https://helix.agiletechbd.com/builds/42",
+      "title": "Build 42",
+      "description": "All checks passed.",
+      "image": {
+        "id": "0192a4f0-0000-7000-8000-0000000000f0",
+        "key": "NDtCSVBXXmVsc3qBiI-WnaSrsrnAx87V3OPq8fj_Bg0",
+        "digest": "NTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3eTr8vkABw4",
+        "size": 48210,
+        "mime": "image/png",
+        "name": "avatar.png"
+      }
+    }
+  },
+  "reply": {
+    "id": "0192a4f0-0000-7000-8000-00000000000d",
+    "author": "0192a4f0-0000-7000-8000-00000000000b"
+  },
+  "exp": 86400,
+  "profile_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+}
