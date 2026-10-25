@@ -199,4 +199,124 @@ void main() {
     expect(note.message, 'entries dropped');
     expect(note.fields, {'dropped': '3'});
   });
+
+  group('when a crash is sent (AUD-14h-1)', () {
+    testWidgets(
+      'a crash that repeats every half second is still sent in time',
+      (tester) async {
+        final sent = <AnomalyReport>[];
+        AnomalyLog.install((report) async => sent.add(report));
+        for (var i = 0; i < 10; i++) {
+          AnomalyLog.crash(StateError('every frame'), null);
+          await tester.pump(const Duration(milliseconds: 500));
+          if (i == 4) {
+            expect(
+              sent,
+              isNotEmpty,
+              reason: 'the first crash goes at two seconds, storm or not',
+            );
+          }
+        }
+        expect(
+          [for (final r in sent) ...r.entries].first.fields['repeats'],
+          isNotNull,
+        );
+        expect(AnomalyLog.queued.length, lessThan(5));
+        AnomalyLog.install(null); // the timer a pending repeat leaves
+      },
+    );
+
+    testWidgets('one crash goes within two seconds, and not at once', (
+      tester,
+    ) async {
+      final sent = <AnomalyReport>[];
+      AnomalyLog.install((report) async => sent.add(report));
+      AnomalyLog.crash(StateError('once'), null);
+      await tester.pump(const Duration(milliseconds: 1900));
+      expect(sent, isEmpty);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(sent, hasLength(1));
+    });
+
+    testWidgets(
+      'a slow note waits for the regular send, a crash brings it in',
+      (tester) async {
+        final sent = <AnomalyReport>[];
+        AnomalyLog.install((report) async => sent.add(report));
+        AnomalyLog.state('slow', 'odd');
+        await tester.pump(const Duration(seconds: 19));
+        expect(sent, isEmpty);
+        await tester.pump(const Duration(seconds: 2));
+        expect(sent, hasLength(1));
+
+        AnomalyLog.state('slow again', 'odd');
+        await tester.pump(const Duration(seconds: 5));
+        AnomalyLog.crash(StateError('now'), null);
+        await tester.pump(const Duration(milliseconds: 2100));
+        expect(sent, hasLength(2), reason: 'the crash does not wait for 20 s');
+      },
+    );
+  });
+
+  group('whose server hears what (Q10)', () {
+    test(
+      'an entry goes to the server it was seen under, and only there',
+      () async {
+        var open = 'https://a.example:443';
+        final sentTo = <String, List<String>>{};
+        AnomalyLog.install((report) async {
+          sentTo.putIfAbsent(AnomalyLog.flushingServer!, () => []).addAll([
+            for (final e in report.entries) e.where,
+          ]);
+        }, server: () => open);
+        AnomalyLog.state('seen under a', 'odd');
+        open = 'https://b.example:443';
+        AnomalyLog.state('seen under b', 'odd');
+
+        await AnomalyLog.flush();
+        expect(sentTo, {
+          'https://b.example:443': ['seen under b'],
+        });
+        expect(AnomalyLog.queued.map((e) => e.where), ['seen under a']);
+
+        open = 'https://a.example:443';
+        await AnomalyLog.flush();
+        expect(sentTo['https://a.example:443'], ['seen under a']);
+        expect(AnomalyLog.queued, isEmpty);
+      },
+    );
+
+    test('what was seen before any session goes to the first server', () async {
+      String? open;
+      final sent = <String>[];
+      AnomalyLog.install(
+        (report) async =>
+            sent.addAll([for (final e in report.entries) e.where]),
+        server: () => open,
+      );
+      AnomalyLog.state('before sign-in', 'odd');
+      await AnomalyLog.flush();
+      expect(sent, isEmpty, reason: 'no session, nowhere to send');
+
+      open = 'https://a.example:443';
+      await AnomalyLog.flush();
+      expect(sent, ['before sign-in']);
+    });
+
+    test('the same anomaly under two servers is two entries', () {
+      var open = 'https://a.example:443';
+      AnomalyLog.install((report) async {}, server: () => open);
+      AnomalyLog.state('same', 'odd');
+      open = 'https://b.example:443';
+      AnomalyLog.state('same', 'odd');
+      expect(AnomalyLog.queued, hasLength(2));
+    });
+
+    test('two spellings of one address are one server', () {
+      expect(
+        AnomalyLog.serverKey(Uri.parse('HTTPS://Helix.Example/some/path')),
+        AnomalyLog.serverKey(Uri.parse('https://helix.example:443')),
+      );
+    });
+  });
 }

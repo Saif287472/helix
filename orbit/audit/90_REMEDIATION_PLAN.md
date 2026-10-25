@@ -4263,6 +4263,39 @@ plan records that as the contract. The report's shape and the anomaly route are
 otherwise unchanged; the only visible difference is that a crash storm produces
 its entry instead of eating it.
 
+- S1 (AUD-14h-1, Q10) — the anomaly log sends what it recorded, to the server
+  it was seen under; app only. **14h-1:** a crash asks for the next send to be
+  two seconds from the *first* such request and never pushes it back: the
+  scheduler keeps whether its pending timer is the short one, and a repeat of
+  a crash leaves it alone (a slow note's 20 s timer is still brought forward
+  by a crash). **Q10 (owner: option 1):** every entry is tagged with the server
+  open when it was recorded (`AnomalyLog.serverKey`: scheme, host, port) and
+  `flush` sends a server only its own entries; what was seen before any session
+  exists is given to the first server that has one; entries for a server that
+  is not open wait (the 200 cap still drops the oldest); the same anomaly under
+  two servers is two entries. `install(send, server:)` takes the resolver; the
+  app's reads the open runtime's server, the push isolate's its own runtime's,
+  and the app's sender refuses to send a batch if an account switch changed
+  the open server since the batch was chosen (`flushingServer`). The old
+  clear-the-queue-on-switch rule is gone: option 1 replaces it, so the crash
+  that caused a switch is kept for its own server. **A choice:** the tag stays
+  local; the owner's answer mentioned an additive field in what is sent, and
+  none is needed to keep the split, so the report and the route are
+  unchanged. Tests: three timer tests on the pump clock (a crash every 500 ms
+  for 5 s is sent by 2.5 s with a queue of fewer than five entries; one crash
+  goes between 1.9 and 2.1 s; a slow note waits for 20 s but a crash brings it
+  in) and four server tests (A and B entries go to their own servers and the
+  other waits until its server is open; pre-session entries go to the first
+  server; same text under two servers is two entries; `serverKey` normalises).
+  Run against the old log with stubbed signatures, the storm test and the
+  three server tests fail; the account-isolation test now asserts the entry
+  stays queued across a same-server switch. Gate: full app suite **1,113
+  green**, analyze and format clean.
+  **Batch report.** B24's finding and Q10 are closed. **Owner-facing:** a new
+  APK; no server change; a device with accounts on two servers now holds
+  entries for the closed one until it is opened again.
+- Next: B25 (chat day and snippet), then T4.
+
 ## B25 — A chat day is a calendar day, and a snippet cuts a character
 **A · ~0.5 day · no migration, no wire**
 

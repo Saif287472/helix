@@ -223,7 +223,7 @@ void main() {
   );
 
   test(
-    'what one account left in the anomaly queue is not the next one to send',
+    'what one account left in the anomaly queue stays for its own server',
     () async {
       final c = container(twoAccounts());
       final (first, second) = await signInBoth(c);
@@ -235,15 +235,13 @@ void main() {
 
       await c.read(accountsProvider.notifier).switchTo(second);
       await settle();
-      expect(
-        AnomalyLog.queued,
-        isEmpty,
-        reason: 'Bilal\'s server is not told what went wrong for Aisha',
-      );
-      // Only the switch empties it: what the account on screen runs into is
-      // still waiting for its own server.
-      AnomalyLog.record('state', 'test.where', message: 'Bilal\'s trouble');
+      // The switch does not empty it any more: each entry is tagged with the
+      // server it was seen under and sent only there (the two accounts here
+      // share one, so it is the same operator's). The server split itself is
+      // `anomaly_log_test.dart`'s.
       expect(AnomalyLog.queued, hasLength(1));
+      AnomalyLog.record('state', 'test.where', message: 'Bilal\'s trouble');
+      expect(AnomalyLog.queued, hasLength(2));
     },
   );
 

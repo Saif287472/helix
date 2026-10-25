@@ -138,7 +138,10 @@ Future<void> _wakeAccount(
   // earlier account failed with.
   final ownsLog = !AnomalyLog.hasSender;
   if (ownsLog) {
-    AnomalyLog.install((report) => runtime.api.ops.anomalies(report));
+    AnomalyLog.install(
+      (report) => runtime.api.ops.anomalies(report),
+      server: () => AnomalyLog.serverKey(runtime.serverUrl),
+    );
   }
   try {
     if (pushToken != null) {

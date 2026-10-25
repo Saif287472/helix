@@ -34,7 +34,11 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 /// Entries wait in memory (at most [maxQueued]; the oldest go first, and how
 /// many a burst pushed out is reported once something is sent) until the
 /// device has a session, so errors from before sign-in are sent after it.
-/// Switching accounts throws away what is still waiting ([clearQueued]).
+/// An entry belongs to the server that was open when it was seen, and only
+/// that server is sent it: what went wrong in a session on one operator's
+/// server never reaches another's. What was seen before any session exists is
+/// given to the first server that has one ([install]'s `server`). Entries for
+/// a server that is not open wait their turn.
 /// The same anomaly again within [repeatWindow] only counts up.
 abstract final class AnomalyLog {
   static const maxQueued = 200;
@@ -48,7 +52,18 @@ abstract final class AnomalyLog {
   static final List<_Entry> _queue = [];
   static Future<void> Function(AnomalyReport report)? _send;
   static Timer? _timer;
+
+  /// Whether [_timer] is the short one a crash asks for.
+  static bool _timerSoon = false;
+
+  /// How long a crash may wait before it is sent.
+  static const soonAfter = Duration(seconds: 2);
   static bool _sending = false;
+  static String? Function()? _serverOf;
+
+  /// The server a batch is being sent to, for as long as [flush] is sending
+  /// it: the sender checks that the session it uses is that server's.
+  static String? flushingServer;
   static int _dropped = 0;
 
   /// What is waiting to be sent, oldest first.
@@ -147,9 +162,13 @@ abstract final class AnomalyLog {
     try {
       final at = now();
       final text = _message(message);
+      final server = _serverOf?.call();
       for (final e in _queue.reversed) {
         if (at.difference(e.lastAt) > repeatWindow) break;
-        if (e.kind == kind && e.where == where && e.message == text) {
+        if (e.kind == kind &&
+            e.where == where &&
+            e.message == text &&
+            e.server == server) {
           e.count++;
           e.lastAt = at;
           _schedule(soon: soon);
@@ -164,6 +183,7 @@ abstract final class AnomalyLog {
           message: text,
           stack: stack == null ? '' : _stack(stack),
           fields: {for (final f in fields.entries) f.key: mask(f.value)},
+          server: server,
         ),
       );
       while (_queue.length > maxQueued) {
@@ -181,10 +201,26 @@ abstract final class AnomalyLog {
   static Future<void> flush() async {
     final send = _send;
     if (send == null || _sending || _queue.isEmpty) return;
+    String? server;
+    if (_serverOf != null) {
+      server = _serverOf!();
+      // No session, so no server to tell: everything waits.
+      if (server == null) return;
+      // What was seen before there was a session belongs to the first server
+      // that has one.
+      for (final e in _queue) {
+        e.server ??= server;
+      }
+    }
     _sending = true;
     try {
-      while (_queue.isNotEmpty) {
-        final batch = _queue.take(AnomalyReport.maxEntries).toList();
+      while (true) {
+        final batch = [
+          for (final e in _queue)
+            if (_serverOf == null || e.server == server) e,
+        ].take(AnomalyReport.maxEntries).toList();
+        if (batch.isEmpty) break;
+        flushingServer = server;
         await send(
           AnomalyReport(
             appVersion: kAppVersion,
@@ -193,12 +229,13 @@ abstract final class AnomalyLog {
             entries: [for (final e in batch) e.toAnomaly()],
           ),
         );
-        _queue.removeRange(0, batch.length);
+        _queue.removeWhere(batch.contains);
         _noteDropped();
       }
     } on Object {
       // Offline or signed out: kept for the next try.
     } finally {
+      flushingServer = null;
       _sending = false;
     }
   }
@@ -217,23 +254,33 @@ abstract final class AnomalyLog {
         where: 'diagnostics.queue',
         message: 'entries dropped',
         stack: '',
+        server: _serverOf?.call(),
         fields: {'dropped': '$dropped'},
       ),
     );
   }
 
+  /// A crash brings the next send forward to [soonAfter] from the first one,
+  /// and never pushes it back: a crash that recurs faster than that (a widget
+  /// that throws in every frame) used to restart the wait on each repeat and
+  /// so postponed its own report for as long as it went on (AUD-14h-1).
   static void _schedule({bool soon = false}) {
     if (_send == null) return;
     if (soon) {
+      if (_timer != null && _timerSoon) return;
       _timer?.cancel();
-      _timer = Timer(const Duration(seconds: 2), _tick);
+      _timerSoon = true;
+      _timer = Timer(soonAfter, _tick);
       return;
     }
-    _timer ??= Timer(flushEvery, _tick);
+    if (_timer != null) return;
+    _timerSoon = false;
+    _timer = Timer(flushEvery, _tick);
   }
 
   static void _tick() {
     _timer = null;
+    _timerSoon = false;
     unawaited(
       flush().whenComplete(() {
         if (_queue.isNotEmpty) _schedule();
@@ -294,19 +341,26 @@ abstract final class AnomalyLog {
   /// one-pass isolate for as long as it lives ([hasSender] says whether
   /// anyone already has). What was recorded before a sender exists waits for
   /// the next [flush].
-  static void install(Future<void> Function(AnomalyReport report)? send) {
+  ///
+  /// [server] names the server the sender talks to now (null while there is no
+  /// session); with it, every entry is tagged with the server it was seen under
+  /// and sent only there. Without it the log is not split by server.
+  static void install(
+    Future<void> Function(AnomalyReport report)? send, {
+    String? Function()? server,
+  }) {
     _send = send;
+    _serverOf = send == null ? null : server;
     _timer?.cancel();
     _timer = null;
+    _timerSoon = false;
     if (send != null && _queue.isNotEmpty) _schedule();
   }
 
-  /// Throws away what is waiting: an error seen on another account is not
-  /// this one's to send, and its server is often another operator's.
-  static void clearQueued() {
-    _queue.clear();
-    _dropped = 0;
-  }
+  /// What the log calls a server: scheme, host and port, so two spellings of
+  /// one address are one server and a path never matters.
+  static String serverKey(Uri url) =>
+      '${url.scheme.toLowerCase()}://${url.host.toLowerCase()}:${url.port}';
 
   @visibleForTesting
   static void resetForTest() {
@@ -314,7 +368,10 @@ abstract final class AnomalyLog {
     _send = null;
     _timer?.cancel();
     _timer = null;
+    _timerSoon = false;
     _sending = false;
+    _serverOf = null;
+    flushingServer = null;
     _dropped = 0;
     fullDetail = kDebugMode;
     now = DateTime.now;
@@ -329,6 +386,7 @@ final class _Entry {
     required this.message,
     required this.stack,
     required this.fields,
+    this.server,
   }) : lastAt = at;
 
   final DateTime at;
@@ -337,6 +395,9 @@ final class _Entry {
   final String message;
   final String stack;
   final Map<String, String> fields;
+
+  /// The server this was seen under; null before there was a session.
+  String? server;
   DateTime lastAt;
   int count = 1;
 
@@ -353,18 +414,24 @@ final class _Entry {
 /// Connects [AnomalyLog] to this device's server. Read once when the app
 /// starts; what was recorded before then is sent once a session exists.
 ///
-/// Leaving an account for another empties the queue: what the one that left
-/// the screen ran into is not the new one's to report, and its server may be
-/// run by somebody else.
+/// What was seen under one server is sent to that server only, whichever
+/// account is open when the send happens (an account of another operator's
+/// server never receives it); [AnomalyLog] keeps the entries of a server that
+/// is not open until it is.
 final anomalyLogInstallProvider = Provider<void>((ref) {
+  String? openServer() {
+    final runtime = ref.read(runtimeProvider).value;
+    return runtime == null ? null : AnomalyLog.serverKey(runtime.serverUrl);
+  }
+
   AnomalyLog.install((report) async {
     final runtime = await ref.read(runtimeProvider.future);
-    await runtime.api.ops.anomalies(report);
-  });
-  ref.onDispose(() => AnomalyLog.install(null));
-  ref.listen(activeAccountProvider, (previous, next) {
-    if (previous?.id != null && previous?.id != next?.id) {
-      AnomalyLog.clearQueued();
+    // An account switch between choosing the batch and sending it must not
+    // carry it to the other server.
+    if (AnomalyLog.serverKey(runtime.serverUrl) != AnomalyLog.flushingServer) {
+      throw StateError('the open server changed');
     }
-  });
+    await runtime.api.ops.anomalies(report);
+  }, server: openServer);
+  ref.onDispose(() => AnomalyLog.install(null));
 });
