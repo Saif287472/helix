@@ -198,3 +198,18 @@ metadata). The cryptography has **not been externally reviewed**
   keeps previews on for convenience, exposes every new message to anyone near the locked phone.
   Helix has no per-app "hide on lock screen" setting; turning previews off also removes the text
   from the shade while the phone is unlocked.
+
+### T-14: Whoever holds the phone sees Helix where it was left
+- **Description**: Until 2026-10-25 the app's only activity declared `android:showWhenLocked`, so
+  the phone locking hid nothing: the chats stayed on screen and tappable over the keyguard, and the
+  unlock only appeared once the person left the app. A declared flag cannot be scoped to the one
+  screen that wants it, so the whole app was exposed.
+- **Mitigation**: The declaration is gone and `product_rules_test` ("the app never draws itself over
+  the lock screen") keeps it gone. A call still reaches a locked screen, which is what it needs to
+  be answered: `MainActivity.kt` adds and clears the same two window flags for the length of the
+  call, on `setCallActive`. The app then sits behind the phone's own keyguard like any other app,
+  and Privacy > App lock adds a device-authentication gate inside Helix, on a cold start and after
+  a background timeout ("Lock again").
+- **Residual risk**: App lock is off by default (the owner's ruling, 2026-10-25), so a phone with a
+  short keyguard delay, or one somebody has just unlocked, still shows the chat that was open. The
+  gate is a choice in Privacy, not a default.

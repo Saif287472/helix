@@ -240,6 +240,29 @@ void main() {
       );
     }
   });
+
+  test('the app never draws itself over the lock screen', () {
+    // A declared showWhenLocked on the app's only activity keeps all of Helix
+    // visible and tappable while the keyguard is up: the phone locks, the
+    // chats stay on screen, and the unlock only appears when the person leaves
+    // the app. A call needs the same two flags and asks for them itself, for
+    // as long as it lasts, through `setCallActive` in MainActivity.kt.
+    // Comments are stripped first: the manifest explains the refusal in prose
+    // that names the very attributes searched for.
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync().replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '');
+    expect(manifest, isNot(contains('android:showWhenLocked')));
+    expect(manifest, isNot(contains('android:turnScreenOn')));
+
+    expect(
+      File(
+        'android/app/src/main/kotlin/com/helix/remote/MainActivity.kt',
+      ).readAsStringSync(),
+      contains('WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED'),
+      reason: 'a ringing or live call still reaches the locked screen',
+    );
+  });
 }
 
 /// The 1-based lines of every `IconButton(` whose argument list carries no

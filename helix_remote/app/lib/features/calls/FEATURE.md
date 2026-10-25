@@ -72,8 +72,11 @@ call log by name. Names come from `peopleDirectoryProvider`
 The call host (`core/calls/call_host.dart`) reads `callScreenStateProvider`, which
 derives from `engine.calls.watchCurrent()` (not from `IncomingCallEvent`, which
 cannot be replayed), and pushes `/call` the moment a call exists - ringing here,
-dialing, anywhere in the app, over the lock screen (the activity already shows
-when locked; the effects set the window flags and `AppLock.callInProgress`).
+dialing, anywhere in the app, over the lock screen too. Only a call does that:
+the effects set the two window flags for as long as the call lasts and clear
+them after (`AppLock.callInProgress` lifts the in-app gate), and the activity
+itself declares no `showWhenLocked`, so nothing else in Helix is ever drawn
+over the keyguard.
 Closed app: the FCM isolate shows the full-screen ringing notification
 (`CallNotifications.showIncoming`, caller name only); its buttons open the app,
 which rings the call (`fetchPending`) and applies a button pressed before the
