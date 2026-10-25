@@ -5,6 +5,9 @@ import 'package:test/test.dart';
 
 import 'support.dart';
 
+/// The revision of a job nobody has claimed yet; `claim` raises it.
+const unclaimed = 0;
+
 /// The DAO methods the media transfer queue (Phase C4-M) added: held outbox
 /// ops, lease renewal and release, rescheduling, thumbnail jobs, and the
 /// attachment queries behind progress, view-once and the file sweep.
@@ -187,12 +190,26 @@ void main() {
     test('renewLease extends a held lease and refuses a lost one', () async {
       final id = await upload();
       expect(
-        await db.transfersDao.renewLease(id, until: at(100)),
+        await db.transfersDao.renewLease(
+          id,
+          version: unclaimed,
+          until: at(100),
+        ),
         isFalse,
         reason: 'not claimed yet',
       );
-      await db.transfersDao.claim(at(1), lease: const Duration(seconds: 10));
-      expect(await db.transfersDao.renewLease(id, until: at(100)), isTrue);
+      final held = (await db.transfersDao.claim(
+        at(1),
+        lease: const Duration(seconds: 10),
+      ))!;
+      expect(
+        await db.transfersDao.renewLease(
+          id,
+          version: held.version,
+          until: at(100),
+        ),
+        isTrue,
+      );
       expect((await db.transfersDao.byId(id))!.leaseUntil, at(100));
       // Nobody can claim it while the renewed lease lasts.
       expect(
@@ -200,14 +217,29 @@ void main() {
         isNull,
       );
       await db.transfersDao.remove(id);
-      expect(await db.transfersDao.renewLease(id, until: at(200)), isFalse);
+      expect(
+        await db.transfersDao.renewLease(
+          id,
+          version: held.version,
+          until: at(200),
+        ),
+        isFalse,
+      );
     });
 
     test('release hands a job back with its progress and no attempt', () async {
       final id = await upload();
-      await db.transfersDao.claim(at(1), lease: const Duration(seconds: 60));
-      await db.transfersDao.setProgress(id, offset: 4096, mediaId: 'obj');
-      await db.transfersDao.release(id, at: at(2));
+      final held = (await db.transfersDao.claim(
+        at(1),
+        lease: const Duration(seconds: 60),
+      ))!;
+      await db.transfersDao.setProgress(
+        id,
+        version: held.version,
+        offset: 4096,
+        mediaId: 'obj',
+      );
+      await db.transfersDao.release(id, version: held.version, at: at(2));
       final job = (await db.transfersDao.byId(id))!;
       expect(job.state, TransferState.pending);
       expect(job.leaseUntil, isNull);
@@ -220,8 +252,8 @@ void main() {
 
     test('release does not revive a finished job', () async {
       final id = await upload();
-      await db.transfersDao.markDone(id);
-      await db.transfersDao.release(id, at: at(2));
+      await db.transfersDao.markDone(id, version: unclaimed);
+      await db.transfersDao.release(id, version: unclaimed, at: at(2));
       expect((await db.transfersDao.byId(id))!.state, TransferState.done);
     });
 
@@ -229,11 +261,20 @@ void main() {
       'reschedule counts the attempt, keeps progress, never gives up',
       () async {
         final id = await upload();
-        await db.transfersDao.claim(at(1), lease: const Duration(seconds: 60));
-        await db.transfersDao.setProgress(id, offset: 8192, mediaId: 'obj');
+        final held = (await db.transfersDao.claim(
+          at(1),
+          lease: const Duration(seconds: 60),
+        ))!;
+        await db.transfersDao.setProgress(
+          id,
+          version: held.version,
+          offset: 8192,
+          mediaId: 'obj',
+        );
         for (var i = 1; i <= 8; i++) {
           await db.transfersDao.reschedule(
             id,
+            version: held.version,
             nextAttemptAt: at(100 * i),
             code: 'network',
           );
@@ -248,8 +289,13 @@ void main() {
 
     test('resetProgress forgets the offset and the server object', () async {
       final id = await upload();
-      await db.transfersDao.setProgress(id, offset: 4096, mediaId: 'obj');
-      await db.transfersDao.resetProgress(id);
+      await db.transfersDao.setProgress(
+        id,
+        version: unclaimed,
+        offset: 4096,
+        mediaId: 'obj',
+      );
+      await db.transfersDao.resetProgress(id, version: unclaimed);
       final job = (await db.transfersDao.byId(id))!;
       expect(job.offset, 0);
       expect(job.mediaId, isNull);
@@ -286,7 +332,7 @@ void main() {
           now: t0,
         );
         expect((await db.transfersDao.byId(id))!.kind, 'thumbnail');
-        await db.transfersDao.markDone(id);
+        await db.transfersDao.markDone(id, version: unclaimed);
         final again = await db.transfersDao.enqueueDownload(
           attachmentRowid: attachment,
           mediaId: 'obj',
@@ -310,13 +356,14 @@ void main() {
       expect(seen.last.map((j) => j.id), [id]);
       await db.transfersDao.fail(
         id,
+        version: unclaimed,
         code: 'quota_exceeded',
         now: at(1),
         backoff: Duration.zero,
         maxAttempts: 1,
       );
       expect((await db.transfersDao.live()).single.state, TransferState.failed);
-      await db.transfersDao.markDone(id);
+      await db.transfersDao.markDone(id, version: unclaimed);
       expect(await db.transfersDao.live(), isEmpty);
       await eventually(() => seen.last.isEmpty);
     });

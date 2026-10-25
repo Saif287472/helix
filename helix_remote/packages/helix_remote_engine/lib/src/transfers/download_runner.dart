@@ -52,7 +52,7 @@ final class DownloadRunner {
     if (attachment.transfer == AttachmentTransfer.ready &&
         existing != null &&
         await _blobs.length(existing) != null) {
-      await _db.transfersDao.markDone(job.id);
+      await _db.transfersDao.markDone(job.id, version: job.version);
       return;
     }
     if (attachment.size > _config.maxDownloadBytes) {
@@ -101,14 +101,16 @@ final class DownloadRunner {
     await _blobs.move(plain, dest);
     var kept = false;
     await _db.transaction(() async {
-      if (await _db.transfersDao.byId(job.id) == null) return; // cancelled
       if (await _db.messagesDao.attachmentById(attachment.id) == null) return;
+      // Cancelled, or no longer this attempt's job: the file is not kept.
+      if (!await _db.transfersDao.markDone(job.id, version: job.version)) {
+        return;
+      }
       await _db.messagesDao.updateAttachment(
         attachment.id,
         transfer: AttachmentTransfer.ready,
         localPath: dest,
       );
-      await _db.transfersDao.markDone(job.id);
       kept = true;
     });
     if (!kept) await _blobs.delete(dest); // its message went meanwhile
@@ -244,7 +246,9 @@ final class DownloadRunner {
       job.attachmentRowid!,
     );
     if (attachment != null) await _fetchThumbnail(attachment, control);
-    await _db.transfersDao.markDone(job.id);
+    // Changes nothing when the job became a download while the thumbnail came
+    // in: that download is still to run (AUD-10-3).
+    await _db.transfersDao.markDone(job.id, version: job.version);
   }
 
   Future<void> _fetchThumbnail(
@@ -318,7 +322,11 @@ final class DownloadRunner {
       for (final path in await TransferFiles.allFor(_blobs, job.id)) {
         await _blobs.delete(path);
       }
-      await _db.transfersDao.setProgress(job.id, offset: 0);
+      await _db.transfersDao.setProgress(
+        job.id,
+        version: job.version,
+        offset: 0,
+      );
     }
   }
 

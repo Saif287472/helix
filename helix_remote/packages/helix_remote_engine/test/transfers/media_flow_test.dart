@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as hashes;
@@ -376,6 +377,55 @@ void main() {
       expect(path, isNotNull, reason: 'the preview is under its cap');
       expect(bob.blobs.bytesOf(path!), thumbnail);
     });
+
+    test(
+      'asking for a file while its thumbnail comes in still downloads it',
+      () async {
+        // One job row serves an attachment's thumbnail and its download, so the
+        // tap turns the row the thumbnail worker holds into the download. That
+        // worker used to finish by marking the row done by id: the file never
+        // came, and the attachment showed as downloading for ever (AUD-10-3).
+        await start(aliceProcessor: FakeProcessor(thumbnail: thumbnailBytes()));
+        final file = patterned(2000);
+        await alice.engine.media.sendMedia(chat, [
+          MediaInput.bytes(
+            bytes: file,
+            kind: MediaItemKind.video,
+            mime: 'video/mp4',
+          ),
+        ]);
+        await alice.settle();
+        final thumbnailAsked = Completer<void>();
+        final letThrough = Completer<void>();
+        world.media.onGet = (_) async {
+          if (thumbnailAsked.isCompleted) return;
+          thumbnailAsked.complete();
+          await letThrough.future;
+        };
+        await bob.engine.syncOnce();
+        final video = (await bob.messages(
+          alice,
+        )).lastWhere((m) => m.kind == 'media');
+        final attachment = (await bob.attachments(video)).single;
+        final draining = bob.engine.drainTransfers();
+        await thumbnailAsked.future;
+        expect(
+          (await bob.db.transfersDao.byAttachment(attachment.id))!.kind,
+          'thumbnail',
+          reason: 'the thumbnail is what is coming in',
+        );
+
+        await bob.engine.media.downloadNow(attachment.id);
+        letThrough.complete();
+        await draining;
+        await bob.settle();
+
+        final done = (await bob.attachments(video)).single;
+        expect(done.transfer, AttachmentTransfer.ready);
+        expect(bob.blobs.bytesOf(done.localPath!), file);
+        expect(done.thumbnailPath, isNotNull, reason: 'and the preview landed');
+      },
+    );
 
     test('a size limit applies per kind, and settings change it', () async {
       await start();

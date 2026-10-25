@@ -585,6 +585,12 @@ with a `TransferFailure` code (`quota_exceeded`, `too_large`, `file_missing`,
 past the server's 30 days), `rejected`, `gave_up`, `unknown`). A worker that
 dies leaves a lease that runs out; the next claim resumes at the stored
 offset. `stop()` hands running jobs back (pending, no attempt counted).
+Every write an attempt makes to its job names the claim's `version`
+(AUD-10-3): an attempt whose job was removed, re-claimed or turned into
+another kind (a thumbnail the person opened as a file) changes nothing on
+it - a download it finishes keeps no file, an upload it finishes does not
+release the message, a failure it gives up on notifies nobody - and the
+worker does not claim an id it is still running.
 `registerStandalone` lets other features (group pictures, backup blobs) run
 jobs without an attachment under their `purpose`; jobs of a purpose nobody
 registered are left alone.

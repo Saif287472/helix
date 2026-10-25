@@ -54,7 +54,8 @@ class TransferJobs extends Table {
   IntColumn get leaseUntil => integer().nullable().map(const EpochMs())();
 
   /// The claim token (AUD-10-3). `claim` raises it and gives it to the worker;
-  /// `markDone`, `fail`, `release` and `setProgress` write
+  /// every write the worker makes to its job (`setProgress`, `renewLease`,
+  /// `resetProgress`, `release`, `reschedule`, `fail`, `markDone`) is
   /// `WHERE id = ? AND version = ?`, so a worker that held the row as a
   /// thumbnail cannot complete it after it became a download. The same shape
   /// as `sessions.version` and `sender_keys.version`, and for the same reason:

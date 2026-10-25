@@ -545,9 +545,10 @@ final class OutboundMedia {
     required String mediaId,
     required Uint8List digest,
   }) => _db.transaction(() async {
-    if (await _db.transfersDao.byId(job.id) == null) return; // cancelled
     final fresh = await _db.messagesDao.attachmentById(attachment.id);
     if (fresh == null) return;
+    // Cancelled, or no longer this attempt's job (AUD-10-3): nothing changes.
+    if (!await _db.transfersDao.markDone(job.id, version: job.version)) return;
     await _db.messagesDao.setAttachmentPointer(
       attachment.id,
       mediaId: mediaId,
@@ -557,7 +558,6 @@ final class OutboundMedia {
       attachment.id,
       transfer: AttachmentTransfer.ready,
     );
-    await _db.transfersDao.markDone(job.id);
     await _release(attachment.messageRowid);
   });
 

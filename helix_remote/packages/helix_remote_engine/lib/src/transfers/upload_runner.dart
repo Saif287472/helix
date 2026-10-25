@@ -76,7 +76,12 @@ final class UploadRunner {
       // again. Anything already on the server came from different bytes.
       if (mediaId != null) {
         unawaited(_deleteRemote(mediaId));
-        await _db.transfersDao.resetProgress(job.id);
+        if (!await _db.transfersDao.resetProgress(
+          job.id,
+          version: job.version,
+        )) {
+          throw const RequestCancelledException(); // the job was taken back
+        }
         mediaId = null;
         offset = 0;
       }

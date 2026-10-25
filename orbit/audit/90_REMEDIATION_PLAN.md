@@ -2964,6 +2964,71 @@ the migration and dump that go with it).
   proof of a fix. Gate: db **150 green** (148 before), `dart analyze` clean,
   `dart format` clean. No behaviour, schema, wire or server change, and nothing
   for the phone.
+- S4 (AUD-10-3, and two of AUD-12n-2's three mechanisms) — one
+  `transfer_jobs` row serves an attachment's thumbnail and its full download.
+  Tapping download while the thumbnail was coming in rewrote the row the
+  thumbnail worker held into a download but left it `inFlight` under that
+  worker's lease; the worker then finished with `markDone(id)` - by id alone -
+  and closed the download it never ran. The attachment, already set to
+  `downloading`, showed a spinner for ever. Reproduced end to end before the
+  fix: the new engine test below ends with the attachment `downloading`.
+  **What changed:** the S1 `version` column is now the claim.
+  [`TransfersDao.claim`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/daos/transfers_dao.dart)
+  raises it in the same statement that takes the lease, and `setProgress`,
+  `renewLease`, `resetProgress`, `release`, `reschedule`, `fail` and
+  `markDone` all take the claimed `version` and return false, changing
+  nothing, once the row moved on (`fail` already returned "given up"; a lost
+  claim now returns false, and with the worker's one allowed attempt that
+  means only a lost claim). `_enqueue` runs in a transaction and, when it turns
+  a job into another kind, raises the revision and makes the row pending with
+  no lease, so the download is claimable at once instead of after the old
+  worker's 60 s lease; re-queuing the same kind still leaves an in-flight job
+  with its worker. Every worker write passes the claim:
+  [`TransferWorker`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/transfers/transfer_worker.dart)'s
+  heartbeat, release, reschedule and give-up (which no longer notifies the
+  owner when the claim is gone); `_Control.progress`, which cancels the
+  attempt when either the progress write or the renewal finds the claim lost;
+  the download runner's completion, which now writes the attachment only if
+  `markDone` held (a lost claim keeps no file), and its thumbnail completion;
+  the upload runner's progress reset; and `OutboundMedia.completeUpload`,
+  which releases the message only if its `markDone` held. And
+  `claim(running:)` skips the ids the caller is still running, which the
+  worker passes from `_running`: the converted job waits for the thumbnail
+  attempt to end rather than starting a second attempt under the same id
+  (sharing its staging names and its `_running` entry).
+  **AUD-12n-2 overlap.** That finding's lapsed-lease case needed exactly two
+  of these: the old heartbeat can no longer renew the new claim's lease (its
+  version is stale), and the worker no longer claims an id it is running. Its
+  third part - a renewal that *throws* is still swallowed by the heartbeat,
+  so an attempt whose database writes fail keeps running past its lease - is
+  left to the 12n-2 step, with that finding's own test.
+  Tests: [`transfers_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/test/transfers_test.dart)
+  gains a "claim token" group: every claim is a new revision; a thumbnail
+  claimed and then asked for as a download is pending, unleased, at a higher
+  revision, and all seven writes under the thumbnail's claim return false and
+  change nothing, after which the download is claimed and completed; a lapsed
+  lease belongs to whoever claimed it next (the dead worker's renewal and
+  completion are refused, the new lease is untouched). Also "a job the caller
+  is still running is not claimed again", and "re-queuing leaves a job a
+  worker holds in flight" now asserts that the worker still holds it. The
+  existing DAO tests name the revision they write at (`unclaimed`, 0, or the
+  claim's). In the engine,
+  [`media_flow_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/test/transfers/media_flow_test.dart)
+  "asking for a file while its thumbnail comes in still downloads it" pauses
+  the thumbnail GET on the fake media server, calls `downloadNow`, lets the
+  GET finish and expects the file `ready` with the right bytes and the
+  preview stored; on the code before this step it fails with the attachment
+  still `downloading`.
+  Gate: db **154 green** (150 before), engine **355 green** (354 before), cli
+  **13 green**, and on Postgres the server's engine client tests that drive
+  transfers - `media_test.dart` **9 green**, `backup_test`, `restore_test` and
+  `groups_test` **28 green** (standalone backup and avatar jobs go through the
+  changed worker paths). `dart analyze` clean on db and engine, `flutter
+  analyze` clean on the workspace, `dart format` clean on the changed files,
+  `tool/codegen.dart --check` clean (the only generated change is the
+  `version` column's doc comment, which drift copies). No schema, wire or
+  server change; the app and CLI get it from the packages, and the phone needs
+  a new APK to see it.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

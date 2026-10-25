@@ -6,6 +6,9 @@ import 'package:test/test.dart';
 
 import 'support.dart';
 
+/// The revision of a job nobody has claimed yet; `claim` raises it.
+const unclaimed = 0;
+
 void main() {
   late HelixDb db;
   late TransfersDao transfers;
@@ -75,6 +78,7 @@ void main() {
       final id = await upload();
       await transfers.fail(
         id,
+        version: unclaimed,
         code: 'network',
         now: t0,
         backoff: const Duration(seconds: 1),
@@ -92,9 +96,17 @@ void main() {
 
     test('re-queuing leaves a job a worker holds in flight', () async {
       final id = await upload();
-      await transfers.claim(at(1), lease: const Duration(minutes: 1));
+      final held = (await transfers.claim(
+        at(1),
+        lease: const Duration(minutes: 1),
+      ))!;
       await upload(now: at(2));
       expect((await transfers.byId(id))!.state, TransferState.inFlight);
+      expect(
+        await transfers.markDone(id, version: held.version),
+        isTrue,
+        reason: 'the same job asked for again is still the worker\'s',
+      );
     });
 
     test(
@@ -143,7 +155,7 @@ void main() {
       await eventually(() => stream.isNotEmpty);
       final id = await upload();
       await eventually(() => stream.last.length == 1);
-      await transfers.markDone(id);
+      await transfers.markDone(id, version: unclaimed);
       await eventually(() => stream.last.isEmpty);
     });
   });
@@ -194,8 +206,16 @@ void main() {
       'a dead worker\'s lease runs out and the job resumes from its offset',
       () async {
         final id = await upload();
-        await transfers.claim(at(1), lease: const Duration(seconds: 30));
-        await transfers.setProgress(id, offset: 2048, mediaId: 'srv-1');
+        final held = (await transfers.claim(
+          at(1),
+          lease: const Duration(seconds: 30),
+        ))!;
+        await transfers.setProgress(
+          id,
+          version: held.version,
+          offset: 2048,
+          mediaId: 'srv-1',
+        );
         // Still leased at +30 s.
         expect(
           await transfers.claim(at(30), lease: const Duration(seconds: 30)),
@@ -213,11 +233,161 @@ void main() {
 
     test('done, failed and given-up jobs are never claimed', () async {
       final id = await upload();
-      await transfers.markDone(id);
+      await transfers.markDone(id, version: unclaimed);
       expect(
         await transfers.claim(at(1), lease: const Duration(seconds: 30)),
         isNull,
       );
+    });
+
+    test('a job the caller is still running is not claimed again', () async {
+      final id = await upload();
+      expect(
+        await transfers.claim(
+          at(1),
+          lease: const Duration(seconds: 30),
+          running: {id},
+        ),
+        isNull,
+      );
+      expect(
+        (await transfers.claim(at(1), lease: const Duration(seconds: 30)))!.id,
+        id,
+      );
+    });
+  });
+
+  /// A worker's writes name the revision it claimed (AUD-10-3). One row
+  /// serves an attachment's thumbnail and its full download, so asking for the
+  /// file while the thumbnail runs turns the row the thumbnail worker holds
+  /// into a download. That worker used to finish by marking the row done by id
+  /// alone - the download it never ran - and the attachment, already shown as
+  /// downloading, waited for ever.
+  group('the claim token', () {
+    Future<int> thumbnail() => transfers.enqueueThumbnail(
+      attachmentRowid: attachment,
+      mediaId: 'thumb-1',
+      mediaKey: key(),
+      size: 100,
+      now: t0,
+    );
+
+    Future<int> download({DateTime? now}) => transfers.enqueueDownload(
+      attachmentRowid: attachment,
+      mediaId: 'media-1',
+      mediaKey: key(),
+      size: 1000,
+      now: now ?? t0,
+    );
+
+    test('every claim is a new revision', () async {
+      final id = await upload();
+      expect((await transfers.byId(id))!.version, unclaimed);
+      final first = (await transfers.claim(
+        at(1),
+        lease: const Duration(seconds: 30),
+      ))!;
+      await transfers.release(id, version: first.version, at: at(2));
+      final second = (await transfers.claim(
+        at(3),
+        lease: const Duration(seconds: 30),
+      ))!;
+      expect(second.version, greaterThan(first.version));
+      expect(first.version, greaterThan(unclaimed));
+    });
+
+    test('a thumbnail turned into a download under its worker is not completed '
+        'by that worker', () async {
+      final id = await thumbnail();
+      final held = (await transfers.claim(
+        at(1),
+        lease: const Duration(minutes: 1),
+      ))!;
+      expect(held.kind, 'thumbnail');
+
+      // The person opens the file while the thumbnail is still coming in.
+      expect(await download(now: at(2)), id);
+      final converted = (await transfers.byId(id))!;
+      expect(
+        (converted.kind, converted.state, converted.leaseUntil),
+        ('download', TransferState.pending, null),
+        reason: 'taken back from the thumbnail worker, claimable at once',
+      );
+      expect(converted.version, greaterThan(held.version));
+
+      // The thumbnail worker finishes, or fails, or stops: none of it lands.
+      expect(await transfers.markDone(id, version: held.version), isFalse);
+      expect(
+        await transfers.setProgress(id, version: held.version, offset: 64),
+        isFalse,
+      );
+      expect(
+        await transfers.renewLease(id, version: held.version, until: at(90)),
+        isFalse,
+      );
+      expect(
+        await transfers.release(id, version: held.version, at: at(90)),
+        isFalse,
+      );
+      expect(
+        await transfers.reschedule(
+          id,
+          version: held.version,
+          nextAttemptAt: at(90),
+          code: 'network',
+        ),
+        isFalse,
+      );
+      expect(
+        await transfers.fail(
+          id,
+          version: held.version,
+          code: 'size_mismatch',
+          now: at(3),
+          backoff: Duration.zero,
+          maxAttempts: 1,
+        ),
+        isFalse,
+      );
+      expect(await transfers.resetProgress(id, version: held.version), isFalse);
+      final after = (await transfers.byId(id))!;
+      expect(
+        (after.kind, after.state, after.offset, after.attempts),
+        ('download', TransferState.pending, 0, 0),
+      );
+      expect(after.version, converted.version);
+
+      // And the download runs.
+      final next = (await transfers.claim(
+        at(3),
+        lease: const Duration(minutes: 1),
+        kinds: {'download'},
+      ))!;
+      expect((next.id, next.kind, next.mediaId), (id, 'download', 'media-1'));
+      expect(await transfers.markDone(id, version: next.version), isTrue);
+    });
+
+    test('a lease that ran out belongs to whoever claimed it next', () async {
+      final id = await upload();
+      final dead = (await transfers.claim(
+        at(1),
+        lease: const Duration(seconds: 30),
+      ))!;
+      final next = (await transfers.claim(
+        at(40),
+        lease: const Duration(seconds: 30),
+      ))!;
+      expect(next.id, id);
+      // The first worker's heartbeat no longer stretches the second's lease,
+      // and its late completion does not end the second's attempt.
+      expect(
+        await transfers.renewLease(id, version: dead.version, until: at(500)),
+        isFalse,
+      );
+      expect((await transfers.byId(id))!.leaseUntil, at(70));
+      expect(await transfers.markDone(id, version: dead.version), isFalse);
+      expect((await transfers.byId(id))!.state, TransferState.inFlight);
+      expect(await transfers.markDone(id, version: next.version), isTrue);
     });
   });
 
@@ -228,11 +398,12 @@ void main() {
         final id = await upload();
         await transfers.setProgress(
           id,
+          version: unclaimed,
           offset: 1000,
           mediaId: 'srv-1',
           localPath: 'media/abc.bin',
         );
-        await transfers.setProgress(id, offset: 2000);
+        await transfers.setProgress(id, version: unclaimed, offset: 2000);
         final job = (await transfers.byId(id))!;
         expect(
           (job.offset, job.mediaId, job.localPath),
@@ -243,9 +414,12 @@ void main() {
 
     test('markDone clears the offset, the lease and the error', () async {
       final id = await upload();
-      await transfers.claim(at(1), lease: const Duration(seconds: 30));
-      await transfers.setProgress(id, offset: 4000);
-      await transfers.markDone(id);
+      final held = (await transfers.claim(
+        at(1),
+        lease: const Duration(seconds: 30),
+      ))!;
+      await transfers.setProgress(id, version: held.version, offset: 4000);
+      await transfers.markDone(id, version: held.version);
       final job = (await transfers.byId(id))!;
       expect(
         (job.state, job.offset, job.leaseUntil, job.lastError),
@@ -259,9 +433,13 @@ void main() {
         final id = await upload();
         const backoff = Duration(seconds: 10);
         for (var attempt = 1; attempt < 3; attempt++) {
-          await transfers.claim(at(attempt * 100), lease: backoff);
+          final held = (await transfers.claim(
+            at(attempt * 100),
+            lease: backoff,
+          ))!;
           final givenUp = await transfers.fail(
             id,
+            version: held.version,
             code: 'http_503',
             now: at(attempt * 100),
             backoff: backoff,
@@ -275,9 +453,11 @@ void main() {
           expect(job.nextAttemptAt, at(attempt * 100 + 10 * attempt));
           expect(job.lastError, 'http_503');
         }
+        final last = (await transfers.claim(at(500), lease: backoff))!;
         expect(
           await transfers.fail(
             id,
+            version: last.version,
             code: 'http_503',
             now: at(500),
             backoff: backoff,

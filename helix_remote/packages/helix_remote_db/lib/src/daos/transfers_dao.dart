@@ -16,6 +16,13 @@ part 'transfers_dao.g.dart';
 ///
 /// The bytes live outside the database under a random name; this table holds
 /// the path, the progress and the key.
+///
+/// **A claim is a revision, not just an id** (AUD-10-3). [claim] raises the
+/// job's `version` and hands the row to the worker; every write a worker makes
+/// to its job ([setProgress], [renewLease], [resetProgress], [release],
+/// [reschedule], [fail], [markDone]) names that version and changes nothing -
+/// returning false - once the row moved on: it was removed, re-claimed after
+/// its lease ran out, or turned into another kind of job under the worker.
 @DriftAccessor(tables: [TransferJobs, TransferChunks])
 class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
   TransfersDao(super.attachedDatabase);
@@ -87,9 +94,17 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
     required Uint8List mediaKey,
     required int size,
     required DateTime now,
-  }) async {
+  }) => transaction(() async {
     final existing = await byAttachment(attachmentRowid);
     if (existing != null) {
+      // Re-queuing a failed or finished job makes it retryable again, and one
+      // a worker holds a lease on stays with that worker - unless it becomes
+      // another kind of job (a thumbnail the person now wants whole). That
+      // worker is running the old job, so the row is taken back: a new
+      // revision, pending at once, which the old worker's writes no longer
+      // match (AUD-10-3).
+      final converted = existing.kind != kind;
+      final keepsClaim = existing.state == TransferState.inFlight && !converted;
       await (update(
         transferJobs,
       )..where((t) => t.id.equals(existing.id))).write(
@@ -99,16 +114,16 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
           mediaId: Value(mediaId),
           mediaKey: Value(mediaKey),
           size: Value(size),
-          // Re-queuing a failed or finished job makes it retryable again;
-          // one a worker holds a lease on stays where it is.
-          state: existing.state == TransferState.inFlight
+          state: keepsClaim
               ? const Value.absent()
               : const Value(TransferState.pending),
+          leaseUntil: keepsClaim ? const Value.absent() : const Value(null),
           attempts: const Value(0),
           nextAttemptAt: Value(now),
           lastError: const Value(null),
         ),
       );
+      if (converted) await _nextRevision(existing.id);
       return existing.id;
     }
     return into(transferJobs).insert(
@@ -124,7 +139,16 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
         createdAt: now,
       ),
     );
-  }
+  });
+
+  /// Raises a job's revision, so whoever claimed the one before no longer
+  /// holds it. One statement, so it cannot interleave with a [claim].
+  Future<void> _nextRevision(int id) => customUpdate(
+    'UPDATE transfer_jobs SET version = version + 1 WHERE id = ?',
+    variables: [Variable.withInt(id)],
+    updates: {transferJobs},
+    updateKind: UpdateKind.update,
+  );
 
   Future<TransferRow?> byId(int id) =>
       (select(transferJobs)..where((t) => t.id.equals(id))).getSingleOrNull();
@@ -187,51 +211,74 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
   /// the next worker resumes it.
   ///
   /// With [kinds], only jobs of those kinds are considered (a worker with
-  /// separate limits for uploads and downloads).
+  /// separate limits for uploads and downloads). Jobs in [running] are
+  /// skipped: the caller is still running an attempt of them, and a second
+  /// attempt of the same id would share its staging files.
+  ///
+  /// The returned row carries the claim's `version`, which the worker passes
+  /// to every write it makes to the job.
   Future<TransferRow?> claim(
     DateTime now, {
     required Duration lease,
     Set<String>? kinds,
+    Set<int> running = const {},
   }) => transaction(() async {
     final nowMs = now.millisecondsSinceEpoch;
     for (final candidate in await due(now)) {
       if (kinds != null && !kinds.contains(candidate.kind)) continue;
-      final taken =
-          await (update(transferJobs)..where(
-                (t) =>
-                    t.id.equals(candidate.id) &
-                    (t.leaseUntil.isNull() |
-                        t.leaseUntil.isSmallerOrEqualValue(nowMs)),
-              ))
-              .write(
-                TransferJobsCompanion(
-                  state: const Value(TransferState.inFlight),
-                  leaseUntil: Value(now.add(lease)),
-                ),
-              );
+      if (running.contains(candidate.id)) continue;
+      final taken = await customUpdate(
+        'UPDATE transfer_jobs SET state = ?, lease_until = ?, '
+        'version = version + 1 '
+        'WHERE id = ? AND (lease_until IS NULL OR lease_until <= ?)',
+        variables: [
+          Variable.withString(TransferState.inFlight.name),
+          Variable.withInt(now.add(lease).millisecondsSinceEpoch),
+          Variable.withInt(candidate.id),
+          Variable.withInt(nowMs),
+        ],
+        updates: {transferJobs},
+        updateKind: UpdateKind.update,
+      );
       if (taken > 0) return byId(candidate.id);
     }
     return null;
   });
 
+  /// The rows of [id] still at the claim [version].
+  Expression<bool> _held($TransferJobsTable t, int id, int version) =>
+      t.id.equals(id) & t.version.equals(version);
+
   /// Extends the lease of a job a worker is still running. False when the
-  /// job is gone or no longer leased (cancelled, or taken over).
-  Future<bool> renewLease(int id, {required DateTime until}) async {
+  /// claim is lost: the job is gone, no longer leased (cancelled, handed
+  /// back), or at another revision (taken over, or turned into another kind).
+  Future<bool> renewLease(
+    int id, {
+    required int version,
+    required DateTime until,
+  }) async {
     final changed =
         await (update(transferJobs)..where(
               (t) =>
-                  t.id.equals(id) & t.state.equalsValue(TransferState.inFlight),
+                  _held(t, id, version) &
+                  t.state.equalsValue(TransferState.inFlight),
             ))
             .write(TransferJobsCompanion(leaseUntil: Value(until)));
     return changed > 0;
   }
 
   /// Gives a leased job back without counting an attempt (the worker is
-  /// stopping): pending again, due [at], with its progress kept.
-  Future<void> release(int id, {required DateTime at}) =>
-      (update(transferJobs)..where(
+  /// stopping): pending again, due [at], with its progress kept. False when
+  /// the claim was already lost.
+  Future<bool> release(
+    int id, {
+    required int version,
+    required DateTime at,
+  }) async =>
+      await (update(transferJobs)..where(
             (t) =>
-                t.id.equals(id) & t.state.equalsValue(TransferState.inFlight),
+                _held(t, id, version) &
+                t.state.equalsValue(TransferState.inFlight),
           ))
           .write(
             TransferJobsCompanion(
@@ -239,34 +286,43 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
               nextAttemptAt: Value(at),
               leaseUntil: const Value(null),
             ),
-          );
+          ) >
+      0;
 
   /// The attempt failed for a reason that may pass (no network, a busy
   /// server): pending again at [nextAttemptAt], progress kept, the attempt
-  /// counted. Unlike [fail] this never gives up by itself.
-  Future<void> reschedule(
+  /// counted. Unlike [fail] this never gives up by itself. False when the
+  /// claim was lost.
+  Future<bool> reschedule(
     int id, {
+    required int version,
     required DateTime nextAttemptAt,
     required String code,
-  }) => customUpdate(
-    'UPDATE transfer_jobs SET state = ?, attempts = attempts + 1, '
-    'next_attempt_at = ?, lease_until = NULL, last_error = ? WHERE id = ?',
-    variables: [
-      Variable.withString(TransferState.pending.name),
-      Variable.withInt(nextAttemptAt.millisecondsSinceEpoch),
-      Variable.withString(code),
-      Variable.withInt(id),
-    ],
-    updates: {transferJobs},
-    updateKind: UpdateKind.update,
-  );
+  }) async =>
+      await customUpdate(
+        'UPDATE transfer_jobs SET state = ?, attempts = attempts + 1, '
+        'next_attempt_at = ?, lease_until = NULL, last_error = ? '
+        'WHERE id = ? AND version = ?',
+        variables: [
+          Variable.withString(TransferState.pending.name),
+          Variable.withInt(nextAttemptAt.millisecondsSinceEpoch),
+          Variable.withString(code),
+          Variable.withInt(id),
+          Variable.withInt(version),
+        ],
+        updates: {transferJobs},
+        updateKind: UpdateKind.update,
+      ) >
+      0;
 
   /// Forgets the progress and the server object of a job (the staged bytes
-  /// were lost, so the transfer starts again from nothing).
-  Future<void> resetProgress(int id) =>
-      (update(transferJobs)..where((t) => t.id.equals(id))).write(
+  /// were lost, so the transfer starts again from nothing). False when the
+  /// claim was lost.
+  Future<bool> resetProgress(int id, {required int version}) async =>
+      await (update(transferJobs)..where((t) => _held(t, id, version))).write(
         const TransferJobsCompanion(offset: Value(0), mediaId: Value(null)),
-      );
+      ) >
+      0;
 
   /// Queues the download of an attachment's thumbnail, or returns the
   /// existing job. The thumbnail is its own small object, so this job
@@ -305,44 +361,58 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
           .watch();
 
   /// Records progress after a chunk, so a resumed transfer continues. A null
-  /// [mediaId] or [localPath] leaves the stored one as it is.
-  Future<void> setProgress(
+  /// [mediaId] or [localPath] leaves the stored one as it is. False when the
+  /// claim was lost, and then nothing is recorded: the bytes belong to an
+  /// attempt that no longer owns the job.
+  Future<bool> setProgress(
     int id, {
+    required int version,
     required int offset,
     String? mediaId,
     String? localPath,
-  }) => (update(transferJobs)..where((t) => t.id.equals(id))).write(
-    TransferJobsCompanion(
-      offset: Value(offset),
-      mediaId: mediaId == null ? const Value.absent() : Value(mediaId),
-      localPath: localPath == null ? const Value.absent() : Value(localPath),
-    ),
-  );
+  }) async =>
+      await (update(transferJobs)..where((t) => _held(t, id, version))).write(
+        TransferJobsCompanion(
+          offset: Value(offset),
+          mediaId: mediaId == null ? const Value.absent() : Value(mediaId),
+          localPath: localPath == null
+              ? const Value.absent()
+              : Value(localPath),
+        ),
+      ) >
+      0;
 
-  Future<void> markDone(int id) =>
-      (update(transferJobs)..where((t) => t.id.equals(id))).write(
+  /// Completes the job the worker claimed. False when the claim was lost - the
+  /// row is gone, or became another job (a thumbnail turned into a download)
+  /// that must still run - and then the row is left as it is.
+  Future<bool> markDone(int id, {required int version}) async =>
+      await (update(transferJobs)..where((t) => _held(t, id, version))).write(
         const TransferJobsCompanion(
           state: Value(TransferState.done),
           offset: Value(0),
           leaseUntil: Value(null),
           lastError: Value(null),
         ),
-      );
+      ) >
+      0;
 
   /// Schedules a retry, or gives up after [maxAttempts] and lets the UI offer
-  /// one. The error is a code only.
+  /// one. The error is a code only. True when the job was given up; false when
+  /// it was rescheduled, or when the claim was lost (nothing is written then,
+  /// and the job lives on as whoever holds it now left it).
   Future<bool> fail(
     int id, {
+    required int version,
     required String code,
     required DateTime now,
     required Duration backoff,
     int maxAttempts = 5,
-  }) async {
+  }) => transaction(() async {
     final job = await byId(id);
-    if (job == null) return true;
+    if (job == null || job.version != version) return false;
     final attempts = job.attempts + 1;
     final givenUp = attempts >= maxAttempts;
-    await (update(transferJobs)..where((t) => t.id.equals(id))).write(
+    await (update(transferJobs)..where((t) => _held(t, id, version))).write(
       TransferJobsCompanion(
         state: Value(givenUp ? TransferState.failed : TransferState.pending),
         attempts: Value(attempts),
@@ -352,7 +422,7 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
       ),
     );
     return givenUp;
-  }
+  });
 
   /// Removes a finished job and its file.
   ///

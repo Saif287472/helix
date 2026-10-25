@@ -92,6 +92,17 @@ and the GHASH key.
   engine raises `StaleSenderKeyState` and encrypts the group message again.
   Keys received from other devices go through `saveSenderKey` and stay at 0:
   receiving never encrypts.
+- **`transfer_jobs.version` is the claim** (review batch B13, AUD-10-3).
+  `TransfersDao.claim` raises it in the same statement that takes the lease
+  and hands the row to the worker; `setProgress`, `renewLease`,
+  `resetProgress`, `release`, `reschedule`, `fail` and `markDone` take that
+  `version` and **return false**, changing nothing, once the row moved on. It
+  moves on when it is removed, re-claimed after its lease ran out, or turned
+  into another kind of job by `_enqueue` (a thumbnail asked for as a full
+  download), which also makes it pending at once instead of leaving it under
+  the old worker's lease. `claim(running:)` skips the ids the caller is still
+  running, so that converted job waits for the old attempt rather than
+  running twice under one id. A new row, or one from before schema 5, is at 0.
 - **`busy_timeout` is 5 s** (`busyTimeout` in `opening.dart`). SQLite's default
   is zero, which fails the second writer at once; the compare-and-set is only
   reachable if the losing writer can take its turn.

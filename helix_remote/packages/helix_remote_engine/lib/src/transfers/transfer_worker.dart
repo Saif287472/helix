@@ -21,7 +21,7 @@ abstract interface class JobControl {
   void throwIfCancelled();
 
   /// Records [offset] (and the server object, once it exists), renews the
-  /// lease and notices a job that was removed meanwhile.
+  /// lease and notices a job that was removed or taken back meanwhile.
   Future<void> progress(int offset, {String? mediaId});
 }
 
@@ -180,6 +180,10 @@ final class TransferWorker {
         _ctx.now(),
         lease: _config.lease,
         kinds: kinds,
+        // A job taken back from an attempt still finishing here (a thumbnail
+        // turned into a download) waits for that attempt to end, rather than
+        // running twice under one id.
+        running: _running.keys.toSet(),
       );
       if (job == null) return;
       _start(job);
@@ -249,12 +253,16 @@ final class TransferWorker {
 
   // ----------------------------------------------------------------- jobs
 
+  /// Every write to the job names the claim's `version`, so an attempt whose
+  /// job was taken back - removed, re-claimed, or turned into another kind -
+  /// changes nothing on it (AUD-10-3).
   Future<void> _execute(TransferRow job, _Running running) async {
-    final control = _Control(this, job.id, running);
+    final control = _Control(this, job, running);
     final heartbeat = Timer.periodic(_config.lease ~/ 3, (_) async {
       try {
         final held = await _db.transfersDao.renewLease(
           job.id,
+          version: job.version,
           until: _ctx.now().add(_config.lease),
         );
         if (!held) running.token.cancel();
@@ -265,7 +273,7 @@ final class TransferWorker {
     try {
       final ran = await _run(job, control);
       if (ran && job.attachmentRowid == null) {
-        await _db.transfersDao.markDone(job.id);
+        await _db.transfersDao.markDone(job.id, version: job.version);
       }
     } on Object catch (error) {
       await _failed(job, running, classifyTransferError(error));
@@ -283,6 +291,7 @@ final class TransferWorker {
         // Nobody here runs this one: leave it, look again later.
         await _db.transfersDao.release(
           job.id,
+          version: job.version,
           at: _ctx.now().add(const Duration(hours: 1)),
         );
         return false;
@@ -314,7 +323,11 @@ final class TransferWorker {
           // Cancelled (the row is gone) or the worker is stopping: hand a
           // stopped job back with its progress; a cancelled one has no row.
           if (_stopping) {
-            await _db.transfersDao.release(job.id, at: _ctx.now());
+            await _db.transfersDao.release(
+              job.id,
+              version: job.version,
+              at: _ctx.now(),
+            );
           }
         case RetryTransfer():
           if (_ctx.now().difference(job.createdAt) > _config.maxAge) {
@@ -329,6 +342,7 @@ final class TransferWorker {
           if (atLeast != null && atLeast > delay) delay = atLeast;
           await _db.transfersDao.reschedule(
             job.id,
+            version: job.version,
             nextAttemptAt: _ctx.now().add(delay),
             code: outcome.code,
           );
@@ -337,12 +351,14 @@ final class TransferWorker {
         case TransferSessionEnded():
           await _db.transfersDao.release(
             job.id,
+            version: job.version,
             at: _ctx.now().add(const Duration(seconds: 30)),
           );
           onSessionEnded();
         case TransferDeviceRevoked():
           await _db.transfersDao.release(
             job.id,
+            version: job.version,
             at: _ctx.now().add(const Duration(minutes: 5)),
           );
           // Not awaited: revoking stops this worker.
@@ -354,13 +370,18 @@ final class TransferWorker {
   }
 
   Future<void> _giveUp(TransferRow job, TransferFailure failure) async {
-    await _db.transfersDao.fail(
+    final givenUp = await _db.transfersDao.fail(
       job.id,
+      version: job.version,
       code: failure.wire,
       now: _ctx.now(),
       backoff: Duration.zero,
       maxAttempts: 1,
     );
+    // With one attempt allowed, only a lost claim leaves it not given up: the
+    // job is gone or is someone else's now, so its owner hears nothing from
+    // this attempt.
+    if (!givenUp) return;
     final purpose = job.purpose;
     if (job.attachmentRowid == null) {
       await (purpose == null ? null : _handlers[purpose])?.failed(job, failure);
@@ -384,10 +405,10 @@ final class _Running {
 }
 
 final class _Control implements JobControl {
-  _Control(this._worker, this._jobId, this._running);
+  _Control(this._worker, this._job, this._running);
 
   final TransferWorker _worker;
-  final int _jobId;
+  final TransferRow _job;
   final _Running _running;
 
   @override
@@ -402,11 +423,18 @@ final class _Control implements JobControl {
   Future<void> progress(int offset, {String? mediaId}) async {
     throwIfCancelled();
     final db = _worker._db;
-    await db.transfersDao.setProgress(_jobId, offset: offset, mediaId: mediaId);
-    final held = await db.transfersDao.renewLease(
-      _jobId,
-      until: _worker._ctx.now().add(_worker._config.lease),
-    );
+    final held =
+        await db.transfersDao.setProgress(
+          _job.id,
+          version: _job.version,
+          offset: offset,
+          mediaId: mediaId,
+        ) &&
+        await db.transfersDao.renewLease(
+          _job.id,
+          version: _job.version,
+          until: _worker._ctx.now().add(_worker._config.lease),
+        );
     if (!held) {
       _running.token.cancel();
       throw const RequestCancelledException();
