@@ -215,6 +215,16 @@ jobs:
         run: dart tool/check_performance_budgets.dart
       - name: Enforce message-list burst budget on the CI reference runner
         run: flutter test app/test/performance_budget_test.dart
+      # A day label is a calendar day across a clock change (AUD-14i-1): the
+      # test only means something in a zone that has one, so it runs in two.
+      - name: Day labels across a spring clock change (northern zone)
+        env:
+          TZ: America/New_York
+        run: flutter test app/test/day_labels_dst_test.dart
+      - name: Day labels across a spring clock change (southern zone)
+        env:
+          TZ: Australia/Sydney
+        run: flutter test app/test/day_labels_dst_test.dart
 
   no-source-changes:
     needs: changes

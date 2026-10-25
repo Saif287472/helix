@@ -4341,6 +4341,28 @@ change in a non-DST zone, and `flutter analyze` plus the app suite stay green.
 **Rollout:** app only. The labels change only on the day after a spring
 transition; the snippet changes only where a cut splits a character.
 
+- S1 (AUD-14i-1, AUD-14i-2) — a chat day is a calendar day, and a snippet
+  cuts a character; app only. **14i-1:** `_daysBetween` counts between the two
+  dates as UTC midnights instead of subtracting local midnights, so a spring
+  transition's 23-hour day is a day (chat time, day separator, last seen,
+  message info, call log, join requests all go through it). **14i-2:**
+  `snippetFor` steps the cut back by one unit when it would land on the low
+  half of a surrogate pair, so the row starts with the whole character.
+  Tests (`day_labels_dst_test.dart`): the day-label group skips itself in a
+  zone that has no clock change between its dates, so **on this Windows
+  machine, which does not honour `TZ`, the DST assertions were skipped (6) and
+  prove nothing**; CI now runs the file with `TZ=America/New_York` and
+  `TZ=Australia/Sydney` (two steps added to the ubuntu job in `ci.yml`; the
+  governance check still passes). The fix is correct by construction (UTC
+  dates have no offsets) but unobserved failing-then-passing until that CI run.
+  The snippet test (eleven emoji, then `.needle`) starts with a whole emoji
+  and one range covering exactly "needle", and fails on the old function with
+  the lone low surrogate (56832 against 128512). Gate: full app suite **1,115
+  green** (6 skipped here), analyze, format and governance checks clean.
+  **Batch report.** B25's two findings are closed (14i-1 awaiting its CI zone
+  run). **Owner-facing:** a new APK; no server change.
+- Next: T4.
+
 ---
 
 # Tier 4 — decisions and ideas, not scheduled work

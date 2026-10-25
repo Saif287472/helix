@@ -164,9 +164,14 @@ String formatAgoShort(DateTime? at, DateTime now) {
   return '${diff.inDays} d ago';
 }
 
+/// How many calendar days [now]'s day is after [day]'s. Counted between the two
+/// dates as UTC midnights, never between local midnights: across a spring
+/// transition the day before is 23 hours away, and `.inDays` of that is 0
+/// ("today") - a day wrong for about a day, and the week's weekday names for a
+/// week (AUD-14i-1).
 int _daysBetween(DateTime day, DateTime now) {
-  final today = DateTime(now.year, now.month, now.day);
-  final that = DateTime(day.year, day.month, day.day);
+  final today = DateTime.utc(now.year, now.month, now.day);
+  final that = DateTime.utc(day.year, day.month, day.day);
   return today.difference(that).inDays;
 }
 

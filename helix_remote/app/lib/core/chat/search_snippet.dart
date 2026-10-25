@@ -17,7 +17,11 @@ HelixHighlightedText snippetFor(String text, String query) {
   }
   // Show a little context before the first hit, so the match is not at the
   // far edge of a one-line row.
-  final start = first > 20 ? first - 20 : 0;
+  var start = first > 20 ? first - 20 : 0;
+  // Never cut a character in two: a cut between the halves of a surrogate pair
+  // would begin the row with a lone low half (AUD-14i-2). The whole character
+  // is kept.
+  if (start > 0 && _isLowSurrogate(flat.codeUnitAt(start))) start--;
   final shown = start == 0 ? flat : '...${flat.substring(start)}';
   final shift = start == 0 ? 0 : 3 - start;
   final ranges = <HelixTextRange>[];
@@ -36,3 +40,5 @@ HelixHighlightedText snippetFor(String text, String query) {
   ranges.sort((a, b) => a.start.compareTo(b.start));
   return HelixHighlightedText(shown, ranges);
 }
+
+bool _isLowSurrogate(int unit) => unit >= 0xDC00 && unit <= 0xDFFF;
