@@ -1,4 +1,5 @@
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/media/module.dart';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
@@ -170,6 +171,98 @@ void main() {
         expect(tooBig.status, 413);
       },
     );
+
+    test('concurrent creates stay inside the quota', () async {
+      final schema = h.env.platform.schemas.of('media');
+      // Room for exactly three 10-byte objects.
+      await h.env.platform.db.execute(
+        'INSERT INTO $schema.account_usage (account_id, kind, bytes, objects) '
+        'VALUES (@a:uuid, @k:text, @n:int8, 0)',
+        {
+          'a': alice.accountId,
+          'k': 'attachment',
+          'n': MediaModule.attachmentQuota - 30,
+        },
+      );
+      Future<TestResponse> create() => h.api.call(
+        Routes.createUpload,
+        bearer: alice.bearer,
+        body: const CreateUploadRequest(
+          size: 10,
+          kind: MediaKind.attachment,
+        ).toJson(),
+      );
+      final answers = await Future.wait([for (var i = 0; i < 6; i++) create()]);
+      expect(
+        answers.where((r) => r.status == 201),
+        hasLength(3),
+        reason:
+            'the reservation is one row update; a read-then-insert let '
+            'concurrent creates all pass (AUD-5-4)',
+      );
+      expect(
+        answers.where((r) => r.errorCode == 'quota_exceeded'),
+        hasLength(3),
+      );
+      final usage = await h.env.platform.db.queryOne(
+        'SELECT bytes, objects FROM $schema.account_usage '
+        'WHERE account_id = @a:uuid AND kind = @k:text',
+        {'a': alice.accountId, 'k': 'attachment'},
+      );
+      expect(usage!.integer('bytes'), MediaModule.attachmentQuota);
+      expect(usage.integer('objects'), 3);
+    });
+
+    test('the object count is capped independently of bytes', () async {
+      final schema = h.env.platform.schemas.of('media');
+      final first = await create(1);
+      await put(first, [1]);
+      await h.env.platform.db.execute(
+        'UPDATE $schema.account_usage SET objects = @n:int8 '
+        'WHERE account_id = @a:uuid AND kind = @k:text',
+        {
+          'n': MediaModule.maxObjectsPerKind,
+          'a': alice.accountId,
+          'k': 'attachment',
+        },
+      );
+      final refused = await h.api.call(
+        Routes.createUpload,
+        bearer: alice.bearer,
+        body: const CreateUploadRequest(
+          size: 1,
+          kind: MediaKind.attachment,
+        ).toJson(),
+      );
+      expect(refused.status, 422);
+      expect(refused.errorCode, 'quota_exceeded');
+      expect(
+        refused.json.object('error').object('details').integer('quota_objects'),
+        MediaModule.maxObjectsPerKind,
+      );
+    });
+
+    test('deleting an object gives its bytes and its row back', () async {
+      final schema = h.env.platform.schemas.of('media');
+      final target = await create(4);
+      await put(target, [1, 2, 3, 4]);
+      Future<(int, int)> usage() async {
+        final row = await h.env.platform.db.queryOne(
+          'SELECT bytes, objects FROM $schema.account_usage '
+          'WHERE account_id = @a:uuid AND kind = @k:text',
+          {'a': alice.accountId, 'k': 'attachment'},
+        );
+        return (row!.integer('bytes'), row.integer('objects'));
+      }
+
+      expect(await usage(), (4, 1));
+      await h.api.call(
+        Routes.deleteMedia,
+        params: {'media_id': target.mediaId},
+        bearer: alice.bearer,
+      );
+      expect(await usage(), (0, 0));
+    });
 
     test('owners delete; expired objects disappear', () async {
       final target = await create(4);

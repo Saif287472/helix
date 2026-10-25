@@ -40,6 +40,13 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   static const attachmentQuota = 4 * 1024 * 1024 * 1024;
   static const persistentQuota = 50 * 1024 * 1024;
   static const backupQuota = 1024 * 1024 * 1024;
+
+  /// The byte quota does not bound row count: the smallest legal object is
+  /// one byte, so 4 GiB could be millions of rows that every sweep then has
+  /// to delete one blob at a time (AUD-5-3). A generous cap, counted per
+  /// kind, keeps a normal library far below it.
+  static const maxObjectsPerKind = 100000;
+
   static const presignTtl = Duration(minutes: 15);
 
   static Duration? retention(MediaKind kind) => switch (kind) {
@@ -77,6 +84,7 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   @override
   List<Migration> get migrations => const [
     Migration(1, 'media_baseline', _baseline),
+    Migration(2, 'media_usage', _usage),
   ];
 
   static String _baseline(String s) =>
@@ -94,6 +102,24 @@ CREATE TABLE $s.objects (
 CREATE INDEX objects_owner ON $s.objects (owner_account, kind);
 CREATE INDEX objects_expires ON $s.objects (expires_at) WHERE expires_at IS NOT NULL;
 CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS NULL;
+''';
+
+  /// The reserved bytes and object count per account and kind. Kept in its
+  /// own row so a create can reserve both in one statement, which is what
+  /// makes the quota hold under concurrent creates (AUD-5-4). Backfilled
+  /// from what is already stored.
+  static String _usage(String s) =>
+      '''
+CREATE TABLE $s.account_usage (
+  account_id uuid NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('attachment', 'persistent', 'backup')),
+  bytes bigint NOT NULL CHECK (bytes >= 0),
+  objects bigint NOT NULL CHECK (objects >= 0),
+  PRIMARY KEY (account_id, kind)
+);
+INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
+  SELECT owner_account, kind, coalesce(sum(size), 0)::bigint, count(*)::bigint
+  FROM $s.objects GROUP BY owner_account, kind;
 ''';
 
   String get s => schema;
@@ -145,14 +171,31 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     final id = Uuid.v7();
     final keep = retention(req.kind);
     await context.db.tx((tx) async {
-      final used = await tx.queryOne(
-        'SELECT coalesce(sum(size), 0)::int8 AS n FROM $s.objects WHERE owner_account = @a:uuid AND kind = @k:text',
-        {'a': q.device.accountId, 'k': req.kind.wire},
+      // Reserve bytes and the row atomically. A read-then-insert let two
+      // concurrent creates both see the old sum and both insert (AUD-5-4);
+      // the row lock on the usage row serializes them, and the guard is
+      // re-evaluated after the wait.
+      final reserved = await tx.queryOne(
+        'INSERT INTO $s.account_usage AS usage (account_id, kind, bytes, objects) '
+        'VALUES (@a:uuid, @k:text, @n:int8, 1) '
+        'ON CONFLICT (account_id, kind) DO UPDATE SET '
+        'bytes = usage.bytes + excluded.bytes, '
+        'objects = usage.objects + 1 '
+        'WHERE usage.bytes + excluded.bytes <= @quota:int8 '
+        'AND usage.objects + 1 <= @cap:int8 '
+        'RETURNING bytes, objects',
+        {
+          'a': q.device.accountId,
+          'k': req.kind.wire,
+          'n': req.size,
+          'quota': quota,
+          'cap': maxObjectsPerKind,
+        },
       );
-      if (used!.integer('n') + req.size > quota) {
+      if (reserved == null) {
         throw ApiError(
           ErrorCode.quotaExceeded,
-          details: {'quota_bytes': quota},
+          details: {'quota_bytes': quota, 'quota_objects': maxObjectsPerKind},
         );
       }
       await tx.execute(
@@ -357,11 +400,34 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
       throw const ApiError(ErrorCode.notFound);
     }
     await _blobs.delete(_key(_kind(object), id));
-    await context.db.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
-      'id': id,
+    await context.db.tx((tx) async {
+      await tx.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
+        'id': id,
+      });
+      await _release(
+        tx,
+        object.string('owner_account'),
+        _kind(object),
+        object.integer('size'),
+      );
     });
     return noContent();
   }
+
+  /// Gives an object's bytes and row back to the account's quota.
+  /// `greatest` keeps a counter that drifted low from going negative; the
+  /// weekly reconcile repairs drift the other way.
+  Future<void> _release(
+    SqlSession db,
+    String account,
+    MediaKind kind,
+    int size,
+  ) => db.execute(
+    'UPDATE $s.account_usage SET bytes = greatest(bytes - @n:int8, 0), '
+    'objects = greatest(objects - 1, 0) '
+    'WHERE account_id = @a:uuid AND kind = @k:text',
+    {'a': account, 'k': kind.wire, 'n': size},
+  );
 
   /// Expired objects, and uploads abandoned for a day. Each blob goes
   /// before its row (review A-10): a blob that cannot be deleted (a file an
@@ -372,7 +438,7 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     var failed = 0;
     while (true) {
       final rows = await context.db.query(
-        'SELECT id, kind FROM $s.objects WHERE id > @after:uuid AND '
+        'SELECT id, owner_account, kind, size FROM $s.objects WHERE id > @after:uuid AND '
         "(expires_at < now() OR (completed_at IS NULL AND created_at < now() - interval '1 day')) "
         'ORDER BY id LIMIT 500',
         {'after': after},
@@ -391,7 +457,7 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
   Future<void> _purgeAccount(Map<String, Object?> payload) async {
     final account = payload['account']! as String;
     final rows = await context.db.query(
-      'SELECT id, kind FROM $s.objects WHERE owner_account = @a:uuid',
+      'SELECT id, owner_account, kind, size FROM $s.objects WHERE owner_account = @a:uuid',
       {'a': account},
     );
     var failed = 0;
@@ -401,6 +467,13 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     if (failed > 0) {
       throw StateError('$failed media blobs could not be deleted');
     }
+    // Every row is gone, so the account has no usage left to count. A
+    // deletion that stopped on a blob failure keeps its rows (and counter)
+    // for the retry.
+    await context.db.execute(
+      'DELETE FROM $s.account_usage WHERE account_id = @a:uuid',
+      {'a': account},
+    );
   }
 
   /// Deletes one object's blob, then its row. False (row kept) when the
@@ -412,8 +485,16 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     } on Object {
       return false;
     }
-    await context.db.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
-      'id': id,
+    await context.db.tx((tx) async {
+      await tx.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
+        'id': id,
+      });
+      await _release(
+        tx,
+        r.string('owner_account'),
+        _kind(r),
+        r.integer('size'),
+      );
     });
     return true;
   }

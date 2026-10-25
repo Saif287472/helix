@@ -3,11 +3,20 @@
 Encrypted media objects (CRYPTO_V2.md §12). Schema `media` (`objects`).
 Bytes live in `ObjectStorage` under `<kind>/<id>`.
 
-| Kind | Max size | Quota per account | Kept |
-|---|---|---|---|
-| `attachment` | `HELIX_MAX_ATTACHMENT_BYTES` | 4 GiB | 30 days |
-| `persistent` (avatars, group pictures) | 5 MiB | 50 MiB | until deleted |
-| `backup` | 100 MiB | 1 GiB | 90 days, refreshed by each full backup |
+| Kind | Max size | Quota per account | Objects per account | Kept |
+|---|---|---|---|---|
+| `attachment` | `HELIX_MAX_ATTACHMENT_BYTES` | 4 GiB | 100,000 | 30 days |
+| `persistent` (avatars, group pictures) | 5 MiB | 50 MiB | 100,000 | until deleted |
+| `backup` | 100 MiB | 1 GiB | 100,000 | 90 days, refreshed by each full backup |
+
+The object cap (`maxObjectsPerKind`) is independent of bytes: the smallest
+legal object is one byte, so without it a 4 GiB quota can become millions of
+rows that a sweep then deletes one blob at a time (AUD-5-3). Both the bytes
+and the row count live in `media.account_usage`, one row per account and
+kind, backfilled from `objects` by migration 2. A create reserves both in the
+same statement that checks them, so two concurrent creates serialize on the
+row instead of both passing a read-then-insert (AUD-5-4); deleting or
+expiring an object gives both back.
 
 - **Server-wide budget:** per-account quotas add up on one disk, so with
   `HELIX_STORAGE_BUDGET_BYTES` set, `POST /v1/media` answers

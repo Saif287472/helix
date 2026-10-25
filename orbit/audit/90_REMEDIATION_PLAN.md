@@ -1464,6 +1464,28 @@ constraint (expand → backfill → migrate → contract). No wire change.
   Gate: `test/modules/media_backup_test.dart` **8 green**, `dart analyze`
   clean on the changed files. No schema change, no wire change, no app
   change; no APK needed. Docs: backup MODULE.md.
+- S2 (AUD-5-4, AUD-5-3) — upload quota was a read-then-insert: two
+  concurrent creates both saw the old sum and both inserted. It also
+  counted only bytes, so one-byte objects could turn 4 GiB into millions of
+  rows, each costing a blob delete inside a five-minute job.
+  **What changed:** migration 2 adds `media.account_usage` - bytes and
+  object count per account and kind, backfilled from `objects`. A create
+  reserves both in one `INSERT ... ON CONFLICT DO UPDATE ... WHERE ...
+  RETURNING`, so concurrent creates serialize on the row and the guard is
+  re-evaluated after the wait; the cap is `maxObjectsPerKind` (100,000 per
+  kind). Deleting or expiring an object releases both in the same
+  transaction as its row, and the account purge drops the usage row with
+  the last object.
+  Tests: `test/modules/media_backup_test.dart` "concurrent creates stay
+  inside the quota" (six concurrent creates with room for three: three
+  201s, three `quota_exceeded`, the counter lands exactly on the quota),
+  "the object count is capped independently of bytes" (a full count
+  refuses the next create and names `quota_objects`), and "deleting an
+  object gives its bytes and its row back".
+  Gate: media/backup file **11 green**; availability plus the engine media
+  and backup suites **34 green**; `dart analyze` clean on the changed
+  files. Migration 2 (`media_usage`) is new and production owes it. No
+  wire change, no app change; no APK needed. Docs: media MODULE.md.
 
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**
