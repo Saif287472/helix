@@ -46,7 +46,6 @@ class _AccountsScreenState extends State<AccountsScreen> {
   Future<void> _open(AdminAccount account) async {
     final outcome = await showConsoleSheet<String>(
       context: context,
-      heightFactor: 0.85,
       child: AccountDetailView(
         adminContext: widget.adminContext,
         accountId: account.accountId,

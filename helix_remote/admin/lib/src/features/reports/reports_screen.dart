@@ -78,7 +78,6 @@ class ReportsView extends StatelessWidget {
   Future<void> _open(BuildContext context, AdminReport report) async {
     final outcome = await showConsoleSheet<ReportStatus>(
       context: context,
-      heightFactor: 0.75,
       child: _ReportSheet(
         report: report,
         controller: controller,
@@ -254,7 +253,6 @@ class _ReportSheet extends StatelessWidget {
   Future<void> _openAccount(BuildContext context) async {
     final outcome = await showConsoleSheet<String>(
       context: context,
-      heightFactor: 0.85,
       child: AccountDetailView(
         adminContext: adminContext,
         accountId: report.subject,
