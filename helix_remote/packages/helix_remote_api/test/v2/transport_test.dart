@@ -592,6 +592,25 @@ void main() {
       },
     );
 
+    test('a GET that consumes a one-time prekey is sent once', () async {
+      server.handler = (_) => throw http.ClientException('reset');
+      await expectLater(
+        KeysClient(transport()).accountKeys('id@other.example'),
+        throwsA(isA<NetworkException>()),
+      );
+      expect(server.seen, hasLength(1));
+      expect(slept, isEmpty);
+
+      server.seen.clear();
+      server.handler = (_) => apiError(ErrorCode.unavailable);
+      await expectLater(
+        KeysClient(transport()).accountKeys('id@other.example'),
+        throwsA(isA<ApiException>()),
+      );
+      expect(server.seen, hasLength(1));
+      expect(slept, isEmpty);
+    });
+
     test('client errors are not retried', () async {
       server.handler = (_) => apiError(ErrorCode.invalidField);
       await expectLater(

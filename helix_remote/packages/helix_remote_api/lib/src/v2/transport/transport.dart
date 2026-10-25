@@ -174,11 +174,17 @@ final class HelixTransport {
     final unsafe =
         route.method != HttpMethod.get && route.method != HttpMethod.head;
     final key = unsafe ? (idempotencyKey ?? _newId()) : null;
-    final repeatable =
+    final repeatable = switch (route.retrySafety) {
+      RetrySafety.never => false,
+      // A repeated public POST (refresh) looks like token reuse, so the
+      // catalog cannot make one repeatable.
+      RetrySafety.idempotent => route.access != RouteAccess.public || !unsafe,
+      RetrySafety.byMethod =>
         !unsafe ||
-        route.method == HttpMethod.put ||
-        route.method == HttpMethod.delete ||
-        route.access == RouteAccess.device;
+            route.method == HttpMethod.put ||
+            route.method == HttpMethod.delete ||
+            route.access == RouteAccess.device,
+    };
     final requestId = _newId();
     final uri = url(route, params: params, query: query);
     final body = json != null

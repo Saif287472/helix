@@ -21,9 +21,10 @@ final class CancellationToken {
 /// Only requests that are safe to repeat are retried: `GET`, `HEAD`, `PUT`
 /// and `DELETE` (idempotent by HTTP), and device-authenticated `POST`/
 /// `PATCH` requests, which always carry an `Idempotency-Key` the server
-/// replays (REST_V2.md). Public `POST`s (sign-in, codes, refresh) are never
-/// repeated: a repeated refresh would look like token reuse and revoke the
-/// device.
+/// replays (REST_V2.md). A route can decline repetition in the catalog
+/// (`RetrySafety.never`: fetching bundles consumes a one-time prekey).
+/// Public `POST`s (sign-in, codes, refresh) are never repeated: a repeated
+/// refresh would look like token reuse and revoke the device.
 ///
 /// They are retried on no response (connection or timeout) and on
 /// retryable error codes (`rate_limited`, `unavailable`, `maintenance`,

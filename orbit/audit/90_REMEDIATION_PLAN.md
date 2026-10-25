@@ -1787,6 +1787,27 @@ upload pairs with B7's chunk protocol but does not require it.
   Gate: api **209 green**; `flutter analyze` clean on the package and the
   runtime. No wire change; the only app change is the diagnostic line; no
   APK needed.
+- S3 (AUD-11c-1) — `GET /v1/keys/{account}` looks safe by its method, but each
+  call takes one one-time prekey per device from the target (the hourly gap
+  marker). The transport repeated every GET after a timeout, so the repeat
+  consumed another prekey (or, once the gap marker was set, returned a bundle
+  with none) and the first answer was lost. The same guess would burn any
+  future consuming read.
+  **What changed:** the catalog states retry safety. `ApiRoute` gained
+  `retrySafety` (`RetrySafety.byMethod` default, `never`, `idempotent`), and
+  `Routes.accountKeys` is `never`; the transport's `repeatable` is a switch on
+  it, keeping the method rule for everything not marked. An `idempotent` mark
+  cannot make a public POST repeatable (a repeated refresh is token reuse).
+  A protocol snapshot test pins the exception list to exactly the one route,
+  so a new consuming read cannot be added silently.
+  Tests: `routes_test.dart` "routes that may not be repeated are named
+  explicitly"; `transport_test.dart` "a GET that consumes a one-time prekey is
+  sent once" (a connection failure and a retryable `unavailable` both reach
+  the server once, with no backoff), while the existing exponential-backoff
+  test still sees four attempts on `GET /v1/devices`.
+  Gate: protocol **121 green** (120 before, +1), api **210 green** (209
+  before, +1); `flutter analyze` clean on both. No wire change, no app change;
+  no APK needed.
 
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**

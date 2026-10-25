@@ -6,6 +6,16 @@ library;
 
 enum HttpMethod { get, post, put, patch, delete, head }
 
+/// Whether the transport may send a route again after no answer.
+///
+/// [byMethod] follows HTTP semantics: `GET` and `HEAD` are repeated, and so
+/// are `PUT`, `DELETE` and every unsafe device-authenticated request (which
+/// carries an `Idempotency-Key` the server replays). [never] is for a route
+/// that consumes something on every call even though its method looks safe;
+/// [idempotent] for one that is safe to repeat even though its method or
+/// audience says otherwise. Both exceptions are deliberate.
+enum RetrySafety { byMethod, never, idempotent }
+
 /// Who may call a route.
 enum RouteAccess {
   /// No session. The server must give every public route a rate limit.
@@ -27,6 +37,7 @@ final class ApiRoute {
     this.path, {
     required this.module,
     required this.access,
+    this.retrySafety = RetrySafety.byMethod,
   });
 
   final HttpMethod method;
@@ -37,6 +48,9 @@ final class ApiRoute {
   /// The server module that owns the route (ADR-026).
   final String module;
   final RouteAccess access;
+
+  /// Set when repeating the request is not safe by its method alone.
+  final RetrySafety retrySafety;
 
   static final RegExp _param = RegExp(r'\{([a-z_]+)\}');
 
@@ -280,6 +294,9 @@ abstract final class Routes {
     '/v1/keys/{account}',
     module: 'keys',
     access: _dev,
+    // Each call gives the requester one one-time prekey per device, so a
+    // retry would burn another and could return a bundle without one.
+    retrySafety: RetrySafety.never,
   );
 
   // --------------------------------------------------------------- messaging

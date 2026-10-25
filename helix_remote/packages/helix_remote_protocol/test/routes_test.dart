@@ -62,6 +62,16 @@ void main() {
     expect(public, publicRouteSnapshot);
   });
 
+  test('routes that may not be repeated are named explicitly', () {
+    final exceptions = [
+      for (final route in Routes.all)
+        if (route.retrySafety != RetrySafety.byMethod)
+          '${route.retrySafety.name} $route',
+    ];
+    // Each call to the bundle route gives up one one-time prekey per device.
+    expect(exceptions, ['never GET /v1/keys/{account}']);
+  });
+
   test('method and path pairs are unique', () {
     final seen = <String>{};
     for (final route in Routes.all) {
