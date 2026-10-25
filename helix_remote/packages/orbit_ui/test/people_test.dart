@@ -379,4 +379,37 @@ void main() {
       expect(looked, 1);
     });
   });
+
+  group('the note-to-self entry', () {
+    testWidgets('browsing offers it, and tapping opens that chat', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      await show(
+        tester,
+        PeoplePanel(
+          model: const PeoplePanelModel(
+            self: PanelSelf(
+              accountId: 'self-account',
+              title: 'Note to self',
+              avatar: HelixAvatarModel(name: 'You'),
+            ),
+          ),
+          actions: PeoplePanelActions(onOpenSelf: opened.add),
+        ),
+      );
+      expect(find.text('Note to self'), findsOneWidget);
+      expect(find.text('Message yourself'), findsOneWidget);
+      await tester.tap(find.text('Note to self'));
+      await tester.pump();
+      expect(opened, ['self-account']);
+    });
+
+    testWidgets('nothing is offered when the device has no account', (
+      tester,
+    ) async {
+      await show(tester, const PeoplePanel(model: PeoplePanelModel()));
+      expect(find.text('Message yourself'), findsNothing);
+    });
+  });
 }

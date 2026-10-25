@@ -86,6 +86,22 @@ class PanelGroup {
   final HelixAvatarModel avatar;
 }
 
+/// The note-to-self entry the people panel offers while browsing: the chat
+/// you keep your own notes in. Its title is the app's, so the row and the chat
+/// it opens say the same thing.
+class PanelSelf {
+  const PanelSelf({
+    required this.accountId,
+    required this.title,
+    required this.avatar,
+  });
+
+  /// Whose chat this is: this device's own account.
+  final String accountId;
+  final String title;
+  final HelixAvatarModel avatar;
+}
+
 /// What the panel says when there is nothing to show.
 enum PanelEmpty { none, nobodyYet, noMatches }
 
@@ -102,6 +118,7 @@ class PeoplePanelModel {
     this.lookup = LookupView.idle,
     this.groups = const [],
     this.people = const [],
+    this.self,
     this.empty = PanelEmpty.none,
   });
 
@@ -117,6 +134,10 @@ class PeoplePanelModel {
   final LookupView lookup;
   final List<PanelGroup> groups;
   final List<HelixPersonItem> people;
+
+  /// The note-to-self row, while browsing; null with no account on this
+  /// device, and on the Calls tab, where you cannot call yourself.
+  final PanelSelf? self;
   final PanelEmpty empty;
 
   /// "People on Orbit" while browsing, "People" for a search.
@@ -251,6 +272,7 @@ class PeoplePanelActions {
     this.onCallPerson,
     this.onOpenContactInfo,
     this.onOpenGroup,
+    this.onOpenSelf,
   });
 
   final void Function(String text)? onQueryChanged;
@@ -263,6 +285,10 @@ class PeoplePanelActions {
   onCallPerson;
   final void Function(String accountId)? onOpenContactInfo;
   final void Function(String groupId)? onOpenGroup;
+
+  /// Opens the note-to-self chat of [PanelSelf.accountId]. Null where there is
+  /// no such entry to tap.
+  final void Function(String accountId)? onOpenSelf;
 }
 
 /// `HomeActions` with the Chats and Calls tabs' actions (`contracts/home.md`).

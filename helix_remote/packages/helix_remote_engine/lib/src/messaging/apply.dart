@@ -33,7 +33,8 @@ final class ApplyResult {
 enum _Action { done, defer, ignore }
 
 /// The chat a content message belongs to: a direct chat ([peer] is the other
-/// person) or a group chat ([group] is its id, [peer] is empty).
+/// person - this account itself in a note-to-self chat) or a group chat
+/// ([group] is its id, [peer] is empty).
 typedef _Chat = ({String peer, String id, String? group});
 
 /// Applies decrypted content to the database (plan §6.3 "apply"): the
@@ -172,7 +173,9 @@ final class ContentApplier {
       sender: senderAccount,
       selfAccount: self,
     );
-    if (peer == self) return null;
+    // Only the check above can leave [peer] as this account: a note this
+    // account sent to itself, which is a chat like any other (the app calls
+    // it "You"). Nobody else's message ever files here.
     return (peer: peer, id: directConversationId(peer), group: null);
   }
 
@@ -228,6 +231,8 @@ final class ContentApplier {
   ) async {
     final self = _ctx.identity.accountId;
     final fromSelf = sender.account == self;
+    // A note-to-self chat: this account's own message, addressed to itself.
+    final selfChat = chat.peer == self;
     final existing = await _db.messagesDao.find(
       content.id,
       sender: sender.account,
@@ -251,9 +256,11 @@ final class ContentApplier {
       await _db.conversationsDao.ensureDirect(chat.peer, now: now);
     }
     // The person this message tells us about: the peer of a direct chat, or
-    // the author of a message in a group (not this account's own).
+    // the author of a message in a group (not this account's own). This
+    // account is not a person it needs a row for: the app names its own chat
+    // "You".
     final person = group == null ? chat.peer : sender.account;
-    if (group == null || !fromSelf) {
+    if (person != self && (group == null || !fromSelf)) {
       await _db.peopleDao.upsertPerson(
         PeopleCompanion.insert(
           accountId: person,
@@ -289,7 +296,12 @@ final class ContentApplier {
         mentionsMe: Value(
           body is TextBody && body.mentions.any((m) => m.account == self),
         ),
-        status: fromSelf ? MessageStatus.sent : MessageStatus.received,
+        // A note lands on the writer's other devices unread: a thing jotted
+        // on one device is then noticed on the other. Own messages elsewhere
+        // are already read where they were written.
+        status: fromSelf && !selfChat
+            ? MessageStatus.sent
+            : MessageStatus.received,
         expireSeconds: Value(content.expireSeconds),
         viewOnceState: content.viewOnce
             ? const Value(ViewOnceState.unopened)

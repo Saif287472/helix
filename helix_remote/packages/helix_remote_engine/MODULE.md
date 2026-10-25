@@ -857,6 +857,18 @@ stays) and `presence.watchAllTyping()` (who is typing, in every chat). The db
 package gained the matching `MessagesDao.watchReactionsSince` and
 `clearConversation`.
 
+## A chat with yourself (note to self)
+
+`direct:<own account>` is a direct chat like any other; the app calls it "Note
+to self". Only this account's own message files there - the chat id comes from
+both sides of a direct message, so a peer equal to this account means it wrote
+to itself. A note that lands on another device of the same account stores as
+`received`, so it reads as unread there, but it makes no notification and
+queues no delivered receipt: an own message still returns right after the
+store (`messaging/apply.dart`). `chats.openDirect` keeps no people row for this
+account (the app names itself), and `presence.sendTyping` sends nothing when
+the peer is yourself. Tests: `test/self_chat_test.dart`.
+
 ## Security review pass (2026-10-05)
 
 What the independent review changed here (CRYPTO_V2.md section 14 has the

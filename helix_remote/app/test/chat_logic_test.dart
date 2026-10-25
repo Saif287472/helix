@@ -5,9 +5,12 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/app_blob_store.dart';
+import 'package:helix_remote/features/chats/application/chat_list_mapper.dart';
+import 'package:helix_remote/features/conversation/application/conversation_links.dart';
 import 'package:helix_remote/features/conversation/application/message_mapper.dart';
 import 'package:helix_remote/features/conversation/application/timeline_builder.dart';
 import 'package:helix_remote/features/conversation/application/composer_notifier.dart';
+import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show BlobArea;
 import 'package:orbit_ui/models.dart';
@@ -237,6 +240,65 @@ void main() {
       expect(mentionTokenAt('mail me@al', 10), isNull);
       expect(mentionTokenAt('@', 1)?.query, '');
       expect(mentionTokenAt('hello', 5), isNull);
+    });
+  });
+
+  group('your own chat in the list', () {
+    final me = const PersonName(
+      accountId: 'me',
+      names: HelixPersonNames(nickname: 'You'),
+      display: 'You',
+      isSelf: true,
+    );
+    final directory = people.withSelf(me);
+
+    ConversationListItem listRow(String peer, String text) =>
+        ConversationListItem(
+          ConversationRow(
+            id: 'direct:$peer',
+            kind: ConversationKind.direct,
+            archived: false,
+            unreadCount: 0,
+            mentionCount: 0,
+            createdAt: now,
+            lastMessageAt: now,
+          ),
+          row(1, body: text, outgoing: true, sender: peer),
+        );
+
+    test('it is named for what it is and its lines need no "You:"', () {
+      final note = chatListItemOf(
+        listRow('me', 'buy milk'),
+        people: directory,
+        selfId: 'me',
+        now: now,
+      );
+      expect(note.title, 'Note to self');
+      expect(note.preview?.text, 'buy milk');
+      expect(
+        note.preview?.senderPrefix,
+        isNull,
+        reason: 'the chat already says who writes in it',
+      );
+
+      final bob = chatListItemOf(
+        listRow('bob', 'see you'),
+        people: directory,
+        selfId: 'me',
+        now: now,
+      );
+      expect(bob.title, 'Bob');
+      expect(bob.preview?.senderPrefix, 'You');
+    });
+
+    test('it has no contact info page, because it is not a person', () {
+      expect(infoLocationOf('direct:me', selfAccount: 'me'), isNull);
+      expect(
+        infoLocationOf('direct:bob', selfAccount: 'me'),
+        PeoplePaths.person('bob'),
+      );
+      // Signed out there is no own id, so a direct chat keeps its info page.
+      expect(infoLocationOf('direct:me'), PeoplePaths.person('me'));
     });
   });
 

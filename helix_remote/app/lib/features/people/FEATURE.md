@@ -227,6 +227,29 @@ An answer that could tell them apart would let anyone walk the server's names.
 `test/person_link_test.dart` pins that the exception behind a failure never
 reaches the screen.
 
+## Note to self
+
+Your own account is a chat: `direct:<own account>`, titled **Note to self**
+(`chat_naming.dart`'s `noteToSelfTitle`) and called **You** everywhere else
+(a reply quote, a member list). The engine keeps no people row for your own
+account, so the app supplies the person: `selfPersonProvider` builds it from the
+gateway's own account id and your own picture, and `peopleDirectoryProvider`
+folds it in (`withSelf`). `PeopleDirectory.isSelf(id)` is then the one question
+the screens ask - it is what drops the "You " sender prefix from a note's chat
+list row and what keeps the header from showing presence, call buttons or block.
+
+- The Chats tab's people panel and the people search screen put it above the
+  people you know ("Message yourself"). The Calls tab does not show it: you
+  cannot call yourself (`PeoplePanelModel.self` is null there).
+- It is silent: a note lands on the other device unread, without a notification
+  or a delivered receipt (the engine applies your own message quietly).
+- `searchPeople` still leaves yourself out - the note is a row in the panel, not
+  a search hit. The forward sheet never offers you as a stranger to start a chat
+  with (`forwardTargetsProvider` filters your own id), but once the note exists
+  it is a chat like any other and can be forwarded into.
+- A `~name` link or QR code of your own account opens this chat; until
+  2026-10-26 it answered "That is your own ~name." instead.
+
 ## Engine additions this feature needed (small, additive)
 
 - `PeopleService.report(account, category, {note})` over the existing

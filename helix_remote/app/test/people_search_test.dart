@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/features/people/application/people_gateway.dart';
 import 'package:helix_remote/features/people/presentation/people_search_screen.dart';
+import 'package:helix_remote_db/helix_remote_db.dart' show directConversationId;
 import 'package:helix_remote_api/v2.dart' show ApiException, NetworkException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode;
@@ -77,6 +78,25 @@ void main() {
       // The line under a name is the number, or the ~Helix name.
       expect(find.text('+8801711000001'), findsOneWidget);
       expect(find.text('~sam_s'), findsOneWidget);
+    });
+
+    testWidgets('offers the chat you keep your own notes in', (tester) async {
+      await open(tester);
+      await settle(tester);
+      expect(find.text('Note to self'), findsOneWidget);
+      expect(find.text('Message yourself'), findsOneWidget);
+
+      await tester.tap(find.text('Note to self'));
+      await settle(tester);
+      expect(gateway.calls, contains('openChat:self-account'));
+      expect(seams.opened, [directConversationId('self-account')]);
+    });
+
+    testWidgets('the Calls panel has no such row, because you cannot call '
+        'yourself', (tester) async {
+      await open(tester, mode: PeopleSearchMode.calls);
+      await settle(tester);
+      expect(find.text('Note to self'), findsNothing);
     });
 
     testWidgets('asks for the contacts once, with the privacy copy', (

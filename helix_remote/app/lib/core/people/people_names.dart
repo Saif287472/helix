@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/platform/profile_image_source.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' show PersonRow;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show PersonNaming, maskPhone, shortId;
@@ -44,6 +46,7 @@ final class PersonName {
     this.verified = false,
     this.image,
     this.avatarBytes,
+    this.isSelf = false,
   });
 
   /// A person this device knows nothing about yet (a stranger's message that
@@ -139,6 +142,10 @@ final class PersonName {
   final bool blocked;
   final bool verified;
 
+  /// This device's own account, which [selfPersonProvider] adds to the
+  /// directory: never a people row, always named by [display] alone.
+  final bool isSelf;
+
   /// Their picture, when this device has one.
   final ImageProvider? image;
 
@@ -219,6 +226,7 @@ final class PersonName {
       other.profileName == profileName &&
       other.blocked == blocked &&
       other.verified == verified &&
+      other.isSelf == isSelf &&
       other.image == image;
 
   @override
@@ -229,6 +237,7 @@ final class PersonName {
     profileName,
     blocked,
     verified,
+    isSelf,
     image,
   );
 }
@@ -254,6 +263,14 @@ final class PeopleDirectory {
       ),
   });
 
+  /// The same directory with this device's own account in it, keyed by its id.
+  ///
+  /// The engine keeps no people row for your own account (nobody is a contact
+  /// to themselves), so [self] from [selfPersonProvider] is the only entry for
+  /// it; null before sign-in leaves the directory as the rows made it.
+  PeopleDirectory withSelf(PersonName? self) =>
+      self == null ? this : PeopleDirectory({...byId, self.accountId: self});
+
   /// The name of [accountId]; [PersonName.unknown] for a stranger, with
   /// [fallbackName] (a name a roster or a call row gave) as their `~Helix
   /// name` when there is one.
@@ -274,6 +291,9 @@ final class PeopleDirectory {
   /// The avatar of [accountId]: their picture when this device has one, else
   /// their initials.
   HelixAvatarModel avatarOf(String accountId) => nameOf(accountId).avatar;
+
+  /// Whether [accountId] is this device's own account.
+  bool isSelf(String accountId) => byId[accountId]?.isSelf ?? false;
 
   /// Their picture, when this device has one.
   ImageProvider? imageOf(String accountId) => byId[accountId]?.image;
@@ -326,28 +346,64 @@ final peopleRowsProvider = StreamProvider<List<PersonRow>>((ref) async* {
   yield* runtime.engine.people.watchAll();
 });
 
-/// The directory of everyone this device knows, live.
+/// The directory of everyone this device knows, live, plus this device's own
+/// account (see [selfPersonProvider]).
 ///
 /// One stream over the engine's people watch query, however many rows read it
 /// (a chat list of 5,000 rows must not open 5,000 queries).
 final peopleDirectoryProvider = StreamProvider<PeopleDirectory>((ref) {
   final controller = StreamController<PeopleDirectory>();
-  // Each emission maps from the previous directory, so an avatar that did not
-  // change is not decoded again.
-  var current = PeopleDirectory.empty;
+  var rows = const <PersonRow>[];
+  PersonName? self;
+  // Nothing is published until the people table has answered once, so the
+  // first frame shows names rather than "Helix user ..." placeholders.
+  var haveRows = false;
+  PeopleDirectory? current;
+  void publish() {
+    current = PeopleDirectory.fromRows(rows, previous: current).withSelf(self);
+    controller.add(current!);
+  }
+
   ref.listen<AsyncValue<List<PersonRow>>>(peopleRowsProvider, (_, next) {
     switch (next) {
       case AsyncData(:final value):
-        current = PeopleDirectory.fromRows(value, previous: current);
-        controller.add(current);
+        rows = value;
+        haveRows = true;
+        publish();
       case AsyncError(:final error, :final stackTrace):
         controller.addError(error, stackTrace);
       case AsyncLoading():
         break;
     }
   }, fireImmediately: true);
+  ref.listen<PersonName?>(selfPersonProvider, (_, next) {
+    self = next;
+    if (haveRows) publish();
+  }, fireImmediately: true);
   ref.onDispose(controller.close);
   return controller.stream;
+});
+
+/// This device's own person: the name and picture of the note-to-self chat,
+/// where the peer is this account.
+///
+/// Built from the account id the chat gateway knows and the picture stored on
+/// this device, because the engine keeps no people row for your own account
+/// (nobody is a contact to themselves). Null before sign-in.
+final selfPersonProvider = Provider<PersonName?>((ref) {
+  final accountId = ref.watch(chatGatewayProvider).value?.selfAccountId;
+  if (accountId == null) return null;
+  final bytes = ref.watch(profileAvatarProvider).value;
+  return PersonName(
+    accountId: accountId,
+    // "You" in a reply quote or a member list; the chat itself is titled by
+    // what it is for (`noteToSelfTitle`).
+    names: const HelixPersonNames(nickname: 'You'),
+    display: 'You',
+    image: bytes == null || bytes.isEmpty ? null : MemoryImage(bytes),
+    avatarBytes: bytes,
+    isSelf: true,
+  );
 });
 
 /// One person's name. Only rebuilds the watcher when **that** person's name,

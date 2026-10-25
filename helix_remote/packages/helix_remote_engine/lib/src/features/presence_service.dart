@@ -103,6 +103,7 @@ final class PresenceService {
       return;
     }
     final peer = conversationId.substring(prefix.length);
+    if (peer == (_ctx.isSignedIn ? _ctx.identity.accountId : null)) return;
     try {
       if (!await _sender.readyWithoutSetup(peer)) return;
       final content = ContentMessage(

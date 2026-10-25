@@ -159,13 +159,17 @@ final class ChatsService {
   );
 
   /// The direct chat with [peerAccount], created if missing. There are no
-  /// contact requests: anyone can be messaged (AGENTS.md product rules).
+  /// contact requests: anyone can be messaged (AGENTS.md product rules). This
+  /// account's own id is the note-to-self chat, which needs no people row.
   Future<ConversationRow> openDirect(String peerAccount) =>
       _db.transaction(() async {
         final now = _ctx.now();
-        await _db.peopleDao.upsertPerson(
-          PeopleCompanion.insert(accountId: peerAccount, updatedAt: now),
-        );
+        final self = _ctx.isSignedIn ? _ctx.identity.accountId : null;
+        if (peerAccount != self) {
+          await _db.peopleDao.upsertPerson(
+            PeopleCompanion.insert(accountId: peerAccount, updatedAt: now),
+          );
+        }
         return _db.conversationsDao.ensureDirect(peerAccount, now: now);
       });
 

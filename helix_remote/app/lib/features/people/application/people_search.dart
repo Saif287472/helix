@@ -338,9 +338,8 @@ final class PeopleActions {
         return 'No Helix account is called ~$helixName on your server, '
             'or it is not findable by name.';
       }
-      if (person.accountId == gateway.selfAccountId) {
-        return 'That is your own ~name.';
-      }
+      // Your own link, tapped or scanned, opens the one chat it can mean: the
+      // notes you keep for yourself.
       await openChat(person.accountId);
       return null;
     } on Object catch (error) {

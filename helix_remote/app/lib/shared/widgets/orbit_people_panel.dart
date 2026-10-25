@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/chat/chat_naming.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
@@ -154,6 +155,13 @@ PeoplePanelModel orbitPeoplePanelModel(
     empty = PanelEmpty.none;
   }
 
+  // The chat you keep your own notes in is an entry point here, the same way
+  // WhatsApp's "Message yourself" sits in the contact list. The Calls tab has
+  // no such row: there is nobody to call there.
+  final selfPerson = mode == PeopleSearchMode.calls
+      ? null
+      : ref.watch(selfPersonProvider);
+
   return PeoplePanelModel(
     query: text,
     mode: mode,
@@ -169,6 +177,13 @@ PeoplePanelModel orbitPeoplePanelModel(
     lookup: lookupView,
     groups: groups,
     people: people,
+    self: selfPerson == null
+        ? null
+        : PanelSelf(
+            accountId: selfPerson.accountId,
+            title: noteToSelfTitle,
+            avatar: selfPerson.avatar,
+          ),
     empty: empty,
   );
 }

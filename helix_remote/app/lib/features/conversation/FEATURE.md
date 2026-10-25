@@ -62,7 +62,9 @@ conversation_routes.dart    /chat/:id and its sub-routes
   You can't message or call them.") instead of the text field.
 - **Info pages:** the header title and the menu open the contact info (direct chat,
   `PeoplePaths.person`) or the group info (`GroupPaths.info`); see
-  `application/conversation_links.dart`.
+  `application/conversation_links.dart`. Your own note-to-self chat has no info
+  page, and its header (from `conversation_header.dart`) carries no peer, so it
+  offers no call buttons, no presence and no block either.
 - **Shared media:** `/chat/:id/shared` (`shared_media_screen.dart`, `?tab=docs` or
   `?tab=links` to open on another tab): photos and videos
   in a grid, documents, links; from the menu, the settings and the contact info

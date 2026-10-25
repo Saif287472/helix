@@ -178,6 +178,19 @@ final conversationHeaderProvider = Provider.autoDispose
       final muted = chat.mutedUntil?.isAfter(now) ?? false;
 
       if (peer != null) {
+        if (people.isSelf(peer)) {
+          // The note-to-self chat: there is nobody here to be online, to call
+          // or to block you, so the header says nothing but the title. Asking
+          // the server for your own presence would be a poll every minute for
+          // a chat that is only ever read on this device's own accounts.
+          return ConversationHeader(
+            id: id,
+            title: title,
+            avatar: people.avatarOf(peer),
+            muted: muted,
+            disappearingSeconds: chat.disappearingSeconds,
+          );
+        }
         final presence = ref.watch(peerPresenceProvider(peer)).value;
         final blocked = people.isBlocked(peer);
         final blockedByPeer =

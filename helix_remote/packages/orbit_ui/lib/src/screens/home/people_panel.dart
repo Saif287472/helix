@@ -17,10 +17,10 @@ import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 /// `peoplePanel` (`prototype/js/screens/home.js`): the people part of the
 /// Chats search, the Calls search and the People page.
 ///
-/// With nothing typed: the contacts card (or the Refresh row), then everyone
-/// you know under "People on Orbit". With a search: the lookup row or its
-/// result, a hint for an incomplete number, then Groups and People that
-/// match, or "No matches".
+/// With nothing typed: the contacts card (or the Refresh row), then your own
+/// note-to-self chat, then everyone you know under "People on Orbit". With a
+/// search: the lookup row or its result, a hint for an incomplete number, then
+/// Groups and People that match, or "No matches".
 class PeoplePanel extends StatelessWidget {
   const PeoplePanel({
     super.key,
@@ -97,6 +97,12 @@ class PeoplePanel extends StatelessWidget {
             ),
           );
         case ContactsCard.hidden:
+      }
+      final note = m.self;
+      if (note != null) {
+        out.add(
+          _SelfRow(note, onTap: () => a.onOpenSelf?.call(note.accountId)),
+        );
       }
       if (m.empty == PanelEmpty.nobodyYet) {
         out.add(
@@ -356,6 +362,34 @@ class _GroupRow extends StatelessWidget {
       ),
       sub: OrbitText(
         'Group',
+        style: t.font.style(size: OrbitType.small, color: t.ink3),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+/// The note-to-self entry: your own picture, the chat's name as the app gives
+/// it, and what the chat is for under it.
+class _SelfRow extends StatelessWidget {
+  const _SelfRow(this.entry, {this.onTap});
+
+  final PanelSelf entry;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    return _Line(
+      lead: OrbitAvatar(avatar: entry.avatar, size: 52),
+      name: OrbitText(
+        entry.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: _nameStyle(t),
+      ),
+      sub: OrbitText(
+        'Message yourself',
         style: t.font.style(size: OrbitType.small, color: t.ink3),
       ),
       onTap: onTap,

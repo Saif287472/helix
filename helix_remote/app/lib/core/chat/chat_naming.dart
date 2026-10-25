@@ -6,6 +6,11 @@ import 'package:orbit_ui/models.dart';
 /// account id.
 const _directPrefix = 'direct:';
 
+/// What the chat you keep your own notes in is called: the row in the chat
+/// list, the header of the conversation and the entry that opens it all say
+/// this, and nothing else names it.
+const noteToSelfTitle = 'Note to self';
+
 /// The peer of a direct chat, or null for a group chat.
 String? peerOfConversation(String conversationId) =>
     conversationId.startsWith(_directPrefix)
@@ -13,10 +18,12 @@ String? peerOfConversation(String conversationId) =>
     : null;
 
 /// The title of a chat row or a conversation header: a person by the naming
-/// rule, a group by its name.
+/// rule, a group by its name, and your own chat by what it is for.
 String chatTitleOf(ConversationRow chat, PeopleDirectory people) {
   final peer = peerOfConversation(chat.id);
-  if (peer != null) return people.displayOf(peer);
+  if (peer != null) {
+    return people.isSelf(peer) ? noteToSelfTitle : people.displayOf(peer);
+  }
   final title = chat.title?.trim();
   return title == null || title.isEmpty ? 'Group' : title;
 }

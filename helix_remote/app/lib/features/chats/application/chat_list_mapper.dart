@@ -44,7 +44,8 @@ HelixChatPreview? _previewOf(
   }
   final last = row.lastMessage;
   if (last == null) return null;
-  final isGroup = peerOfConversation(row.conversation.id) == null;
+  final peer = peerOfConversation(row.conversation.id);
+  final isGroup = peer == null;
   final notice = systemNoticeText(last, selfId: selfId, people: people);
   if (isNoticeKind(last.kind)) {
     // Notices have no author and no tick: they are the chat talking.
@@ -57,7 +58,8 @@ HelixChatPreview? _previewOf(
   }
   final String? prefix;
   if (last.outgoing) {
-    prefix = 'You';
+    // Your own chat says who wrote it, so its lines need no "You:".
+    prefix = peer != null && people.isSelf(peer) ? null : 'You';
   } else if (isGroup) {
     prefix = people.firstNameOf(last.sender);
   } else {

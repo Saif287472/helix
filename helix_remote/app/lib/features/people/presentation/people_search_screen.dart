@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -76,6 +78,7 @@ class _PeopleSearchScreenState extends ConsumerState<PeopleSearchScreen> {
           onOpenContactInfo: (id) => context.push(PeoplePaths.person(id)),
           onOpenGroup: (groupId) =>
               people.openGroup(GroupSummary(id: groupId, title: '')),
+          onOpenSelf: (id) => unawaited(people.openChat(id)),
         ),
       ),
     );

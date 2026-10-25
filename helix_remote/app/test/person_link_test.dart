@@ -55,11 +55,11 @@ void main() {
     );
   });
 
-  test('your own name is not a chat to open', () async {
+  test('your own name opens the chat you keep your notes in', () async {
     gateway.byHelixName['me'] = personRow('self-account', helix: 'me');
 
-    expect(await resolve('me'), 'That is your own ~name.');
-    expect(seams.opened, isEmpty);
+    expect(await resolve('me'), isNull);
+    expect(seams.opened, [directConversationId('self-account')]);
   });
 
   test('a failed lookup is one plain sentence', () async {

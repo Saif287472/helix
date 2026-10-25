@@ -32,7 +32,7 @@ class ConversationSettingsScreen extends ConsumerWidget {
         ),
       );
     }
-    final info = infoLocationOf(conversationId);
+    final info = ref.watch(conversationInfoRouteProvider(conversationId));
     final peer = view.peerAccount;
     return orbit.ChatSettingsScreen(
       model: orbit.ChatSettingsModel(

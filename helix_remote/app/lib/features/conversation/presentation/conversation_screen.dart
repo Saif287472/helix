@@ -341,6 +341,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     ref.watch(readTrackerProvider(_id));
     final open = ref.watch(conversationOpenProvider(_id));
     final header = ref.watch(conversationHeaderProvider(_id));
+    final infoRoute = ref.watch(conversationInfoRouteProvider(_id));
     final composer = ref.watch(composerProvider(_id));
     final draft = ref.watch(composerDraftProvider(_id)).value ?? '';
     final enterSends = ref.watch(enterSendsProvider).value ?? false;
@@ -443,7 +444,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
       verified: header?.verified ?? false,
       isGroup: header?.isGroup ?? group != null,
       showCallButtons: header?.canCall ?? false,
-      hasInfoPage: infoLocationOf(_id) != null,
+      hasInfoPage: infoRoute != null,
       pendingMembers: pending,
       items: items,
       hasOlder: hasOlder,
@@ -492,12 +493,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     final window = _args == null
         ? null
         : ref.read(timelineWindowProvider(_args!).notifier);
-    final info0 = infoLocationOf(_id);
     final members = ref.read(pendingMemberActionsProvider);
     return ChatScreen(
       model: model,
       actions: ChatActions(
-        onOpenInfo: info0 == null ? null : () => context.push(info0),
+        onOpenInfo: infoRoute == null ? null : () => context.push(infoRoute),
         onOpenSharedMedia: () => context.push(sharedMediaLocation(_id)),
         onOpenSettings: () => context.push(chatSettingsLocation(_id)),
         onCall: _call,

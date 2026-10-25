@@ -21,6 +21,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart'
     show PhoneBookSyncResult;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ReportCategory;
+import 'package:orbit_ui/models.dart' show HelixPersonNames;
 import 'orbit_theme.dart';
 
 /// 2026-10-03 12:00 UTC: the clock every people test runs on.
@@ -471,6 +472,16 @@ Future<ProviderContainer> pumpPeople(
     overrides: [
       peopleGatewayProvider.overrideWith((ref) async => gateway),
       peopleRowsProvider.overrideWith((ref) => gateway.rows()),
+      // The panel's own entry: these fakes have no chat gateway, so the real
+      // provider would reach for a runtime.
+      selfPersonProvider.overrideWithValue(
+        PersonName(
+          accountId: gateway.selfAccountId ?? 'self-account',
+          names: const HelixPersonNames(nickname: 'You'),
+          display: 'You',
+          isSelf: true,
+        ),
+      ),
       contactsAccessProvider.overrideWithValue(
         contacts ?? FakeContactsAccess(state: ContactsPermission.granted),
       ),

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/core/chat/chat_naming.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show PersonNaming;
@@ -185,6 +186,54 @@ void main() {
     });
   });
 
+  group('your own account', () {
+    // The engine keeps no people row for this account: the app adds the one
+    // entry itself, so the chat you write notes in has a name and a picture.
+    final me = const PersonName(
+      accountId: 'me',
+      names: HelixPersonNames(nickname: 'You'),
+      display: 'You',
+      isSelf: true,
+    );
+
+    ConversationRow chat(String peer) => ConversationRow(
+      id: 'direct:$peer',
+      kind: ConversationKind.direct,
+      archived: false,
+      unreadCount: 0,
+      mentionCount: 0,
+      createdAt: DateTime.utc(2026, 10, 3),
+    );
+
+    test('the directory carries it, and only the app says it is you', () {
+      final known = PeopleDirectory.fromRows([
+        personRow('acc', nickname: 'Mum'),
+      ]);
+      expect(known.isSelf('acc'), isFalse);
+      // Without the entry (signed out) the directory is the rows, unchanged.
+      expect(identical(known.withSelf(null), known), isTrue);
+
+      final directory = known.withSelf(me);
+      expect(directory.isSelf('me'), isTrue);
+      expect(directory.isSelf('acc'), isFalse);
+      expect(directory.displayOf('me'), 'You');
+      expect(directory.nameOf('me').isSelf, isTrue);
+      expect(directory.all.length, 2);
+    });
+
+    test('its chat is titled by what it is for, not by you', () {
+      final directory = PeopleDirectory.fromRows([
+        personRow('acc', nickname: 'Mum'),
+      ]).withSelf(me);
+
+      expect(chatTitleOf(chat('me'), directory), 'Note to self');
+      expect(chatTitleOf(chat('acc'), directory), 'Mum');
+      // The picture is your own, which is why the entry carries it rather than
+      // the chat's title.
+      expect(chatAvatarOf(chat('me'), directory).name, 'You');
+    });
+  });
+
   group('the providers', () {
     late StreamController<List<PersonRow>> rows;
     late ProviderContainer container;
@@ -192,7 +241,11 @@ void main() {
     setUp(() {
       rows = StreamController<List<PersonRow>>();
       container = ProviderContainer(
-        overrides: [peopleRowsProvider.overrideWith((ref) => rows.stream)],
+        overrides: [
+          peopleRowsProvider.overrideWith((ref) => rows.stream),
+          // No account on screen here: these tests are about other people.
+          selfPersonProvider.overrideWithValue(null),
+        ],
       );
     });
     tearDown(() async {

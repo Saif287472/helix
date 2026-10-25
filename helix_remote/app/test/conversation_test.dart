@@ -45,6 +45,22 @@ void main() {
     expect(find.byType(OrbitMessageBubble), findsNWidgets(2));
   });
 
+  chatTest('your own chat is yours alone', (tester, gateway) async {
+    final chat = (await tester.runAsync(
+      () => gateway.db.conversationsDao.ensureDirect('me', now: testNow),
+    ))!;
+    await tester.runAsync(() => gateway.outgoing(chat.id, 'buy milk'));
+    await open(tester, gateway, chat.id);
+
+    expect(find.text('Note to self'), findsOneWidget);
+    expect(findMessageText('buy milk'), findsOneWidget);
+    expect(
+      find.text('online'),
+      findsNothing,
+      reason: 'there is nobody here whose presence to ask the server about',
+    );
+  });
+
   chatTest('an empty conversation says it is encrypted', (
     tester,
     gateway,

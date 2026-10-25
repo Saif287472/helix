@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -255,6 +257,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
         onOpenContactInfo: (id) => context.push(PeoplePaths.person(id)),
         onOpenGroup: (gid) =>
             peopleActions.openGroup(GroupSummary(id: gid, title: '')),
+        onOpenSelf: (id) => unawaited(peopleActions.openChat(id)),
       ),
       peopleCalls: PeoplePanelActions(
         onQueryChanged: (text) => setState(() => _callQuery = text),

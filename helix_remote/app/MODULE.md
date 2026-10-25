@@ -269,7 +269,8 @@ other:
 
 - `core/people/people_names.dart` - `peopleDirectoryProvider`,
   `personNameProvider(id)`, `PersonName` / `PeopleDirectory`: phone-book name,
-  then nickname, then number, then `~Helix name`, reactive.
+  then nickname, then number, then `~Helix name`, reactive. Your own account is
+  in it too (`selfPersonProvider`, `isSelf`), as the note-to-self chat.
 - `shared/widgets/people_search_panel.dart` - `PeopleSearchPanel`, mounted
   under the Chats (A2a) and Calls (A3a) search fields.
 - `shared/navigation/conversation_seams.dart` - `ConversationSeams`:
