@@ -40,12 +40,16 @@ final class ReportsController extends PagedController<AdminReport> {
       if (_status == null) {
         // Everything is listed: show the new state in place, with the two
         // people still named and numbered on it.
-        replaceWhere(
-          (r) => r.reportId == reportId,
-          items
-              .firstWhere((r) => r.reportId == reportId)
-              .copyWith(status: outcome),
-        );
+        // The list may have been refreshed while the answer was on the wire;
+        // a report that is no longer in it shows the server's state at the
+        // next refresh (AUD-17b-1).
+        final shown = items.where((r) => r.reportId == reportId).firstOrNull;
+        if (shown != null) {
+          replaceWhere(
+            (r) => r.reportId == reportId,
+            shown.copyWith(status: outcome),
+          );
+        }
       } else {
         removeWhere((r) => r.reportId == reportId);
       }

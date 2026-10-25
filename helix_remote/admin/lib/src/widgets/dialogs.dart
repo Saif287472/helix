@@ -264,52 +264,63 @@ Future<void> showCodeOnceDialog(
 }) => showDialog<void>(
   context: context,
   barrierDismissible: false,
-  builder: (context) => AlertDialog(
-    title: Text(title),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(explanation),
-        const SizedBox(height: HelixSpace.md),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(HelixSpace.sm),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: HelixRadius.card,
-          ),
-          child: SelectableText(
-            code,
-            key: const Key('shown-once-code'),
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+  // Back, the system gesture and Escape pop the route whatever the barrier
+  // says: the only way out is a button, so the one copy of the code is never
+  // lost to a gesture (AUD-17b-2).
+  builder: (context) => PopScope(
+    canPop: false,
+    child: AlertDialog(
+      title: Text(title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(explanation),
+          const SizedBox(height: HelixSpace.md),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(HelixSpace.sm),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: HelixRadius.card,
+            ),
+            child: SelectableText(
+              code,
+              key: const Key('shown-once-code'),
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
+          const SizedBox(height: HelixSpace.xs),
+          Text(
+            'Expires ${formatTime(expiresAt)}. It is shown only now.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: code));
+            if (context.mounted) showMessage(context, 'Code copied.');
+          },
+          icon: const Icon(Icons.copy),
+          label: const Text('Copy code'),
         ),
-        const SizedBox(height: HelixSpace.xs),
-        Text(
-          'Expires ${formatTime(expiresAt)}. It is shown only now.',
-          style: Theme.of(context).textTheme.bodySmall,
+        TextButton(
+          key: const Key('discard-code'),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Discard code'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Done'),
         ),
       ],
     ),
-    actions: [
-      TextButton.icon(
-        onPressed: () async {
-          await Clipboard.setData(ClipboardData(text: code));
-          if (context.mounted) showMessage(context, 'Code copied.');
-        },
-        icon: const Icon(Icons.copy),
-        label: const Text('Copy code'),
-      ),
-      FilledButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Done'),
-      ),
-    ],
   ),
 );
 

@@ -200,6 +200,16 @@ class _SignInScreenState extends State<SignInScreen> {
                               false => 'Sign in',
                             }),
                     ),
+                    if (session.canRetrySavedSession) ...[
+                      const SizedBox(height: 10),
+                      // The saved session is still good: the server could not
+                      // be reached, which is not the session's fault.
+                      TextButton(
+                        key: const Key('retry-saved-session'),
+                        onPressed: session.retrySavedSession,
+                        child: const Text('Try the saved session again'),
+                      ),
+                    ],
                   ],
                 ),
               ),

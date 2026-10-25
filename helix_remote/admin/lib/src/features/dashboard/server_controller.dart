@@ -73,14 +73,26 @@ final class ServerController extends FeatureController {
 
   /// Reloads everything. The reads are independent: one failing leaves
   /// a note instead of hiding the rest.
+  /// Counts the changes this console made to the configuration: a `config`
+  /// read that started before the latest one is older than what the server
+  /// answered to it, and must not overwrite it (AUD-17b-4).
+  var _configChanges = 0;
+
   Future<void> refresh() async {
     _loading = true;
     notifyListeners();
     Object? configError;
+    final changesAtStart = _configChanges;
     await Future.wait([
-      _read(() async => _config = await ctx.api.admin.config(), (e) {
-        configError = e;
-      }),
+      _read(
+        () async {
+          final read = await ctx.api.admin.config();
+          if (_configChanges == changesAtStart) _config = read;
+        },
+        (e) {
+          configError = e;
+        },
+      ),
       _read(
         () async => _flags = (await ctx.api.admin.featureFlags()).flags,
         (e) => _flagsNote = describeAdminError(e, now: ctx.now),
@@ -160,6 +172,7 @@ final class ServerController extends FeatureController {
     notifyListeners();
     final problem = await attempt(() async {
       _config = await ctx.api.admin.updateConfig(patch);
+      _configChanges++;
     });
     _busy.remove(key);
     notifyListeners();

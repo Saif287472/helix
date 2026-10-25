@@ -377,7 +377,7 @@ class _SegmentButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
+            constraints: const BoxConstraints(minHeight: 48),
             child: Center(
               child: Text(
                 segment.label,

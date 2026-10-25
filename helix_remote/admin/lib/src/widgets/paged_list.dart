@@ -66,8 +66,16 @@ class PagedListView<T> extends StatelessWidget {
         } else {
           state = null;
         }
+        // A filter over the loaded pages can match nothing while the server
+        // has more: the empty state keeps its "Load more" (AUD-17b-3).
+        final moreBehindEmpty =
+            state is ConsoleEmpty &&
+            controller.items.isNotEmpty &&
+            controller.hasMore;
         final lead = hasHeader ? 1 : 0;
-        final count = state != null ? lead + 1 : lead + items.length + 1;
+        final count = state != null
+            ? lead + (moreBehindEmpty ? 2 : 1)
+            : lead + items.length + 1;
         return RefreshIndicator(
           onRefresh: controller.refresh,
           child: ListView.builder(
@@ -81,7 +89,12 @@ class PagedListView<T> extends StatelessWidget {
                   child: header,
                 );
               }
-              if (state != null) return state;
+              if (state != null) {
+                if (moreBehindEmpty && index == lead + 1) {
+                  return _Footer(controller: controller);
+                }
+                return state;
+              }
               final i = index - lead;
               if (i < items.length) {
                 return Padding(

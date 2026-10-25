@@ -50,6 +50,17 @@ final class AdminClient {
   /// Ends every session of this operator on the server (any other copy of
   /// the token too), then forgets the token here.
   Future<void> signOut() async {
+    // The server call is best effort; forgetting the token is not: an
+    // operator who asked to sign out must not stay signed in because the
+    // network failed (AUD-11c-2).
+    try {
+      await _signOutOnServer();
+    } finally {
+      auth.forget();
+    }
+  }
+
+  Future<void> _signOutOnServer() async {
     await _t.empty(Routes.adminSignOut);
     auth.forget();
   }

@@ -3729,6 +3729,44 @@ page with retry; a saved session survives a failed refresh; the segmented bar is
 code dialog; "Load more" survives a filter; a failed sign-out clears local
 state anyway.
 
+- S1 (AUD-17a-1 to -17a-3, AUD-17b-1 to -17b-4, AUD-11c-2) — the operator
+  console, all eight findings in one step (admin app and one API client). **17a-1:**
+  `start()` and `_resume()` catch a storage failure (settings, or the secure
+  vault, whose `clear` may fail too) and land on the sign-in form with "The
+  console could not read its saved sign-in. Sign in again." instead of a launch
+  screen that never ends. **17a-2:** when the launch check fails for a reason
+  that is not the session's (network, server), the form shows "Try the saved
+  session again" (`retrySavedSession`), which re-runs the resume without a
+  password. **17a-3:** the segmented bar's segment is `minHeight: 48`, and
+  the tap-target rule scans for `minHeight` below 48 as well as the shrink
+  patterns it already had. **17b-1:** resolving a report under the "All"
+  filter looks the report up with `firstOrNull` and skips the in-place update
+  when a refresh dropped it meanwhile. **17b-2:** the shown-once code dialog
+  is a `PopScope(canPop: false)`; its two exits are "Discard code" and
+  "Done". **17b-3:** `PagedListView` keeps its "Load more" footer behind the
+  empty state when a client-side filter hides every loaded row and the server
+  has more pages. **17b-4:** `ServerController` counts configuration changes;
+  a `config` read that began before the latest change does not overwrite it.
+  **11c-2:** `AdminClient.signOut` forgets the token in a `finally`, so a
+  failed server call cannot leave the operator signed in. Tests
+  (`stranded_operator_test.dart`, 8): a throwing vault and unreadable settings
+  both reach the form with the message; a saved session is retried after an
+  unreachable launch and the console opens; a segment is at least 48 px; the
+  code survives `handlePopRoute` and leaves only by a button; a filter that
+  hides page one still offers "Load more" and loads page two; a failed sign-out
+  leaves the token forgotten (**fails on the old client**). The suite fails on
+  the old admin sources by construction (new controller API). **17b-1 and
+  17b-4 are fixed without a failing test:** both need a held response on the
+  fake server, which it cannot do; the changes are one lookup and one counter.
+  Gate: admin **214 green**, api **217 green**, `flutter analyze` and `dart
+  format` clean.
+  **Batch report.** B18's eight findings are closed. **Owner-facing:** no
+  server change and no new `.env` line; the admin console is built from this
+  repository, so rebuild it (`helix_remote/admin`) to get these. The
+  phone app is unaffected, but `AdminClient` is in the shared API package, so
+  the next app build carries the sign-out fix too.
+- Next: B19 (CLI), then the remaining batches.
+
 ---
 
 # Tier 3 — the app and the CLI on their own device

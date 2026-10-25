@@ -109,14 +109,24 @@ final class AdminSessionController extends ChangeNotifier {
   // ------------------------------------------------------------------ start
 
   Future<void> start() async {
-    _settings = await services.loadSettings();
-    _lastServerUrl = _settings!.serverUrl ?? '';
+    try {
+      _settings = await services.loadSettings();
+      _lastServerUrl = _settings!.serverUrl ?? '';
+    } on Object {
+      // Preferences that cannot be read must not leave the console on its
+      // launch screen for ever (AUD-17a-1): sign-in works without them.
+      if (_disposed) return;
+      return _toSignedOut(error: _unreadableStorage);
+    }
     if (_settings!.appLockEnabled) {
       _setPhase(SessionPhase.locked);
     } else {
       await _resume();
     }
   }
+
+  static const _unreadableStorage =
+      'The console could not read its saved sign-in. Sign in again.';
 
   /// Asks for the device unlock; on success opens the saved session.
   Future<void> unlock() async {
@@ -147,8 +157,23 @@ final class AdminSessionController extends ChangeNotifier {
 
   /// Opens the saved session when it is still good.
   Future<void> _resume() async {
-    final stored = await services.vault.read();
+    final StoredSession? stored;
+    try {
+      stored = await services.vault.read();
+    } on Object {
+      // Secure storage that cannot be read (a keystore after a device
+      // restore, a locked one) ends in the sign-in form with the reason, not
+      // in a launch screen that never finishes (AUD-17a-1).
+      if (_disposed) return;
+      try {
+        await services.vault.clear();
+      } on Object {
+        // Nothing more can be done about storage that is not there.
+      }
+      return _toSignedOut(error: _unreadableStorage);
+    }
     if (_disposed) return;
+    _retryable = false;
     if (stored == null) return _toSignedOut();
     if (!stored.session.expiresAt.isAfter(services.now())) {
       await services.vault.clear();
@@ -174,6 +199,9 @@ final class AdminSessionController extends ChangeNotifier {
           notice: 'Your admin session has ended. Sign in again.',
         );
       }
+      // Not a rejected token: the saved session is still good, and the
+      // sign-in form offers to try it again (AUD-17a-2).
+      _retryable = true;
       return _toSignedOut(error: describeAdminError(e, now: services.now));
     }
     if (_disposed) {
@@ -181,6 +209,21 @@ final class AdminSessionController extends ChangeNotifier {
       return;
     }
     _enter(api, address, stored.session);
+  }
+
+  bool _retryable = false;
+
+  /// A saved session is still in storage and the last launch check failed for
+  /// a reason that is not the session's (the network, the server): the
+  /// sign-in form can try it again instead of asking for the password
+  /// (AUD-17a-2).
+  bool get canRetrySavedSession => _retryable && !_busy;
+
+  Future<void> retrySavedSession() async {
+    if (!canRetrySavedSession) return;
+    _error = null;
+    _setPhase(SessionPhase.starting);
+    await _resume();
   }
 
   // ------------------------------------------------------------- sign-in form

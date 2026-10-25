@@ -86,7 +86,9 @@ void main() {
       final shrink = RegExp(
         r'MaterialTapTargetSize\.shrinkWrap|VisualDensity\.compact|'
         r'minimumSize:\s*(const\s+)?Size\(\s*(\d{1,2}|4[0-7])\s*,|'
-        r'minimumSize:\s*Size\.zero',
+        r'minimumSize:\s*Size\.zero|'
+        // A box that sizes a tap target (AUD-17a-3 was `minHeight: 44`).
+        r'minHeight:\s*(\d{1,2}|4[0-7])(?!\.)',
       );
       final offenders = <String>[];
       lib.forEach((path, source) {
