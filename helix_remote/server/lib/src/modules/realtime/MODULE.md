@@ -13,7 +13,9 @@ reads frame headers on the raw socket and destroys it before a larger
 payload is buffered (`dart:io` has no limit of its own).
 More than 20 upgrades per device in 10
 minutes, or client frames beyond a burst of 300 at 30 per second, close
-with 4029.
+with 4029. The frame bucket and the idle timer run on a monotonic uptime
+(`platform/clock.dart`), so a wall-clock step (NTP, a manual change) closes
+no socket (AUD-3-9); `hello`'s `server_time` is still wall-clock time.
 
 1. **Supersede:** a previous connection for the device on this node is
    closed with 4008. `realtime.connected` on the bus does the same on

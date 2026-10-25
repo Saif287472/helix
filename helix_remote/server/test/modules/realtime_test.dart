@@ -482,6 +482,37 @@ void main() {
     });
   });
 
+  group('realtime timing', skip: databaseTestSkipReason, () {
+    test('a stepping clock cannot trip the frame or idle timer', () async {
+      final uptime = ManualUptime();
+      final h = await Harness.start(realtimeUptime: uptime);
+      try {
+        final b1 = await h.registerGlobal(bobNumber);
+        final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+        await socket.hello();
+        // A clock that steps backwards must not refill the bucket by a
+        // negative amount, nor make a speaking socket look idle.
+        uptime.advance(const Duration(hours: -1));
+        for (var i = 0; i < 5; i++) {
+          socket.ping('back$i');
+        }
+        for (var i = 0; i < 5; i++) {
+          expect(await socket.next(), isA<PongFrame>());
+        }
+        await h.realtime.refreshConnections();
+        socket.ping('still');
+        expect(await socket.next(), isA<PongFrame>());
+
+        // The same source still closes a socket that really went quiet.
+        uptime.advance(const Duration(seconds: 51));
+        await h.realtime.refreshConnections();
+        expect(await socket.closed, RealtimeCloseCode.idleTimeout);
+      } finally {
+        await h.stop();
+      }
+    });
+  });
+
   group('realtime token expiry', skip: databaseTestSkipReason, () {
     test('the route refresh closes sockets whose token expired', () async {
       final clock = _OffsetClock();

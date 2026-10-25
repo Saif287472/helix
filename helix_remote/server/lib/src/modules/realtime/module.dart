@@ -6,6 +6,7 @@ import 'package:helix_remote_server/src/kernel/presence.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
+import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/http/websocket_limits.dart';
@@ -25,8 +26,10 @@ final class RealtimeModule extends ModuleBase {
     required this.messaging,
     required this.authenticator,
     EventBus? bus,
+    Uptime? uptime,
   }) {
     _bus = bus ?? context.bus;
+    _uptime = uptime ?? StopwatchUptime();
     _connected = context.metrics.counter(
       'helix_ws_connections_total',
       'WebSocket connections opened',
@@ -50,6 +53,10 @@ final class RealtimeModule extends ModuleBase {
 
   /// The platform bus, unless a test replaces it.
   late final EventBus _bus;
+
+  /// Frame-bucket and idle timing; monotonic, so a wall-clock step cannot
+  /// close a well-behaved socket (AUD-3-9).
+  late final Uptime _uptime;
   final Map<String, _Connection> _connections = {};
   final List<StreamSubscription<Object?>> _subscriptions = [];
   final Set<Future<void>> _tasks = {};
@@ -366,7 +373,10 @@ final class _Connection {
     this._head,
   ) : deviceId = principal.deviceId,
       accountId = principal.accountId,
-      suspended = principal.suspended;
+      suspended = principal.suspended {
+    _frameAt = _m._uptime.elapsed;
+    _lastHeard = _frameAt;
+  }
 
   final RealtimeModule _m;
   final WebSocketChannel _ws;
@@ -384,9 +394,12 @@ final class _Connection {
   /// The device's sequence head at connect time, sent in `hello`.
   final int _head;
   double _frameTokens = RealtimeModule.frameBurst.toDouble();
-  DateTime _frameAt = DateTime.now();
+
+  /// When the frame bucket was last refilled, and when a client frame was
+  /// last heard. Both are monotonic marks, never wall-clock times.
+  late Duration _frameAt;
   final List<int> _unacked = [];
-  DateTime _lastHeard = DateTime.now();
+  late Duration _lastHeard;
   bool _closed = false;
   bool _finished = false;
   bool _pumping = false;
@@ -457,16 +470,17 @@ final class _Connection {
   }
 
   void _onFrame(Object? data) {
-    final now = DateTime.now();
+    final now = _m._uptime.elapsed;
+    final since = now - _frameAt;
+    _frameAt = now;
     _lastHeard = now;
     _frameTokens = math.min(
       RealtimeModule.frameBurst.toDouble(),
       _frameTokens +
-          now.difference(_frameAt).inMicroseconds /
+          (since.isNegative ? 0 : since.inMicroseconds) /
               1e6 *
               RealtimeModule.framesPerSecond,
     );
-    _frameAt = now;
     if (_frameTokens < 1) {
       _m.track(() => close(RealtimeCloseCode.rateLimited, 'too many frames'));
       return;
@@ -567,7 +581,7 @@ final class _Connection {
   }
 
   void checkIdle() {
-    if (DateTime.now().difference(_lastHeard) > RealtimeModule.heartbeat * 2) {
+    if (_m._uptime.elapsed - _lastHeard > RealtimeModule.heartbeat * 2) {
       _m.track(() => close(RealtimeCloseCode.idleTimeout, 'no heartbeat'));
     }
   }

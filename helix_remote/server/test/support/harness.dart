@@ -42,6 +42,7 @@ final class Harness {
     ObjectStorage? blobs,
     Authenticator? realtimeAuthenticator,
     EventBus? realtimeBus,
+    Uptime? realtimeUptime,
   }) async {
     final push = RecordingPushProvider();
     final env = await TestPlatform.open(
@@ -63,6 +64,7 @@ final class Harness {
         sms: sms,
         realtimeAuthenticator: realtimeAuthenticator,
         realtimeBus: realtimeBus,
+        realtimeUptime: realtimeUptime,
       ),
     );
     return Harness._(env, server, sms, push, TestApi(server.baseUri));

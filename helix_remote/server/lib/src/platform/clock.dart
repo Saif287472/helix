@@ -25,3 +25,28 @@ final class ManualClock implements Clock {
 
   void set(DateTime to) => _now = to.toUtc();
 }
+
+/// Monotonic time for intervals a wall-clock step must not disturb (socket
+/// frame buckets, idle timers). Unlike [Clock], elapsed time never moves
+/// backwards in production: a clock change or an NTP correction is invisible.
+abstract interface class Uptime {
+  Duration get elapsed;
+}
+
+final class StopwatchUptime implements Uptime {
+  final Stopwatch _watch = Stopwatch()..start();
+
+  @override
+  Duration get elapsed => _watch.elapsed;
+}
+
+/// An uptime tests move by hand; [advance] may step it backwards, standing in
+/// for a clock that is not monotonic.
+final class ManualUptime implements Uptime {
+  Duration _elapsed = Duration.zero;
+
+  @override
+  Duration get elapsed => _elapsed;
+
+  void advance(Duration by) => _elapsed += by;
+}

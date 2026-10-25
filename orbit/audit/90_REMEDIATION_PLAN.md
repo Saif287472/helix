@@ -2283,6 +2283,31 @@ table at implementation time.
   Gate: the realtime file **21 green** (20 before), `dart analyze` clean on
   the changed files. No wire change, no migration, no app change, no APK; a
   server restart (or the next deploy) picks it up.
+- S3 (AUD-3-9) — the frame-token bucket and the idle timer both diffed
+  `DateTime.now()` against a wall-clock mark. A backwards step (an NTP
+  correction, a manual change on the server PC) refilled the bucket by a
+  negative amount, so the next ordinary frame could close a socket with 4029
+  for no client misbehaviour; either direction also skewed the idle check.
+  **What changed:** a monotonic
+  [`Uptime`](file:///J:/Projects/helix/helix_remote/server/lib/src/platform/clock.dart#L32)
+  (`StopwatchUptime`, next to `Clock`/`ManualClock`) is now the only source for
+  both marks: `_frameAt` and `_lastHeard` are `Duration`s read from it,
+  [`_onFrame`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L472)
+  clamps a negative elapsed to zero before refilling, and
+  [`checkIdle`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L583)
+  subtracts the same source. `hello`'s `server_time` still uses the wall clock,
+  as the wire requires. `RealtimeModule` takes an uptime override (beside the
+  authenticator and bus ones), so a test can step it;
+  `allModules`/`Harness.start` pass `realtimeUptime`. `realtime/MODULE.md`
+  states the split.
+  Tests: `server/test/modules/realtime_test.dart` gained a `timing` group with
+  a `ManualUptime`: stepping it back an hour, five pings still answer with
+  pongs and a sweep neither rate-limits nor idles the socket; advancing it 51 s
+  and sweeping then closes it with 4010, proving the same source drives the
+  idle timer.
+  Gate: the realtime file **22 green** (21 before), `dart analyze` clean on
+  the changed files. No wire change, no migration, no app change, no APK; a
+  server restart (or the next deploy) picks it up.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**
