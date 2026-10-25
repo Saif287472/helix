@@ -3442,6 +3442,36 @@ removed or bounded — note that removing a column needs the contract step a
 release later). The export gains `truncated`/`total` per section: additive, so
 any consumer ignoring them is unaffected.
 
+- S1 (AUD-4a-2, -4a-5, -4a-6, -4a-7, -4a-8) — the people module. One
+  migration (people 5) and the report intake. **4a-6:** `POST /v1/reports`
+  now refuses oneself and an account this server does not know
+  (`invalid_field`, field `account`), files one open report per (reporter,
+  subject, category) - a partial unique index, after the migration closed the
+  extra open duplicates an old server accepted (oldest kept, `close_reason =
+  'duplicate'`) - and answers a repeat with the open report's id (200, not
+  201); 50 a day per account on top of the hourly limit; an open report older
+  than 90 days is closed by the daily job with `close_reason = 'expired'` and
+  its note cleared. **4a-5:** the note is the reporter's free text, so it is
+  cleared when the reporter's account is deleted and when the report expires,
+  the claim "ids only" in the docs now says what is kept, and the account
+  export includes the note. **4a-7, 4a-2:** indexes on open reports by subject
+  and on `contacts.contact` (the deletion purge's `OR contact = …` scanned the
+  table). **4a-8 (owner ruling Q3):** the export lists the newest 500 reports
+  and 500 blocks and says so: `reports_filed_total`/`_truncated`,
+  `blocked_total`/`_truncated`. The note column stays (the operator reads it
+  while a report is open); the contract step the audit mentions is not needed.
+  Tests (`people_test.dart`): a report is filed once while open, and a second
+  category is its own; self and unknown subjects are refused (400); an open
+  report past 90 days expires with its note cleared; a deleted reporter's note
+  goes and the report stays; the export carries the note and, with 501 reports
+  seeded, says 501 and `truncated` while listing 500. They use API that did
+  not exist or fail on the old module's behaviour. Gate: people and
+  ops_admin tests 44 green on Postgres, analyze and format clean. **Rollout:**
+  people migration 5 (additive; it runs at start, or earlier with
+  `bin/migrate.dart`); no `.env` line; `admin_report` wire unchanged, the
+  operator console does not show `close_reason` yet. A client that files a
+  report twice gets the first report's id, which it ignores.
+
 ## B16 — Group data and federation: one writer, one owner
 **S · ~2–3 days · groups module migration · depends on B3**
 

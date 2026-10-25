@@ -63,14 +63,24 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   day, one of `people.read_targets` (2,000 distinct accounts a day; the
   `people:seen:<reader>:<target>` marker in the ephemeral store, one day, is
   removed again when the read is refused). Reading yourself is free.
-- **Reports:** `reports` stores no message content. The admin console
-  lists and resolves them through `PeopleApi.reports` / `resolveReport`.
-  They survive account deletion as the moderation record (ids only) while
-  open. Resolving or dismissing sets `resolved_at` (migration 3), and
-  `people.purge_reports` (daily) deletes them 180 days later
-  (`reportRetention`).
+- **Reports:** `reports` stores no message content, but it does keep the
+  reporter's free-text `note` (500 characters): that note is cleared when the
+  reporter's account is deleted and when the report expires, and the export
+  includes it. The admin console lists and resolves reports through
+  `PeopleApi.reports` / `resolveReport`. A report survives account deletion as
+  the moderation record (ids, category, status). Intake (migration 5): the
+  subject must be another account this server knows; one open report per
+  (reporter, subject, category) - asking again returns the open one (200,
+  not 201) - 20 an hour and 50 a day per account; an open report older than 90
+  days is closed by `people.purge_reports` with `close_reason = 'expired'`.
+  Resolving or dismissing sets `resolved_at` (migration 3), and the job
+  deletes closed reports 180 days later (`reportRetention`). Migration 5 also
+  adds the index for "open reports about this account" and one on
+  `contacts.contact`, so deleting an account does not scan the table.
 - **Export:** profile version, privacy, blocked accounts, contact count,
-  reports filed.
+  reports filed (with their notes). A growing section lists its newest 500 and
+  says so: `blocked_total`/`blocked_truncated` and
+  `reports_filed_total`/`reports_filed_truncated` (owner ruling Q3).
 - **Remote accounts:** blocks accept `uuid@domain` (stored qualified;
   `blocked` is `text` since migration 2). Messages and calls relayed from
   that account are then dropped like local ones.

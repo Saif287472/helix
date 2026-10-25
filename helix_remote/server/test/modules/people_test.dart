@@ -518,18 +518,119 @@ void main() {
       expect((await look()).lastSeenAt, isNull);
     });
 
-    test('reports are stored without content', () async {
-      final r = await h.api.call(
-        Routes.report,
-        bearer: alice.bearer,
-        body: ReportRequest(
-          account: bob.accountId,
-          category: ReportCategory.spam,
-          note: 'sends links',
-        ).toJson(),
+    PeopleModule people() => h.server.modules.whereType<PeopleModule>().single;
+    String reportsTable() => '${h.env.platform.schemas.of('people')}.reports';
+
+    Future<TestResponse> report(
+      TestDevice who,
+      String account, {
+      ReportCategory category = ReportCategory.spam,
+      String? note,
+    }) => h.api.call(
+      Routes.report,
+      bearer: who.bearer,
+      body: ReportRequest(
+        account: account,
+        category: category,
+        note: note,
+      ).toJson(),
+    );
+
+    test('a report is filed once while it is open (AUD-4a-6)', () async {
+      final first = await report(alice, bob.accountId, note: 'sends links');
+      expect(first.status, 201);
+      final id = ReportResponse.fromJson(first.json).reportId;
+      expect(Uuid.isValid(id), isTrue);
+      final again = await report(alice, bob.accountId, note: 'and again');
+      expect(again.status, 200);
+      expect(ReportResponse.fromJson(again.json).reportId, id);
+      final other = await report(
+        alice,
+        bob.accountId,
+        category: ReportCategory.abuse,
       );
-      expect(r.status, 201);
-      expect(Uuid.isValid(ReportResponse.fromJson(r.json).reportId), isTrue);
+      expect(other.status, 201);
+      expect(ReportResponse.fromJson(other.json).reportId, isNot(id));
+      final rows = await h.env.platform.db.queryOne(
+        'SELECT count(*)::int8 AS n FROM ${reportsTable()}',
+      );
+      expect(rows!.integer('n'), 2);
+    });
+
+    test('nobody reports themselves or an account that is not there', () async {
+      for (final subject in [alice.accountId, Uuid.v7()]) {
+        final r = await report(alice, subject);
+        expect(r.status, 400, reason: subject);
+        expect(r.json.object('error').string('code'), 'invalid_field');
+      }
+    });
+
+    test('an open report expires, a closed one keeps its retention', () async {
+      await report(alice, bob.accountId);
+      final db = h.env.platform.db;
+      await db.execute(
+        "UPDATE ${reportsTable()} SET created_at = now() - interval '91 days'",
+      );
+      final job = people().periodic.firstWhere(
+        (j) => j.name == 'people.purge_reports',
+      );
+      await job.run();
+      final row = (await db.queryOne(
+        'SELECT status, close_reason, note FROM ${reportsTable()}',
+      ))!;
+      expect(row.string('status'), 'dismissed');
+      expect(row.string('close_reason'), 'expired');
+      expect(row.optString('note'), isNull);
+    });
+
+    test('the note of a deleted reporter goes, the report stays', () async {
+      await report(alice, bob.accountId, note: 'sends links');
+      await h.env.platform.db.tx(
+        (tx) => h.identity.api.deleteAccount(tx, alice.accountId),
+      );
+      final row = (await h.env.platform.db.queryOne(
+        'SELECT reporter, category, note FROM ${reportsTable()}',
+      ))!;
+      expect(row.string('reporter'), alice.accountId);
+      expect(row.string('category'), 'spam');
+      expect(row.optString('note'), isNull);
+    });
+
+    /// The export lists the newest 500 of a growing section and says so
+    /// (owner ruling Q3, AUD-4a-8).
+    test('the export says when a section was cut', () async {
+      Future<Map<String, Object?>> exported() async {
+        final response = await h.api.call(
+          Routes.exportData,
+          bearer: alice.bearer,
+        );
+        final sections = AccountExport.fromJson(response.json).sections;
+        return (sections['people']! as Map).cast<String, Object?>();
+      }
+
+      await report(alice, bob.accountId, note: 'sends links');
+      var people = await exported();
+      expect(people['reports_filed_total'], 1);
+      expect(people['reports_filed_truncated'], isFalse);
+      expect(
+        (people['reports_filed']! as List).single,
+        containsPair('note', 'sends links'),
+      );
+
+      await h.env.platform.db.execute(
+        'INSERT INTO ${reportsTable()} (id, reporter, subject, category) '
+        "SELECT gen_random_uuid(), @a:uuid, gen_random_uuid(), 'spam' "
+        'FROM generate_series(1, 500)',
+        {'a': alice.accountId},
+      );
+      people = await exported();
+      expect(people['reports_filed_total'], 501);
+      expect(people['reports_filed_truncated'], isTrue);
+      expect(
+        people['reports_filed']! as List,
+        hasLength(PeopleModule.exportSectionLimit),
+      );
+      expect(people['blocked_truncated'], isFalse);
     });
   });
 }

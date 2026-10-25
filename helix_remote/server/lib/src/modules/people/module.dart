@@ -87,6 +87,23 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   /// the operator handles them.
   static const reportRetention = Duration(days: 180);
 
+  /// Reports one account may file a day, on top of the hourly limit: the
+  /// operator's queue is the input this bounds (AUD-4a-6).
+  static final _reportsDaily = RateLimitPolicy.per(
+    'people.reports_daily',
+    50,
+    const Duration(days: 1),
+  );
+
+  /// An open report nobody handled is closed by the server after this long,
+  /// with `close_reason = 'expired'` (AUD-4a-6).
+  static const openReportExpiry = Duration(days: 90);
+
+  /// What an export lists of a growing section before it says "and more"
+  /// (owner ruling Q3, AUD-4a-8): the newest [exportSectionLimit] rows, the
+  /// total, and `truncated`.
+  static const exportSectionLimit = 500;
+
   /// Days of discovery budget rows kept besides today's. The table is one row
   /// per account per day and, before AUD-4a-4, only account deletion ever
   /// removed one, so a server that is used filled it for ever.
@@ -99,15 +116,21 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
 
   @override
   List<PeriodicJob> get periodic => [
-    PeriodicJob(
-      'people.purge_reports',
-      const Duration(hours: 24),
-      () => context.db.execute(
+    PeriodicJob('people.purge_reports', const Duration(hours: 24), () async {
+      await context.db.execute(
         'DELETE FROM $s.reports WHERE resolved_at < now() - '
         'make_interval(secs => @age:int8)',
         {'age': reportRetention.inSeconds},
-      ),
-    ),
+      );
+      // An open report nobody handled does not wait for ever (AUD-4a-6); its
+      // note goes with it, and its retention starts now.
+      await context.db.execute(
+        "UPDATE $s.reports SET status = 'dismissed', resolved_at = now(), "
+        "close_reason = 'expired', note = NULL WHERE status = 'open' AND "
+        'created_at < now() - make_interval(secs => @age:int8)',
+        {'age': openReportExpiry.inSeconds},
+      );
+    }),
     PeriodicJob(
       'people.purge_discovery',
       const Duration(hours: 24),
@@ -127,7 +150,28 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
     Migration(2, 'federated_blocks', _federatedBlocks),
     Migration(3, 'report_resolved_at', _reportResolvedAt),
     Migration(4, 'display_names', _displayNames),
+    Migration(5, 'report_bounds', _reportBounds),
   ];
+
+  /// Reports that can be told apart and found (AUD-4a-6, -4a-7, -4a-2): one
+  /// open report per (reporter, subject, category) - the extra ones an old
+  /// server accepted are closed first, oldest kept - an index for the
+  /// operator's "open reports about this account" count, a reason an open
+  /// report was closed by the server, and an index on `contacts.contact` so
+  /// deleting an account does not scan the table.
+  static String _reportBounds(String s) =>
+      '''
+ALTER TABLE $s.reports ADD COLUMN close_reason text;
+UPDATE $s.reports r SET status = 'dismissed', resolved_at = now(), close_reason = 'duplicate'
+FROM (
+  SELECT id, row_number() OVER (PARTITION BY reporter, subject, category ORDER BY created_at, id) AS n
+  FROM $s.reports WHERE status = 'open'
+) d
+WHERE d.id = r.id AND d.n > 1;
+CREATE UNIQUE INDEX reports_open_once ON $s.reports (reporter, subject, category) WHERE status = 'open';
+CREATE INDEX reports_open_subject ON $s.reports (subject) WHERE status = 'open';
+CREATE INDEX contacts_contact ON $s.contacts (contact);
+''';
 
   /// The name each account gives itself, as its app reports it in the clear
   /// for the operator console (ADR-030). Contacts read the encrypted profile.
@@ -239,7 +283,8 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
   String get s => schema;
 
   /// Reports stay after an account is deleted: they are the moderation
-  /// record (ids only; no content).
+  /// record (ids, category, status). The reporter's free-text note does not:
+  /// it is cleared with the account, and when the report expires.
   @override
   Future<Object?> exportAccount(SqlSession db, String accountId) async {
     final profile = await db.queryOne(
@@ -247,7 +292,12 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       {'a': accountId},
     );
     final blocks = await db.query(
-      'SELECT blocked, created_at FROM $s.blocks WHERE account_id = @a:uuid ORDER BY created_at',
+      'SELECT blocked, created_at FROM $s.blocks WHERE account_id = @a:uuid '
+      'ORDER BY created_at LIMIT @n:int4',
+      {'a': accountId, 'n': exportSectionLimit},
+    );
+    final blockTotal = await db.queryOne(
+      'SELECT count(*)::int8 AS n FROM $s.blocks WHERE account_id = @a:uuid',
       {'a': accountId},
     );
     final contacts = await db.queryOne(
@@ -255,8 +305,12 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       {'a': accountId},
     );
     final reports = await db.query(
-      'SELECT id, subject, category, status, created_at FROM $s.reports '
-      'WHERE reporter = @a:uuid ORDER BY id DESC LIMIT 500',
+      'SELECT id, subject, category, status, note, created_at FROM $s.reports '
+      'WHERE reporter = @a:uuid ORDER BY id DESC LIMIT @n:int4',
+      {'a': accountId, 'n': exportSectionLimit},
+    );
+    final reportTotal = await db.queryOne(
+      'SELECT count(*)::int8 AS n FROM $s.reports WHERE reporter = @a:uuid',
       {'a': accountId},
     );
     final displayName = await db.queryOne(
@@ -282,6 +336,8 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
             'since': toWireTime(r.time('created_at')),
           },
       ],
+      'blocked_total': blockTotal!.integer('n'),
+      'blocked_truncated': blockTotal.integer('n') > blocks.length,
       'contacts': contacts!.integer('n'),
       'reports_filed': [
         for (final r in reports)
@@ -290,9 +346,12 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
             'subject': r.string('subject'),
             'category': r.string('category'),
             'status': r.string('status'),
+            'note': r.optString('note'),
             'created_at': toWireTime(r.time('created_at')),
           },
       ],
+      'reports_filed_total': reportTotal!.integer('n'),
+      'reports_filed_truncated': reportTotal.integer('n') > reports.length,
     };
   }
 
@@ -313,6 +372,13 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
     );
     await tx.execute(
       'DELETE FROM $s.contacts WHERE account_id = @a:uuid OR contact = @a:uuid',
+      {'a': accountId},
+    );
+    // The report stays (the moderation record: ids, category, status), but
+    // the free text its reporter wrote does not outlive the reporter
+    // (AUD-4a-5).
+    await tx.execute(
+      'UPDATE $s.reports SET note = NULL WHERE reporter = @a:uuid',
       {'a': accountId},
     );
   }
@@ -720,9 +786,30 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
         (req.note?.length ?? 0) > ReportRequest.maxNoteLength) {
       throw const ApiError(ErrorCode.invalidField);
     }
+    // Nobody reports themselves, and nobody this server does not know: such a
+    // report could never be acted on (AUD-4a-6).
+    if (req.account == q.device.accountId ||
+        await identity.account(context.db, req.account) == null) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'account'},
+      );
+    }
+    final daily = await context.rateLimiter.hit(
+      _reportsDaily,
+      q.device.accountId,
+    );
+    if (!daily.allowed) {
+      throw ApiError(ErrorCode.rateLimited, retryAfter: daily.retryAfter);
+    }
+    // One open report per (reporter, subject, category): asking again is the
+    // report already filed, not a second row for the operator to read.
     final id = Uuid.v7();
-    await context.db.execute(
-      'INSERT INTO $s.reports (id, reporter, subject, category, note) VALUES (@id:uuid, @r:uuid, @s:uuid, @c:text, @n:text)',
+    final row = await context.db.queryOne(
+      'INSERT INTO $s.reports (id, reporter, subject, category, note) '
+      'VALUES (@id:uuid, @r:uuid, @s:uuid, @c:text, @n:text) '
+      "ON CONFLICT (reporter, subject, category) WHERE status = 'open' "
+      'DO NOTHING RETURNING id',
       {
         'id': id,
         'r': q.device.accountId,
@@ -731,7 +818,17 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
         'n': req.note,
       },
     );
-    return jsonResponse(ReportResponse(reportId: id).toJson(), status: 201);
+    if (row != null) {
+      return jsonResponse(ReportResponse(reportId: id).toJson(), status: 201);
+    }
+    final existing = await context.db.queryOne(
+      'SELECT id FROM $s.reports WHERE reporter = @r:uuid AND subject = @s:uuid '
+      "AND category = @c:text AND status = 'open'",
+      {'r': q.device.accountId, 's': req.account, 'c': req.category.wire},
+    );
+    return jsonResponse(
+      ReportResponse(reportId: existing!.string('id')).toJson(),
+    );
   }
 }
 
