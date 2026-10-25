@@ -364,6 +364,12 @@ enum ReportStatus implements WireEnum {
 }
 
 /// One row of `GET /v1/admin/reports` (filter: `status`).
+///
+/// [reporter] and [subject] are account ids and are always there; the four
+/// fields after them are who those ids are, joined by the server only for the
+/// operator console (ADR-030). A party whose app never reported a name or a
+/// number, and any server without `HELIX_PHONE_KEY`, is left out of them - the
+/// console then shows what it has, which is the id.
 final class AdminReport {
   const AdminReport({
     required this.reportId,
@@ -373,6 +379,10 @@ final class AdminReport {
     required this.status,
     required this.createdAt,
     this.note,
+    this.reporterName,
+    this.reporterPhone,
+    this.subjectName,
+    this.subjectPhone,
   });
 
   final String reportId;
@@ -383,6 +393,36 @@ final class AdminReport {
   final DateTime createdAt;
   final String? note;
 
+  /// The name the reporter gave themselves, as their app reported it.
+  final String? reporterName;
+
+  /// The reporter's number (E.164), where the server keeps numbers.
+  final String? reporterPhone;
+
+  /// The reported account's own name and number, same rules as the reporter's.
+  final String? subjectName;
+  final String? subjectPhone;
+
+  AdminReport copyWith({
+    ReportStatus? status,
+    String? reporterName,
+    String? reporterPhone,
+    String? subjectName,
+    String? subjectPhone,
+  }) => AdminReport(
+    reportId: reportId,
+    reporter: reporter,
+    subject: subject,
+    category: category,
+    status: status ?? this.status,
+    createdAt: createdAt,
+    note: note,
+    reporterName: reporterName ?? this.reporterName,
+    reporterPhone: reporterPhone ?? this.reporterPhone,
+    subjectName: subjectName ?? this.subjectName,
+    subjectPhone: subjectPhone ?? this.subjectPhone,
+  );
+
   JsonMap toJson() => compact({
     'report_id': reportId,
     'reporter': reporter,
@@ -391,6 +431,10 @@ final class AdminReport {
     'status': status.wire,
     'created_at': toWireTime(createdAt),
     'note': note,
+    'reporter_name': reporterName,
+    'reporter_phone': reporterPhone,
+    'subject_name': subjectName,
+    'subject_phone': subjectPhone,
   });
 
   factory AdminReport.fromJson(JsonReader json) => AdminReport(
@@ -409,6 +453,10 @@ final class AdminReport {
     ),
     createdAt: json.time('created_at'),
     note: json.optString('note'),
+    reporterName: json.optString('reporter_name'),
+    reporterPhone: json.optString('reporter_phone'),
+    subjectName: json.optString('subject_name'),
+    subjectPhone: json.optString('subject_phone'),
   );
 }
 

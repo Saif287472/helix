@@ -296,7 +296,7 @@ tokens never open each other's routes.
 | `GET /v1/admin/invites` | — → `Page<AdminInvite>` | Codes are never listed. |
 | `POST /v1/admin/invites` | — → 201 `CreatedInvite` | Code shown once. |
 | `DELETE /v1/admin/invites/{invite_id}` | — → 204 | Open invites only. |
-| `GET /v1/admin/reports` | — → `Page<AdminReport>` | `status`. |
+| `GET /v1/admin/reports` | — → `Page<AdminReport>` | `status`. Each row names both people as the accounts list does - `reporter_name`, `reporter_phone`, `subject_name`, `subject_phone` (ADR-030) - and keeps their ids, which is all the record holds. |
 | `PUT /v1/admin/reports/{report_id}` | `ResolveReportRequest` → 204 | `resolved` or `dismissed`; open reports only. |
 | `GET /v1/admin/audit` | — → `Page<AuditEntry>` | Newest first. |
 | `GET /v1/admin/config` | — → `AdminConfig` | No secrets. `integrations` (optional) says whether push, SMS and TURN are set up: `configured`, plus `provider` (`fcm`, `bulksmsbd`) or `count` (TURN addresses). |

@@ -178,10 +178,13 @@ Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
 
 ## Operator actions (`IdentityAdminApi`, `api.admin`)
 
-Used only by the admin module: account list and detail (last four digits,
-never the number), suspend and unsuspend (status only; suspended principals
-reach `allowSuspended` routes), ban (phone hash into `banned_phones`, then
-full deletion), device revoke (same hooks and signals as a user revoke,
+Used only by the admin module: account list and detail (the `~Helix name`, the
+last four digits and, where `HELIX_PHONE_KEY` opens `phone_sealed`, the full
+number the app reported - ADR-030), `phoneNumbers` (the same numbers by account
+id, for a report row's two people), suspend and unsuspend (status only;
+suspended principals reach `allowSuspended` routes), ban (phone hash into
+`banned_phones`, then full deletion), device revoke (same hooks and signals as
+a user revoke,
 reason `admin`), recovery codes, invites (list, create, cancel) and purging
 expired rows. The account export section comes from
 `data/admin_store.dart`: account, devices, push token kinds (never tokens),

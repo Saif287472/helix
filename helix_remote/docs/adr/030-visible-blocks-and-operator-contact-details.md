@@ -60,6 +60,11 @@ channel), and a server that holds names and numbers is a richer target.
   console shows them, falling back to the `~Helix name` and the last four
   digits. Both are in the account's own export and are deleted with the
   account.
+- `AdminReport` carries the same for both people - `reporter_name`,
+  `reporter_phone`, `subject_name`, `subject_phone` - added 2026-10-25 so a
+  report row names who filed it and who it is about, and each name opens that
+  account's console page. Nothing new is stored: the record keeps its two
+  account ids and the row is joined at read time from the tables above.
 
 ## Consequences
 

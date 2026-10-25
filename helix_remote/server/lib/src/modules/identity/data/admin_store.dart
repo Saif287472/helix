@@ -97,6 +97,28 @@ final class AdminStore {
     return r == null ? null : await _accountOf(r);
   }
 
+  /// The full numbers these accounts reported, for the console's report rows
+  /// (ADR-030). A server without `HELIX_PHONE_KEY` and an account that never
+  /// reported its number are both left out, so the caller shows the id.
+  Future<Map<String, String>> phoneNumbers(
+    SqlSession db,
+    Iterable<String> accounts,
+  ) async {
+    final ids = accounts.toSet().toList();
+    if (ids.isEmpty) return const {};
+    final rows = await db.query(
+      'SELECT id, phone_sealed FROM $s.accounts WHERE id = ANY(@ids:_uuid)',
+      {'ids': ids},
+    );
+    final found = <String, String>{};
+    for (final r in rows) {
+      final id = r.string('id');
+      final number = await _number(id, r.optBytes('phone_sealed'));
+      if (number != null) found[id] = number;
+    }
+    return found;
+  }
+
   Future<List<AdminDevice>> devices(SqlSession db, String accountId) async {
     final rows = await db.query(
       'SELECT id, name, platform, status, created_at, last_seen_on, revoked_at '

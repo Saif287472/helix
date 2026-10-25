@@ -5,5 +5,9 @@
   "category": "spam",
   "status": "open",
   "created_at": 1790827200000,
-  "note": "Sends unsolicited links."
+  "note": "Sends unsolicited links.",
+  "reporter_name": "Alice Rahman",
+  "reporter_phone": "+8801712345678",
+  "subject_name": "Bob Rahman",
+  "subject_phone": "+8801700000000"
 }

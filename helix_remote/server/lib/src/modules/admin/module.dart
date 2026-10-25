@@ -599,7 +599,27 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       page: _page(q),
       status: status,
     );
-    return jsonResponse(page.toJson((r) => r.toJson()));
+    // A report row is two account ids. The operator reads the people behind
+    // them exactly as the accounts list does - the name people keeps, the
+    // number identity unseals (ADR-030) - so the console can act on a report
+    // without a second lookup per row.
+    final ids = {
+      for (final r in page.items) ...[r.reporter, r.subject],
+    };
+    final names = await people.displayNames(context.db, ids);
+    final numbers = await identity.admin.phoneNumbers(context.db, ids);
+    return jsonResponse(
+      page.toJson(
+        (r) => r
+            .copyWith(
+              reporterName: names[r.reporter],
+              reporterPhone: numbers[r.reporter],
+              subjectName: names[r.subject],
+              subjectPhone: numbers[r.subject],
+            )
+            .toJson(),
+      ),
+    );
   }
 
   Future<Response> _resolveReport(HelixRequest q) async {

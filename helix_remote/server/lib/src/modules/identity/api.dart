@@ -205,8 +205,9 @@ abstract interface class IdentityApi {
 }
 
 /// What the operator console may do with accounts, devices, invites and
-/// recovery codes. Never exposes phone numbers (last four digits only),
-/// codes after issue, or keys.
+/// recovery codes. Names and full numbers are its to read (ADR-030) and never
+/// leave through this facade except on an admin route; codes after issue, and
+/// keys, are never exposed.
 abstract interface class IdentityAdminApi {
   /// Newest first. [query] matches a `~Helix name` prefix, or the last four
   /// digits when it is four digits.
@@ -216,6 +217,14 @@ abstract interface class IdentityAdminApi {
     AccountStatus? status,
     String? query,
   });
+
+  /// The full numbers [accounts] reported (E.164), for a report row that has
+  /// to name the two people behind its ids. Accounts that reported no number,
+  /// and any server without `HELIX_PHONE_KEY`, are left out of the map.
+  Future<Map<String, String>> phoneNumbers(
+    SqlSession s,
+    Iterable<String> accounts,
+  );
 
   /// The account, every device (active and revoked) and whether a password
   /// is set; null if there is no such account.

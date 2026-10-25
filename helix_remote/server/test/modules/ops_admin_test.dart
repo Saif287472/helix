@@ -694,6 +694,18 @@ void main() {
       final token = await setUpAdmin();
       final alice = await h.registerGlobal(aliceNumber);
       final bob = await h.registerGlobal(bobNumber);
+      // Both apps say who they are (ADR-030), so a report row can name the
+      // two people instead of showing two ids.
+      await h.api.call(
+        Routes.setOwnName,
+        bearer: alice.bearer,
+        body: const SetOwnNameRequest(name: 'Alice Rahman').toJson(),
+      );
+      await h.api.call(
+        Routes.setOwnName,
+        bearer: bob.bearer,
+        body: const SetOwnNameRequest(name: 'Bob Rahman').toJson(),
+      );
       await h.api.call(
         Routes.report,
         bearer: alice.bearer,
@@ -715,6 +727,16 @@ void main() {
       expect(report.reporter, alice.account.id);
       expect(report.subject, bob.account.id);
       expect(report.note, 'rude');
+      expect(report.reporterName, 'Alice Rahman');
+      expect(report.subjectName, 'Bob Rahman');
+      // This server has no HELIX_PHONE_KEY: the numbers are left out of the
+      // row rather than answered empty.
+      expect(report.reporterPhone, isNull);
+      expect(report.subjectPhone, isNull);
+      expect(
+        jsonEncode(report.toJson()),
+        isNot(anyOf(contains('reporter_phone'), contains('subject_phone'))),
+      );
 
       final bad = await h.api.call(
         Routes.adminResolveReport,

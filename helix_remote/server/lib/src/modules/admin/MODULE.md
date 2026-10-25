@@ -74,7 +74,7 @@ deleted account by at most a year.
 | Devices | `DELETE …/devices/{id}` | Full revoke: hooks purge keys and mailbox, and the socket closes. |
 | Recovery | `POST …/recovery-codes` | 48 hours, single use, shown once. |
 | Invites | list, create (code shown once), cancel | Codes are stored hashed. |
-| Reports | list (`status`), resolve or dismiss | |
+| Reports | list (`status`), resolve or dismiss | The record holds two account ids; each row is answered with both people named and numbered the way Accounts does, joined at read time from people and identity (ADR-030). |
 | Audit | list, newest first | |
 | Config | get, patch `server_name`, `maintenance`, `federation_enabled` | `get` also says which outside services are set up (`integrations`: push, SMS, TURN), as a yes/no with the provider name or an address count. Never a key, address or secret; it cannot say whether a provider accepts its key. |
 | Flags | get, set (allow-listed) | |

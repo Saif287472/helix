@@ -454,6 +454,42 @@ void main() {
       );
     });
 
+    test('a report row names and numbers both people', () async {
+      await start(
+        extra: {
+          'HELIX_PHONE_KEY': encodeBytes(List<int>.generate(32, (i) => i)),
+        },
+      );
+      final alice = await person(aliceNumber);
+      final bob = await person(bobNumber);
+      final reporter = deviceApi(bob);
+      final reported = deviceApi(alice);
+      // Each app reports its own name and number once, as a real app does
+      // after signing in (ADR-030).
+      await reporter.identity.setPhoneNumber(bobNumber);
+      await reporter.people.setOwnName('Bob Rahman');
+      await reported.identity.setPhoneNumber(aliceNumber);
+      await reported.people.setOwnName('Alice Rahman');
+      await reporter.people.report(
+        ReportRequest(
+          account: alice.accountId,
+          category: ReportCategory.spam,
+          note: 'sends me spam',
+        ),
+      );
+      final api = await signedIn();
+
+      final report = (
+        await api.admin.reports(status: ReportStatus.open)
+      ).items.single;
+      expect(report.reporter, bob.accountId);
+      expect(report.reporterName, 'Bob Rahman');
+      expect(report.reporterPhone, bobNumber);
+      expect(report.subject, alice.accountId);
+      expect(report.subjectName, 'Alice Rahman');
+      expect(report.subjectPhone, aliceNumber);
+    });
+
     test('config, flags and maintenance mode', () async {
       await start();
       final alice = await person(aliceNumber);

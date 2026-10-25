@@ -34,6 +34,12 @@ final class Administration implements IdentityAdminApi {
   }) => store.accounts(s, page: page, status: status, query: query);
 
   @override
+  Future<Map<String, String>> phoneNumbers(
+    SqlSession s,
+    Iterable<String> accounts,
+  ) => store.phoneNumbers(s, accounts);
+
+  @override
   Future<({AdminAccount account, List<AdminDevice> devices, bool hasPassword})?>
   accountDetail(SqlSession s, String accountId) async {
     final account = await store.account(s, accountId);

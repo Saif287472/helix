@@ -80,6 +80,37 @@ void main() {
       (v) => v.toJson(),
       AdminReport.fromJson,
     );
+    // The console's row: the same record with both people joined in.
+    expectRoundTrip(
+      AdminReport(
+        reportId: Uuid.v7(),
+        reporter: Uuid.v7(),
+        subject: account.accountId,
+        category: ReportCategory.impersonation,
+        status: ReportStatus.open,
+        createdAt: at,
+        note: 'pretends to be support',
+      ).copyWith(
+        reporterName: 'Alice Rahman',
+        reporterPhone: '+8801712345678',
+        subjectName: 'Bob Rahman',
+        subjectPhone: '+8801700000000',
+      ),
+      (v) => v.toJson(),
+      AdminReport.fromJson,
+    );
+    // Nothing reported, nothing joined: the keys are absent, not null.
+    expect(
+      AdminReport(
+        reportId: Uuid.v7(),
+        reporter: Uuid.v7(),
+        subject: account.accountId,
+        category: ReportCategory.impersonation,
+        status: ReportStatus.open,
+        createdAt: at,
+      ).toJson(),
+      isNot(contains('reporter_name')),
+    );
     expectRoundTrip(
       AuditEntry(
         id: Uuid.v7(),
