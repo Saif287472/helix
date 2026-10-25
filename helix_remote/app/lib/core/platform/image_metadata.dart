@@ -15,16 +15,82 @@ abstract final class ImageMetadata {
   /// the stripper understands (a corrupt file is null as well: the caller
   /// must not send what it could not clean).
   static Uint8List? strip(Uint8List bytes) =>
-      stripJpeg(bytes) ?? stripPng(bytes) ?? stripWebp(bytes);
+      stripJpeg(bytes) ??
+      stripPng(bytes) ??
+      stripWebp(bytes) ??
+      stripGif(bytes);
 
-  /// True when [bytes] start like a GIF. A GIF has no EXIF block, so it is
-  /// sent as it is.
+  /// True when [bytes] start like a GIF.
   static bool isGif(Uint8List bytes) =>
       bytes.length >= 6 &&
       bytes[0] == 0x47 &&
       bytes[1] == 0x49 &&
       bytes[2] == 0x46 &&
       bytes[3] == 0x38;
+
+  // ------------------------------------------------------------------- GIF
+
+  /// Application extensions a viewer needs (looping an animation); every
+  /// other one, the XMP packet among them, is dropped.
+  static const _gifKeptApplications = ['NETSCAPE2.0', 'ANIMEXTS1.0'];
+
+  /// Strips a GIF: keeps the header, the palettes, the frames and the
+  /// extensions that drive the animation, and drops Comment and Plain Text
+  /// extensions, every other Application extension (XMP) and anything after
+  /// the trailer (AUD-14c-4). The pixels are not touched. Null when [b] is
+  /// not a well-formed GIF.
+  static Uint8List? stripGif(Uint8List b) {
+    if (!isGif(b) || b.length < 13) return null;
+    final out = BytesBuilder(copy: false);
+    var at = 13;
+    if (b[10] & 0x80 != 0) at += 3 * (1 << ((b[10] & 7) + 1));
+    if (at > b.length) return null;
+    out.add(Uint8List.sublistView(b, 0, at));
+    // Sub-blocks: length-prefixed runs ending in a zero length. Returns the
+    // offset after the terminator, or -1 when the data runs out.
+    int endOfSubBlocks(int from) {
+      var i = from;
+      while (true) {
+        if (i >= b.length) return -1;
+        final n = b[i];
+        i += 1 + n;
+        if (n == 0) return i <= b.length ? i : -1;
+      }
+    }
+
+    while (true) {
+      if (at >= b.length) return null; // no trailer: not a whole GIF
+      final marker = b[at];
+      if (marker == 0x3B) {
+        out.addByte(0x3B);
+        return out.takeBytes();
+      }
+      if (marker == 0x21) {
+        if (at + 2 > b.length) return null;
+        final label = b[at + 1];
+        final end = endOfSubBlocks(at + 2);
+        if (end < 0) return null;
+        var keep = label == 0xF9; // graphic control (frame delay, transparency)
+        if (label == 0xFF && b[at + 2] == 11 && at + 3 + 11 <= b.length) {
+          final id = String.fromCharCodes(b.sublist(at + 3, at + 14));
+          keep = _gifKeptApplications.contains(id);
+        }
+        if (keep) out.add(Uint8List.sublistView(b, at, end));
+        at = end;
+      } else if (marker == 0x2C) {
+        if (at + 10 > b.length) return null;
+        var i = at + 10;
+        if (b[at + 9] & 0x80 != 0) i += 3 * (1 << ((b[at + 9] & 7) + 1));
+        i += 1; // the LZW minimum code size
+        final end = i > b.length ? -1 : endOfSubBlocks(i);
+        if (end < 0) return null;
+        out.add(Uint8List.sublistView(b, at, end));
+        at = end;
+      } else {
+        return null;
+      }
+    }
+  }
 
   // ------------------------------------------------------------------ JPEG
 

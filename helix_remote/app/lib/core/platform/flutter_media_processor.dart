@@ -1,6 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:helix_remote/core/platform/attachment_picker.dart'
+    show readHead;
 import 'package:helix_remote/core/platform/mp4_metadata.dart';
 import 'package:helix_remote/core/platform/pixel_decoder.dart';
 import 'package:helix_remote/core/platform/thumbnail_encoder.dart';
@@ -63,17 +64,16 @@ final class FlutterMediaProcessor implements MediaProcessor {
   Future<ProcessedMedia> _image(String path) async {
     final file = File(path);
     final length = await file.length();
-    final bytes = Uint8List.fromList(await file.readAsBytes());
-    final header = BasicMediaProcessor.imageSize(
-      Uint8List.sublistView(
-        bytes,
-        0,
-        bytes.length < 262144 ? bytes.length : 262144,
-      ),
-    );
+    // The size is checked before the picture is read: the cap exists to keep
+    // a huge image out of memory, and reading it first (twice, with the copy)
+    // was the spike (AUD-14d-1). The header alone gives the dimensions.
+    final head = await readHead(path, length: 262144);
+    if (head == null) return ProcessedMedia.none;
+    final header = BasicMediaProcessor.imageSize(head);
     if (length > maxDecodeBytes) {
       return _dimensions(header);
     }
+    final bytes = await file.readAsBytes();
     final pixels = await _decoder.decode(bytes, maxSide: thumbnailSide);
     if (pixels == null) return _dimensions(header);
     final EncodedThumbnail encoded;

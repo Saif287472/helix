@@ -169,7 +169,6 @@ const _failed = 3;
 int _stripImageFile(String source, String target) {
   try {
     final bytes = File(source).readAsBytesSync();
-    if (ImageMetadata.isGif(bytes)) return _clean;
     final stripped = ImageMetadata.strip(bytes);
     if (stripped == null) return _unsupported;
     if (_same(bytes, stripped)) return _clean;

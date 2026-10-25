@@ -54,32 +54,56 @@ final class DeviceProfileImageSource implements ProfileImageSource {
     Uint8List bytes, {
     int size = 256,
   }) async {
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    ui.Codec? codec;
+    ui.Image? source;
+    ui.Image? cropped;
     try {
-      final codec = await ui.instantiateImageCodec(bytes);
+      // Decoded no larger than twice the result on the short side: a
+      // 12-megapixel photo is never held at full size, which on a small phone
+      // is what threw (AUD-14c-2).
+      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final shortSide = descriptor.width < descriptor.height
+          ? descriptor.width
+          : descriptor.height;
+      final scale = shortSide <= size * 2 ? 1.0 : (size * 2) / shortSide;
+      codec = await descriptor.instantiateCodec(
+        targetWidth: (descriptor.width * scale).round().clamp(1, 1 << 14),
+        targetHeight: (descriptor.height * scale).round().clamp(1, 1 << 14),
+      );
       final frame = await codec.getNextFrame();
-      final source = frame.image;
-      final side = source.width < source.height ? source.width : source.height;
-      final left = (source.width - side) / 2;
-      final top = (source.height - side) / 2;
+      final image = source = frame.image;
+      final side = image.width < image.height ? image.width : image.height;
+      final left = (image.width - side) / 2;
+      final top = (image.height - side) / 2;
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
       canvas.drawImageRect(
-        source,
+        image,
         ui.Rect.fromLTWH(left, top, side.toDouble(), side.toDouble()),
         ui.Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()),
         ui.Paint()..filterQuality = ui.FilterQuality.high,
       );
-      final cropped = await recorder.endRecording().toImage(size, size);
-      final data = await cropped.toByteData(format: ui.ImageByteFormat.png);
-      source.dispose();
-      cropped.dispose();
-      codec.dispose();
+      final result = cropped = await recorder.endRecording().toImage(
+        size,
+        size,
+      );
+      final data = await result.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) throw const ProfileImageException();
       return data.buffer.asUint8List();
     } on ProfileImageException {
       rethrow;
     } on Object {
       throw const ProfileImageException();
+    } finally {
+      // Every native object goes, whether the crop worked or not.
+      cropped?.dispose();
+      source?.dispose();
+      codec?.dispose();
+      descriptor?.dispose();
+      buffer?.dispose();
     }
   }
 }

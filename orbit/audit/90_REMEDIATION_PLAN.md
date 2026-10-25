@@ -3978,6 +3978,47 @@ and the three outcomes) keeps passing.
 **Rollout:** app only. No schema, no wire, no server. A `.heif` photo that was
 sent as a document before the fix is already out; this batch only stops more.
 
+- S1 (AUD-14c-1 to -14c-4, AUD-14d-1) — an attachment is what it is, cleaned,
+  or it does not go; app only. **14c-1:** the picker kind came from the file
+  *name*, so a photo saved as `.heif`, `.avif`, `.tif` or with no extension was
+  a "document" and went out with its position and camera. `describePickedFile`
+  now takes the file's first bytes (`readHead`, 32 of them) and `sniffMime`
+  decides from magic bytes - JPEG, PNG, GIF, WebP, TIFF, BMP, the ISO-media
+  brands (HEIC/HEIF/AVIF as photos, QuickTime/3GP/MP4 as video, M4A as audio),
+  WebM, Ogg, FLAC, MP3, WAV - and the name only when the bytes say nothing;
+  `heif`, `avif`, `tif`, `tiff` and `bmp` are also in the extension map. A
+  photo the metadata stripper does not read in place (HEIF, AVIF, TIFF, BMP)
+  goes to the sanitizer's existing re-encode path, which drops everything. The
+  gallery picker and the camera path both read the head. **14c-3:** a file
+  that cannot be read in a multi-select is skipped, not the whole selection.
+  **14c-4:** `ImageMetadata.stripGif` walks a GIF's blocks and drops Comment
+  and Plain Text extensions, every Application extension but `NETSCAPE2.0`
+  and `ANIMEXTS1.0` (so the XMP packet goes) and anything after the trailer;
+  frames, palettes and timing are kept byte for byte, a clean GIF comes back
+  identical, and a truncated or malformed one is refused (and re-encoded by
+  the sanitizer, as an unreadable photo is) instead of sent. **14c-2:**
+  `cropToSquare` decodes through an `ImageDescriptor` at no more than twice
+  the result on the short side and disposes the descriptor, buffer, codec and
+  both images in a `finally`. **14d-1:** the media processor checks the file
+  size against the 96 MiB cap *before* reading, using only a 256 KiB head for
+  dimensions, instead of reading the whole file and copying it first. Tests
+  (`attachment_kind_test.dart`, 7): a no-extension JPEG, `.heif`, `.avif`,
+  HEIC and TIFF by content are photos and a plain ISO file is video; the name
+  decides when the bytes say nothing; a no-extension JPEG with a comment goes
+  through the sanitizer as `stripped` and the marker is gone; a GIF loses its
+  comment, XMP and trailer bytes and keeps NETSCAPE, still decodes, is
+  idempotent, and truncated ones are null; the sanitizer cleans a GIF; a
+  4000x3000 photo is cropped to 256x256 and garbage is a
+  `ProfileImageException`. They use API that did not exist, so the first
+  three groups fail on the old code by construction; **the crop test passes on
+  the old code too** (it was correct, only wasteful), and 14c-3 and 14d-1 have
+  no test (the first needs the platform picker, the second would need to
+  observe memory). Gate: media and profile tests 83 green, analyze and format
+  clean.
+  **Batch report.** B21's five findings are closed. A `.heif` photo already
+  sent as a document is out. **Owner-facing:** a new APK; no server change.
+- Next: B22 (a player and a recorder tell the truth), then B23 onward.
+
 ## B22 — A player and a recorder tell the truth about a failure
 
 **A · ~0.5–1 day · no migration, no wire**

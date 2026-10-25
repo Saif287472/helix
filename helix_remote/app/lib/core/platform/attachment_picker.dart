@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:helix_remote/core/platform/device_camera.dart';
@@ -137,6 +138,7 @@ final class DeviceAttachmentPicker implements AttachmentPicker {
         name: name,
         size: size,
         temporary: true,
+        head: await readHead(path),
       );
     } on Object {
       return null;
@@ -148,17 +150,24 @@ final class DeviceAttachmentPicker implements AttachmentPicker {
       final files = await FilePicker.pickFiles(type: type);
       final out = <PickedFile>[];
       for (final file in files) {
-        final path = file.path;
-        if (path == null) continue;
-        final size = await File(path).length();
-        out.add(
-          describePickedFile(
-            path: path,
-            name: file.name,
-            size: size,
-            temporary: await _temp.owns(path),
-          ),
-        );
+        // One file that cannot be read (a cloud placeholder, a revoked
+        // provider) is left out; the others still attach (AUD-14c-3).
+        try {
+          final path = file.path;
+          if (path == null) continue;
+          final size = await File(path).length();
+          out.add(
+            describePickedFile(
+              path: path,
+              name: file.name,
+              size: size,
+              temporary: await _temp.owns(path),
+              head: await readHead(path),
+            ),
+          );
+        } on Object {
+          continue;
+        }
       }
       return out;
     } on Object {
@@ -169,15 +178,37 @@ final class DeviceAttachmentPicker implements AttachmentPicker {
   }
 }
 
-/// A [PickedFile] for [path], its kind and mime type guessed from the name.
+/// The first bytes of [path], enough to tell what the file is; null when it
+/// cannot be read.
+Future<Uint8List?> readHead(String path, {int length = 32}) async {
+  try {
+    final file = await File(path).open();
+    try {
+      return await file.read(length);
+    } finally {
+      await file.close();
+    }
+  } on Object {
+    return null;
+  }
+}
+
+/// A [PickedFile] for [path]: its kind and mime type from what the file *is*
+/// when [head] (its first bytes) says so, and from its name otherwise.
+///
+/// The sanitizer cleans a file because of its kind, so the kind cannot depend
+/// on a name: a photo saved as `.heif`, `.avif` or with no extension used to
+/// be a "document" and went out with its position and camera (AUD-14c-1).
 PickedFile describePickedFile({
   required String path,
   String? name,
   required int size,
   bool temporary = false,
+  Uint8List? head,
 }) {
   final fileName = name ?? p.basename(path);
-  final mime = mimeForFileName(fileName);
+  final mime =
+      (head == null ? null : sniffMime(head)) ?? mimeForFileName(fileName);
   final kind = switch (mime.split('/').first) {
     'image' => PickedKind.image,
     'video' => PickedKind.video,
@@ -194,6 +225,56 @@ PickedFile describePickedFile({
   );
 }
 
+/// The media type of a file from its first bytes, for the formats whose
+/// identity matters to what is done with them (photos, video, audio); null
+/// when [head] says nothing certain.
+String? sniffMime(Uint8List head) {
+  bool at(int offset, List<int> bytes) {
+    if (head.length < offset + bytes.length) return false;
+    for (var i = 0; i < bytes.length; i++) {
+      if (head[offset + i] != bytes[i]) return false;
+    }
+    return true;
+  }
+
+  if (at(0, const [0xFF, 0xD8, 0xFF])) return 'image/jpeg';
+  if (at(0, const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) {
+    return 'image/png';
+  }
+  if (at(0, const [0x47, 0x49, 0x46, 0x38])) return 'image/gif';
+  if (at(0, const [0x52, 0x49, 0x46, 0x46]) &&
+      at(8, const [0x57, 0x45, 0x42, 0x50])) {
+    return 'image/webp';
+  }
+  if (at(0, const [0x52, 0x49, 0x46, 0x46]) &&
+      at(8, const [0x57, 0x41, 0x56, 0x45])) {
+    return 'audio/wav';
+  }
+  if (at(0, const [0x49, 0x49, 0x2A, 0x00]) ||
+      at(0, const [0x4D, 0x4D, 0x00, 0x2A])) {
+    return 'image/tiff';
+  }
+  if (at(0, const [0x42, 0x4D]) && head.length >= 14) return 'image/bmp';
+  if (at(4, const [0x66, 0x74, 0x79, 0x70]) && head.length >= 12) {
+    // ISO base media: the major brand says photo or video.
+    final brand = String.fromCharCodes(head.sublist(8, 12));
+    return switch (brand) {
+      'heic' || 'heix' || 'hevc' || 'hevx' => 'image/heic',
+      'mif1' || 'msf1' || 'heim' || 'heis' => 'image/heif',
+      'avif' || 'avis' => 'image/avif',
+      'qt  ' => 'video/quicktime',
+      '3gp4' || '3gp5' || '3gp6' || '3ge6' || '3gg6' => 'video/3gpp',
+      'M4A ' || 'M4B ' => 'audio/aac',
+      _ => 'video/mp4',
+    };
+  }
+  if (at(0, const [0x1A, 0x45, 0xDF, 0xA3])) return 'video/webm';
+  if (at(0, const [0x4F, 0x67, 0x67, 0x53])) return 'audio/ogg';
+  if (at(0, const [0x66, 0x4C, 0x61, 0x43])) return 'audio/flac';
+  if (at(0, const [0x49, 0x44, 0x33])) return 'audio/mpeg';
+  return null;
+}
+
 /// The media type for a file name, by its extension. The few that matter to a
 /// chat; everything else is `application/octet-stream`.
 String mimeForFileName(String fileName) {
@@ -204,6 +285,10 @@ String mimeForFileName(String fileName) {
     'gif' => 'image/gif',
     'webp' => 'image/webp',
     'heic' => 'image/heic',
+    'heif' => 'image/heif',
+    'avif' => 'image/avif',
+    'tif' || 'tiff' => 'image/tiff',
+    'bmp' => 'image/bmp',
     'mp4' || 'm4v' => 'video/mp4',
     'mov' => 'video/quicktime',
     'webm' => 'video/webm',
