@@ -153,6 +153,11 @@ final class HelixRuntime {
       clientName: config.deviceName,
       sockets: pinned ? pinning.socketFactory : defaultSocketFactory,
       onRequestFailed: AnomalyLog.request,
+      onSessionPersistFailed: (error, _) => AnomalyLog.state(
+        'session',
+        'the refreshed session could not be saved',
+        fields: {'error': error.runtimeType.toString()},
+      ),
     );
     // The REST client makes its `HttpClient` when it is constructed, so a
     // pinned runtime builds it inside the pinning scope.

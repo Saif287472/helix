@@ -62,12 +62,18 @@ final class DeviceSessionAuth implements AuthProvider {
     required this._refresher,
     this.reauthenticate,
     this.refreshAhead = const Duration(seconds: 30),
+    this.onPersistFailed,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
   final SessionStore _store;
   final Future<Session> Function(String refreshToken) _refresher;
   final DateTime Function() _now;
+
+  /// Told when a session could not be saved. The in-memory session is
+  /// already the new one, so the current run continues; the loss shows only
+  /// after a restart, when the previous session is read back.
+  final void Function(Object error, StackTrace stack)? onPersistFailed;
 
   /// Last resort when the refresh token is refused; null when it cannot
   /// sign in either.
@@ -97,19 +103,39 @@ final class DeviceSessionAuth implements AuthProvider {
     return _cached;
   }
 
-  /// Stores a session returned by registration or a sign-in route.
+  /// Stores a session returned by registration, a sign-in route or a
+  /// refresh.
+  ///
+  /// The in-memory session is authoritative and is set before the store is
+  /// written: a refresh has already rotated the pair on the server, so
+  /// keeping the old refresh token in memory when the write fails would
+  /// present a token the server treats as reuse and refuse the whole family
+  /// (AUD-11a-4). A failed write is reported through [onPersistFailed] and
+  /// does not fail the call.
   Future<void> signedIn(Session session) async {
-    await _store.write(session);
     _cached = session;
     _loaded = true;
+    try {
+      await _store.write(session);
+    } on Object catch (error, stack) {
+      final report = onPersistFailed;
+      if (report == null) return;
+      try {
+        report(error, stack);
+      } on Object {
+        // A reporter never changes what the caller sees.
+      }
+    }
   }
 
   /// Forgets the session (after `DELETE /v1/auth/sessions/current`, or when
-  /// the device learns it was revoked).
+  /// the device learns it was revoked). The cache goes first for the same
+  /// reason as [signedIn]: a stale token in memory is worse than a store
+  /// that could not be cleared.
   Future<void> forget() async {
-    await _store.clear();
     _cached = null;
     _loaded = true;
+    await _store.clear();
   }
 
   @override

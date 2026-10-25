@@ -237,6 +237,56 @@ void main() {
       expect(refreshCalls, 1);
     });
 
+    test('a failed store write keeps the rotated session in memory', () async {
+      final flaky = _FlakyStore(session('t1'));
+      final failures = <Object>[];
+      var calls = 0;
+      final a = DeviceSessionAuth(
+        store: flaky,
+        refresher: (token) async {
+          calls++;
+          return session('t2');
+        },
+        onPersistFailed: (error, _) => failures.add(error),
+      );
+      expect(await a.refresh('t1'), 't2');
+      expect(failures, hasLength(1));
+      expect((await flaky.read())!.accessToken, 't1');
+      expect(await a.accessToken(), 't2');
+      expect(await a.refresh('t1'), 't2');
+      expect(calls, 1, reason: 'the rotated-out token is never presented');
+    });
+
+    test(
+      'a wrong password is an answer, not an authentication failure',
+      () async {
+        const wrong = ApiException(
+          status: 401,
+          code: ErrorCode.invalidCredentials,
+        );
+        expect(wrong.isUnauthenticated, isFalse);
+        expect(
+          const ApiException(
+            status: 401,
+            code: ErrorCode.unauthenticated,
+          ).isUnauthenticated,
+          isTrue,
+        );
+        server.handler = (_) => apiError(ErrorCode.invalidCredentials);
+        await expectLater(
+          transport().send(Routes.devices),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.isUnauthenticated,
+              'isUnauthenticated',
+              false,
+            ),
+          ),
+        );
+        expect(refreshCalls, 0);
+      },
+    );
+
     test(
       'admin tokens are not refreshed: a 401 signs the console out',
       () async {
@@ -832,4 +882,26 @@ void main() {
       expect(put.request.bodyBytes, [1, 2, 3]);
     });
   });
+}
+
+final class _FlakyStore implements SessionStore {
+  _FlakyStore(this._session);
+
+  Session? _session;
+  bool failNextWrite = true;
+
+  @override
+  Future<Session?> read() async => _session;
+
+  @override
+  Future<void> write(Session session) async {
+    if (failNextWrite) {
+      failNextWrite = false;
+      throw StateError('the disk is full');
+    }
+    _session = session;
+  }
+
+  @override
+  Future<void> clear() async => _session = null;
 }

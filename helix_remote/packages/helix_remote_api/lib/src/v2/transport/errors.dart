@@ -99,7 +99,12 @@ final class ApiException extends HelixApiException {
   }
 
   /// The session is not (or no longer) valid: refresh, then sign in again.
-  bool get isUnauthenticated => status == 401;
+  ///
+  /// `invalid_credentials` is also a 401, but it answers a wrong password in
+  /// the body, not a rejected token; the transport already declines to
+  /// refresh it and must not be reported as a lost session.
+  bool get isUnauthenticated =>
+      status == 401 && code != ErrorCode.invalidCredentials;
 
   /// Worth retrying later, with [retryAfter] when given.
   bool get isRetryable => code.isRetryable;

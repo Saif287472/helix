@@ -36,11 +36,13 @@ final class HelixApi {
     Duration timeout = const Duration(seconds: 30),
     Future<Session?> Function(IdentityClient identity)? reauthenticate,
     void Function(RequestFailure failure)? onRequestFailed,
+    void Function(Object error, StackTrace stack)? onSessionPersistFailed,
   }) {
     late final HelixTransport transport;
     final auth = DeviceSessionAuth(
       store: sessions,
       refresher: (token) => IdentityClient(transport).refresh(token),
+      onPersistFailed: onSessionPersistFailed,
     );
     transport = HelixTransport(
       baseUrl: baseUrl,

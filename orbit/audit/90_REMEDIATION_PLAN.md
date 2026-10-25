@@ -1764,6 +1764,29 @@ upload pairs with B7's chunk protocol but does not require it.
   and still succeeds, in 65 slices).
   Gate: api **207 green** (205 before, +2), `flutter analyze` clean on the
   package. No wire change, no app change; no APK needed.
+- S2 (AUD-11a-3, AUD-11a-4) — `isUnauthenticated` was true for any 401, so
+  the engine's "sign in again" branches would have treated a wrong password
+  as a lost session (the transport itself already declined to refresh it);
+  and `signedIn` wrote the store *before* caching, so a failed write after a
+  refresh left the rotated-out refresh token in memory, and the next refresh
+  presented it again - which the server treats as theft and refuses the
+  family.
+  **What changed:** the getter excludes `invalid_credentials`; `signedIn`
+  sets the in-memory session first and persists afterwards, reporting a
+  failed write through a new `onPersistFailed` callback (threaded through
+  `HelixApi`, wired in the app runtime to `AnomalyLog.state`) instead of
+  failing the call; `forget` clears the cache first for the same reason. A
+  full disk can still lose the new session at restart - one sign-in - but the
+  running app never presents a rotated-out token.
+  Tests: `transport_test.dart` "a failed store write keeps the rotated
+  session in memory" (the write throws once: the callback is told, the store
+  still holds the old token, every later request uses the new one, and the
+  refresher runs once) and "a wrong password is an answer, not an
+  authentication failure" (the getter on both 401s, and a 401
+  `invalid_credentials` on a device route is thrown without a refresh).
+  Gate: api **209 green**; `flutter analyze` clean on the package and the
+  runtime. No wire change; the only app change is the diagnostic line; no
+  APK needed.
 
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**
