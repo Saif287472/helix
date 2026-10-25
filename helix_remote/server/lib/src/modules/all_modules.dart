@@ -12,6 +12,7 @@ import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/modules/ops/module.dart';
 import 'package:helix_remote_server/src/modules/people/module.dart';
 import 'package:helix_remote_server/src/modules/realtime/module.dart';
+import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/server.dart';
@@ -20,11 +21,12 @@ import 'package:helix_remote_server/src/server.dart';
 /// the facades of modules listed before it. Grows phase by phase.
 ///
 /// [sms] replaces the configured SMS provider (tests);
-/// [realtimeAuthenticator] replaces identity's for the realtime gateway's
-/// sweep (tests).
+/// [realtimeAuthenticator] and [realtimeBus] replace identity's authenticator
+/// and the platform bus inside the realtime gateway (tests).
 List<ModuleFactory> allModules({
   SmsProvider? sms,
   Authenticator? realtimeAuthenticator,
+  EventBus? realtimeBus,
 }) {
   late OpsModule ops;
   late IdentityModule identity;
@@ -45,6 +47,7 @@ List<ModuleFactory> allModules({
       c,
       messaging: messaging.api,
       authenticator: realtimeAuthenticator ?? identity.authenticator,
+      bus: realtimeBus,
     ),
     (c) => people = PeopleModule(
       c,

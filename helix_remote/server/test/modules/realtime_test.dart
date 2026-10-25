@@ -8,6 +8,7 @@ import 'package:helix_remote_server/src/kernel/presence.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
+import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
@@ -462,6 +463,25 @@ void main() {
     });
   });
 
+  group('realtime registration', skip: databaseTestSkipReason, () {
+    test('a socket whose start fails is closed and its route drops', () async {
+      final h = await Harness.start(realtimeBus: _DeadBus());
+      try {
+        final b1 = await h.registerGlobal(bobNumber);
+        final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+        expect(await socket.closed, RealtimeCloseCode.goingAway);
+        expect(
+          await h.env.platform.ephemeral.get(Presence.routeKey(b1.id)),
+          isNull,
+          reason: 'presence stops calling the device online',
+        );
+        expect(h.env.platform.metrics.render(), contains('helix_ws_open 0'));
+      } finally {
+        await h.stop();
+      }
+    });
+  });
+
   group('realtime token expiry', skip: databaseTestSkipReason, () {
     test('the route refresh closes sockets whose token expired', () async {
       final clock = _OffsetClock();
@@ -486,6 +506,26 @@ final class _OffsetClock implements Clock {
 
   @override
   DateTime now() => DateTime.now().toUtc().add(offset);
+}
+
+/// A bus whose publishes fail, as a database blip would; its subscriptions
+/// go to an in-memory bus that receives nothing.
+final class _DeadBus implements EventBus {
+  final InMemoryEventBus _local = InMemoryEventBus();
+
+  @override
+  Future<void> publish(String topic, Map<String, Object?> message) async =>
+      throw StateError('the bus is down');
+
+  @override
+  Stream<Map<String, Object?>> subscribe(String topic) =>
+      _local.subscribe(topic);
+
+  @override
+  Future<void> get ready => _local.ready;
+
+  @override
+  Future<void> close() => _local.close();
 }
 
 /// Identity's authenticator behind a gate: [device] counts the call and waits

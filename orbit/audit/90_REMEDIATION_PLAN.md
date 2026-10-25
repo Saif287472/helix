@@ -2259,6 +2259,30 @@ table at implementation time.
   Gate: the realtime file **20 green** (19 before), `dart analyze` clean on
   the changed files. No wire change, no migration, no app change, no APK; a
   server restart (or the next deploy) picks it up.
+- S2 (AUD-3-10) — `_accept` put the new connection in `_connections`, wrote
+  its route and then started it. `start()` is also where the client's stream
+  is listened to and the `hello` is sent, so if the route save, the
+  `realtime.connected` publish or the first mailbox read threw, `track`
+  merely logged it: the socket stayed registered and its route stayed in the
+  store, so presence reported the device online, sends skipped its push and
+  nothing reached the client until the 50 s idle close.
+  **What changed:**
+  [`_accept`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L289)
+  now wraps the whole post-registration sequence (route save, previous
+  socket's supersede close, publish, `start`) in a `try` whose catch closes
+  the connection with 4503 and rethrows for the log. The route save moved
+  ahead of the previous close: once the route names the new connection, a
+  later failure's close takes that route with it, whereas closing first
+  would leave the old route behind if the save then failed. The gateway can
+  take its bus from a test (as it already takes the authenticator), so
+  `allModules`/`Harness.start` gained a `realtimeBus` override.
+  `realtime/MODULE.md` states the close and the cleanup.
+  Tests: `server/test/modules/realtime_test.dart` gained a `registration`
+  group: on a node whose bus publishes throw, one upgrade closes with 4503,
+  the device's route key is gone and the open-connection gauge reads 0.
+  Gate: the realtime file **21 green** (20 before), `dart analyze` clean on
+  the changed files. No wire change, no migration, no app change, no APK; a
+  server restart (or the next deploy) picks it up.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**

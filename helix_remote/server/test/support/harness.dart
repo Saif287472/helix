@@ -5,6 +5,7 @@ import 'package:helix_remote_server/src/modules/identity/sms.dart';
 import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/modules/realtime/module.dart';
 import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
+import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
 
@@ -40,6 +41,7 @@ final class Harness {
     Clock clock = const SystemClock(),
     ObjectStorage? blobs,
     Authenticator? realtimeAuthenticator,
+    EventBus? realtimeBus,
   }) async {
     final push = RecordingPushProvider();
     final env = await TestPlatform.open(
@@ -57,7 +59,11 @@ final class Harness {
     final sms = RecordingSmsProvider();
     final server = await HelixServer.start(
       env.platform,
-      allModules(sms: sms, realtimeAuthenticator: realtimeAuthenticator),
+      allModules(
+        sms: sms,
+        realtimeAuthenticator: realtimeAuthenticator,
+        realtimeBus: realtimeBus,
+      ),
     );
     return Harness._(env, server, sms, push, TestApi(server.baseUri));
   }

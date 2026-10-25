@@ -24,7 +24,9 @@ final class RealtimeModule extends ModuleBase {
     super.context, {
     required this.messaging,
     required this.authenticator,
+    EventBus? bus,
   }) {
+    _bus = bus ?? context.bus;
     _connected = context.metrics.counter(
       'helix_ws_connections_total',
       'WebSocket connections opened',
@@ -45,6 +47,9 @@ final class RealtimeModule extends ModuleBase {
   /// Re-checks each socket's access token (expiry, session cut-off,
   /// suspension) on every route refresh and when sessions end.
   final Authenticator authenticator;
+
+  /// The platform bus, unless a test replaces it.
+  late final EventBus _bus;
   final Map<String, _Connection> _connections = {};
   final List<StreamSubscription<Object?>> _subscriptions = [];
   final Set<Future<void>> _tasks = {};
@@ -82,7 +87,7 @@ final class RealtimeModule extends ModuleBase {
 
   @override
   Future<void> start() async {
-    final bus = context.bus;
+    final bus = _bus;
     _subscriptions
       ..add(
         bus.subscribe(MailboxTopics.wake).listen((m) {
@@ -305,16 +310,30 @@ final class RealtimeModule extends ModuleBase {
     final previous = _connections[principal.deviceId];
     _connections[principal.deviceId] = connection;
     _connected.inc();
-    await previous?.close(
-      RealtimeCloseCode.superseded,
-      'replaced by a newer connection',
-    );
-    await connection.saveRoute();
-    await context.bus.publish(_supersededTopic, {
-      'd': principal.deviceId,
-      'c': connection.id,
-    });
-    await connection.start();
+    try {
+      // The route first: once it names this connection, a later failure
+      // closes it and takes that route with it. Closing the previous socket
+      // first would leave its route behind if the save then failed.
+      await connection.saveRoute();
+      await previous?.close(
+        RealtimeCloseCode.superseded,
+        'replaced by a newer connection',
+      );
+      await _bus.publish(_supersededTopic, {
+        'd': principal.deviceId,
+        'c': connection.id,
+      });
+      await connection.start();
+    } on Object {
+      // Registered but never started: presence would call this device
+      // online while nothing reaches it and no hello ever arrives
+      // (AUD-3-10). Closing drops the map entry and the route.
+      await connection.close(
+        RealtimeCloseCode.goingAway,
+        'connection setup failed',
+      );
+      rethrow;
+    }
   }
 
   Future<void> _closed(_Connection connection) async {

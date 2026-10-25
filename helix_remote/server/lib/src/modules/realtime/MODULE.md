@@ -55,6 +55,10 @@ with 4029.
    Suspension (`identity.account_suspended`, or seen on refresh) closes
    with 4004. Two silent heartbeats close with 4010; shutdown and failed
    delivery close with 4503 (not 1001, which WebSocket libraries refuse).
+   A connection that was registered but failed to start (the route save, the
+   `realtime.connected` publish or the first mailbox read threw) is closed
+   with 4503 too, so presence does not keep it online until the idle
+   timeout (AUD-3-10); its route is deleted and its map entry removed.
    Closing always clears the route if it is still this connection's, and
    records `rt:seen:<account>` for presence.
 
