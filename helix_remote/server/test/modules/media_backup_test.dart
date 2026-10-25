@@ -50,6 +50,58 @@ void main() {
       body: data,
     );
 
+    /// A PUT that streams in two chunks, so two of them can be inside the
+    /// server at once the way a retried upload and its original are.
+    Future<http.Response> streamedPut(UploadTarget t, List<int> data) async {
+      final request =
+          http.StreamedRequest('PUT', h.server.baseUri.resolve(t.url))
+            ..headers.addAll({
+              'authorization': 'Bearer ${alice.bearer}',
+              'upload-offset': '0',
+              'content-type': 'application/octet-stream',
+            });
+      final client = http.Client();
+      final response = client.send(request);
+      final half = data.length ~/ 2;
+      request.sink.add(data.sublist(0, half));
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      request.sink.add(data.sublist(half));
+      await request.sink.close();
+      final answer = await http.Response.fromStream(await response);
+      client.close();
+      return answer;
+    }
+
+    test(
+      'two concurrent uploads of one object leave one intact copy',
+      () async {
+        final first = bytes(64 * 1024, 11);
+        final second = bytes(64 * 1024, 22);
+        final target = await create(first.length);
+
+        final answers = await Future.wait([
+          streamedPut(target, first),
+          streamedPut(target, second),
+        ]);
+
+        expect(
+          answers.where((r) => r.statusCode == 204),
+          hasLength(1),
+          reason: 'one writer wins; two used to append into the same blob',
+        );
+        expect(answers.where((r) => r.statusCode == 409), hasLength(1));
+        final full = await http.get(
+          h.server.baseUri.resolve(
+            Routes.downloadContent.expand({'media_id': target.mediaId}),
+          ),
+          headers: {'authorization': 'Bearer ${alice.bearer}'},
+        );
+        expect(full.statusCode, 200);
+        expect(full.bodyBytes, hasLength(first.length), reason: 'not doubled');
+        expect(full.bodyBytes, anyOf(equals(first), equals(second)));
+      },
+    );
+
     test(
       'resumable upload, status, ranged download by anyone signed in',
       () async {

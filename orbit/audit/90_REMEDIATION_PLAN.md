@@ -1556,6 +1556,26 @@ constraint (expand → backfill → migrate → contract). No wire change.
   schema change, no wire change, no app change; no APK needed. Docs: media
   MODULE.md, and `media.reconcile` added to the periodic-jobs invariant in
   `test/server_test.dart`.
+- S6 (AUD-5-5) — two concurrent chunk uploads of one object could both pass
+  the length check and both append, leaving a blob holding two interleaved
+  bodies that the route then sealed as complete. The storage protocol that
+  prevents it landed with B4 S2 (`LocalObjectStorage.append` holds a per-key
+  gate, re-reads the file's real length after the gate, and answers
+  `OffsetMismatch`, which the route turns into 409 `conflict` with
+  `upload_offset`); what was missing was a test at the route, where the two
+  requests actually meet.
+  **What changed:** no production code — one regression test drives the real
+  upload route with two streamed PUTs (two chunks each, sent over a chunked
+  body) at offset 0. Exactly one answers 204, the other 409, and a download
+  is exactly one of the two payloads at its declared length: not doubled,
+  not interleaved.
+  Tests: `test/modules/media_backup_test.dart` "two concurrent uploads of one
+  object leave one intact copy"; the storage-level sibling from B4,
+  `test/platform/infra_test.dart` "two writers at one offset: one appends,
+  the other is told to resume", stays the protocol test.
+  Gate: media/backup **15 green**, the new test also green three runs alone;
+  `dart analyze` clean on the changed file. No schema change, no wire change,
+  no app change; no APK needed.
 
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**
