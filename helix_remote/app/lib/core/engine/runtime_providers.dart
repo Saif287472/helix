@@ -79,7 +79,14 @@ final runtimeFactoryProvider = Provider<RuntimeFactory>(
 /// The country code bare national numbers are read in (the prefix of this
 /// account's own number), shared by the address-book adapter the engine holds
 /// and the people search. See [PhoneCountry].
-final phoneCountryProvider = Provider<PhoneCountry>((ref) => PhoneCountry());
+///
+/// One holder per account: it is filled from the account's own number, so two
+/// accounts on one phone must not read the address book with the other's
+/// prefix.
+final phoneCountryProvider = Provider<PhoneCountry>((ref) {
+  ref.watch(activeAccountProvider);
+  return PhoneCountry();
+});
 
 /// The keystore that holds each account's database key. Overridden in tests
 /// so nothing writes to the platform.
@@ -334,6 +341,11 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
 
 /// The account on screen and its server, or null on sign-in. A record, so a
 /// change elsewhere in the list does not reopen the runtime.
+///
+/// This is what an engine gateway keys itself on (the rule in `app/MODULE.md`):
+/// it changes exactly when [runtimeProvider] does, and unlike that provider it
+/// never throws - a gateway is built by screens that show before anyone is
+/// signed in.
 final activeAccountProvider = Provider<({String id, Uri server})?>((ref) {
   final current = ref.watch(accountsProvider).current;
   return current == null ? null : (id: current.id, server: current.serverUrl);

@@ -103,6 +103,51 @@ in-memory encrypted database.
 timers, which is what the FCM background isolate needs - it calls `syncOnce()`
 and closes.
 
+## One account on screen at a time (the rule)
+
+Several accounts can be signed in on one phone, but exactly one is on screen.
+`accountsProvider.switchTo` moves it; `runtimeProvider` closes that account's
+engine and opens the next; the router goes home.
+
+**A provider that opens a stream off the engine must be keyed on the account
+that engine belongs to: give its `Provider` body
+`ref.watch(activeAccountProvider)` before building the gateway.** A gateway that
+holds a `Ref` and reads `runtimeProvider` *lazily*, inside its methods, keeps
+every stream it started on the engine it first read - the one the switch closed.
+That is the bug this rule exists for: the chats on screen were the new account's
+while its profile, settings, devices or backup were still the old account's. The
+providers keyed this way are `profileGatewayProvider`,
+`settingsGatewayProvider`, `devicesGatewayProvider`, `backupGatewayProvider`,
+`localSettingsProvider` and `packSourceProvider`.
+
+Key them on `activeAccountProvider`, not on `runtimeProvider`: since Riverpod 3
+a `watch` rethrows the watched provider's error, and `runtimeProvider`
+deliberately holds "nobody is signed in" as an error - a gateway provider is
+built by screens that show at that moment. The two change together anyway.
+Watching the account does not cover the rarer case where the same account's
+engine is invalidated (a push isolate took the database lease over): the gateway
+then keeps its old streams, and the screen's retry opens new ones on the runtime
+that replaced it.
+
+`test/architecture_test.dart` enforces the shape per file: a `lib/` file that
+both opens a stream (`Stream<` or `async*`) and reads `runtimeProvider` lazily
+must also watch or listen to the account (or to `runtimeProvider`, where that is
+safe). The single exemption, `_rebindsItsOwnStreams`, is a file that cancels and
+reopens its own subscription by listening to a provider that is itself keyed on
+the runtime (`call_effects.dart` on `callsPortProvider`); adding a path there
+needs that sentence in the file, not only the path.
+`test/account_isolation_test.dart` proves the behaviour, over two real engines on
+two real encrypted files - a fake gateway would answer the question either way.
+
+Non-stream state that belongs to one account is keyed the same way:
+`phoneCountryProvider` on `activeAccountProvider`, because it is filled from
+that account's own number, and `PendingAttachments` - the files waiting on the
+send-preview screen, a family keyed by chat id and deliberately not
+auto-disposed, and so the same key under two accounts - resets when the account
+does. What an account leaves in device-wide memory is thrown away on a switch:
+`AnomalyLog.clearQueued`, because an error seen on one account is not the next
+one's to send, and its server is often another operator's.
+
 ## Sign-in
 
 `features/sign_in/application/sign_in_controller.dart` is the whole flow: the

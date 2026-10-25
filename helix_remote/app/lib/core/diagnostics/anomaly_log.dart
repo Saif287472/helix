@@ -34,6 +34,7 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 /// Entries wait in memory (at most [maxQueued]; the oldest go first, and how
 /// many a burst pushed out is reported once something is sent) until the
 /// device has a session, so errors from before sign-in are sent after it.
+/// Switching accounts throws away what is still waiting ([clearQueued]).
 /// The same anomaly again within [repeatWindow] only counts up.
 abstract final class AnomalyLog {
   static const maxQueued = 200;
@@ -272,6 +273,13 @@ abstract final class AnomalyLog {
     if (send != null && _queue.isNotEmpty) _schedule();
   }
 
+  /// Throws away what is waiting: an error seen on another account is not
+  /// this one's to send, and its server is often another operator's.
+  static void clearQueued() {
+    _queue.clear();
+    _dropped = 0;
+  }
+
   @visibleForTesting
   static void resetForTest() {
     _queue.clear();
@@ -316,10 +324,19 @@ final class _Entry {
 
 /// Connects [AnomalyLog] to this device's server. Read once when the app
 /// starts; what was recorded before then is sent once a session exists.
+///
+/// Leaving an account for another empties the queue: what the one that left
+/// the screen ran into is not the new one's to report, and its server may be
+/// run by somebody else.
 final anomalyLogInstallProvider = Provider<void>((ref) {
   AnomalyLog.install((report) async {
     final runtime = await ref.read(runtimeProvider.future);
     await runtime.api.ops.anomalies(report);
   });
   ref.onDispose(() => AnomalyLog.install(null));
+  ref.listen(activeAccountProvider, (previous, next) {
+    if (previous?.id != null && previous?.id != next?.id) {
+      AnomalyLog.clearQueued();
+    }
+  });
 });

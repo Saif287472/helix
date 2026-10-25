@@ -49,14 +49,15 @@ final class AccountBadgeStore {
 /// Read when an account list opens: a count only changes when a mailbox is
 /// read, which happens on a push or in the running app, and never because
 /// someone looked at this list.
-final accountUnreadProvider =
-    FutureProvider.autoDispose<Map<String, int>>((ref) async {
-      const store = AccountBadgeStore();
-      return {
-        for (final account in ref.watch(accountsProvider).signedIn)
-          account.id: await store.read(account.id),
-      };
-    });
+final accountUnreadProvider = FutureProvider.autoDispose<Map<String, int>>((
+  ref,
+) async {
+  const store = AccountBadgeStore();
+  return {
+    for (final account in ref.watch(accountsProvider).signedIn)
+      account.id: await store.read(account.id),
+  };
+});
 
 /// Keeps the account on screen's count current while the app runs, so reading
 /// its chats takes the number off its row and a message that arrives puts it

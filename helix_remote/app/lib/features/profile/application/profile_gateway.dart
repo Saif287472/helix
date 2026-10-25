@@ -74,9 +74,17 @@ abstract interface class ProfileGateway {
   Future<void> clearHelixName();
 }
 
-final profileGatewayProvider = Provider<ProfileGateway>(
-  EngineProfileGateway.new,
-);
+/// This account's profile, read from the engine on screen.
+///
+/// Keyed on [activeAccountProvider]: a switch is a new gateway, so the streams
+/// it opened start again on the new account's database instead of staying on
+/// the engine the switch closed. [runtimeProvider] itself cannot be watched
+/// here - it throws before anyone is signed in, and a gateway is built by
+/// screens that show then. See the rule in `app/MODULE.md`.
+final profileGatewayProvider = Provider<ProfileGateway>((ref) {
+  ref.watch(activeAccountProvider);
+  return EngineProfileGateway(ref);
+});
 
 final class EngineProfileGateway implements ProfileGateway {
   EngineProfileGateway(this._ref);

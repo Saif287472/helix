@@ -62,9 +62,13 @@ abstract interface class DevicesGateway {
   Future<LinkSession> beginLink({String? deviceName});
 }
 
-final devicesGatewayProvider = Provider<DevicesGateway>(
-  EngineDevicesGateway.new,
-);
+/// The account on screen's devices, read from its runtime. Keyed on
+/// [activeAccountProvider] so its streams follow an account switch, the way
+/// every engine gateway is (see `app/MODULE.md`).
+final devicesGatewayProvider = Provider<DevicesGateway>((ref) {
+  ref.watch(activeAccountProvider);
+  return EngineDevicesGateway(ref);
+});
 
 /// `482 913`: a short number derived from the link code, shown on both
 /// devices. It does not secure anything by itself (the code is a bearer

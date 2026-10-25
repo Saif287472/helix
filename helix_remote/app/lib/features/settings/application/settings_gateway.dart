@@ -110,9 +110,13 @@ abstract interface class SettingsGateway {
   Future<int> freeChatSpace(String chatId, StorageFreeKind kind);
 }
 
-final settingsGatewayProvider = Provider<SettingsGateway>(
-  EngineSettingsGateway.new,
-);
+/// The account on screen's settings, read from its runtime. Keyed on
+/// [activeAccountProvider] so its streams follow an account switch, the way
+/// every engine gateway is (see `app/MODULE.md`).
+final settingsGatewayProvider = Provider<SettingsGateway>((ref) {
+  ref.watch(activeAccountProvider);
+  return EngineSettingsGateway(ref);
+});
 
 final class EngineSettingsGateway implements SettingsGateway {
   EngineSettingsGateway(this._ref);

@@ -6,6 +6,8 @@ import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart'
+    show activeAccountProvider;
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/attachment_picker.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
@@ -847,7 +849,13 @@ final class PendingAttachments extends Notifier<List<AttachmentDraft>> {
   final String conversationId;
 
   @override
-  List<AttachmentDraft> build() => const [];
+  List<AttachmentDraft> build() {
+    // A switch is a rebuild, and so a reset: the same person is `direct:<peer>`
+    // on more than one account, and files picked on one must not wait on
+    // another's preview screen. Their temp copies go with that folder's sweep.
+    ref.watch(activeAccountProvider);
+    return const [];
+  }
 
   void set(List<AttachmentDraft> files) => state = files;
 
@@ -873,8 +881,10 @@ final class PendingAttachments extends Notifier<List<AttachmentDraft>> {
   }
 }
 
-/// Not auto-disposed: the files are set on one screen and read on the next,
-/// with nothing listening in between.
+/// The files waiting for one conversation, keyed by its id. Not auto-disposed:
+/// they are set on one screen and read on the next, with nothing listening in
+/// between. [PendingAttachments.build] is what resets them, on a send, on
+/// leaving the preview and when another account comes on screen.
 final pendingAttachmentsProvider =
     NotifierProvider.family<PendingAttachments, List<AttachmentDraft>, String>(
       PendingAttachments.new,

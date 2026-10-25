@@ -67,7 +67,13 @@ abstract interface class BackupGateway {
   void pauseOffer(String transferId);
 }
 
-final backupGatewayProvider = Provider<BackupGateway>(EngineBackupGateway.new);
+/// The account on screen's backup and history transfers, read from its
+/// runtime. Keyed on [activeAccountProvider] so its streams follow an account
+/// switch, the way every engine gateway is (see `app/MODULE.md`).
+final backupGatewayProvider = Provider<BackupGateway>((ref) {
+  ref.watch(activeAccountProvider);
+  return EngineBackupGateway(ref);
+});
 
 final class EngineBackupGateway implements BackupGateway {
   EngineBackupGateway(this._ref);

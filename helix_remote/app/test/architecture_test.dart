@@ -166,11 +166,56 @@ void main() {
           'shared/, or read it from a provider in core/.',
     );
   });
+
+  test('a gateway that streams from the engine is keyed on the account', () {
+    // Several accounts are signed in on one phone and one is on screen. A
+    // gateway that resolves that account's runtime *inside its methods*
+    // (`ref.read(runtimeProvider…)`) keeps every stream it opened on the
+    // engine it first read, so one account's profile, settings, devices or
+    // backup went on showing while another's chats were open. Its provider
+    // must therefore watch the account on screen - `activeAccountProvider`,
+    // or `runtimeProvider` where watching that is safe: a new account is a new
+    // gateway, and its streams start again on the right database.
+    //
+    // The check is per file, which is enough for the seam it guards: a file
+    // that opens engine streams and reads the runtime lazily must key them on
+    // the account. See the rule in MODULE.md.
+    final offenders = <String>[];
+    for (final file in files.where((f) => f.path.startsWith('lib/'))) {
+      if (_rebindsItsOwnStreams.contains(file.path)) continue;
+      final source = File(file.path).readAsStringSync();
+      final opensStreams = RegExp(r'Stream<|async\*').hasMatch(source);
+      final lazyRuntime = RegExp(r'read\(\s*runtimeProvider').hasMatch(source);
+      final keyedOnAccount = RegExp(
+        r'(watch|listen)[<(]*[^;]*(activeAccountProvider|runtimeProvider)',
+      ).hasMatch(source);
+      if (opensStreams && lazyRuntime && !keyedOnAccount) {
+        offenders.add(file.path);
+      }
+    }
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'These files open a stream off a lazily-read runtime. Give their '
+          'provider `ref.watch(activeAccountProvider)`, so an account switch '
+          'reopens the stream on the account now on screen.',
+    );
+  });
 }
 
 /// The two files allowed to log, and only an exception's type from each.
 bool _isExemptFromLogging(String path) =>
     path == 'lib/main.dart' || path == 'lib/core/push/push_background.dart';
+
+/// Files that read the runtime lazily and hold streams, and re-bind those
+/// streams to the account now on screen in their own way: they listen to a
+/// provider that is itself keyed on the runtime (`callsPortProvider`) and
+/// cancel and reopen the subscription on every change. Adding a file here
+/// needs that sentence in the file, not only the path.
+const _rebindsItsOwnStreams = {
+  'lib/features/calls/application/call_effects.dart',
+};
 
 /// `lib/features/<name>/…` -> `<name>`; anything else -> null.
 String? _featureOf(String path) {

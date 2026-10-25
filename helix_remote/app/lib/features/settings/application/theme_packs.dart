@@ -53,7 +53,13 @@ final class ApiPackSource implements PackSource {
   }
 }
 
-final packSourceProvider = Provider<PackSource>(ApiPackSource.new);
+/// The packs of the server the account on screen talks to. Keyed on
+/// [activeAccountProvider] so a switch asks the new server rather than keeping
+/// the old one's answer (see `app/MODULE.md`).
+final packSourceProvider = Provider<PackSource>((ref) {
+  ref.watch(activeAccountProvider);
+  return ApiPackSource(ref);
+});
 
 /// The packs on this device that the app can draw with, newest revision of
 /// each. Errors only when the pack folder itself cannot be read.

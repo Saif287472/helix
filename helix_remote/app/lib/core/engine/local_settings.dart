@@ -40,7 +40,14 @@ final class EngineLocalSettings implements LocalSettings {
   }
 }
 
-final localSettingsProvider = Provider<LocalSettings>(EngineLocalSettings.new);
+/// The settings of the account on screen. Keyed on [activeAccountProvider] so
+/// a stream opened on one account dies when another is opened: a value read
+/// for one account must not be written into another's database (see
+/// `app/MODULE.md`).
+final localSettingsProvider = Provider<LocalSettings>((ref) {
+  ref.watch(activeAccountProvider);
+  return EngineLocalSettings(ref);
+});
 
 /// A live value of one setting, as a provider.
 ///
