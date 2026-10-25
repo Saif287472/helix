@@ -64,14 +64,19 @@ final class GroupMeta {
 /// the epoch the blob can still be under the old key until a member re-seals
 /// it: opening tries the held epochs from the newest down. Keys live in
 /// `settings` one row per epoch, `group.key.<group id>.<epoch>`; only the
-/// newest [GroupLimits.keptEpochKeys] are kept. The per-field rows make a
-/// key write one upsert, so two rotations cannot drop each other's epoch
-/// (AUD-12e-2), and the same holds for the group's metadata below. The
-/// database is SQLCipher-protected like every other key here.
+/// newest [GroupLimits.keptEpochKeys] are kept. An epoch may hold a second
+/// key, `group.key.<group id>.<epoch>.candidate`, while the stored state
+/// cannot say which of two arrivals is the group's (AUD-12f-3; the decision
+/// is [GroupKeyAuthority]'s). The per-field rows make a key write one
+/// upsert, so two rotations cannot drop each other's epoch (AUD-12e-2), and
+/// the same holds for the group's metadata below. The database is
+/// SQLCipher-protected like every other key here.
 final class GroupKeyring {
   GroupKeyring(this._ctx);
 
   final EngineContext _ctx;
+
+  static const _candidateSuffix = '.candidate';
 
   static String _keyPrefix(String groupId) => 'group.key.$groupId.';
 
@@ -88,6 +93,9 @@ final class GroupKeyring {
   static Setting<String?> _keyRow(String groupId, int epoch) =>
       Setting<String?>('${_keyPrefix(groupId)}$epoch', null);
 
+  static Setting<String?> _candidateRow(String groupId, int epoch) =>
+      Setting<String?>('${_keyPrefix(groupId)}$epoch$_candidateSuffix', null);
+
   static Setting<String?> _metaSettings(String groupId) =>
       Setting<String?>('${_metaPrefix(groupId)}settings', null);
 
@@ -101,15 +109,6 @@ final class GroupKeyring {
       Setting<String?>('${_metaPrefix(groupId)}avatar', null);
 
   SettingsDao get _settings => _ctx.db.settingsDao;
-
-  static String? _decodeString(String stored) {
-    try {
-      final json = jsonDecode(stored);
-      return json is String ? json : null;
-    } on FormatException {
-      return null;
-    }
-  }
 
   // ---------------------------------------------------------------- keys
 
@@ -143,32 +142,96 @@ final class GroupKeyring {
     final held = <int, Uint8List>{};
     for (final row in rows.entries) {
       final epoch = int.tryParse(row.key.substring(prefix.length));
-      final encoded = _decodeString(row.value);
-      if (epoch == null || encoded == null) continue;
-      try {
-        held[epoch] = decodeBytes(encoded);
-      } on FormatException {
-        // A corrupt row holds no key; it must not fail every reader.
-      }
+      if (epoch == null) continue; // A `.candidate` row is not the primary.
+      final key = _decodeKey(row.value);
+      if (key != null) held[epoch] = key;
     }
     return held;
+  }
+
+  /// The second key held for each epoch, by epoch.
+  Future<Map<int, Uint8List>> _candidates(String groupId) async {
+    final prefix = _keyPrefix(groupId);
+    final rows = await _settings.entriesWithPrefix(prefix);
+    final held = <int, Uint8List>{};
+    for (final row in rows.entries) {
+      final suffix = row.key.substring(prefix.length);
+      if (!suffix.endsWith(_candidateSuffix)) continue;
+      final epoch = int.tryParse(
+        suffix.substring(0, suffix.length - _candidateSuffix.length),
+      );
+      if (epoch == null) continue;
+      final key = _decodeKey(row.value);
+      if (key != null) held[epoch] = key;
+    }
+    return held;
+  }
+
+  static Uint8List? _decodeKey(String? stored) {
+    if (stored == null) return null;
+    try {
+      final encoded = jsonDecode(stored);
+      return encoded is String ? decodeBytes(encoded) : null;
+    } on FormatException {
+      // A corrupt row holds no key; it must not fail every reader.
+      return null;
+    }
   }
 
   Future<Uint8List?> keyFor(String groupId, int epoch) async =>
       (await keys(groupId))[epoch];
 
-  /// Stores the key of [epoch], dropping the oldest beyond the kept count.
+  /// The second key held for [epoch], when the stored state could not say
+  /// which of two arrivals is the group's.
+  Future<Uint8List?> candidateFor(String groupId, int epoch) async =>
+      (await _candidates(groupId))[epoch];
+
+  /// Stores the key of [epoch] as its primary, dropping the oldest epochs
+  /// beyond the kept count (both keys of a dropped epoch go).
   Future<void> put(String groupId, int epoch, List<int> key) async {
     await _migrateKeys(groupId);
-    await _settings.set(
-      _keyRow(groupId, epoch),
-      encodeBytes(key),
-      now: _ctx.now(),
-    );
+    final now = _ctx.now();
+    await _settings.set(_keyRow(groupId, epoch), encodeBytes(key), now: now);
+    final candidate = await candidateFor(groupId, epoch);
+    if (candidate != null && bytesEqual(candidate, key)) {
+      await _settings.reset(_candidateRow(groupId, epoch));
+    }
     final epochs = (await keys(groupId)).keys.toList()..sort();
     final excess = max(0, epochs.length - GroupLimits.keptEpochKeys);
     for (final stale in epochs.take(excess)) {
       await _settings.reset(_keyRow(groupId, stale));
+      await _settings.reset(_candidateRow(groupId, stale));
+    }
+  }
+
+  /// Keeps [key] as the second key of [epoch], beside the primary.
+  Future<void> putCandidate(String groupId, int epoch, List<int> key) async {
+    await _migrateKeys(groupId);
+    final primary = await keyFor(groupId, epoch);
+    if (primary != null && bytesEqual(primary, key)) return;
+    await _settings.set(
+      _candidateRow(groupId, epoch),
+      encodeBytes(key),
+      now: _ctx.now(),
+    );
+  }
+
+  /// Makes [key] the primary of [epoch]; the key it replaces stays as the
+  /// second one, since a later state write may still be sealed under it. The
+  /// primary is written first so a crash between the two writes keeps the
+  /// key that was just verified, never only the one it replaced.
+  Future<void> promote(String groupId, int epoch, List<int> key) async {
+    await _migrateKeys(groupId);
+    final previous = await keyFor(groupId, epoch);
+    if (previous != null && bytesEqual(previous, key)) return;
+    final now = _ctx.now();
+    await _settings.set(_keyRow(groupId, epoch), encodeBytes(key), now: now);
+    if (previous != null) {
+      await _settings.set(
+        _candidateRow(groupId, epoch),
+        encodeBytes(previous),
+        now: now,
+      );
     }
   }
 
@@ -322,8 +385,27 @@ final class GroupKeyring {
     required int epoch,
     required int version,
   }) async {
+    final opened = await openStateWithKey(
+      groupId,
+      blob,
+      epoch: epoch,
+      version: version,
+    );
+    return opened?.content;
+  }
+
+  /// [openState] and the key that opened [blob]: the primary of an epoch is
+  /// tried before its second key.
+  Future<({GroupStateContent content, int epoch, Uint8List key})?>
+  openStateWithKey(
+    String groupId,
+    List<int> blob, {
+    required int epoch,
+    required int version,
+  }) async {
     final held = await keys(groupId);
-    final order = held.keys.toList()
+    final candidates = await _candidates(groupId);
+    final order = {...held.keys, ...candidates.keys}.toList()
       ..sort((a, b) {
         // At or below the group's epoch first, newest first; then the rest.
         final aOk = a <= epoch;
@@ -332,8 +414,11 @@ final class GroupKeyring {
         return b.compareTo(a);
       });
     for (final e in order) {
-      final content = await tryOpen(groupId, blob, e, version, held[e]!);
-      if (content != null) return content;
+      for (final key in [held[e], candidates[e]]) {
+        if (key == null) continue;
+        final content = await tryOpen(groupId, blob, e, version, key);
+        if (content != null) return (content: content, epoch: e, key: key);
+      }
     }
     return null;
   }

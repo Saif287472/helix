@@ -6,6 +6,7 @@ import 'package:helix_remote_db/helix_remote_db.dart' hide GroupRole;
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
+import 'package:helix_remote_engine/src/groups/group_key_authority.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_roster.dart';
 import 'package:helix_remote_engine/src/groups/group_trust.dart';
@@ -27,6 +28,7 @@ final class GroupKeyDistributor {
   GroupKeyDistributor(
     this._ctx,
     this._keyring,
+    this._authority,
     this._outbox,
     this._roster,
     this._trust,
@@ -34,6 +36,7 @@ final class GroupKeyDistributor {
 
   final EngineContext _ctx;
   final GroupKeyring _keyring;
+  final GroupKeyAuthority _authority;
   final OutboxService _outbox;
   final GroupRosterSync _roster;
   final GroupTrust _trust;
@@ -54,7 +57,14 @@ final class GroupKeyDistributor {
     final group = await _db.groupsDao.byId(groupId);
     final at = epoch ?? group?.epoch;
     if (at == null) return false;
-    final key = await _keyring.keyFor(groupId, at);
+    final key = group == null
+        ? await _keyring.keyFor(groupId, at)
+        : await _authority.keyForWrite(
+            groupId,
+            epoch: at,
+            state: group.state,
+            version: group.stateVersion,
+          );
     if (key == null) return false;
     final profileKey = (await _db.accountDao.current())?.profileKey;
     await _outbox.enqueueContent(
@@ -95,23 +105,20 @@ final class GroupKeyDistributor {
       if (update == null) return; // Not a member any more: nothing to do.
       final group = update.group;
       final epoch = group.epoch;
-      var key = await _keyring.keyFor(groupId, epoch);
       final blob = group.state;
-      if (key != null &&
-          blob != null &&
-          await _keyring.tryOpen(
+      if (blob != null &&
+          await _authority.keyThatOpens(
                 groupId,
                 blob,
-                epoch,
-                group.stateVersion,
-                key,
+                epoch: epoch,
+                version: group.stateVersion,
               ) !=
               null) {
-        return; // Already rotated and sealed.
+        return; // Already rotated and sealed under a key this device holds.
       }
       var state = blob == null
           ? null
-          : await _keyring.openState(
+          : await _authority.openState(
               groupId,
               blob,
               epoch: epoch,
@@ -125,9 +132,14 @@ final class GroupKeyDistributor {
         }
         state = GroupStateContent(name: group.title);
       }
+      // Only a key the state confirms (the early return above) or one for an
+      // epoch with no state yet is reused. A key the stored state does not
+      // open must not become the one the rotation seals under: that made a
+      // wrong key the group's for good (AUD-12f-3).
+      var key = blob == null ? await _keyring.keyFor(groupId, epoch) : null;
       if (key == null) {
         key = newSymmetricKey(_ctx.random);
-        await _keyring.put(groupId, epoch, key);
+        await _authority.storeMinted(groupId, epoch, key);
       }
       final members = [
         for (final m in await _db.groupsDao.members(groupId)) m.accountId,
@@ -209,18 +221,13 @@ final class GroupKeyDistributor {
         // Nothing has ever been sealed: the name is the server's plain column
         // and no reader is holding a key that has to be replaced.
         if (blob == null) continue;
-        final key = await _keyring.keyFor(group.id, group.epoch);
-        if (key != null &&
-            await _keyring.tryOpen(
-                  group.id,
-                  blob,
-                  group.epoch,
-                  group.stateVersion,
-                  key,
-                ) !=
-                null) {
-          continue; // Rotated and sealed: the duty is done.
-        }
+        final key = await _authority.keyThatOpens(
+          group.id,
+          blob,
+          epoch: group.epoch,
+          version: group.stateVersion,
+        );
+        if (key != null) continue; // Rotated and sealed: the duty is done.
         if (!await isFirstAdmin(group.id, exclude: const {})) continue;
         await _outbox.enqueueRekey(
           group.id,

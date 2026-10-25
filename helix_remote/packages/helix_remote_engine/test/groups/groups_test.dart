@@ -84,6 +84,52 @@ void main() {
       if (m.kind == 'text') m.body,
   ];
 
+  /// The primary master key this device holds for [epoch].
+  Future<Uint8List?> storedEpochKey(
+    Peer peer,
+    String groupId,
+    int epoch,
+  ) async {
+    final stored = await peer.db.settingsDao.get(
+      Setting<String?>('group.key.$groupId.$epoch', null),
+    );
+    return stored == null ? null : decodeBytes(stored);
+  }
+
+  /// The second master key this device holds for [epoch], beside the primary.
+  Future<Uint8List?> storedCandidateKey(
+    Peer peer,
+    String groupId,
+    int epoch,
+  ) async {
+    final stored = await peer.db.settingsDao.get(
+      Setting<String?>('group.key.$groupId.$epoch.candidate', null),
+    );
+    return stored == null ? null : decodeBytes(stored);
+  }
+
+  /// [from] hands [to] a `group_key` for [epoch] over their pairwise session,
+  /// as any member can; [to] processes it.
+  Future<void> sendGroupKey(
+    Peer from,
+    Peer to,
+    String groupId,
+    int epoch,
+    Uint8List key,
+  ) async {
+    await from.engine.debugSend(
+      ContentMessage(
+        id: Uuid.v7(),
+        sentAt: peers.clock.now,
+        conversation: GroupConversation(group: groupId),
+        body: GroupKeyBody(groupId: groupId, epoch: epoch, key: key),
+      ),
+      audience: [to.account],
+    );
+    await from.engine.drainOutbox();
+    await to.sync();
+  }
+
   group('roster and state', () {
     test('create keeps groups, group_members and the chat consistent, and '
         'the key reaches the members', () async {
@@ -298,6 +344,121 @@ void main() {
         ))!.title,
         'Secret name',
       );
+    });
+
+    test('a key the old state cannot confirm is kept beside the first one, '
+        'and the key the state is sealed under wins', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register('bob', phone: '+8801711000002');
+      final carol = await peers.register('carol', phone: '+8801711000003');
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      final created = await alice.engine.groups.create(
+        name: 'Weekend',
+        members: [bob.account, carol.account, dave.account],
+      );
+      await alice.engine.drainOutbox();
+      for (final peer in [bob, carol, dave]) {
+        await peer.sync();
+      }
+      // The removal bumps the epoch; the remaining members adopt it while the
+      // stored state is still sealed under the old epoch's key.
+      await alice.engine.groups.removeMember(created.groupId, dave.account);
+      await bob.sync();
+      await carol.sync();
+      expect((await carol.db.groupsDao.byId(created.groupId))!.epoch, 1);
+
+      // Carol holds no key for the new epoch. A key from Bob arrives first,
+      // and the old blob cannot say whether it is the group's (AUD-12f-3:
+      // the first arrival used to be kept unconditionally).
+      final first = Uint8List.fromList(List.filled(32, 9));
+      await sendGroupKey(bob, carol, created.groupId, 1, first);
+      expect(await storedEpochKey(carol, created.groupId, 1), first);
+
+      // Alice's rotation mints the real key, shares it, and only then seals
+      // the state under it. Carol's next sync delivers the key before the
+      // state: it must be kept, not refused as it was before this change.
+      await alice.engine.drainOutbox();
+      await alice.engine.groups.rename(created.groupId, 'Weekend v2');
+      await carol.sync();
+
+      expect(
+        (await carol.engine.groups.details(created.groupId))!.title,
+        'Weekend v2',
+        reason: 'the key that opens the state beat the first arrival',
+      );
+      expect(
+        await storedEpochKey(carol, created.groupId, 1),
+        isNot(first),
+        reason: 'the key that opens the state is the one that is kept first',
+      );
+    });
+
+    test('a rotation seals the state under its own key, not one a member '
+        'handed it', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register('bob', phone: '+8801711000002');
+      final carol = await peers.register('carol', phone: '+8801711000003');
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      final created = await alice.engine.groups.create(
+        name: 'Weekend',
+        members: [bob.account, carol.account, dave.account],
+      );
+      await alice.engine.drainOutbox();
+      for (final peer in [bob, carol, dave]) {
+        await peer.sync();
+      }
+      await alice.engine.groups.removeMember(created.groupId, dave.account);
+      await bob.sync();
+      await carol.sync();
+
+      // Alice's sync delivers the key and then runs the rotation she queued,
+      // so the intermediate state is not observable. It accepts any member's
+      // key, but the old state cannot confirm it: the rotation must mint its
+      // own. It used to re-use the held key and seal the state under it,
+      // making a key a member chose the group's for good.
+      final injected = Uint8List.fromList(List.filled(32, 8));
+      await sendGroupKey(carol, alice, created.groupId, 1, injected);
+
+      expect(
+        await storedEpochKey(alice, created.groupId, 1),
+        isNot(injected),
+        reason:
+            'the rotation mints its own key instead of sealing the state '
+            'under one it cannot open',
+      );
+      expect(
+        await storedCandidateKey(alice, created.groupId, 1),
+        injected,
+        reason: 'the key it was handed is kept beside its own, not dropped',
+      );
+      await alice.engine.groups.rename(created.groupId, 'After');
+      await bob.sync();
+      await carol.sync();
+      for (final peer in [bob, carol]) {
+        expect(
+          (await peer.engine.groups.details(created.groupId))!.title,
+          'After',
+          reason: 'the group stays readable under the rotation own key',
+        );
+      }
+    });
+
+    test('a held key that opens the state refuses one that does not', () async {
+      final g = await trio();
+      final before = await storedEpochKey(g.bob, g.id, 0);
+      await sendGroupKey(
+        g.carol,
+        g.bob,
+        g.id,
+        0,
+        Uint8List.fromList(List.filled(32, 7)),
+      );
+      expect(
+        await storedEpochKey(g.bob, g.id, 0),
+        before,
+        reason: 'a key the state does not open cannot displace its own',
+      );
+      expect((await g.bob.engine.groups.details(g.id))!.title, 'Weekend');
     });
 
     test('a roster older than the stored epoch is refused', () async {

@@ -2,6 +2,7 @@ import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/pairwise_crypto.dart';
 import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
 import 'package:helix_remote_engine/src/groups/group_inbound.dart';
+import 'package:helix_remote_engine/src/groups/group_key_authority.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_ops.dart';
 import 'package:helix_remote_engine/src/groups/group_rekey.dart';
@@ -27,16 +28,17 @@ final class GroupPipeline implements GroupOutbox {
     required InboundHooks hooks,
   }) {
     keyring = GroupKeyring(ctx);
+    authority = GroupKeyAuthority(keyring);
     senderKeys = DbSenderKeyStore(ctx);
     trust = GroupTrust(ctx);
-    roster = GroupRosterSync(ctx, keyring, peers, senderKeys, trust);
-    keys = GroupKeyDistributor(ctx, keyring, outbox, roster, trust);
+    roster = GroupRosterSync(ctx, keyring, authority, peers, senderKeys, trust);
+    keys = GroupKeyDistributor(ctx, keyring, authority, outbox, roster, trust);
     sender = GroupMessageSender(ctx, peers, crypto, senderKeys, roster);
     inbound = GroupInbound(
       ctx,
       roster,
       senderKeys,
-      keyring,
+      authority,
       keys,
       applier,
       outbox,
@@ -46,6 +48,7 @@ final class GroupPipeline implements GroupOutbox {
       ctx,
       roster,
       keyring,
+      authority,
       keys,
       senderKeys,
       outbox,
@@ -54,6 +57,7 @@ final class GroupPipeline implements GroupOutbox {
   }
 
   late final GroupKeyring keyring;
+  late final GroupKeyAuthority authority;
   late final DbSenderKeyStore senderKeys;
   late final GroupTrust trust;
   late final GroupRosterSync roster;

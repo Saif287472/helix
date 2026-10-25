@@ -641,6 +641,8 @@ direct chats. Supersedes the Groups bullet of "Not here yet".
 group_ids.dart          GroupIds (conversation id `group:<id>`), GroupLimits, notice kinds
 group_keyring.dart      group master keys per epoch + GroupMeta, one `settings` row per entry;
                         sealing and opening the state blob (SealedBlobCipher.groupState)
+group_key_authority.dart GroupKeyAuthority: which arriving key is the epoch's, decided by the
+                        stored state; one primary and one candidate key per epoch
 sender_key_store.dart   SenderKeyStore over `sender_keys`; commits GroupCryptoWrites
 group_roster.dart       GroupRosterSync: server roster -> groups / group_members / conversation;
                         stale-digest adoption; forgetting a group; the send roster and digest
@@ -785,8 +787,16 @@ queued to every member, the state re-sealed under it with the optimistic
 and from the server). The blob stays sealed under
 the epoch it was written in, so opening tries the held epochs newest first. A
 `group_key` is accepted from a member, never for an epoch the server has not
-reached, and never replaces a key that opens the stored state with one that
-does not. A newly linked device gets the keys from the account's other devices
+reached. Which of the keys a device holds is the epoch's is
+`GroupKeyAuthority`'s call, and the stored state decides whenever it can: a key
+that opens it replaces whatever is held (the replaced key stays beside it), and
+a held key that opens it refuses one that does not. When both keys fail to open
+it (no state yet, or a blob still under an older epoch) the arrival is kept as
+a second candidate, and whichever key a later state write seals under is
+promoted on the first read. The rotation only seals the state under a key the
+blob confirms; otherwise it mints one, so a key a member handed it can never be
+the key the group's state is sealed under (AUD-12f-3). A newly linked device
+gets the keys from the account's other devices
 (`GroupKeyDistributor.shareAllWithOwnDevices`, on the device-list change) and
 reads the group list when sign-in finishes (`GroupsService.refreshAll`).
 
@@ -798,7 +808,10 @@ fragment); the server keeps the token's hash and the sealed preview.
 
 **Known limits.** The group state AAD binds the epoch, not the version (CRYPTO_V2.md
 §14). A member that is not an admin can hand a new member a wrong key; the name
-stays unreadable until an admin's key arrives. If the first admin never comes
+stays unreadable until a key that opens the state arrives, which then displaces
+the wrong one. An epoch keeps two keys at most (primary and candidate): a third
+arrival overwrites the candidate, which can only happen while neither of them
+opens the stored state. If the first admin never comes
 online after a leave, nobody rotates the key (a rotation that fails or gives up
 is asked again by housekeeping; `GroupsService.rotateKey` still does it by
 hand). A device that has no key from a member can read that member's

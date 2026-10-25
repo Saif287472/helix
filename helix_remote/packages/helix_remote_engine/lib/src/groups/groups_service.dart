@@ -7,6 +7,7 @@ import 'package:helix_remote_db/helix_remote_db.dart' hide GroupRole;
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
+import 'package:helix_remote_engine/src/groups/group_key_authority.dart';
 import 'package:helix_remote_engine/src/groups/group_invite_links.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_rekey.dart';
@@ -153,6 +154,7 @@ final class GroupsService {
     this._ctx,
     this._roster,
     this._keyring,
+    this._authority,
     this._keys,
     this._senderKeys,
     this._outbox,
@@ -162,6 +164,7 @@ final class GroupsService {
   final EngineContext _ctx;
   final GroupRosterSync _roster;
   final GroupKeyring _keyring;
+  final GroupKeyAuthority _authority;
   final GroupKeyDistributor _keys;
   final DbSenderKeyStore _senderKeys;
   final OutboxService _outbox;
@@ -265,7 +268,7 @@ final class GroupsService {
       key,
       state,
     );
-    await _keyring.put(groupId, 0, key);
+    await _authority.storeMinted(groupId, 0, key);
     final wanted = members.where((m) => m != self).toSet().toList();
     final created = await _postCreate(groupId, sealed, wanted, settings);
     await _roster.apply(created);
@@ -723,13 +726,18 @@ final class GroupsService {
         throw const GroupException(GroupFailure.notAllowed);
       }
       final group = details.group;
-      final key = await _keyring.keyFor(groupId, group.epoch);
-      if (key == null) throw const GroupException(GroupFailure.noGroupKey);
       final blob = group.state;
+      final key = await _authority.keyForWrite(
+        groupId,
+        epoch: group.epoch,
+        state: blob,
+        version: group.stateVersion,
+      );
+      if (key == null) throw const GroupException(GroupFailure.noGroupKey);
       final current =
           (blob == null
               ? null
-              : await _keyring.openState(
+              : await _authority.openState(
                   groupId,
                   blob,
                   epoch: group.epoch,

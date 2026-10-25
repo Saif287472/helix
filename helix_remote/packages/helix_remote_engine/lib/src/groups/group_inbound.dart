@@ -5,7 +5,7 @@ import 'package:helix_remote_db/helix_remote_db.dart' hide GroupRole;
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
-import 'package:helix_remote_engine/src/groups/group_keyring.dart';
+import 'package:helix_remote_engine/src/groups/group_key_authority.dart';
 import 'package:helix_remote_engine/src/groups/group_notices.dart';
 import 'package:helix_remote_engine/src/groups/group_rekey.dart';
 import 'package:helix_remote_engine/src/groups/group_roster.dart';
@@ -51,7 +51,7 @@ final class GroupInbound {
     this._ctx,
     this._roster,
     this._store,
-    this._keyring,
+    this._authority,
     this._keys,
     this._applier,
     this._outbox,
@@ -61,7 +61,7 @@ final class GroupInbound {
   final EngineContext _ctx;
   final GroupRosterSync _roster;
   final DbSenderKeyStore _store;
-  final GroupKeyring _keyring;
+  final GroupKeyAuthority _authority;
   final GroupKeyDistributor _keys;
   final ContentApplier _applier;
   final OutboxService _outbox;
@@ -371,49 +371,34 @@ final class GroupInbound {
     return _acceptGroupKey(group, body as GroupKeyBody);
   }
 
-  /// A group master key for an epoch. A held key is never replaced by one
-  /// that does not open the stored state, and keys for epochs the server has
-  /// not reached are refused (they could push real keys out of the keyring).
-  /// A member that is not an admin can still hand a key to someone it added;
-  /// the residual risk (a member handing a new member a wrong key) is that
-  /// the group's name stays unreadable until an admin's key arrives.
+  /// A group master key for an epoch, arbitrated by [GroupKeyAuthority]: the
+  /// stored state confirms a key that opens it, refuses one a held key
+  /// opens, and keeps both when it can decide for neither (AUD-12f-3). Keys
+  /// for epochs the server has not reached are refused (they could push real
+  /// keys out of the keyring). A member that is not an admin can still hand a
+  /// key to someone it added; the residual risk (a member handing a new
+  /// member a wrong key) is that the group's name stays unreadable until a
+  /// state write under the right key promotes it.
   Future<ApplyResult> _acceptGroupKey(GroupRow group, GroupKeyBody body) async {
     if (body.key.length != 32 || body.epoch < 0 || body.epoch > group.epoch) {
       return const ApplyResult.ignored('bad_group_key');
     }
-    final held = await _keyring.keyFor(group.id, body.epoch);
-    if (held != null && bytesEqual(held, body.key)) {
-      return const ApplyResult.ignored('known_key');
-    }
-    final blob = group.state;
-    final opensNew =
-        blob != null &&
-        await _keyring.tryOpen(
-              group.id,
-              blob,
-              body.epoch,
-              group.stateVersion,
-              body.key,
-            ) !=
-            null;
-    if (held != null) {
-      final opensHeld =
-          blob != null &&
-          await _keyring.tryOpen(
-                group.id,
-                blob,
-                body.epoch,
-                group.stateVersion,
-                held,
-              ) !=
-              null;
-      if (opensHeld || !opensNew) {
+    final verdict = await _authority.accept(
+      groupId: group.id,
+      epoch: body.epoch,
+      state: group.state,
+      version: group.stateVersion,
+      key: body.key,
+    );
+    switch (verdict) {
+      case GroupKeyVerdict.accepted || GroupKeyVerdict.tentative:
+        await _roster.reopenState(group.id);
+        return const ApplyResult.applied();
+      case GroupKeyVerdict.known:
+        return const ApplyResult.ignored('known_key');
+      case GroupKeyVerdict.refused:
         return const ApplyResult.ignored('key_conflict');
-      }
     }
-    await _keyring.put(group.id, body.epoch, body.key);
-    await _roster.reopenState(group.id);
-    return const ApplyResult.applied();
   }
 
   // --------------------------------------------------------- roster changes

@@ -1386,6 +1386,31 @@ update to be protected.
   Gate: engine suite **343 green**, `dart analyze` clean. No schema change,
   no wire change, no app change; no APK needed. Docs: engine MODULE.md
   inbound rules (the ephemeral bullet).
+- S12 (AUD-12f-3, with AUD-12e-1) — three writers stored epoch keys (group
+  creation, the rotation, an inbound `group_key`) and the keyring kept
+  whatever it was handed, so the first arrival won. A rotation re-used any
+  held key for the new epoch and sealed the state under it: a key a member
+  handed the group became the group's for good, and that device could read
+  every later state.
+  **What changed:** `GroupKeyAuthority` owns the decision and `GroupKeyring`
+  only stores. The stored state arbitrates whenever it can: an arrival that
+  opens it is promoted (the key it replaced stays beside it as the
+  candidate), a held key that opens it refuses an arrival that does not, and
+  when it opens under neither the arrival is kept as the epoch's second key.
+  The rotation stops only when the blob opens under a held key; otherwise it
+  mints one, so it never seals the state under a key the blob could not
+  confirm. Opening the state or a write promotes the key that opened it, so
+  whichever competing state write lands settles the order on the first read.
+  Tests: `test/groups/groups_test.dart` "a key the old state cannot confirm
+  is kept beside the first one, and the key the state is sealed under wins"
+  (a member's key arrives first; the rotation's key overtakes it and the
+  group stays readable), "a rotation seals the state under its own key, not
+  one a member handed it" (the rotation mints its own; the injected key is
+  kept only as the candidate), and "a held key that opens the state refuses
+  one that does not" (the original key is not displaced).
+  Gate: engine suite **346 green**, `dart analyze` clean. No schema change,
+  no wire change, no app change; no APK needed. Docs: engine MODULE.md
+  (group master key, file map, known limits - two keys per epoch).
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

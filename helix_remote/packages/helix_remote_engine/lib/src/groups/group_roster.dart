@@ -9,6 +9,7 @@ import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
+import 'package:helix_remote_engine/src/groups/group_key_authority.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_notices.dart';
 import 'package:helix_remote_engine/src/groups/group_trust.dart';
@@ -109,6 +110,7 @@ final class GroupRosterSync {
   GroupRosterSync(
     this._ctx,
     this._keyring,
+    this._authority,
     this._peers,
     this._senderKeys,
     this._trust,
@@ -116,6 +118,7 @@ final class GroupRosterSync {
 
   final EngineContext _ctx;
   final GroupKeyring _keyring;
+  final GroupKeyAuthority _authority;
   final PeerDirectory _peers;
   final DbSenderKeyStore _senderKeys;
   final GroupTrust _trust;
@@ -210,7 +213,7 @@ final class GroupRosterSync {
         : group.stateVersion;
     final content = stateBlob == null
         ? null
-        : await _keyring.openState(
+        : await _authority.openState(
             groupId,
             stateBlob,
             epoch: group.epoch,
@@ -430,7 +433,7 @@ final class GroupRosterSync {
     final group = await _db.groupsDao.byId(groupId);
     final blob = group?.state;
     if (group == null || blob == null) return;
-    final content = await _keyring.openState(
+    final content = await _authority.openState(
       groupId,
       blob,
       epoch: group.epoch,
