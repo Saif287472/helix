@@ -3,6 +3,7 @@
 library;
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/groups/module.dart';
 import 'package:test/test.dart';
 
 import '../support/federated.dart';
@@ -567,6 +568,96 @@ void main() {
         reason: 'the newest roster has no Carol',
       );
     });
+
+    /// A sync whose answer was lost is sent again by the job. Members hear
+    /// of the roster change once (AUD-4c-5).
+    test('a sync delivered twice tells the members once', () async {
+      final g = await create([onB(bob)]);
+      Future<int> changes() async =>
+          (await envelopes(b, bob, EnvelopeKind.rosterChange)).length;
+      final before = await changes();
+      final snapshot = Group(
+        groupId: g.groupId,
+        epoch: 0,
+        stateVersion: 1,
+        encryptedState: bytes(4),
+        settings: const GroupSettings(),
+        members: [
+          GroupMember(
+            account: onA(alice),
+            role: GroupRole.owner,
+            joinedAt: DateTime.utc(2026),
+          ),
+          GroupMember(
+            account: bob.accountId,
+            role: GroupRole.member,
+            joinedAt: DateTime.utc(2026),
+          ),
+        ],
+        createdAt: DateTime.utc(2026),
+        homeServer: a.domain,
+      );
+      Future<void> send() => a.federation.client.call(
+        b.domain,
+        'POST',
+        Routes.s2sGroupSync.expand({'group_id': g.groupId}),
+        body: S2SGroupSync(
+          rosterVersion: 5000,
+          group: snapshot,
+          event: RosterChangeEvent(
+            groupId: g.groupId,
+            change: RosterChangeKind.stateChanged,
+            epoch: 0,
+            actor: onA(alice),
+            members: [bob.accountId],
+          ),
+          notify: [bob.accountId],
+        ).toJson(),
+      );
+      await send();
+      await send();
+      expect(await changes(), before + 1);
+    });
+
+    /// A deleted account's leave is owed until the home answers: the queued
+    /// job gives up after a dozen tries, and the member server has forgotten
+    /// the group by then (AUD-4c-6).
+    test(
+      'a leave the job did not finish is retried until it is done',
+      () async {
+        final g = await create([onB(bob), onB(carol)]);
+        // The job never runs on B: the home is, for the test, unreachable.
+        await b.env.platform.jobs.stop();
+        await b.env.platform.periodic.stop();
+        await b.env.platform.db.tx(
+          (tx) => b.identity.api.deleteAccount(tx, bob.accountId),
+        );
+        final leaves = '${b.env.platform.schemas.of('groups')}.remote_leaves';
+        Future<int> owed() async => (await b.env.platform.db.queryOne(
+          'SELECT count(*)::int8 AS n FROM $leaves',
+        ))!.integer('n');
+        expect(await owed(), 1);
+        Future<int> membersOnA() async => (await a.api.call(
+          Routes.group,
+          params: {'group_id': g.groupId},
+          bearer: alice.bearer,
+        )).json.objects('members', (j) => j).length;
+        expect(await membersOnA(), 3);
+
+        await b.env.platform.db.execute(
+          "UPDATE $leaves SET created_at = now() - interval '2 hours'",
+        );
+        final job = b.server.modules
+            .whereType<GroupsModule>()
+            .single
+            .periodic
+            .firstWhere((j) => j.name == 'groups.retry_leaves');
+        await job.run();
+        await settle([a, b]);
+        expect(await owed(), 0);
+        expect(await membersOnA(), 2);
+      },
+    );
 
     test('only the home server may push a group', () async {
       final g = await create([onB(bob)]);

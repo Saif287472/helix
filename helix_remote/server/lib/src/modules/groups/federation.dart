@@ -366,7 +366,21 @@ extension on GroupsModule {
           );
         }
       }
-      if (event != null) {
+      // The same event arriving again (its answer was lost and the job
+      // retried) is not told to members twice (AUD-4c-5). Identified by what it
+      // says and the roster version it came with.
+      final fresh =
+          event != null &&
+          await _store.markEventSeen(
+            tx,
+            groupId,
+            sha256Bytes(
+              utf8.encode(
+                '${sync.rosterVersion}:${jsonEncode(event.toJson())}',
+              ),
+            ),
+          );
+      if (event != null && fresh) {
         // Only people who are, or just were, members here hear about it.
         final targets = {
           for (final a in sync.notify)
@@ -558,6 +572,14 @@ extension on GroupsModule {
   Future<void> _leaveRemoteGroups(Tx tx, String accountId) async {
     if (_relay != null) {
       for (final g in await _store.remoteGroupsOf(tx, accountId)) {
+        // The job retries a few times; this record is what keeps the leave
+        // owed after that (AUD-4c-6), until the home answers.
+        await _store.addLeave(
+          tx,
+          account: accountId,
+          groupId: g.groupId,
+          home: g.home,
+        );
         await context.outbox.enqueue(tx, _leaveJob, {
           'group_id': g.groupId,
           'home': g.home,
@@ -590,7 +612,7 @@ extension on GroupsModule {
     final relay = _relay;
     if (relay == null) return;
     final account = payload['account']! as String;
-    await _runAction(
+    final result = await _runAction(
       relay,
       payload,
       S2SGroupAction(
@@ -599,10 +621,47 @@ extension on GroupsModule {
         params: {'account': account},
       ),
     );
+    // Any answer from the home ends the duty: it left, or the home says it
+    // cannot (not a member, the group is gone). Only silence keeps it.
+    if (result.status < 500) {
+      await _store.doneLeave(
+        context.db,
+        account: account,
+        groupId: payload['group_id']! as String,
+      );
+    }
+  }
+
+  /// The periodic retry of leaves the queued job gave up on (AUD-4c-6), and
+  /// the sweep of event digests and abandoned leave records.
+  Future<void> _retryLeaves() async {
+    final relay = _relay;
+    if (relay != null) {
+      final owed = await _store.pendingLeaves(
+        context.db,
+        age: const Duration(minutes: 30),
+      );
+      for (final leave in owed) {
+        try {
+          await _runLeave({
+            'group_id': leave.groupId,
+            'home': leave.home,
+            'account': leave.account,
+          });
+        } on Object {
+          // The home is still unreachable: the record stays for the next pass.
+        }
+      }
+    }
+    await _store.sweepFederationState(
+      context.db,
+      eventAge: const Duration(days: 1),
+      leaveAge: const Duration(days: 30),
+    );
   }
 
   /// Runs a queued action; RelayUnavailable propagates so the job retries.
-  Future<void> _runAction(
+  Future<S2SGroupActionResult> _runAction(
     GroupRelay relay,
     Map<String, Object?> payload,
     S2SGroupAction action,
@@ -620,5 +679,6 @@ extension on GroupsModule {
         'status': result.status,
       });
     }
+    return result;
   }
 }

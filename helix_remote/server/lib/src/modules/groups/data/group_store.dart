@@ -123,6 +123,32 @@ SELECT setval(pg_get_serial_sequence('$s.members', 'joined_seq'),
               greatest(1, coalesce((SELECT max(joined_seq) FROM $s.members), 1)));
 ''';
 
+  /// Two lifetimes federation needed (AUD-4c-5, AUD-4c-6). `remote_events`
+  /// remembers, per group, the roster events this server already delivered to
+  /// its members, so a sync that is delivered twice (its answer was lost, the
+  /// job retried) tells them once. `remote_leaves` is the durable record that a
+  /// local account must still leave a group homed elsewhere, kept until the
+  /// home answers, because the outbox's attempts end and the member server has
+  /// already forgotten the group.
+  static String lifetimes(String s) =>
+      '''
+CREATE TABLE $s.remote_events (
+  group_id uuid NOT NULL,
+  digest bytea NOT NULL,
+  seen_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (group_id, digest)
+);
+CREATE INDEX remote_events_seen ON $s.remote_events (seen_at);
+CREATE TABLE $s.remote_leaves (
+  account uuid NOT NULL,
+  group_id uuid NOT NULL,
+  home text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account, group_id)
+);
+CREATE INDEX remote_leaves_created ON $s.remote_leaves (created_at);
+''';
+
   /// Who made each invite link (expand only: older links have none).
   static String linkCreator(String s) =>
       'ALTER TABLE $s.invite_links ADD COLUMN created_by text;';
@@ -538,6 +564,76 @@ SELECT setval(pg_get_serial_sequence('$s.members', 'joined_seq'),
       {'g': groupId},
     );
     return r?.string('home_domain');
+  }
+
+  /// Records that [digest] (a roster event) was delivered for [groupId]:
+  /// true the first time, false for a repeat.
+  Future<bool> markEventSeen(Tx tx, String groupId, List<int> digest) async =>
+      await tx.queryOne(
+        'INSERT INTO $s.remote_events (group_id, digest) VALUES (@g:uuid, @d:bytea) '
+        'ON CONFLICT DO NOTHING RETURNING 1 AS x',
+        {'g': groupId, 'd': digest},
+      ) !=
+      null;
+
+  /// A local account that must still leave a group homed elsewhere.
+  Future<void> addLeave(
+    Tx tx, {
+    required String account,
+    required String groupId,
+    required String home,
+  }) => tx.execute(
+    'INSERT INTO $s.remote_leaves (account, group_id, home) '
+    'VALUES (@a:uuid, @g:uuid, @h:text) ON CONFLICT DO NOTHING',
+    {'a': account, 'g': groupId, 'h': home},
+  );
+
+  Future<void> doneLeave(
+    SqlSession db, {
+    required String account,
+    required String groupId,
+  }) => db.execute(
+    'DELETE FROM $s.remote_leaves WHERE account = @a:uuid AND group_id = @g:uuid',
+    {'a': account, 'g': groupId},
+  );
+
+  /// Leaves still owed, oldest first: those at least [age] old.
+  Future<List<({String account, String groupId, String home})>> pendingLeaves(
+    SqlSession db, {
+    required Duration age,
+    int limit = 50,
+  }) async {
+    final rows = await db.query(
+      'SELECT account, group_id, home FROM $s.remote_leaves '
+      'WHERE created_at < now() - make_interval(secs => @age:int8) '
+      'ORDER BY created_at LIMIT @n:int4',
+      {'age': age.inSeconds, 'n': limit},
+    );
+    return [
+      for (final r in rows)
+        (
+          account: r.string('account'),
+          groupId: r.string('group_id'),
+          home: r.string('home'),
+        ),
+    ];
+  }
+
+  /// Drops event digests older than [eventAge] and leave records older than
+  /// [leaveAge] (a home that has not answered for that long is gone).
+  Future<void> sweepFederationState(
+    SqlSession db, {
+    required Duration eventAge,
+    required Duration leaveAge,
+  }) async {
+    await db.execute(
+      'DELETE FROM $s.remote_events WHERE seen_at < now() - make_interval(secs => @a:int8)',
+      {'a': eventAge.inSeconds},
+    );
+    await db.execute(
+      'DELETE FROM $s.remote_leaves WHERE created_at < now() - make_interval(secs => @a:int8)',
+      {'a': leaveAge.inSeconds},
+    );
   }
 
   /// Takes this group's cache lock for the rest of the transaction. Syncs of

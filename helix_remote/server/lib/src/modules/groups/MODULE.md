@@ -166,6 +166,15 @@ receiving server's frame (`Frame`): bare ids for that server's accounts,
   server and not reported for another account; otherwise the action is
   refused 403 (AUD-4c-4). Deleting a group forgets the reported devices of its
   remote members that are in no other group here (AUD-4c-2).
+- **Federation lifetimes (migration 6):** `remote_events` keeps a digest of
+  each roster event this server delivered to its members (kept a day), so a
+  sync delivered twice tells them once (AUD-4c-5). `remote_leaves` records
+  that a deleted local account still owes a leave to a group homed elsewhere;
+  the queued `groups.leave` job removes it on any answer below 500, and the
+  periodic `groups.retry_leaves` (every 30 minutes) retries those at least 30
+  minutes old, dropping records older than 30 days (AUD-4c-6). Roster syncs
+  are *not* coalesced: each carries the event that told members what changed,
+  and merging jobs would drop events.
 - **Routes:** group routes for a remote group are proxied to its home as
   actions. `GET` fetches the group from the home and falls back to the
   snapshot when the home is down. Preview and join use the home named in

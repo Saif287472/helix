@@ -3563,6 +3563,33 @@ app change.
   `bigserial` backfill of an existing members table is one statement); no
   `.env` line, no app change.
 
+- S2 (AUD-4c-5, AUD-4c-6) — federation lifetimes, groups migration 6.
+  **4c-5:** the member's server keeps a digest of each roster event it
+  delivered (`remote_events`, a day), so a sync whose answer was lost and which
+  the job sent again tells members once; the digest is the roster version plus
+  the event's JSON, so two different events never collide. **Not done:** the
+  audit's coalescing of queued syncs. Each sync carries the event that tells
+  members what changed, and a "latest wins" job would drop the ones in
+  between, which clients use; the queue's growth under a dead peer stays
+  bounded by `maxAttempts`. **4c-6:** account deletion writes a durable
+  `remote_leaves` row per remote group next to the queued leave job; the job
+  deletes it on any home answer below 500 (left, not a member, group gone),
+  and the new periodic `groups.retry_leaves` retries rows at least 30 minutes
+  old and drops those older than 30 days. Tests (`group_federation_test`):
+  the same sync sent twice leaves one roster-change envelope; a deleted
+  member's leave, with B's jobs stopped, is owed until the retry job runs and
+  then the home's roster loses the member. The first needs the digest (the old
+  code delivers twice); the second cannot run on the old code (no table, no
+  job). Gate: group_federation, groups and e2e tests 52 green on Postgres.
+  **Batch report.** B16's six findings are closed (S1 `877bfbd`, S2 below),
+  4c-5 in the replay half only. `dart analyze` and `dart format` clean. The
+  full server suite is run at the end of the batch group, not per batch, to
+  keep the shared machine usable; the touched code is the groups module and
+  its two migrations. **Owner-facing:** groups migrations 5 and 6 (additive,
+  run at start, or earlier with `bin/migrate.dart`); no `.env` line; no app
+  change.
+- Next: B17 (sign-in and backup copy), then the later batches.
+
 ## B17 — Sign-in and backup: the copy and the code must agree
 **A · ~2–3 days · no migration · depends on Q4, Q5**
 

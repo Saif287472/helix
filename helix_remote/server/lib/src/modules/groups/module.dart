@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -163,6 +164,16 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     Migration(3, 'group_federation_hardening', GroupStore.hardening),
     Migration(4, 'invite_link_creator', GroupStore.linkCreator),
     Migration(5, 'group_member_order', GroupStore.memberOrder),
+    Migration(6, 'group_federation_lifetimes', GroupStore.lifetimes),
+  ];
+
+  @override
+  List<PeriodicJob> get periodic => [
+    PeriodicJob(
+      'groups.retry_leaves',
+      const Duration(minutes: 30),
+      _retryLeaves,
+    ),
   ];
 
   @override
