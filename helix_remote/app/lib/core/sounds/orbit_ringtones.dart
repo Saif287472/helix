@@ -163,6 +163,18 @@ abstract final class Ringtones {
   static String channelId(String id, String suffix) =>
       '$channelPrefix$id$suffix';
 
+  /// Whether [fileName] (`<id><suffix>`) is the copy of pack [id], and not of
+  /// another pack whose id merely starts with it: what follows the id has to
+  /// be exactly one extension.
+  static bool isCopyOf(String fileName, String id) =>
+      fileName.startsWith(id) &&
+      RegExp(r'^\.[A-Za-z0-9]+$').hasMatch(fileName.substring(id.length));
+
+  /// Whether [channel] is the channel that rings pack [id].
+  static bool isChannelOf(String channel, String id) =>
+      channel.startsWith(channelPrefix) &&
+      isCopyOf(channel.substring(channelPrefix.length), id);
+
   /// Where Android's system reads the copy of [id] at [suffix].
   static String uri(String id, String suffix) =>
       'content://$authority/ringtones/$id$suffix';
@@ -191,10 +203,29 @@ abstract final class Ringtones {
         );
       });
 
+  static var _tempCounter = 0;
+
+  /// The publish in progress: one at a time, because each one ends by
+  /// removing every other copy and temporary in the folder, which would
+  /// delete what a second writer is still filling (AUD-14h-3).
+  static Future<void> _publishing = Future.value();
+
+  static Future<bool> _serial(Future<bool> Function() publish) {
+    final done = _publishing.then((_) => publish());
+    _publishing = done.then<void>((_) {}, onError: (_) {});
+    return done;
+  }
+
   /// [write] puts the sound's bytes at the path it is handed, which is a
   /// temporary file in the ringtones folder - never the copy itself, so a call
   /// cannot read half a ringtone.
   static Future<bool> _publish(
+    String id,
+    String suffix,
+    Future<void> Function(String path) write,
+  ) => _serial(() => _publishNow(id, suffix, write));
+
+  static Future<bool> _publishNow(
     String id,
     String suffix,
     Future<void> Function(String path) write,
@@ -205,7 +236,8 @@ abstract final class Ringtones {
       if (dir == null) return false;
       final name = '$id$suffix';
       final target = File(p.join(dir.path, name));
-      final temp = File('${target.path}.part');
+      // A temporary of its own, so two writers never share one (AUD-14h-3).
+      final temp = File('${target.path}.${_tempCounter++}.part');
       try {
         await write(temp.path);
         // A rename in one folder is atomic, so a call never reads half a file.
@@ -214,7 +246,7 @@ abstract final class Ringtones {
         try {
           if (await temp.exists()) await temp.delete();
         } on Object {
-          // Left for the next publish to overwrite.
+          // Left for the next clean-up.
         }
         return false;
       }
@@ -295,13 +327,10 @@ abstract final class Ringtones {
       // The folder this would clean is not there any more: nothing left to do.
       return;
     }
-    final prefix = id == null ? '' : '$id.';
     for (final entry in entries) {
       if (entry is! File) continue;
       if (entry.path == keep) continue;
-      if (prefix.isNotEmpty && !p.basename(entry.path).startsWith(prefix)) {
-        continue;
-      }
+      if (id != null && !isCopyOf(p.basename(entry.path), id)) continue;
       try {
         await entry.delete();
       } on Object {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/pending_link.dart';
+import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/picker_cleanup.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
@@ -73,6 +74,7 @@ final class SignOutAction {
     await runtime.ensureWiped();
     await _ref.read(secureKeyStoreProvider).forget(account);
     await _wipeLeftovers(account);
+    await LocalNotifications.forgetAccount(account);
     // The next account opens, or sign-in; either way the runtime is rebuilt,
     // which is what makes the wipe visible to the UI.
     await _ref.read(accountsProvider.notifier).removeCurrent();
@@ -123,6 +125,7 @@ final class RemoveAccountAction {
       await runtime.close();
     }
     await _ref.read(secureKeyStoreProvider).forget(id);
+    await LocalNotifications.forgetAccount(id);
     await AppPaths.wipeLocalFiles(id);
     await AppPaths.deleteAccountFolder(id);
   }

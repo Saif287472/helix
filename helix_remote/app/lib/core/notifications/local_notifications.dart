@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:helix_remote/core/notifications/alert_count.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 
 /// The local notifications the app raises.
@@ -165,27 +167,15 @@ abstract final class LocalNotifications {
     );
     await plugin.show(
       // One id per account: a newer run replaces an older one rather than
-      // stacking up. No `onlyAlertOnce`: each new message has to alert again,
-      // not quietly rewrite the line above it.
+      // stacking up.
       id: messagesIdFor(account),
       title: presentation.title,
       body: presentation.body,
       notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          channel.id,
-          channel.name,
-          channelDescription: channel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.message,
-          // Public is what lets a locked phone show the words; with previews
-          // off the notification stays private, so the lock screen reveals
-          // that something arrived and nothing more.
-          visibility: presentation.revealed
-              ? NotificationVisibility.public
-              : NotificationVisibility.private,
-          groupKey: 'helix_messages',
-          subText: accountLabel,
+        android: messageDetails(
+          channel,
+          revealed: presentation.revealed,
+          accountLabel: accountLabel,
         ),
       ),
       payload: NotificationPayload.encode({
@@ -193,6 +183,32 @@ abstract final class LocalNotifications {
       }),
     );
   }
+
+  /// How a message notification is drawn. No `onlyAlertOnce`: each new
+  /// message has to alert again, not quietly rewrite the line above it
+  /// (AUD-14g-2).
+  @visibleForTesting
+  static AndroidNotificationDetails messageDetails(
+    AndroidNotificationChannel channel, {
+    required bool revealed,
+    String? accountLabel,
+  }) => AndroidNotificationDetails(
+    channel.id,
+    channel.name,
+    channelDescription: channel.description,
+    importance: Importance.high,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.message,
+    onlyAlertOnce: false,
+    // Public is what lets a locked phone show the words; with previews off
+    // the notification stays private, so the lock screen reveals that
+    // something arrived and nothing more.
+    visibility: revealed
+        ? NotificationVisibility.public
+        : NotificationVisibility.private,
+    groupKey: 'helix_messages',
+    subText: accountLabel,
+  );
 
   /// What [showMessages] says, apart from the plugin: [revealed] is whether the
   /// title and body may appear on a locked phone.
@@ -215,9 +231,42 @@ abstract final class LocalNotifications {
     );
   }
 
-  /// Clears [account]'s message notification, once the app has caught up.
-  static Future<void> clearMessages(String account) async =>
-      _plugin?.cancel(id: messagesIdFor(account));
+  /// Clears [account]'s message notification, once the app has caught up. The
+  /// next one counts from one again.
+  static Future<void> clearMessages(String account) async {
+    await _plugin?.cancel(id: messagesIdFor(account));
+    await const AlertCountStore().reset(account);
+  }
+
+  /// What the shade holds, and how to take an entry out of it. Replaced in
+  /// tests.
+  @visibleForTesting
+  static NotificationShade? shadeOverride;
+
+  /// Takes everything [account] has in the shade away: its message
+  /// notification, and whatever call entry (incoming or missed) names it in
+  /// its payload. Called when the account is removed from this phone, whose
+  /// wipe leaves nothing for a leftover notification to open, and which would
+  /// otherwise keep showing the last message's words (AUD-14g-3).
+  static Future<void> forgetAccount(String account) async {
+    final plugin = _plugin;
+    final shade =
+        shadeOverride ?? (plugin == null ? null : _PluginShade(plugin));
+    try {
+      if (shade != null) {
+        await shade.cancel(messagesIdFor(account));
+        for (final entry in await shade.active()) {
+          if (NotificationPayload.accountOf(entry.payload) == account) {
+            await shade.cancel(entry.id);
+          }
+        }
+      }
+    } on Object {
+      // No notifications on this platform, or the shade cannot be read: the
+      // account is gone either way.
+    }
+    await const AlertCountStore().reset(account);
+  }
 
   /// The payload of the notification that started the app, if one did.
   static Future<String?> launchPayload() async {
@@ -230,6 +279,30 @@ abstract final class LocalNotifications {
       ?.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
       >();
+}
+
+/// A notification in the shade: its id and payload.
+typedef ShadeEntry = ({int id, String? payload});
+
+/// The part of the plugin that [LocalNotifications.forgetAccount] needs.
+abstract interface class NotificationShade {
+  Future<List<ShadeEntry>> active();
+  Future<void> cancel(int id);
+}
+
+final class _PluginShade implements NotificationShade {
+  _PluginShade(this._plugin);
+
+  final FlutterLocalNotificationsPlugin _plugin;
+
+  @override
+  Future<List<ShadeEntry>> active() async => [
+    for (final n in await _plugin.getActiveNotifications())
+      if (n.id != null) (id: n.id!, payload: n.payload),
+  ];
+
+  @override
+  Future<void> cancel(int id) => _plugin.cancel(id: id);
 }
 
 /// What a notification's payload carries: `key=value` fields joined by `;`.

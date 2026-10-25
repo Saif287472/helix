@@ -84,6 +84,14 @@ abstract final class AppPaths {
     return File(p.join(dir.path, 'unread.json'));
   }
 
+  /// `<account folder>/alert_count.json`: how many messages the account's
+  /// notification has announced since it was cleared (`core/notifications`),
+  /// shared by the push isolate and the running app.
+  static Future<File> alertCountFile(String account) async {
+    final dir = await accountDirectory(account);
+    return File(p.join(dir.path, 'alert_count.json'));
+  }
+
   /// Settings that belong to this device, not the account (the theme). Kept
   /// when the account is signed out, and only ever plain choices.
   static Future<File> deviceSettingsFile() async {

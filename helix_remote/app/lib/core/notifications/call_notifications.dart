@@ -130,11 +130,12 @@ abstract final class CallNotifications {
           AndroidFlutterLocalNotificationsPlugin
         >();
     if (android == null) return;
-    final prefix = '${Ringtones.channelPrefix}$id.';
     for (final channel
         in await android.getNotificationChannels() ??
             const <AndroidNotificationChannel>[]) {
-      if (!channel.id.startsWith(prefix)) continue;
+      // This ringtone's channel and no other: ids may contain dots, so `a.b`
+      // must not take `a.b.c`'s channel with it (AUD-14h-2).
+      if (!Ringtones.isChannelOf(channel.id, id)) continue;
       await android.deleteNotificationChannel(channelId: channel.id);
     }
   }

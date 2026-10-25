@@ -41,9 +41,14 @@ abstract interface class PushTokens {
 /// or nothing rather than throwing, because "push unavailable" is a normal
 /// state for a development checkout, not a failure.
 final class PushTokenSource implements PushTokens {
-  PushTokenSource({FirebaseMessaging? messaging}) : _injected = messaging;
+  PushTokenSource({
+    FirebaseMessaging? messaging,
+    Future<FirebaseMessaging> Function()? start,
+  }) : _injected = messaging,
+       _start = start ?? _firebaseMessaging;
 
   final FirebaseMessaging? _injected;
+  final Future<FirebaseMessaging> Function() _start;
   FirebaseMessaging? _messaging;
   Future<bool>? _prepared;
 
@@ -51,7 +56,22 @@ final class PushTokenSource implements PushTokens {
   bool get available => defaultTargetPlatform == TargetPlatform.android;
 
   @override
-  Future<bool> prepare() => _prepared ??= _prepare();
+  Future<bool> prepare() {
+    final earlier = _prepared;
+    if (earlier != null) return earlier;
+    final attempt = _prepare();
+    _prepared = attempt;
+    // A start that failed is not remembered: the next engine start asks again,
+    // which is what lets a token reach the server once Play services or the
+    // network is back (AUD-14g-7). A build that cannot push at all answers
+    // false at once, so asking again costs nothing.
+    unawaited(
+      attempt.then((ok) {
+        if (!ok && identical(_prepared, attempt)) _prepared = null;
+      }),
+    );
+    return attempt;
+  }
 
   Future<bool> _prepare() async {
     if (!available) return false;
@@ -60,7 +80,7 @@ final class PushTokenSource implements PushTokens {
       // This isolate needs its own Firebase app: the background handler's
       // lives in its isolate. Without it `FirebaseMessaging.instance` throws,
       // which is how the token went unregistered before 2026-10-09.
-      messaging = _injected ?? await _firebaseMessaging();
+      messaging = _injected ?? await _start();
     } on Object {
       return false; // No google-services.json in this build, or no Play services.
     }

@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/notifications/alert_count.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
@@ -21,6 +22,18 @@ typedef ShowMessageAlert =
       required int count,
       IncomingNotice? latest,
       String? senderName,
+      String? accountLabel,
+    });
+
+/// What puts the notification up ([LocalNotifications.showMessages]).
+typedef ShowMessagesPost =
+    Future<void> Function({
+      required String account,
+      required int count,
+      bool sound,
+      bool vibrate,
+      String? sender,
+      String? preview,
       String? accountLabel,
     });
 
@@ -42,8 +55,11 @@ abstract final class MessageAlerts {
     );
   }
 
-  /// Shows, or replaces, [account]'s one notification for [count] new
-  /// messages. [latest] is the newest message of the run: its sender names the
+  /// Shows, or replaces, [account]'s one notification. [count] is how many
+  /// new messages this pass brings; the notification says how many have
+  /// arrived since it was last cleared, counted across every pass and both
+  /// isolates ([AlertCountStore]) - a later wake-up adds to it, never
+  /// replaces it with its own number (AUD-14g-1). [latest] is the newest message of the run: its sender names the
   /// notification and its text is the body, both when the person turned
   /// previews on, and both read from this phone's own decrypted copy - never
   /// from a push. [accountLabel] (on a device with several accounts) follows the
@@ -55,11 +71,13 @@ abstract final class MessageAlerts {
     IncomingNotice? latest,
     String? senderName,
     String? accountLabel,
+    AlertCountStore counts = const AlertCountStore(),
+    ShowMessagesPost post = LocalNotifications.showMessages,
   }) async {
     final previews = await read(AppSettings.notificationsPreview);
-    await LocalNotifications.showMessages(
+    await post(
       account: account,
-      count: count,
+      count: await counts.add(account, count),
       sound: await read(AppSettings.notifySound),
       vibrate: await read(AppSettings.notifyVibrate),
       sender: previews ? senderName : null,
@@ -117,10 +135,6 @@ final class RunningAppAlerts {
 
   static Future<String?> _noName(String accountId) async => null;
 
-  /// The account whose run [_count] counts.
-  String? _account;
-  int _count = 0;
-
   /// A new message arrived for [account] through the running engine.
   Future<void> onNotice(
     IncomingNotice notice,
@@ -130,15 +144,12 @@ final class RunningAppAlerts {
     if (inForeground()) return;
     try {
       if (!await MessageAlerts.alerts(notice, read)) return;
-      if (_account != account) {
-        _account = account;
-        _count = 0;
-      }
-      final count = ++_count;
       await _show(
         read,
         account: account,
-        count: count,
+        // This message. The total is [MessageAlerts.show]'s to keep, with
+        // the push isolate's.
+        count: 1,
         latest: notice,
         // The same name the chat list shows: the running app has the people
         // directory, which the push isolate does not.
@@ -158,7 +169,7 @@ final class RunningAppAlerts {
   }
 
   /// Back in the foreground: the chats are on screen, so their account's
-  /// notification goes, and the next background run counts from one again.
+  /// notification goes, and the next one counts from one again.
   /// Other accounts' notifications stay until they are opened.
   Future<void> resumed() async {
     final account = onScreen();
@@ -166,7 +177,6 @@ final class RunningAppAlerts {
   }
 
   Future<void> _clearFor(String account) async {
-    if (_account == account) _count = 0;
     try {
       await _clear(account);
     } on Object {

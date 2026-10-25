@@ -127,7 +127,10 @@ void main() {
       expect(await copy.exists(), isTrue);
       expect(await copy.readAsBytes(), await sound.file.readAsBytes());
       // Nothing half-written is left for a call to find.
-      expect(File('${copy.path}.part').existsSync(), isFalse);
+      expect(
+        Directory(copy.parent.path).listSync().map((e) => e.path),
+        everyElement(isNot(endsWith('.part'))),
+      );
     });
 
     test(
@@ -145,6 +148,56 @@ void main() {
             if (entry is File) p.basename(entry.path),
         ];
         expect(left, ['bell.m4a']);
+      },
+    );
+
+    test(
+      'removing `a.b` leaves the copy and channel of `a.b.c` (AUD-14h-2)',
+      () {
+        expect(Ringtones.isCopyOf('a.b.m4a', 'a.b'), isTrue);
+        expect(Ringtones.isCopyOf('a.b.c.m4a', 'a.b'), isFalse);
+        expect(Ringtones.isCopyOf('a.b.c.m4a', 'a.b.c'), isTrue);
+        expect(Ringtones.isCopyOf('a.bc.m4a', 'a.b'), isFalse);
+        expect(
+          Ringtones.isChannelOf(Ringtones.channelId('a.b', '.m4a'), 'a.b'),
+          isTrue,
+        );
+        expect(
+          Ringtones.isChannelOf(Ringtones.channelId('a.b.c', '.m4a'), 'a.b'),
+          isFalse,
+        );
+        expect(Ringtones.isChannelOf('other.a.b.m4a', 'a.b'), isFalse);
+      },
+    );
+
+    test('forget(id) takes only that id\'s file', () async {
+      copyOf('a.b', '.m4a')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1]);
+      copyOf('a.b.c', '.m4a').writeAsBytesSync([2]);
+
+      await Ringtones.forget(id: 'a.b');
+
+      expect(copyOf('a.b', '.m4a').existsSync(), isFalse);
+      expect(copyOf('a.b.c', '.m4a').existsSync(), isTrue);
+    });
+
+    test(
+      'two publishes of one sound at once both succeed (AUD-14h-3)',
+      () async {
+        final sound = await installSound('chime');
+        final results = await Future.wait([
+          Ringtones.publish(sound),
+          Ringtones.publish(sound),
+          Ringtones.publish(sound),
+        ]);
+        expect(results, [true, true, true]);
+        final copy = copyOf('chime', '.m4a');
+        expect(await copy.readAsBytes(), await sound.file.readAsBytes());
+        expect(
+          Directory(copy.parent.path).listSync().map((e) => e.path),
+          everyElement(isNot(endsWith('.part'))),
+        );
       },
     );
 

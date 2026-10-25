@@ -4178,6 +4178,49 @@ a shade at update time stay until tapped; the batch covers the ones raised
 after the fix, and the removal cleanup runs on the next removal. The ringtone
 fix touches only the app's own copy folder and channels.
 
+- S1 (AUD-14g-1 to 14g-7, AUD-14h-2, AUD-14h-3) — the notification tells the
+  truth about what arrived, and cleans up after an account; app only.
+  **14g-1:** `MessageAlerts.show` is the one owner of the count: it adds the
+  pass's messages to a per-account total kept in the account's folder
+  (`AlertCountStore`, `alert_count.json`), so a wake-up and the running app add
+  to one number instead of each posting its own; two wake-ups of two messages
+  and one then say 2, 4, 5. Clearing the notification (chats on screen) or
+  removing the account resets it. `RunningAppAlerts` no longer counts. **14g-2:**
+  the code already posted without `onlyAlertOnce` (an earlier fix); the details
+  are now one function with `onlyAlertOnce: false` written out and tested.
+  **14g-3:** `LocalNotifications.forgetAccount` cancels the account's message
+  notification and every shade entry whose payload names it (incoming and
+  missed calls), and resets its count; both `SignOutAction` and
+  `RemoveAccountAction` (the only callers of the wipe) call it. **14g-4:** a
+  press on a message notification of the account already open goes to `/home`
+  (a call's own buttons are left to the call handler). **14g-5, 14g-6:** one
+  rule, `missedCallNeedsNotification`: not for a muted chat, not while
+  `appInForeground()` (so `inactive` counts as on screen). **14g-7:**
+  `PushTokenSource.prepare` forgets a failed start, so the next engine start
+  asks again; a success is kept and concurrent callers share an attempt.
+  **14h-2:** a ringtone's copy and channel are matched by exact id plus one
+  extension (`Ringtones.isCopyOf`, `isChannelOf`), so removing `a.b` leaves
+  `a.b.c`. **14h-3:** publishes run one at a time, each with a temporary of
+  its own. Tests (`notifications_truth_test.dart`, 12; additions to
+  `account_slots_test.dart` and `ringtone_channel_test.dart`): the totals above
+  and a store that cannot write or read; the shade cancels only the removed
+  account's entries and survives a shade that throws; the missed-call rule and
+  the `inactive` lifecycle; a failed token start retried once and kept after a
+  success; the press routes home but a call payload does not; `a.b`/`a.b.c`
+  copies; three simultaneous publishes. The ringtone tests were run against
+  the old file (with stub predicates) and fail: `[true, false, false]` for the
+  publishes, and both cleanup tests; the notification tests use API that did
+  not exist. **A fake `FlutterLocalNotificationsPlugin` was not built:**
+  `showMessages` and the plugin-backed shade were not exercised on a plugin,
+  only through the seams (`post`, `NotificationShade`); the two real-phone
+  checks remain with the owner (two background messages make two alerts; a
+  removed account leaves nothing in the shade). Gate: full app suite **1,106
+  green**, analyze and format clean.
+  **Batch report.** B23's nine findings are closed (14g-2 was already true).
+  **Owner-facing:** a new APK; no server change. Notifications already in a
+  shade stay until tapped.
+- Next: B24 (the anomaly log), then B25 and T4.
+
 ## B24 — The anomaly log sends what it recorded
 **A · ~0.5 day · no migration, no wire**
 

@@ -2,17 +2,21 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/widgets.dart' show SizedBox;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
+import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/notifications/notification_accounts.dart';
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/settings/application/accounts_providers.dart';
 
 /// The accounts on a device: the list in the keystore, and one folder and one
@@ -359,6 +363,54 @@ void main() {
       expect(c.read(activeAccountProvider)?.id, first);
       expect(second, isNot(first));
     });
+
+    test(
+      'a press on the open account\'s message notification goes home',
+      () async {
+        final presses = StreamController<NotificationResponse>();
+        addTearDown(presses.close);
+        final router = GoRouter(
+          initialLocation: '/elsewhere',
+          routes: [
+            GoRoute(path: '/home', builder: (_, _) => const SizedBox()),
+            GoRoute(path: '/elsewhere', builder: (_, _) => const SizedBox()),
+          ],
+        );
+        addTearDown(router.dispose);
+        final c = ProviderContainer(
+          overrides: [
+            accountSlotStoreProvider.overrideWithValue(AccountSlotStore()),
+            secureKeyStoreProvider.overrideWithValue(keys),
+            clockProvider.overrideWithValue(() => at),
+            notificationResponsesProvider.overrideWithValue(presses.stream),
+            appRouterProvider.overrideWithValue(router),
+          ],
+        );
+        addTearDown(c.dispose);
+        final (_, second) = await two(c);
+        c.read(notificationAccountSwitchProvider);
+
+        NotificationResponse press(String payload) => NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: payload,
+        );
+        // A call's own buttons are the call handler's: the page stays.
+        presses.add(press(CallNotifications.payloadFor('c1', account: second)));
+        await pumpEventQueue();
+        expect(c.read(activeAccountProvider)?.id, second);
+        expect(router.routeInformationProvider.value.uri.path, '/elsewhere');
+
+        presses.add(
+          press(
+            NotificationPayload.encode({NotificationPayload.account: second}),
+          ),
+        );
+        await pumpEventQueue();
+        expect(c.read(activeAccountProvider)?.id, second);
+        expect(router.routeInformationProvider.value.uri.path, '/home');
+      },
+    );
 
     test('notifications name the account only on a shared device', () async {
       final c = container();

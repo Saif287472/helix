@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
+import 'package:helix_remote/core/notifications/message_alerts.dart'
+    show appInForeground;
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
@@ -256,8 +257,12 @@ final class CallNotificationHandler {
       if (port == null) return;
       final account = _ref.read(runtimeProvider).value?.account;
       _missed = port.missedCalls.listen((event) {
-        final lifecycle = WidgetsBinding.instance.lifecycleState;
-        if (lifecycle == AppLifecycleState.resumed) return;
+        if (!missedCallNeedsNotification(
+          event,
+          inForeground: appInForeground(),
+        )) {
+          return;
+        }
         final people =
             _ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
         unawaited(_showMissed(event, people, account));
@@ -320,3 +325,12 @@ final class CallNotificationHandler {
     }
   }
 }
+
+/// Whether a call that ended unanswered raises "Missed call". The same two
+/// rules as every other alert: a muted chat is quiet (AUD-14g-5), and so is a
+/// person who is looking at the app - `inactive`, the shade or a dialog over
+/// it, still counts (AUD-14g-6).
+bool missedCallNeedsNotification(
+  MissedCallEvent event, {
+  required bool inForeground,
+}) => !event.notice.muted && !inForeground;

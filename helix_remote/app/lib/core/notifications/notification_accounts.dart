@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
+import 'package:helix_remote/core/router/app_router.dart';
 
 /// Presses on any notification while the app runs. Overridden in tests.
 final notificationResponsesProvider = Provider<Stream<NotificationResponse>>(
@@ -27,7 +28,17 @@ final notificationAccountSwitchProvider = Provider<void>((ref) {
   final presses = ref.watch(notificationResponsesProvider).listen((response) {
     final account = NotificationPayload.accountOf(response.payload);
     if (account == null) return;
-    if (ref.read(activeAccountProvider)?.id == account) return;
+    if (ref.read(activeAccountProvider)?.id == account) {
+      // Already open: nothing switches, so the press has to take the person
+      // to what the notification is about - the chats - instead of leaving
+      // them on whatever page was open (AUD-14g-4). A call's own buttons are
+      // `CallNotificationHandler`'s.
+      final call = NotificationPayload.decode(
+        response.payload,
+      )[NotificationPayload.callId];
+      if (call == null) ref.read(appRouterProvider).go(AppRoutes.home);
+      return;
+    }
     unawaited(ref.read(accountsProvider.notifier).switchTo(account));
   });
   ref.onDispose(presses.cancel);

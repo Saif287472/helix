@@ -195,17 +195,19 @@ void main() {
     });
 
     test(
-      'in the background, new messages raise one counting notification',
+      'in the background, every new message raises the one notification',
       () async {
         final first = _notice('m1', preview: 'hello');
         await alerts.onNotice(first, _settings(), account: 'primary');
         final second = _notice('m2');
         await alerts.onNotice(second, _settings(), account: 'primary');
-        // The newest message travels even when the count grows: that is what
-        // gives the notification its sender and its text.
+        // Each message is reported as itself: the total is the shared
+        // counter's (MessageAlerts.show), with the push isolate's. The newest
+        // message travels with it: that is what gives the notification its
+        // sender and its text.
         expect(shown.map((e) => (e.count, e.latest)), [
           (1, first),
-          (2, second),
+          (1, second),
         ]);
         expect(
           shown.map((e) => e.sender),
@@ -247,7 +249,7 @@ void main() {
       expect(shown.single.count, 1, reason: 'groups still alert');
     });
 
-    test('resuming clears the notification and the count', () async {
+    test('resuming clears the notification', () async {
       await alerts.onNotice(_notice('m1'), _settings(), account: 'primary');
       await alerts.onNotice(_notice('m2'), _settings(), account: 'primary');
       await alerts.resumed();
