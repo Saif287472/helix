@@ -695,10 +695,10 @@ void main() {
       await tester.tap(find.text('Vibrate').last);
       await settle(tester);
       expect(settings.read(AppSettings.notifyVibrate), isFalse);
-      expect(settings.read(AppSettings.notificationsPreview), isFalse);
+      expect(settings.read(AppSettings.notificationsPreview), isTrue);
       await tester.tap(find.text('Show message previews'));
       await settle(tester);
-      expect(settings.read(AppSettings.notificationsPreview), isTrue);
+      expect(settings.read(AppSettings.notificationsPreview), isFalse);
       // A test device is an Android one, and a call there rings with a chosen
       // sound through its notification channels: the row is here, and says what
       // the next call rings with.

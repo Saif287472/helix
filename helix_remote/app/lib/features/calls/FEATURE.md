@@ -114,5 +114,6 @@ offer was known (`PendingCallDecision`, valid for the ring time).
 - The app lock is lifted (`AppLock.callInProgress`) only once a call is
   connecting or active, never while it rings or is being placed.
 - The incoming and missed-call notifications name the caller, and are `public`,
-  only when message previews are on (`CallNotifications.incomingPresentation`);
-  otherwise the title is "Helix" and the notification is `private`.
+  only when message previews are on (on by default since 2026-10-25;
+  `CallNotifications.incomingPresentation`); otherwise the title is "Helix"
+  and the notification is `private`.

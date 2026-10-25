@@ -54,7 +54,9 @@ user asks.
   - App in the background but not swiped away (home button): a new message
     raises the "New message" notification; opening the app clears it.
   - Muted chat, Messages or Groups alerts off in Settings > Notifications:
-    no notification. Previews on: one new message shows its text.
+    no notification. Previews on (the default): one new message names the
+    sender and shows the text, in the shade and on the lock screen; with
+    previews off the alert is generic and the lock screen hides the contents.
   - Sign out, sign in on another server (advanced mode), and repeat the first
     check there.
 - Platform plugin majors (`DEPENDENCY_RISK_REGISTER.md`, "Client platform

@@ -183,3 +183,18 @@ metadata). The cryptography has **not been externally reviewed**
   but no password says an SMS play or a recovery-code request is worth trying. Nothing tells a
   person that their number was asked about, and the question is asked by the app on the number page,
   so a person who only opens sign-in sends their number to the server before choosing anything.
+
+### T-13: The lock screen shows who wrote and what they said
+- **Description**: Since 2026-10-25 message previews are on by default: a new message's notification
+  names its sender and shows the text, on the shade and on a locked phone, and an incoming call's
+  notification names the caller. Anyone who can see the locked screen (someone holding the phone, a
+  camera over a desk, a screen-share) reads that message without unlocking anything.
+- **Mitigation**: The name and text come from this phone's own decrypted copy, never from the push
+  wake-up, so neither the push provider nor anything in transit sees them. Settings > Notifications
+  turns previews off: the notification then says only that something arrived, is `private` to the
+  lock screen, and an account other than the one on screen is not named. The choice is per device
+  and local.
+- **Residual risk**: The default is to show content. A person who does not find the switch, or who
+  keeps previews on for convenience, exposes every new message to anyone near the locked phone.
+  Helix has no per-app "hide on lock screen" setting; turning previews off also removes the text
+  from the shade while the phone is unlocked.

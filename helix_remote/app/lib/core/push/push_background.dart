@@ -159,11 +159,23 @@ Future<void> _wakeAccount(
     );
     if (audible.isNotEmpty) {
       await LocalNotifications.init();
+      // The newest of the run names the notification and gives it its text, so
+      // a second message replaces the first instead of blanking the line.
+      final latest = audible.reduce(
+        (a, b) => a.sentAt.isAfter(b.sentAt) ? a : b,
+      );
+      final person = await runtime.engine.people.person(latest.sender);
       await MessageAlerts.show(
         settings.get,
         account: account,
         count: audible.length,
-        only: audible.length == 1 ? audible.first : null,
+        latest: latest,
+        // The same name the app shows (phone book, nickname, number, `~Helix
+        // name`): this isolate has no providers, so it asks the naming helper
+        // for the one row.
+        senderName: person == null
+            ? PersonName.unknown(latest.sender).display
+            : PersonName.fromRow(person).display,
         accountLabel: label,
       );
     }

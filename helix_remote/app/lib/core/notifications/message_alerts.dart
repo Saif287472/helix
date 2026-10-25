@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote_db/helix_remote_db.dart' show Setting;
 import 'package:helix_remote_engine/helix_remote_engine.dart';
@@ -18,7 +19,8 @@ typedef ShowMessageAlert =
       ReadFlag read, {
       required String account,
       required int count,
-      IncomingNotice? only,
+      IncomingNotice? latest,
+      String? senderName,
       String? accountLabel,
     });
 
@@ -41,16 +43,17 @@ abstract final class MessageAlerts {
   }
 
   /// Shows, or replaces, [account]'s one notification for [count] new
-  /// messages. [only] is the message when there is exactly one: its text
-  /// appears only when the person turned previews on, and it comes from this
-  /// phone's own decrypted copy, never from a push. [accountLabel] (on a
-  /// device with several accounts) follows the same setting: it names whose
-  /// phone this is.
+  /// messages. [latest] is the newest message of the run: its sender names the
+  /// notification and its text is the body, both when the person turned
+  /// previews on, and both read from this phone's own decrypted copy - never
+  /// from a push. [accountLabel] (on a device with several accounts) follows the
+  /// same setting: it names whose phone this is.
   static Future<void> show(
     ReadFlag read, {
     required String account,
     required int count,
-    IncomingNotice? only,
+    IncomingNotice? latest,
+    String? senderName,
     String? accountLabel,
   }) async {
     final previews = await read(AppSettings.notificationsPreview);
@@ -59,21 +62,22 @@ abstract final class MessageAlerts {
       count: count,
       sound: await read(AppSettings.notifySound),
       vibrate: await read(AppSettings.notifyVibrate),
-      preview: await preview(read, count: count, only: only),
+      sender: previews ? senderName : null,
+      preview: previews ? await preview(read, latest: latest) : null,
       accountLabel: previews ? accountLabel : null,
     );
   }
 
-  /// The text the notification may show: the one message's own text, with
-  /// previews on; otherwise null, and the notification says only that
-  /// something arrived.
+  /// The text the notification may show: the newest message's own text, when
+  /// previews are on. Not limited to a run of one - that limit made a second
+  /// message erase the first one's words, which is why a notification sometimes
+  /// arrived empty.
   static Future<String?> preview(
     ReadFlag read, {
-    required int count,
-    IncomingNotice? only,
+    required IncomingNotice? latest,
   }) async {
-    if (count != 1 || only == null || only.preview.isEmpty) return null;
-    return await read(AppSettings.notificationsPreview) ? only.preview : null;
+    if (latest == null || latest.preview.isEmpty) return null;
+    return await read(AppSettings.notificationsPreview) ? latest.preview : null;
   }
 }
 
@@ -90,9 +94,11 @@ final class RunningAppAlerts {
     required this.inForeground,
     required this.onScreen,
     String? Function(String account)? label,
+    Future<String?> Function(String accountId)? nameOf,
     ShowMessageAlert? show,
     Future<void> Function(String account)? clear,
   }) : _label = label ?? _noLabel,
+       _nameOf = nameOf ?? _noName,
        _show = show ?? MessageAlerts.show,
        _clear = clear ?? LocalNotifications.clearMessages;
 
@@ -103,10 +109,13 @@ final class RunningAppAlerts {
   final String? Function() onScreen;
 
   final String? Function(String account) _label;
+  final Future<String?> Function(String accountId) _nameOf;
   final ShowMessageAlert _show;
   final Future<void> Function(String account) _clear;
 
   static String? _noLabel(String account) => null;
+
+  static Future<String?> _noName(String accountId) async => null;
 
   /// The account whose run [_count] counts.
   String? _account;
@@ -130,7 +139,10 @@ final class RunningAppAlerts {
         read,
         account: account,
         count: count,
-        only: count == 1 ? notice : null,
+        latest: notice,
+        // The same name the chat list shows: the running app has the people
+        // directory, which the push isolate does not.
+        senderName: await _nameOf(notice.sender),
         accountLabel: _label(account),
       );
     } on Object {
@@ -180,6 +192,14 @@ final runningAppAlertsProvider = Provider<RunningAppAlerts>((ref) {
     inForeground: appInForeground,
     onScreen: () => ref.read(activeAccountProvider)?.id,
     label: (account) => ref.read(accountsProvider).notificationLabel(account),
+    // The same naming source as the chat list (phone book, nickname, number,
+    // `~Helix name`), asked for the one row the message came from.
+    nameOf: (accountId) async {
+      final engine = ref.read(runtimeProvider).value?.engine;
+      if (engine == null) return null;
+      final person = await engine.people.person(accountId);
+      return person == null ? null : PersonName.fromRow(person).display;
+    },
   );
   StreamSubscription<EngineEvent>? events;
   ref.listen<AsyncValue<HelixRuntime>>(runtimeProvider, (_, next) {

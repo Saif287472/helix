@@ -54,9 +54,11 @@ must be reviewed against the exact release build and store form wording.
   compute phone-hash matches, never to transmit raw contact data. Write is used
   only when the person renames someone in Helix and allows it. Degrades
   gracefully if denied.
-- Notifications: for generic message/call alerts without plaintext content,
-  and for "new sign-in on your account" alerts. OTP codes arrive by SMS, not
-  by notification.
+- Notifications: to show who wrote and what they said to the person's own
+  phone, rendered from that phone's encrypted database (the push payload
+  itself carries no content), and for "new sign-in on your account" alerts.
+  Previews can be turned off in Settings > Notifications, which leaves a
+  generic alert. OTP codes arrive by SMS, not by notification.
 - Files/storage picker: for user-selected encrypted attachment import/export.
 
 ## Required Manual Review Before Submission

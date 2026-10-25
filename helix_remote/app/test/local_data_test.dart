@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
+import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/picker_cleanup.dart';
@@ -289,6 +290,51 @@ void main() {
       );
       expect(on.title, 'Alice');
       expect(on.visibility, NotificationVisibility.public);
+    });
+
+    test('message previews are on by default', () {
+      expect(AppSettings.notificationsPreview.defaultValue, isTrue);
+    });
+
+    test('a message notification names its sender and shows the text', () {
+      final one = LocalNotifications.messagesPresentation(
+        count: 1,
+        sender: 'Alice',
+        preview: 'see you at 5',
+      );
+      expect(one.title, 'Alice');
+      expect(one.body, 'see you at 5');
+      expect(one.revealed, isTrue);
+
+      // A run of several still shows the newest words, under the count.
+      final many = LocalNotifications.messagesPresentation(
+        count: 3,
+        sender: 'Alice',
+        preview: 'see you at 5',
+      );
+      expect(many.title, '3 new messages');
+      expect(many.body, 'see you at 5');
+      expect(many.revealed, isTrue);
+
+      // A photo has a sender but no text: it is still named.
+      final photo = LocalNotifications.messagesPresentation(
+        count: 1,
+        sender: 'Alice',
+      );
+      expect(photo.title, 'Alice');
+      expect(photo.revealed, isTrue);
+    });
+
+    test('with previews off a message notification says only that something '
+        'arrived', () {
+      final one = LocalNotifications.messagesPresentation(count: 1);
+      expect(one.title, 'New message');
+      expect(one.body, isNot(contains('Alice')));
+      expect(one.revealed, isFalse);
+
+      final many = LocalNotifications.messagesPresentation(count: 2);
+      expect(many.title, '2 new messages');
+      expect(many.revealed, isFalse);
     });
   });
 }

@@ -20,11 +20,13 @@ abstract final class AppSettings {
     60,
   );
 
-  /// Show message text in the notification shade. Off by default: the
-  /// notification says something arrived, not what it said.
+  /// Show who wrote and what they said in the notification, on the shade and on
+  /// a locked phone. On by default since 2026-10-25: a notification that names
+  /// nobody and says nothing is not worth a wake-up. Off still alerts, and the
+  /// notification says only that something arrived.
   static const notificationsPreview = Setting<bool>(
     'app.notifications_preview',
-    false,
+    true,
   );
 
   // ---- Settings pages (Phase A3b). Every key lives in the encrypted settings

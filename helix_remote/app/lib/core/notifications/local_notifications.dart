@@ -6,42 +6,59 @@ import 'package:helix_remote/core/platform/app_storage.dart';
 
 /// The local notifications the app raises.
 ///
-/// Only ever a *wake-up*: what a notification says is that something arrived,
-/// never what it said. The message text is read from the local database by the
-/// conversation screen, because a push payload crosses a third-party provider
-/// and every lock screen.
+/// What a notification says is read on this phone from its own decrypted
+/// database, never from a push payload: a push crosses a third-party provider
+/// and every lock screen, so it carries only a wake-up. Message previews are on
+/// by default (Settings > Notifications), which names the sender and shows the
+/// text on the shade and on a locked phone; with them off the notification says
+/// only that something arrived.
 abstract final class LocalNotifications {
   /// One channel per sound/vibrate combination, because on Android 8 and later
   /// a channel owns its sound and vibration: a notification cannot override
   /// them. Settings > Notifications picks which channel a message uses.
+  ///
+  /// High importance, and ids ending in `_2`: Android freezes a channel's
+  /// importance when it is created and ignores later changes, so raising it on
+  /// 2026-10-25 meant new channels. A message now peeks at the top of the
+  /// screen and shows on a locked phone instead of waiting silently in the
+  /// shade.
   static const _messages = AndroidNotificationChannel(
-    'helix_messages',
+    'helix_messages_2',
     'Messages',
     description: 'A new message arrived.',
-    importance: Importance.defaultImportance,
+    importance: Importance.high,
   );
   static const _messagesSilent = AndroidNotificationChannel(
-    'helix_messages_silent',
+    'helix_messages_2_silent',
     'Messages (silent)',
     description: 'A new message arrived, without sound or vibration.',
-    importance: Importance.defaultImportance,
+    importance: Importance.high,
     playSound: false,
     enableVibration: false,
   );
   static const _messagesSoundOnly = AndroidNotificationChannel(
-    'helix_messages_sound',
+    'helix_messages_2_sound',
     'Messages (sound only)',
     description: 'A new message arrived, with sound but no vibration.',
-    importance: Importance.defaultImportance,
+    importance: Importance.high,
     enableVibration: false,
   );
   static const _messagesVibrateOnly = AndroidNotificationChannel(
-    'helix_messages_vibrate',
+    'helix_messages_2_vibrate',
     'Messages (vibrate only)',
     description: 'A new message arrived, with vibration but no sound.',
-    importance: Importance.defaultImportance,
+    importance: Importance.high,
     playSound: false,
   );
+
+  /// The message channels from before the 2026-10-25 importance change. Removed
+  /// at start so Android's own settings show one Messages group, not two.
+  static const _retiredChannels = [
+    'helix_messages',
+    'helix_messages_silent',
+    'helix_messages_sound',
+    'helix_messages_vibrate',
+  ];
 
   static FlutterLocalNotificationsPlugin? _plugin;
 
@@ -83,6 +100,9 @@ abstract final class LocalNotifications {
     ]) {
       await android?.createNotificationChannel(channel);
     }
+    for (final retired in _retiredChannels) {
+      await android?.deleteNotificationChannel(channelId: retired);
+    }
     _plugin = plugin;
   }
 
@@ -110,18 +130,23 @@ abstract final class LocalNotifications {
       : ('messages-$account'.hashCode & 0x7fffffff) | 1;
 
   /// One notification for a run of new messages of [account], so a busy chat
-  /// does not fill the shade. It carries no sender and no text.
+  /// does not fill the shade.
+  ///
+  /// [sender] and [preview] are read from this phone's own decrypted copy,
+  /// never from a push, and only when the person turned previews on: the title
+  /// is who wrote it and the body is what they said, on the shade and on a
+  /// locked phone. Without them the notification says that something arrived,
+  /// and a locked phone hides its contents. A photo has a sender but no text,
+  /// so it is still named.
   ///
   /// [sound] and [vibrate] pick the channel (Settings > Notifications).
-  /// [preview] is the text of a single new message, passed only when the
-  /// person turned message previews on; otherwise the body says nothing about
-  /// what arrived. [accountLabel] names the account, on a device with
-  /// several.
+  /// [accountLabel] names the account, on a device with several.
   static Future<void> showMessages({
     required String account,
     required int count,
     bool sound = true,
     bool vibrate = true,
+    String? sender,
     String? preview,
     String? accountLabel,
   }) async {
@@ -133,28 +158,60 @@ abstract final class LocalNotifications {
       (true, false) => _messagesSoundOnly,
       (false, true) => _messagesVibrateOnly,
     };
+    final presentation = messagesPresentation(
+      count: count,
+      sender: sender,
+      preview: preview,
+    );
     await plugin.show(
       // One id per account: a newer run replaces an older one rather than
-      // stacking up.
+      // stacking up. No `onlyAlertOnce`: each new message has to alert again,
+      // not quietly rewrite the line above it.
       id: messagesIdFor(account),
-      title: count == 1 ? 'New message' : '$count new messages',
-      body: preview ?? 'Open Helix to read them.',
+      title: presentation.title,
+      body: presentation.body,
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           channel.id,
           channel.name,
           channelDescription: channel.description,
-          // Silent: the shade says something arrived, and nothing more.
-          importance: Importance.defaultImportance,
-          priority: Priority.defaultPriority,
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.message,
+          // Public is what lets a locked phone show the words; with previews
+          // off the notification stays private, so the lock screen reveals
+          // that something arrived and nothing more.
+          visibility: presentation.revealed
+              ? NotificationVisibility.public
+              : NotificationVisibility.private,
           groupKey: 'helix_messages',
-          onlyAlertOnce: true,
           subText: accountLabel,
         ),
       ),
       payload: NotificationPayload.encode({
         NotificationPayload.account: account,
       }),
+    );
+  }
+
+  /// What [showMessages] says, apart from the plugin: [revealed] is whether the
+  /// title and body may appear on a locked phone.
+  static ({String title, String body, bool revealed}) messagesPresentation({
+    required int count,
+    String? sender,
+    String? preview,
+  }) {
+    // The person turned previews on if there is a name or a text to show: a
+    // photo has a name but no text, and is still who wrote, not "New message".
+    final revealed = sender != null || preview != null;
+    return (
+      title: switch ((count, sender)) {
+        (1, final name?) => name,
+        (1, _) => 'New message',
+        _ => '$count new messages',
+      },
+      body: preview ?? 'Open Helix to read them.',
+      revealed: revealed,
     );
   }
 

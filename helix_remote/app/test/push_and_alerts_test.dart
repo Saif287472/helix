@@ -151,7 +151,13 @@ void main() {
 
   group('RunningAppAlerts (E-01)', () {
     late List<
-      ({String account, int count, IncomingNotice? only, String? label})
+      ({
+        String account,
+        int count,
+        IncomingNotice? latest,
+        String? sender,
+        String? label,
+      })
     >
     shown;
     late List<String> cleared;
@@ -168,17 +174,20 @@ void main() {
         inForeground: () => foreground,
         onScreen: () => onScreen,
         label: (account) => account == 'b' ? 'Work' : null,
+        nameOf: (accountId) async => accountId == 'alice' ? 'Alice' : null,
         show:
             (
               read, {
               required account,
               required count,
-              only,
+              latest,
+              senderName,
               accountLabel,
             }) async => shown.add((
               account: account,
               count: count,
-              only: only,
+              latest: latest,
+              sender: senderName,
               label: accountLabel,
             )),
         clear: (account) async => cleared.add(account),
@@ -190,8 +199,19 @@ void main() {
       () async {
         final first = _notice('m1', preview: 'hello');
         await alerts.onNotice(first, _settings(), account: 'primary');
-        await alerts.onNotice(_notice('m2'), _settings(), account: 'primary');
-        expect(shown.map((e) => (e.count, e.only)), [(1, first), (2, null)]);
+        final second = _notice('m2');
+        await alerts.onNotice(second, _settings(), account: 'primary');
+        // The newest message travels even when the count grows: that is what
+        // gives the notification its sender and its text.
+        expect(shown.map((e) => (e.count, e.latest)), [
+          (1, first),
+          (2, second),
+        ]);
+        expect(
+          shown.map((e) => e.sender),
+          everyElement('Alice'),
+          reason: 'the same name the chat list gives',
+        );
         expect(shown.map((e) => e.account), everyElement('primary'));
       },
     );
@@ -269,7 +289,8 @@ void main() {
               read, {
               required account,
               required count,
-              only,
+              latest,
+              senderName,
               accountLabel,
             }) async => throw StateError('no plugin'),
         clear: (account) async => throw StateError('no plugin'),
@@ -375,22 +396,26 @@ void main() {
   });
 
   group('MessageAlerts.preview', () {
-    test('only one message, with previews on, and only its own text', () async {
-      final notice = _notice('m1', preview: 'see you at 5');
-      final on = _settings({AppSettings.notificationsPreview: true});
-      final off = _settings({AppSettings.notificationsPreview: false});
-      expect(
-        await MessageAlerts.preview(on, count: 1, only: notice),
-        'see you at 5',
-      );
-      expect(await MessageAlerts.preview(off, count: 1, only: notice), isNull);
-      expect(await MessageAlerts.preview(on, count: 2, only: notice), isNull);
-      expect(
-        await MessageAlerts.preview(on, count: 1, only: _notice('m2')),
-        isNull,
-        reason: 'a photo without a caption has no text',
-      );
-    });
+    test(
+      'the newest message, with previews on, whatever the run length',
+      () async {
+        final notice = _notice('m1', preview: 'see you at 5');
+        final on = _settings({AppSettings.notificationsPreview: true});
+        final off = _settings({AppSettings.notificationsPreview: false});
+        expect(await MessageAlerts.preview(on, latest: notice), 'see you at 5');
+        expect(await MessageAlerts.preview(off, latest: notice), isNull);
+        expect(
+          await MessageAlerts.preview(on, latest: null),
+          isNull,
+          reason: 'nothing newest to quote',
+        );
+        expect(
+          await MessageAlerts.preview(on, latest: _notice('m2')),
+          isNull,
+          reason: 'a photo without a caption has no text',
+        );
+      },
+    );
   });
 }
 

@@ -36,7 +36,7 @@ class NotificationsPage extends ConsumerWidget {
         calls: ref.watch(notifyCallsProvider).value ?? true,
         sound: ref.watch(notifySoundProvider).value ?? true,
         vibrate: ref.watch(notifyVibrateProvider).value ?? true,
-        previews: ref.watch(notificationPreviewsProvider).value ?? false,
+        previews: ref.watch(notificationPreviewsProvider).value ?? true,
         muted: [
           for (final (chat, label) in muted.value ?? const <Never>[])
             orbit.MutedChatItem(

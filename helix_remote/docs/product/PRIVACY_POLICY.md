@@ -74,6 +74,8 @@ jurisdiction-specific legal review before public launch.
   number column to read, and no log line contains one (the redacting logger).
 - No behavioral advertising or cross-context tracking.
 - No plaintext push notification payloads (a wake-up carries only its kind).
+  A notification's sender name and text are read on the phone from its own
+  encrypted copy; Settings > Notifications can turn them off.
 - No plaintext message content in server message-send, push, report, or backup
   APIs.
 - No passwords, backup passphrases, recovery phrases, backup keys, access
