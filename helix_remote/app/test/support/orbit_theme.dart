@@ -22,6 +22,10 @@ OrbitTokens _theme(String id) => OrbitTokens.fromThemeJson(
       as Map<String, Object?>,
 );
 
+/// Any theme in `orbit_ui`'s table, read the same way: what a pack this device
+/// holds looks like to a page.
+OrbitTokens orbitThemeFromAssets(String id) => _theme(id);
+
 /// The app's [ThemeData]: what `main.dart` gives `MaterialApp`.
 ThemeData orbitTestTheme() => OrbitTheme.of(orbitTestTokens);
 

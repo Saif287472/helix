@@ -1313,3 +1313,28 @@ identical at 1x).
     Metal join it as packs or become built-in themes the app ships. Step 8 is
     built and its answer is one argument - `build --ids` takes any of the nine -
     so it is a publish-time choice, not a code change.
+  - **Answered 2026-10-25: all nine went out as packs.** The owner kept the
+    built-in line at Orbit and Orbit Night and had the nine published from
+    `tool/theme_pack_tool.dart` on Helix Global, so the three are now on the app
+    side of the divide - see the next section.
+
+## Appearance lists the themes this device holds (2026-10-25)
+
+- **A downloaded theme is chosen where themes are chosen.** The owner's rule:
+  getting a pack on the "More themes" page and then having to stay on that page
+  to use it is the wrong shape, so `appearanceProvider` reads
+  `themeLibraryProvider` instead of the built-in table - Appearance's cards are
+  the two built-ins and every pack on this device, the built-ins first and the
+  packs A to Z. This supersedes Part C step 4's "Appearance keeps its two cards
+  exactly as they are" and step 7's "the app offers none of the three".
+- **Nothing in `orbit_ui` and no pixel key moved.** `AppearanceScreen` was
+  always given a list and grouped it Light and Dark by `meta.dark`; the extra
+  cards are on the app side. `_PreviewAppearance`
+  (`orbit/flutter/apps/orbit_preview/lib/previews/you.dart`) passes the
+  generated registry itself and does not read the app's providers, so the
+  `appearance` reference is the render it was scored at.
+- **The list is the library, so it cannot lie.** A pack that fails its gate
+  checks stops being in `themeLibraryProvider` and so stops being a card, and a
+  pack downloaded or deleted on the themes page refreshes the library before the
+  row settles - which is why Appearance needs no rule of its own about what is
+  choosable.

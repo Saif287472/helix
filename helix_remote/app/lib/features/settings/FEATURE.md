@@ -135,8 +135,16 @@ has a frame in which it is neither on this phone nor on offer - and a pack that
 just arrived is choosable without a restart, while one that just went leaves the
 app drawing Orbit with the person's choice still saved.
 
+`application/appearance.dart` answers where a theme is chosen.
+`appearanceProvider` reads `themeLibraryProvider`, so Appearance's cards are the
+two built-ins *and* every pack this device holds - the built-ins in their own
+order, then the packs A to Z - and `presentation/appearance_page.dart` draws a
+card for each in itself. A pack deleted on the themes page leaves the list as
+soon as the library is re-read, and one that just arrived is on it without a
+restart.
+
 `presentation/theme_packs_page.dart` (route `/settings/appearance/themes`, one
-row under Appearance's two cards) is `orbit_ui`'s `ThemeGalleryScreen`.
+row under Appearance's theme cards) is `orbit_ui`'s `ThemeGalleryScreen`.
 `themeGalleryProvider` assembles it: the built-in themes, then this device's
 packs named by their own signed document, then the host's offers named by
 nothing but their slug, because the list route carries no display name and a

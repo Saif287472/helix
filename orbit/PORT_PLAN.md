@@ -840,6 +840,13 @@ reuse that effect.
    - **Waiting on you:** a key for the pixel gate cannot be taken for a page the
      prototype does not have. If you want one, the prototype needs the screen
      first.
+   - [x] **Superseded on the cards, 2026-10-25 (pending your review).** The
+     owner's ruling: a theme you downloaded belongs where themes are chosen.
+     `appearanceProvider` now reads the merged library, so Appearance's cards
+     are the two built-ins and every pack on this device - built-ins first,
+     packs A to Z - and "More themes" still opens this page. Nothing in
+     `orbit_ui` changed and the `appearance` key is untouched: the preview
+     passes its own registry. `DEVIATIONS.md` carries the record.
 5. **A ringtone picker** on the Notifications page.
    - One default ringtone is bundled.
    - A chosen ringtone is downloaded ahead of time, because a call cannot
@@ -1028,6 +1035,9 @@ reuse that effect.
      **The app is unchanged:** it still draws the two built-ins, so these three
      join the six as pack material, which is step 8's job. **Owner:** step 8
      names six themes - say whether these three join that list or ship built in.
+     **Answered 2026-10-25:** all nine went out as packs, published on Helix
+     Global, and Appearance now also lists the packs this device holds - see
+     step 4's 2026-10-25 note.
      Pixel gate: the Appearance page draws one card per theme, so both sides of
      `appearance` were re-shot on all three devices, and each pair got closer -
      phone 5.57 to 4.22, window-l 3.85 to 3.40, window-m 4.56 to 4.42. The whole
@@ -1068,11 +1078,14 @@ reuse that effect.
      Tests: 2 in the domain (the slug rule), 1 in the app file, both green, with
      the domain and app suites clean afterwards and `dart analyze tool` and
      `flutter analyze` quiet.
-   - **Waiting on you:** the `keygen` and the real seed. Nothing can be offered
-     until packs are signed with a key a build trusts and published into
-     `HELIX_PACKS_DIR`; the command is in `docs/product/THEME_PACK_FORMAT.md`,
-     and step 7's open question is now one argument - `--ids` takes any of the
-     nine, so six or nine is your call at publish time, not a code change.
+   - [x] **Waiting on you: closed 2026-10-25 (pending your review).** The owner
+     had the key generated, all nine slugs signed and published into Helix
+     Global's `HELIX_PACKS_DIR` at revision 1, and the APK rebuilt with
+     `--dart-define=HELIX_PACK_PUBLISHERS=agiletechbd:<key>`. The anchor and the
+     folder are recorded in `docs/release/REMOTE_RELEASE_CHECKLIST.md`; the seed
+     stays in the gitignored `helix_remote/secrets/orbit-pack.hex`, never in a
+     commit or a log. A theme that changes goes out as
+     `build --ids <slug> --revision 2` - a published revision stays immutable.
 9. **Later: premium themes.** On Android, selling digital items inside the
    app means Google Play Billing.
 

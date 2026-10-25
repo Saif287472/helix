@@ -207,6 +207,39 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 5));
     });
+
+    testWidgets('Appearance shows a downloaded pack and chooses it', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      final store = _MemoryDeviceSettings();
+      final container = newContainer(
+        a3bOverrides(
+          extra: [
+            deviceSettingsStoreProvider.overrideWithValue(store),
+            // The pack a person got on the More themes page: this device holds
+            // its tokens, so the page that chooses themes shows it.
+            downloadedThemesAtStartupProvider.overrideWithValue({
+              'jungle': orbitThemeFromAssets('jungle'),
+            }),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+      await pumpPage(tester, const AppearancePage(), container: container);
+      await settle(tester);
+
+      expect(find.bySemanticsLabel('Orbit theme, selected'), findsOneWidget);
+      expect(find.bySemanticsLabel('Jungle theme'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Jungle theme'));
+      await settle(tester);
+      expect(container.read(themeChoiceProvider), 'jungle');
+      expect(store.theme, 'jungle');
+      expect(find.text('Jungle theme on'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
   });
 }
 

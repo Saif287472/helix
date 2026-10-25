@@ -203,8 +203,10 @@ the rule message under the `~name` field, the remove dialog.
 Dart: `AppearanceScreen`, `AppearanceModel`, `AppearanceActions`.
 
 Themes are data. Built in: Orbit and Orbit Night only. Downloadable packs:
-Bloom, Mochi, Papyrus, Arcade, Terminal and Field first; Jungle, Ocean and
-Metal later. Downloading is a later phase.
+Bloom, Mochi, Papyrus, Arcade, Terminal, Field, Jungle, Ocean and Metal, all
+nine published on 2026-10-25. Appearance lists the built-ins and the packs this
+device holds, a card each; getting, updating and deleting a pack is the page
+behind its "More themes" row.
 
 ### Model
 | Field | Type | Tag | Comes from today | Notes |
