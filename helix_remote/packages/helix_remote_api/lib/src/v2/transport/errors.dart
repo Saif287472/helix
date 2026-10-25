@@ -107,7 +107,14 @@ final class ApiException extends HelixApiException {
       status == 401 && code != ErrorCode.invalidCredentials;
 
   /// Worth retrying later, with [retryAfter] when given.
-  bool get isRetryable => code.isRetryable;
+  ///
+  /// A code this client does not know is judged by the HTTP status class, as
+  /// the protocol promises old clients do; [ErrorCode.unknown] would
+  /// otherwise read as a permanent 500.
+  bool get isRetryable => switch (code) {
+    ErrorCode.unknown => status == 429 || status >= 500,
+    _ => code.isRetryable,
+  };
 
   /// The device lists of `device_list_stale` (null for other codes, or when
   /// the details are malformed). Fix the lists (fetch keys for `missing`,

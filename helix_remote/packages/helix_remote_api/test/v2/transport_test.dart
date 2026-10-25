@@ -518,6 +518,36 @@ void main() {
       },
     );
 
+    test('an unknown code on a transient status is retried, not treated as '
+        'permanent', () async {
+      var calls = 0;
+      server.handler = (_) => ++calls == 1
+          ? http.Response('{"error":{"code":"brand_new"}}', 503)
+          : noContent();
+      await transport().send(Routes.devices);
+      expect(calls, 2);
+      expect(slept, hasLength(1));
+    });
+
+    test('an unknown code on a 4xx is not retried', () async {
+      var calls = 0;
+      server.handler = (_) {
+        calls++;
+        return http.Response('{"error":{"code":"brand_new"}}', 400);
+      };
+      await expectLater(
+        transport().send(Routes.devices),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.isRetryable,
+            'isRetryable',
+            false,
+          ),
+        ),
+      );
+      expect(calls, 1);
+    });
+
     test('a device POST retries 429 with the same idempotency key', () async {
       var calls = 0;
       server.handler = (_) => ++calls < 3

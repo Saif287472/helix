@@ -269,7 +269,7 @@ final class HelixTransport {
       }
 
       final transient =
-          error.code.isRetryable && error.code != ErrorCode.passwordLocked;
+          error.isRetryable && error.code != ErrorCode.passwordLocked;
       if (transient && repeatable) {
         failures++;
         final wait = error.retryAfter ?? retry.backoff(failures, _random);

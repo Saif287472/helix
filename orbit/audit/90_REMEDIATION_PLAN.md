@@ -2493,6 +2493,23 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   `transfer_test.dart` **19 green** (18 before), `dart analyze` clean on both
   changed packages. No migration; no server change; an app needs the new
   package.
+- S3 (AUD-8-4) — a parsable error body naming a code this client does not know
+  became `ErrorCode.unknown`, whose `status` is 500 and whose `isRetryable` is
+  false, even when the response was really a 503 or a 429: the header promises
+  old clients judge unknown codes by HTTP status class, but only an
+  *unparseable* body got that treatment.
+  **What changed:** [`ApiException.isRetryable`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_api/lib/src/v2/transport/errors.dart#L109)
+  answers an unknown code from the status actually received (`429` or `>= 500`
+  retryable, any other 4xx not); known codes keep the catalog's answer. The
+  transport's own retry loop now asks the exception
+  ([`transport.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_api/lib/src/v2/transport/transport.dart#L272)),
+  not `code.isRetryable`, so an unknown code on a transient status is retried
+  in place as well as by callers. `ApiError` does not gain a status field: the
+  only body-only parser is `ApiException`, which already keeps the real one.
+  Tests: `transport_test.dart` adds an unknown code on 503 (retried once, then
+  a 204 passes) and on 400 (one attempt, thrown with `isRetryable` false).
+  Gate: `transport_test.dart` **46 green** (44 before), `dart analyze` clean on
+  the package. No wire change, no migration; an app needs the new package.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**
