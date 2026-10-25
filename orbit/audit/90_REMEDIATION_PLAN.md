@@ -3266,6 +3266,37 @@ the migration and dump that go with it).
   first and last two rely on API that did not exist; the 12r-2 and 12r-4
   tests fail on the code before this step by construction (no recovery, no
   eviction). Gate: see the batch report below.
+  **Batch report.** B13's 21 findings are closed or recorded: S1 `f90aaa2`
+  (schema 5), S2 `d340891`, S3 `ee48286`, S4 `3bcb0b5`, S5 `a30216b`, S6
+  `e630465`, S7 `2405209`, S8 `d26ac74`, S9 `b82ad00`, S10 `8c746cb`.
+  **Not fixed as the audit wrote it:** AUD-10-2 did not reproduce (SQLite
+  accepts `NOT IN ()`); it is pinned by a test. **Fixed by construction, no
+  failing test:** AUD-12m-2, 12m-3, 12n-1 and the renewal-throw rule of 12n-2
+  (their windows cannot be staged without hooks the code does not have).
+  **Partly open:** AUD-12r-3 (a failed receive is still told to the sender as
+  `declined`; that is a wire change), 12r-4 (a ledger full of *live* offers
+  still refuses silently) and the screens for 12q-2 and 12r-3 (no UI renders
+  the truncated flag or `watchSent`). Deletions made before S6's build are not
+  protected (tombstones start empty).
+  **Gate:** server suite on Postgres at `--concurrency=3`, 526 tests, 521
+  green; the five failures are known load flakes and each passed run alone
+  (`backup_test` "refuses an envelope that carries a secret field",
+  `devices_test` password change, `calls_test` non-offer signals,
+  `federation_test` remote key fetches, and `messaging_test` blocked send,
+  which is intermittent even alone). Engine **374** run, 2 failing in
+  `chat_screen_additions_test.dart` with `NotSignedInException`: they come
+  from another session's uncommitted self-chat edits in `chats_service.dart`,
+  not from B13. db **161**, cli **13** green; app one failure, the
+  `performance_budget_test` first-page budget, load-sensitive and listed
+  above. `flutter analyze` and `dart analyze` were clean on every step's
+  files; `codegen --check` and the governance check passed at S6.
+  New in AGENTS.md: `messaging_test` "two engines talking at once" now fails
+  even alone (also at `f43f7a1`, before B13), so it is no longer only a load
+  flake.
+  **Owner-facing, whole batch:** no server migration, no `.env` line, no route
+  change: the server needs nothing. The phone needs a new APK for every step
+  (db schema 5 migrates on open; a downgrade is refused).
+- Next: B14 (identity), then B15, B16 and the later batches.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**
