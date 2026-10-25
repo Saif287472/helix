@@ -161,10 +161,17 @@ final class DeviceAudioPlayer implements AudioPlayerAdapter {
         duration: await _backend.duration() ?? Duration.zero,
       );
       _loaded = true;
-      await _backend.setRate(_speed);
     } on Object {
       _state = const AudioPlayback();
       throw const AudioUnavailable();
+    }
+    // The speed is a preference: a platform that refuses it plays the note at
+    // 1x. It never turns a file that loaded into one that "cannot be played",
+    // and a refusal on one note is not carried to the next (AUD-14e-1).
+    try {
+      await _backend.setRate(_speed);
+    } on Object {
+      // Plays at 1x.
     }
     _emit();
   }

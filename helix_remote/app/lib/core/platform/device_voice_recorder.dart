@@ -156,7 +156,11 @@ final class DeviceVoiceRecorder implements VoiceRecorder {
     _decibels.clear();
     _banked = Duration.zero;
     _runningSince = null;
-    _phaseSub = _backend.phases.listen(_onBackendPhase, onError: (_) {});
+    _phaseSub = _backend.phases.listen(
+      _onBackendPhase,
+      // A capture error ends the recording like the system's own stop does.
+      onError: (Object _) => _endedByPlatform(),
+    );
     try {
       await _backend.start(path);
     } on Object {
@@ -196,6 +200,7 @@ final class DeviceVoiceRecorder implements VoiceRecorder {
   Future<RecordedVoice?> stop() async {
     final path = _path;
     if (path == null) return null;
+    _stopping = true;
     final durationMs = _elapsed.inMilliseconds;
     final waveform = VoiceWaveform.fromDecibels(_decibels);
     String? written;
@@ -204,6 +209,7 @@ final class DeviceVoiceRecorder implements VoiceRecorder {
     } on Object {
       written = null;
     }
+    _stopping = false;
     await _release();
     final file = File(written ?? path);
     if (!await file.exists() || await file.length() == 0) {
@@ -241,15 +247,29 @@ final class DeviceVoiceRecorder implements VoiceRecorder {
   /// A state change the recorder itself reported: a pause or resume that a
   /// call (or another app taking the microphone) caused.
   void _onBackendPhase(VoicePhase reported) {
-    // Our own start and stop already move [_phase]; only the system's pauses
-    // and resumes need following here.
+    // Our own start and stop already move [_phase]; the system's pauses and
+    // resumes need following, and so does its stop.
     if (_path == null) return;
-    if (reported == VoicePhase.paused && _phase == VoicePhase.recording) {
+    if (reported == VoicePhase.idle) {
+      _endedByPlatform();
+    } else if (reported == VoicePhase.paused &&
+        _phase == VoicePhase.recording) {
       _enter(VoicePhase.paused);
     } else if (reported == VoicePhase.recording &&
         _phase == VoicePhase.paused) {
       _enter(VoicePhase.recording);
     }
+  }
+
+  bool _stopping = false;
+
+  /// The recorder stopped without being asked (the system took the
+  /// microphone, or capture failed): the clock stops where the audio did, and
+  /// the composer hears `idle` and leaves its recording state (AUD-14e-2).
+  /// What [stop] reports is the duration up to here.
+  void _endedByPlatform() {
+    if (_stopping || _phase == VoicePhase.idle) return;
+    _enter(VoicePhase.idle);
   }
 
   void _enter(VoicePhase next) {

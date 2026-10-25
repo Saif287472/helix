@@ -82,6 +82,20 @@ void main() {
     expect(file.existsSync(), isFalse, reason: 'the recording is deleted');
   });
 
+  chatTest('a recording the phone ended leaves the recording state, with a '
+      'sentence (AUD-14e-2)', (tester, gateway) async {
+    await open(tester, gateway);
+    await hold(tester);
+    expect(find.text('Slide to cancel'), findsOneWidget);
+    recorder.systemPhase(VoicePhase.idle);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Slide to cancel'), findsNothing);
+    expect(find.textContaining('stopped by your phone'), findsOneWidget);
+    expect(sends(gateway), 0, reason: 'nothing is sent behind their back');
+    expect(recorder.events, contains('cancel'));
+  });
+
   chatTest('sliding to cancel throws the recording away', (
     tester,
     gateway,

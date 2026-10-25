@@ -4058,6 +4058,33 @@ system-ended recording leaves the recording UI with a sentence.
 **Rollout:** app only. No schema, no wire, no server. A voice note already sent
 with an inflated duration stays as it is; the fix only stops new ones.
 
+- S1 (AUD-14e-1, AUD-14e-2) — a player and a recorder tell the truth about a
+  failure; app only. **14e-1:** `DeviceAudioPlayer.load` sets the playback speed
+  in a `try` of its own after the file has loaded, so a platform that refuses
+  the speed plays the note at 1x instead of reporting "Audio playback is not
+  available on this device", and a refusal on one note is not carried to the
+  next (the speed is applied best effort every time). **14e-2:**
+  `DeviceVoiceRecorder` now treats the backend's `idle` state and an error on
+  its state stream as a recording that ended without being asked
+  (`_endedByPlatform`): the clock stops where the audio stopped, `idle` is
+  announced, and `stop()` reports only the duration up to there; the
+  recorder's own `stop` is guarded so the plugin's echo of it is not read as a
+  system stop. The composer, on an `idle` it did not ask for, leaves the
+  recording state with "The recording was stopped by your phone, so nothing
+  was sent. Hold the microphone to record again." and cancels: a recording the
+  person did not end is not sent behind their back (a choice: the audit left it
+  open, and losing a few seconds seemed better than sending what they did not
+  finish). Tests: a player whose `setRate` throws loads, plays, and still plays
+  a second note after `setSpeed(2)`; a recorder whose state stream emits `idle`
+  or an error two seconds in reports `[recording, idle]` and a 2,000 ms note
+  even though the clock then runs a minute; the composer test where the system
+  ends a held recording shows the sentence, sends nothing and cancels. All four
+  fail on the old adapters. Gate: media suite **71 green**, analyze and format
+  clean.
+  **Batch report.** B22's two findings are closed. **Owner-facing:** a new APK;
+  no server change. A voice note already sent with an inflated duration stays.
+- Next: B23 (the notification), then B24, B25 and T4.
+
 ## B23 — The notification tells the truth about what arrived, and cleans up after an account
 **A · ~0.5–1 day · no migration, no wire**
 

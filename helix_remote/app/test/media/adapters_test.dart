@@ -234,6 +234,28 @@ void main() {
       },
     );
 
+    /// A recording has one end, whoever causes it (AUD-14e-2): the system
+    /// taking the microphone for good, or the capture failing, stops the
+    /// clock where the audio stopped.
+    for (final how in ['the system stops it', 'the capture fails']) {
+      test('when $how, the clock stops and idle is reported', () async {
+        final seen = <VoicePhase>[];
+        recorder.phases.listen(seen.add);
+        await recorder.start();
+        now = now.add(const Duration(seconds: 2));
+        if (how == 'the system stops it') {
+          backend.states.add(VoicePhase.idle);
+        } else {
+          backend.states.addError(StateError('capture failed'));
+        }
+        await Future<void>.delayed(Duration.zero);
+        expect(seen, [VoicePhase.recording, VoicePhase.idle]);
+        now = now.add(const Duration(seconds: 58)); // the old clock kept going
+        final voice = (await recorder.stop())!;
+        expect(voice.durationMs, 2000, reason: 'only what was captured');
+      });
+    }
+
     test(
       'a call that pauses the microphone stops the clock and is reported',
       () async {
@@ -305,6 +327,23 @@ void main() {
   });
 
   group('DeviceAudioPlayer', () {
+    /// A speed the platform refuses is a preference lost, not a file that
+    /// cannot be played - and it does not follow the player to the next note
+    /// (AUD-14e-1).
+    test('a refused speed still loads and plays, on every note', () async {
+      final backend = FakeAudioBackend()..failRate = true;
+      final player = DeviceAudioPlayer(backend: backend);
+      addTearDown(player.dispose);
+      await player.load('/a.m4a'); // no AudioUnavailable
+      await player.play();
+      expect(backend.calls, containsAllInOrder(['source', 'rate:1.0', 'play']));
+      await player.setSpeed(2); // refused too: best effort
+      await player.load('/b.m4a');
+      await player.play();
+      expect(backend.calls.where((c) => c == 'source'), hasLength(2));
+      expect(backend.calls.last, 'play');
+    });
+
     test('load, play, report position, finish back at the start', () async {
       final backend = FakeAudioBackend();
       final player = DeviceAudioPlayer(backend: backend);

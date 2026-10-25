@@ -173,6 +173,9 @@ final class FakeAudioPlayer implements AudioPlayerAdapter {
 final class FakeAudioBackend implements AudioBackend {
   final calls = <String>[];
   bool failSource = false;
+
+  /// The platform refuses a playback speed (some files cannot change it).
+  bool failRate = false;
   Duration? length = const Duration(seconds: 8);
   final pos = StreamController<Duration>.broadcast();
   final dur = StreamController<Duration>.broadcast();
@@ -202,7 +205,10 @@ final class FakeAudioBackend implements AudioBackend {
   Future<void> seek(Duration position) async => calls.add('seek:$position');
 
   @override
-  Future<void> setRate(double rate) async => calls.add('rate:$rate');
+  Future<void> setRate(double rate) async {
+    calls.add('rate:$rate');
+    if (failRate) throw StateError('speed refused');
+  }
 
   @override
   Stream<Duration> get positions => pos.stream;

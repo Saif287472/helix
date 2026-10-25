@@ -670,6 +670,17 @@ final class ComposerNotifier extends Notifier<ComposerState> {
       // A call or another app took the microphone, or gave it back: the clock
       // stops and starts with it.
       _voicePhase = phase;
+      if (phase == VoicePhase.idle && state.recording != null) {
+        // The recording ended without the person stopping it (capture failed,
+        // or the system took the microphone for good). The recording state
+        // does not stay up over audio that is no longer being captured; what
+        // exists is not sent behind their back (AUD-14e-2).
+        _notice(
+          'The recording was stopped by your phone, so nothing was sent. Hold '
+          'the microphone to record again.',
+        );
+        unawaited(endVoice(send: false));
+      }
     });
     _voiceTick?.cancel();
     _voiceTick = Timer.periodic(_voiceStep, (_) => _voiceTicked());
