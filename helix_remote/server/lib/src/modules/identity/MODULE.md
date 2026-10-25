@@ -181,7 +181,9 @@ Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
 Used only by the admin module: account list and detail (the `~Helix name`, the
 last four digits and, where `HELIX_PHONE_KEY` opens `phone_sealed`, the full
 number the app reported - ADR-030), `phoneNumbers` (the same numbers by account
-id, for a report row's two people), suspend and unsuspend (status only;
+id, for a report row's two people) and `helixNames` (the `~Helix name` by
+account id, for naming a person whose app never reported a name), suspend and
+unsuspend (status only;
 suspended principals reach `allowSuspended` routes), ban (phone hash into
 `banned_phones`, then full deletion), device revoke (same hooks and signals as
 a user revoke,

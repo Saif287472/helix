@@ -226,6 +226,13 @@ abstract interface class IdentityAdminApi {
     Iterable<String> accounts,
   );
 
+  /// The `~Helix name` [accounts] chose, for naming a person whose app never
+  /// reported a display name (ADR-030). An account with none is left out.
+  Future<Map<String, String>> helixNames(
+    SqlSession s,
+    Iterable<String> accounts,
+  );
+
   /// The account, every device (active and revoked) and whether a password
   /// is set; null if there is no such account.
   Future<({AdminAccount account, List<AdminDevice> devices, bool hasPassword})?>

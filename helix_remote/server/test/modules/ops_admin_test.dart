@@ -768,6 +768,40 @@ void main() {
       );
     });
 
+    test(
+      'a report row names a person who keeps no own name by their Helix name',
+      () async {
+        final token = await setUpAdmin();
+        final alice = await h.registerGlobal(aliceNumber);
+        final bob = await h.registerGlobal(bobNumber);
+        // Bob only ever chose a `~Helix name`; Alice's app reported nothing.
+        await h.api.call(
+          Routes.setHelixName,
+          bearer: bob.bearer,
+          body: const SetHelixNameRequest(name: 'bobby').toJson(),
+        );
+        await h.api.call(
+          Routes.report,
+          bearer: alice.bearer,
+          body: ReportRequest(
+            account: bob.account.id,
+            category: ReportCategory.spam,
+            note: 'ads',
+          ).toJson(),
+        );
+        final report = (await h.api.call(
+          Routes.adminReports,
+          bearer: token,
+          query: const {'status': 'open'},
+        )).json;
+        final row = Page.fromJson(report, AdminReport.fromJson).items.single;
+        expect(row.subjectName, 'bobby');
+        // Nothing is joined for a person who chose no name at all: the console
+        // falls back to the id it is given rather than inventing one.
+        expect(row.reporterName, isNull);
+      },
+    );
+
     test('config, flags, logs, log stream and purge', () async {
       final token = await setUpAdmin();
       final config = AdminConfig.fromJson(

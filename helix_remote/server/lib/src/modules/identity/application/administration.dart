@@ -40,6 +40,12 @@ final class Administration implements IdentityAdminApi {
   ) => store.phoneNumbers(s, accounts);
 
   @override
+  Future<Map<String, String>> helixNames(
+    SqlSession s,
+    Iterable<String> accounts,
+  ) => store.helixNames(s, accounts);
+
+  @override
   Future<({AdminAccount account, List<AdminDevice> devices, bool hasPassword})?>
   accountDetail(SqlSession s, String accountId) async {
     final account = await store.account(s, accountId);

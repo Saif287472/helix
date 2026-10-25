@@ -600,13 +600,18 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       status: status,
     );
     // A report row is two account ids. The operator reads the people behind
-    // them exactly as the accounts list does - the name people keeps, the
-    // number identity unseals (ADR-030) - so the console can act on a report
-    // without a second lookup per row.
+    // them exactly as the accounts list does - the name they keep, else the
+    // `~Helix name` they chose, and the number identity unseals (ADR-030) -
+    // so the console can act on a report without a second lookup per row.
     final ids = {
       for (final r in page.items) ...[r.reporter, r.subject],
     };
-    final names = await people.displayNames(context.db, ids);
+    final display = await people.displayNames(context.db, ids);
+    final helix = await identity.admin.helixNames(context.db, ids);
+    final names = {
+      for (final id in ids)
+        id: ((display[id] ?? '').trim().isEmpty ? helix[id] : display[id]),
+    };
     final numbers = await identity.admin.phoneNumbers(context.db, ids);
     return jsonResponse(
       page.toJson(

@@ -119,6 +119,26 @@ final class AdminStore {
     return found;
   }
 
+  /// The `~Helix name` these accounts chose, for a report row that has to name
+  /// a person whose app never reported a display name (ADR-030). An account
+  /// with no Helix name is left out, and the caller falls back to its id.
+  Future<Map<String, String>> helixNames(
+    SqlSession db,
+    Iterable<String> accounts,
+  ) async {
+    final ids = accounts.toSet().toList();
+    if (ids.isEmpty) return const {};
+    final rows = await db.query(
+      'SELECT id, helix_name FROM $s.accounts WHERE id = ANY(@ids:_uuid)',
+      {'ids': ids},
+    );
+    return {
+      for (final r in rows)
+        if ((r.optString('helix_name') ?? '').isNotEmpty)
+          r.string('id'): r.string('helix_name'),
+    };
+  }
+
   Future<List<AdminDevice>> devices(SqlSession db, String accountId) async {
     final rows = await db.query(
       'SELECT id, name, platform, status, created_at, last_seen_on, revoked_at '
