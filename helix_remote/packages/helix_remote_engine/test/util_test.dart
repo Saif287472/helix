@@ -155,12 +155,15 @@ void main() {
         many = many.withNewActive(loaded.active!);
       }
       expect(many.previous, hasLength(4));
-      final slots = DbSessionStore.encode(many);
+      final slots = many.encodeSlots();
       expect(slots, hasLength(5));
-      expect(DbSessionStore.decode(remote, slots).encode(), many.encode());
+      expect(
+        DeviceSessions.decodeSlots(remote, slots).encodeSlots(),
+        many.encodeSlots(),
+      );
       await store.save(many, now: peers.clock.now);
       final stored = (await store.load(remote))!;
-      expect(stored.encode(), many.encode());
+      expect(stored.encodeSlots(), many.encodeSlots());
       // The save moved the record on: the version it was read at is the one
       // a write must still match.
       expect(stored.version, greaterThan(many.version));
@@ -228,7 +231,7 @@ void main() {
         throwsA(isA<StaleSessionState>()),
       );
       final after = (await first.load(remote))!;
-      expect(after.encode(), advanced.encode());
+      expect(after.encodeSlots(), advanced.encodeSlots());
       expect(after.version, greaterThan(stale.version));
 
       // Retrying from the stored state works, which is what the engine does.

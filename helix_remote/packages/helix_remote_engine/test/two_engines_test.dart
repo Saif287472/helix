@@ -325,6 +325,6 @@ void main() {
         isA<StaleSessionState>().having((e) => e.remote, 'remote', remote),
       ),
     );
-    expect((await first.load(remote))!.encode(), advanced.encode());
+    expect((await first.load(remote))!.encodeSlots(), advanced.encodeSlots());
   });
 }

@@ -1,15 +1,12 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/errors.dart';
-import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// [PairwiseSessionStore] over the `sessions` table. A [DeviceSessions]
-/// record maps onto the six slots: slot 0 holds the active session and the
-/// retired base keys, slots 1-5 the previous sessions, each as UTF-8 JSON
-/// (`PairwiseSession.toJson`). Reads only through the crypto interface; the
+/// record maps onto the six slots through the crypto package's own codec
+/// ([DeviceSessions.encodeSlots] / [DeviceSessions.decodeSlots]): slot 0 holds
+/// the active session and the retired base keys, slots 1-5 the previous
+/// sessions, each as UTF-8 JSON. Reads only through the crypto interface; the
 /// engine commits what the crypto layer returns, inside its own
 /// transactions ([save]).
 ///
@@ -35,7 +32,7 @@ final class DbSessionStore implements PairwiseSessionStore {
     );
     if (rows.isEmpty) return null;
     try {
-      return decode(remote, [
+      return DeviceSessions.decodeSlots(remote, [
         for (final row in rows) row.state,
       ], version: rows.first.version);
     } on CorruptStateException {
@@ -61,51 +58,12 @@ final class DbSessionStore implements PairwiseSessionStore {
     final landed = await _db.cryptoDao.saveSessions(
       remote.account,
       remote.device,
-      encode(sessions),
+      sessions.encodeSlots(),
       now: now,
       expectedVersion: sessions.version,
     );
     if (!landed) throw StaleSessionState(remote);
   }
-
-  /// Slot 0 first, then the previous sessions.
-  static List<Uint8List> encode(DeviceSessions sessions) => [
-    _bytes({
-      'v': 1,
-      'retired': [for (final k in sessions.retiredBaseKeys) encodeBytes(k)],
-      'active': ?sessions.active?.toJson(),
-    }),
-    for (final previous in sessions.previous) _bytes(previous.toJson()),
-  ];
-
-  static DeviceSessions decode(
-    DeviceAddress remote,
-    List<Uint8List> slots, {
-    int version = 0,
-  }) {
-    JsonReader read(Uint8List bytes) => JsonReader.decode(utf8.decode(bytes));
-    final head = read(slots.first);
-    if (head.integer('v') != 1) {
-      throw const MalformedCryptoInputException('unsupported session slot');
-    }
-    return DeviceSessions(
-      remote: remote,
-      active: head.has('active')
-          ? PairwiseSession.fromJson(head.object('active'))
-          : null,
-      previous: [
-        for (final bytes in slots.skip(1))
-          PairwiseSession.fromJson(read(bytes)),
-      ],
-      retiredBaseKeys: [
-        for (final k in head.optStrings('retired')) decodeBytes(k),
-      ],
-      version: version,
-    );
-  }
-
-  static Uint8List _bytes(JsonMap json) =>
-      Uint8List.fromList(utf8.encode(jsonEncode(json)));
 }
 
 /// [LocalPrekeyStore] over the `prekeys` table. A retired signed prekey

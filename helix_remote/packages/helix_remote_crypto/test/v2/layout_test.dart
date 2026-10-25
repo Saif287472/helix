@@ -124,7 +124,10 @@ void main() {
       ...uuid16(deviceB1),
       ...b.keys.identityKey.publicKey,
     ];
-    final session = DeviceSessions.decode(a.sessions.rows[b.address]!).active!;
+    final session = DeviceSessions.decodeSlots(
+      b.address,
+      a.sessions.rows[b.address]!,
+    ).active!;
     expect(session.associatedData, ad);
 
     final root = hkdf(

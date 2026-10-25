@@ -48,18 +48,20 @@ const deviceB1 = '0192a4f0-0000-7000-8000-0000000000b1';
 const deviceC1 = '0192a4f0-0000-7000-8000-0000000000c1';
 const groupG = '0192a4f0-0000-7000-8000-0000000000ee';
 
+/// The sessions a device holds, as the store keeps them: one list of slots per
+/// remote device, slot 0 first (the same shape the `sessions` rows have).
 final class MemorySessionStore implements PairwiseSessionStore {
-  final Map<DeviceAddress, Uint8List> rows = {};
+  final Map<DeviceAddress, List<Uint8List>> rows = {};
 
   @override
   Future<DeviceSessions?> load(DeviceAddress remote) async {
-    final row = rows[remote];
+    final slots = rows[remote];
     // Round-trip through bytes, as the database would.
-    return row == null ? null : DeviceSessions.decode(row);
+    return slots == null ? null : DeviceSessions.decodeSlots(remote, slots);
   }
 
   void save(DeviceSessions sessions) =>
-      rows[sessions.remote] = sessions.encode();
+      rows[sessions.remote] = sessions.encodeSlots();
 }
 
 final class MemoryPrekeyStore implements LocalPrekeyStore {

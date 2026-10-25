@@ -179,9 +179,9 @@ final class DeviceSessions {
 
   /// The revision the record was read at, for a store that refuses to write
   /// over a newer one (two engines on one database file: the app and its
-  /// FCM isolate, C-01). It is **not** part of the stored state - the blob
-  /// below is byte-identical for the same ratchet - so a store that has no
-  /// versions simply leaves it at 0.
+  /// FCM isolate, C-01). It is **not** part of the stored state - [encodeSlots]
+  /// is byte-identical for the same ratchet - so a store that has no versions
+  /// simply leaves it at 0.
   final int version;
 
   bool get isEmpty => active == null && previous.isEmpty;
@@ -245,36 +245,48 @@ final class DeviceSessions {
   bool _isRetired(List<int> baseKey) =>
       retiredBaseKeys.any((k) => bytesEqual(k, baseKey));
 
-  JsonMap toJson() => {
-    'v': 1,
-    'remote': remote.toJson(),
-    'active': ?active?.toJson(),
-    'previous': [for (final s in previous) s.toJson()],
-    'retired': [for (final k in retiredBaseKeys) encodeBytes(k)],
-  };
+  /// The record as the slots a store writes: **slot 0** holds the active
+  /// session and the retired base keys, slots 1 to [maxPrevious] one previous
+  /// session each. The remote device is the row's key, so it is not stored
+  /// here, and neither is [version].
+  List<Uint8List> encodeSlots() => [
+    encodeStateJson({
+      'v': 1,
+      'retired': [for (final k in retiredBaseKeys) encodeBytes(k)],
+      'active': ?active?.toJson(),
+    }),
+    for (final previous in this.previous) encodeStateJson(previous.toJson()),
+  ];
 
-  factory DeviceSessions.fromJson(JsonReader json) =>
-      readState('device sessions', () {
-        requireVersion(json, 1, 'device sessions');
-        return DeviceSessions(
-          remote: DeviceAddress.fromJson(json.object('remote')),
-          active: json.has('active')
-              ? PairwiseSession.fromJson(json.object('active'))
-              : null,
-          previous: List.unmodifiable(
-            json.objects('previous', PairwiseSession.fromJson),
+  /// [encodeSlots] read back: [remote] is the row the [slots] came from and
+  /// [version] the revision the store will compare a write against.
+  /// A slot this build does not understand is a damaged record (AUD-9-1), not
+  /// a peer's message.
+  static DeviceSessions decodeSlots(
+    DeviceAddress remote,
+    List<Uint8List> slots, {
+    int version = 0,
+  }) => readState('device sessions', () {
+    final head = decodeStateJson(slots.first, what: 'device sessions');
+    requireVersion(head, 1, 'device sessions');
+    return DeviceSessions(
+      remote: remote,
+      active: head.has('active')
+          ? PairwiseSession.fromJson(head.object('active'))
+          : null,
+      previous: List.unmodifiable([
+        for (final bytes in slots.skip(1))
+          PairwiseSession.fromJson(
+            decodeStateJson(bytes, what: 'previous session'),
           ),
-          retiredBaseKeys: List.unmodifiable([
-            for (final k in json.strings('retired'))
-              checkedStateKey(decodeBytes(k), 'retired base key'),
-          ]),
-        );
-      });
-
-  Uint8List encode() => encodeStateJson(toJson());
-
-  static DeviceSessions decode(List<int> bytes) =>
-      DeviceSessions.fromJson(decodeStateJson(bytes, what: 'device sessions'));
+      ]),
+      retiredBaseKeys: List.unmodifiable([
+        for (final k in head.optStrings('retired'))
+          checkedStateKey(decodeBytes(k), 'retired base key'),
+      ]),
+      version: version,
+    );
+  });
 
   @override
   String toString() => 'DeviceSessions($remote, ${all.length} sessions)';

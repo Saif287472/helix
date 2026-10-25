@@ -97,9 +97,12 @@ void main() {
       final m = await a.send(b, 'x');
       await b.receive(a, m);
       final stored = b.sessions.rows[a.address]!;
-      expect(DeviceSessions.decode(stored).encode(), stored);
       expect(
-        () => DeviceSessions.decode(utf8.encode('{"v":9}')),
+        DeviceSessions.decodeSlots(a.address, stored).encodeSlots(),
+        stored,
+      );
+      expect(
+        () => DeviceSessions.decodeSlots(a.address, [utf8.encode('{"v":9}')]),
         throwsA(isA<CorruptStateException>()),
       );
     });
@@ -107,15 +110,18 @@ void main() {
     test('a damaged stored record is refused when it is decoded', () async {
       await a.startSessionWith(b);
       await b.receive(a, await a.send(b, 'x'));
-      final stored = b.sessions.rows[a.address]!;
-      final original = jsonDecode(utf8.decode(stored)) as Map<String, Object?>;
+      final slots = b.sessions.rows[a.address]!;
+      final head = jsonDecode(utf8.decode(slots.first)) as Map<String, Object?>;
 
-      Map<String, Object?> damaged(String field, Object? value) {
-        final copy = jsonDecode(jsonEncode(original)) as Map<String, Object?>;
+      List<Uint8List> damaged(String field, Object? value) {
+        final copy = jsonDecode(jsonEncode(head)) as Map<String, Object?>;
         ((copy['active'] as Map<String, Object?>)['ratchet']
                 as Map<String, Object?>)[field] =
             value;
-        return copy;
+        return [
+          Uint8List.fromList(utf8.encode(jsonEncode(copy))),
+          ...slots.skip(1),
+        ];
       }
 
       for (final (field, value) in <(String, Object?)>[
@@ -130,20 +136,21 @@ void main() {
         ('nr', 'many'),
       ]) {
         expect(
-          () => DeviceSessions.decode(
-            utf8.encode(jsonEncode(damaged(field, value))),
-          ),
+          () => DeviceSessions.decodeSlots(a.address, damaged(field, value)),
           throwsA(isA<CorruptStateException>()),
           reason: field,
         );
       }
 
-      final missing = jsonDecode(jsonEncode(original)) as Map<String, Object?>;
+      final missing = jsonDecode(jsonEncode(head)) as Map<String, Object?>;
       ((missing['active'] as Map<String, Object?>)['ratchet']
               as Map<String, Object?>)
           .remove('rk');
       expect(
-        () => DeviceSessions.decode(utf8.encode(jsonEncode(missing))),
+        () => DeviceSessions.decodeSlots(a.address, [
+          Uint8List.fromList(utf8.encode(jsonEncode(missing))),
+          ...slots.skip(1),
+        ]),
         throwsA(isA<CorruptStateException>()),
       );
     });
@@ -163,11 +170,52 @@ void main() {
         expect(loaded.cleared().version, loaded.version);
         expect(loaded.atVersion(7).version, 7);
         // The rest of the record is unchanged by the revision.
-        expect(loaded.atVersion(7).encode(), loaded.encode());
+        expect(loaded.atVersion(7).encodeSlots(), loaded.encodeSlots());
 
-        // It is not part of the bytes: the state blob is identical, so no
+        // It is not part of the bytes: the state slots are identical, so no
         // crypto vector and no wire format changes with it.
-        expect(DeviceSessions.decode(loaded.atVersion(7).encode()).version, 0);
+        expect(
+          DeviceSessions.decodeSlots(
+            b.address,
+            loaded.atVersion(7).encodeSlots(),
+          ).version,
+          0,
+        );
+      },
+    );
+
+    test(
+      'slot 0 carries the active session and the retired base keys',
+      () async {
+        await a.startSessionWith(b);
+        await b.receive(a, await a.send(b, 'x'));
+        var record = (await b.sessions.load(a.address))!;
+        // Six turns through withNewActive: five previous sessions fill the
+        // slots and the sixth is dropped into the retired list.
+        for (var i = 0; i < 6; i++) {
+          record = record.withNewActive(record.active!);
+        }
+        final slots = record.encodeSlots();
+        expect(slots, hasLength(6), reason: 'slot 0 plus the five previous');
+        final head =
+            jsonDecode(utf8.decode(slots.first)) as Map<String, Object?>;
+        expect(head.keys, ['v', 'retired', 'active']);
+        expect(head['active'], isNotNull);
+        expect((head['retired'] as List), isNotEmpty);
+        expect(
+          [
+            for (final slot in slots.skip(1))
+              (jsonDecode(utf8.decode(slot)) as Map<String, Object?>)['v'],
+          ],
+          everyElement(1),
+          reason:
+              'each previous session is a session of its own, no head fields',
+        );
+        final back = DeviceSessions.decodeSlots(a.address, slots);
+        expect(back.active, isNotNull);
+        expect(back.previous, hasLength(5));
+        expect(back.retiredBaseKeys, record.retiredBaseKeys);
+        expect(back.encodeSlots(), slots);
       },
     );
   });
@@ -254,7 +302,10 @@ void main() {
       final chain3 = [for (var i = 0; i < 3; i++) await a.send(b, 'c3-$i')];
       expect(await b.receive(a, chain3[2]), 'c3-2'); // 2,002: evict 2
 
-      final stored = DeviceSessions.decode(b.sessions.rows[a.address]!);
+      final stored = DeviceSessions.decodeSlots(
+        a.address,
+        b.sessions.rows[a.address]!,
+      );
       expect(stored.active!.ratchet.skipped, hasLength(2000));
       await expectThrows<DuplicateOrExpiredMessageException>(
         b.receive(a, chain1[0]),
@@ -308,7 +359,10 @@ void main() {
       await expectThrows<DuplicateOrExpiredMessageException>(b.receive(a, m1));
       // Even after Bob drops every session (no OPK protects this one).
       b.sessions.save(
-        DeviceSessions.decode(b.sessions.rows[a.address]!).cleared(),
+        DeviceSessions.decodeSlots(
+          a.address,
+          b.sessions.rows[a.address]!,
+        ).cleared(),
       );
       await expectThrows<DuplicateOrExpiredMessageException>(b.receive(a, m1));
     });
@@ -363,7 +417,10 @@ void main() {
       expect(await b.receive(a, wire), 'target');
 
       // Same message under a different AD (another device pair) fails.
-      final session = DeviceSessions.decode(b.sessions.rows[a.address]!);
+      final session = DeviceSessions.decodeSlots(
+        a.address,
+        b.sessions.rows[a.address]!,
+      );
       final next =
           SealedPayload.decode(await a.send(b, 'ad')) as RatchetMessage;
       await expectThrows<DecryptionFailedException>(
@@ -574,7 +631,10 @@ void main() {
       final error = await b.send(a, 'decryption_error');
       expect(SealedPayload.decode(error), isA<PrekeyMessage>());
       expect(await a.receive(b, error), 'decryption_error');
-      final aSessions = DeviceSessions.decode(a.sessions.rows[b.address]!);
+      final aSessions = DeviceSessions.decodeSlots(
+        b.address,
+        a.sessions.rows[b.address]!,
+      );
       expect(aSessions.previous, hasLength(1));
 
       final resent = await a.send(b, 'lost');
@@ -586,7 +646,10 @@ void main() {
       for (var i = 0; i < 7; i++) {
         await a.startSessionWith(b, withOneTime: false);
       }
-      final record = DeviceSessions.decode(a.sessions.rows[b.address]!);
+      final record = DeviceSessions.decodeSlots(
+        b.address,
+        a.sessions.rows[b.address]!,
+      );
       expect(record.previous, hasLength(DeviceSessions.maxPrevious));
       expect(record.retiredBaseKeys, hasLength(1));
     });
@@ -605,8 +668,14 @@ void main() {
         expect(await b.receive(a, await a.send(b, 'a$i')), 'a$i');
         expect(await a.receive(b, await b.send(a, 'b$i')), 'b$i');
       }
-      final sa = DeviceSessions.decode(a.sessions.rows[b.address]!).active!;
-      final sb = DeviceSessions.decode(b.sessions.rows[a.address]!).active!;
+      final sa = DeviceSessions.decodeSlots(
+        b.address,
+        a.sessions.rows[b.address]!,
+      ).active!;
+      final sb = DeviceSessions.decodeSlots(
+        a.address,
+        b.sessions.rows[a.address]!,
+      ).active!;
       expect(hex(sa.baseKey), hex(sb.baseKey));
       expect(sa.pendingPrekey, isNull);
       expect(sb.pendingPrekey, isNull);

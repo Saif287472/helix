@@ -2434,7 +2434,7 @@ packages, so one release order covers them.
 in [08_protocol.md](file:///J:/Projects/helix/orbit/audit/08_protocol.md)); a
 dedicated corrupt-local-crypto failure type (S9-1 in
 [09_crypto.md](file:///J:/Projects/helix/orbit/audit/09_crypto.md)); one
-`DeviceSessions` serialization, in the engine.
+`DeviceSessions` serialization, in the package that owns the type.
 
 **Verification:** protocol round-trip and unknown-tag cases for every
 discriminator; new golden fixtures for the new variants (deliberate
@@ -2549,7 +2549,7 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   The two wire paths that used the local codec now call `readWire`, which
   keeps `MalformedCryptoInputException`: provisioning's `DeviceIdentity`
   and the server-fetched `BackupEnvelope`.
-  **AUD-9-1:** [`DbSessionStore.load`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart#L31)
+  **AUD-9-1:** [`DbSessionStore.load`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart#L28)
   catches the new type and drops the record with a compare-and-set
   ([`CryptoDao.deleteSessions(expectedVersion:)`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/daos/crypto_dao.dart#L110))
   - a plain delete could erase a good record another engine just wrote - and
@@ -2568,6 +2568,36 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   green**, `dart analyze` clean on crypto, db, engine and cli. No wire or
   stored-format change (the bytes written stay identical); no migration; an
   app needs the new packages.
+- S6 (AUD-9-2) — `DeviceSessions` had two serializations. The crypto one
+  (`toJson`/`fromJson`/`encode`/`decode`) wrote one JSON document holding
+  `remote`, `active`, `previous[]` and `retired[]`; production
+  [`DbSessionStore`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart#L22)
+  wrote six rows instead - slot 0 `{v, retired[], active}`, slots 1-5 one
+  `PairwiseSession` each, the remote from the row key - and never called the
+  crypto codec, which only crypto tests and the crypto fake used. So a change
+  to the stored envelope could be made in the type, proven green by
+  `session_test.dart`, and leave the bytes the app writes untouched.
+  **Fix:** the slot codec is the package that owns the type's -
+  [`DeviceSessions.encodeSlots()` / `decodeSlots(remote, slots, {version})`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_crypto/lib/src/v2/session.dart#L252)
+  - `DbSessionStore` encodes and reads through it (its own statics and three
+  imports are gone) and the document codec is deleted, with no caller left.
+  `decodeSlots` decodes under `readState`/`requireVersion`, so a slot with an
+  unknown `v` or a bad field is a `CorruptStateException` and takes S5's
+  drop-and-rebuild path; the engine copy had thrown
+  `MalformedCryptoInputException` there, which would have wedged every send
+  to that device.
+  Tests: the crypto fake in [`support.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_crypto/test/v2/support.dart#L53)
+  now stores `List<Uint8List>` slots and round-trips through the codec, so
+  every crypto test pins the bytes production writes; a new
+  `session_test.dart` test builds a record with five previous sessions and
+  asserts six slots, slot 0's `v`/`retired`/`active` keys, each other slot a
+  session of its own, and a byte-identical round trip; the damaged-field test
+  writes into slot 0 as the store does. The engine CAS test still pins the
+  store (`two_engines_test.dart`), now through `encodeSlots()`.
+  Gate: crypto **78 green** (77 before), engine **352 green**, db **140
+  green**, `dart analyze` and `dart format` clean on crypto and engine. Stored
+  bytes, wire format and schema unchanged; no migration; the app and CLI get
+  it from the packages.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**
