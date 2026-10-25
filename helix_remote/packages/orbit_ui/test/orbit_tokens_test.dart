@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit_ui/src/theme/effects.dart';
+import 'package:orbit_ui/src/theme/orbit_theme.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 
 /// The theme layer's contract with the generator.
@@ -435,7 +436,40 @@ void main() {
     expect(half.accent, isNot(orbit.accent));
     expect(half.accent, isNot(night.accent));
     expect(half.rMd, 15.0);
-    expect(orbit.lerp(night, 0), same(night));
-    expect(orbit.lerp(night, 1), same(orbit));
+    // `this` is the theme being left, so a fade starts on it and ends on the
+    // other. The first version had these swapped, which put a flash of the new
+    // theme before the fade and a flash of the old one after it.
+    expect(orbit.lerp(night, 0), same(orbit));
+    expect(orbit.lerp(night, 1), same(night));
   });
+
+  test(
+    'a ThemeData fade starts on the old theme and ends on the new one',
+    () async {
+      // AUD-16-2: [ThemeData.lerp] is the caller that matters - AnimatedTheme
+      // runs it on every theme change - and it passes the old theme as the
+      // receiver and the new one as the other.
+      final orbit = await load('orbit');
+      final night = await load('night');
+      final from = ThemeData.lerp(
+        OrbitTheme.of(orbit),
+        OrbitTheme.of(night),
+        0,
+      );
+      final to = ThemeData.lerp(OrbitTheme.of(orbit), OrbitTheme.of(night), 1);
+
+      expect(from.extension<OrbitTokens>(), same(orbit));
+      expect(to.extension<OrbitTokens>(), same(night));
+      // The old theme's own brightness and accent, so the frames around the fade
+      // are not drawn on the new theme's scaffolding.
+      expect(
+        from.brightness,
+        orbit.meta.dark ? Brightness.dark : Brightness.light,
+      );
+      expect(
+        to.brightness,
+        night.meta.dark ? Brightness.dark : Brightness.light,
+      );
+    },
+  );
 }

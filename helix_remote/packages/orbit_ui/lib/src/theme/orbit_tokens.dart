@@ -301,13 +301,18 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
   /// Themes cross-fade: colours and lengths interpolate, and everything else -
   /// shadows-as-a-list, patterns, fonts - switches at the halfway point.
   ///
+  /// `this` is the theme being left and [other] the one being entered, so each
+  /// end is exactly itself: `ThemeData.lerp` starts at `t == 0` on the old
+  /// theme and ends at `t == 1` on the new one, and a fade that began by
+  /// drawing the theme it is fading to would flash before it faded.
+  ///
   /// Interpolating a box shadow or a pattern would mean re-solving it against
   /// both themes, and nothing in the prototype cross-fades those; switching is
   /// what a person actually sees when a theme changes.
   @override
   OrbitTokens lerp(covariant OrbitTokens? other, double t) {
-    if (other == null || t >= 1) return this;
-    if (t <= 0) return other;
+    if (other == null || t <= 0) return this;
+    if (t >= 1) return other;
     final merged = <String, Object?>{};
     for (final entry in _values.entries) {
       final a = entry.value;

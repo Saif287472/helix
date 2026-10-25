@@ -2068,6 +2068,21 @@ packs only.
   **12 green** (shared store, unchanged), `flutter analyze` clean on the
   workspace. No wire change, no migration, no server change. A new APK carries
   the app half.
+- S3 (AUD-16-2) — `OrbitTokens.lerp` returned the **other** theme at both
+  endpoints (`t <= 0 → other`, `t >= 1 → this`), the reverse of the
+  `ThemeExtension` contract `ThemeData.lerp` follows. `MaterialApp` wraps every
+  screen in `AnimatedTheme`, so every theme change - including the fallback to
+  Orbit when a chosen pack is deleted - drew the target theme, snapped back to
+  the old one, faded, and drew the old one again before the new landed. The
+  unit test asserted the inversion, so it could not catch it.
+  **What changed:** each end returns itself (`t <= 0 → this`, `t >= 1 →
+  other`), with the contract in the doc. The cross-fade test now asserts that,
+  and a new test runs the fade through `ThemeData.lerp(OrbitTheme.of(a),
+  OrbitTheme.of(b), 0|1)` - the caller that matters - checking both the token
+  identity and the brightness on either side.
+  Gate: orbit_ui **237 green** (236 before), the app's settings folder **234
+  green**, `flutter analyze` clean on the workspace. No wire change, no
+  migration, no server change. A new APK carries the fix.
 
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**
