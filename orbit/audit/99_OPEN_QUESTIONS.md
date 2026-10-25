@@ -99,6 +99,13 @@ makes the section large while the quota stays empty (AUD-5-3).
 protocol docs for the export response, and whether the media section needs a
 new `total` field. No schema change in any option.
 
+**Answer (owner, 2026-10-25): option 1.** Every section of the export is capped
+and the response says what was left out (`truncated`, `total`), which is also
+what fixes the media section's missing limit (AUD-7-2). B15/S5 applies the same
+shape to every module's section, so the export is a data right that always
+arrives, with honest bounds — no streaming machinery and no refusal. No schema
+change.
+
 ## Q4 — Should the platform-credential backup wrap be shipped, and how should open fall back?
 
 **Context.** `BackupCrypto.seal` writes a second wrap under an OS/platform key
@@ -125,6 +132,15 @@ that passes a stale platform key plus a correct recovery secret gets a
 wraps, `restoreFullBackup`'s signature (already accepts both), and the
 restore UI's wording. No wire shape change — `key_wraps` already carries both.
 
+**Answer (owner, 2026-10-25): option 2 — delete the platform wrap (the audit
+recommended option 3).** Backups stay recovery-secret only: `seal` writes one
+wrap, `open` takes the recovery secret, and the crypto package and engine keep
+no OS-keystore dependency. Nothing in the product ever passed a `platformKey`,
+so no existing backup has a second wrap to lose, and the stale-key trap cannot
+exist once the path is gone. ADR-030's format documents one wrap; if the
+capability is ever wanted it returns as its own ADR, with the fallback and the
+restore UI designed in together.
+
 ## Q5 — Should `open` cap the Argon2id work a stored envelope can demand?
 
 **Context.** The recovery-secret wrap carries its own KDF parameters, and
@@ -148,6 +164,13 @@ only, so it is one Argon2id run per attempt.
 
 **What the answer changes:** the compatibility window for envelopes sealed by
 older/newer builds, and the restore page's flow. No stored-format change.
+
+**Answer (owner, 2026-10-25): option 3.** The ceiling stays — the v2 floor is
+still enforced and `memoryKib <= 262,144`, `iterations <= 10` are still
+honoured — and the app asks before a restore whose header demands more than the
+app's own sealing defaults, so the person sees the cost before the work starts.
+Envelopes sealed by older or stronger builds still open; only the flow changes.
+No stored-format change.
 
 ## Q6 — How is a device whose session ended recovered?
 
@@ -174,6 +197,13 @@ AUD-12a-1 (P1) has the lines.
 whether the engine or the app owns the repair. Option 1 is engine-only; option
 2 needs a product screen. No wire change in any option.
 
+**Answer (owner, 2026-10-25): option 1.** A sign-in whose server account id
+equals the local account's replaces the identity, prekey and session rows in
+place. Chats and messages are not keyed by device, so the history survives;
+"sign in again" becomes the documented repair instead of a dead end whose only
+exit deletes the data. Engine-only, no wire change, and the app's "Could not
+sign in" page stops offering deletion as the way out.
+
 ## Q7 — How many devices may one account hold?
 
 **Context.** Nothing counts devices (`IdentityContext.addDevice` inserts;
@@ -194,6 +224,13 @@ without bound.
 their per-device loops without their own bounds, and one new error outcome
 (`quota_exceeded` on registration). No schema change.
 
+**Answer (owner, 2026-10-25): option 2 — cap at 10 (the audit recommended
+20).** `addDevice` refuses the eleventh registration with `quota_exceeded`
+under the per-account lock. No existing device is revoked to make room, so an
+account at the cap has to revoke one itself — the device screen must make that
+obvious and safe. B14 then keeps its per-device loops bounded by the cap rather
+than by their own limits. No schema change.
+
 ## Q8 — Should there be an in-app way to stop server wake-ups?
 
 **Context.** `PushService.unregister` exists and no screen calls it
@@ -213,6 +250,13 @@ call.
 
 **What the answer changes:** one Settings control and its tests, or the
 deletion of an unused client method. No wire change (the route exists).
+
+**Answer (owner, 2026-10-25): option 1.** Settings gets a per-device
+"Notifications" control: off calls `PushService.unregister` so the server stops
+waking that device, on registers the token again. The OS setting stays what it
+always was (whether the platform delivers), and the server route needs no
+change. AUD-12j-1 closes with the control and its tests, and the method stops
+being a promise no screen keeps.
 
 ## Q9 — Do call-quality telemetry and ICE restart ship?
 
@@ -237,6 +281,15 @@ ICE-restart path has no caller, the adapter drops the offer it would emit, and
 **What the answer changes:** whether the calls protocol gains a signal kind
 (wire change, option 2), whether `call_metrics` exists at all, and whether
 AUD-6-1 closes by bounding or by removal. No option changes stored user data.
+
+**Answer (owner, 2026-10-25): option 1.** Both dead paths are deleted: the
+quality sampler, `sendMetrics`, the `call_metrics` table and its sweep, the
+renegotiation event and `restartIce`. AUD-6-1 closes by removal — the unbounded
+`outcome` column is gone rather than bounded — and the calls protocol gains no
+signal kind, so no wire change and no APK for this. Call quality, if the
+product wants it later, comes back with bounded fields, an account column,
+indexed cleanup and a renegotiation kind designed for it. Server: dropping
+`call_metrics` is a new migration (never an edit of the one that created it).
 
 ## Q10 — Should the anomaly queue be per server?
 
@@ -263,3 +316,11 @@ whose log it is.
 **What the answer changes:** whether B24's fix carries a queue split and an
 additive field, or a documentation line. No option touches message content or
 keys. No schema change server-side.
+
+**Answer (owner, 2026-10-25): option 1.** An entry records the account/server
+it was seen under and only that server receives it; entries recorded before any
+session exist are tagged when the next runtime resolves, or held as a
+pre-session batch sent to the server that signs in. So a crash in one account's
+session can no longer be delivered to another operator. One additive field in
+what the anomaly log sends and a small queue split; the log still carries
+numbers, routes, types and stacks only. No server schema change.

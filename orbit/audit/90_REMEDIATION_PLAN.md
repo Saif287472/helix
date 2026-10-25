@@ -119,24 +119,26 @@ fault-injection seams dominate that total.
 
 ## Decide first
 
-Nothing in B2, B5, B8, B14, B15, B17, B24 or T4 can be designed until these are
-answered (eight of the twenty-six batches). The options and their consequences
-are in
-[99_OPEN_QUESTIONS.md](file:///J:/Projects/helix/orbit/audit/99_OPEN_QUESTIONS.md);
-the recommendation column is the audit's, not a decision.
+All ten are answered (Q1-Q2 on 2026-10-24, Q3-Q10 by the owner on 2026-10-25), so
+no batch waits on a decision any more: B5, B8, B14, B15, B17, B24 and T4 are
+designable, and each ruling and what it commits to is recorded in
+[99_OPEN_QUESTIONS.md](file:///J:/Projects/helix/orbit/audit/99_OPEN_QUESTIONS.md)
+and in the column below. Two went against the audit's recommendation: Q4
+deletes the platform backup wrap rather than adding a fallback to it, and Q7 caps
+the device list at 10 rather than 20.
 
 | # | Question | Blocks | Recommendation |
 |---|---|---|---|
 | Q1 | Do ephemeral sends draw a budget? | B2 | **Decided 2026-10-24, option 1:** keep them uncharged, with B2's batching. Re-check fan-out cost afterwards; option 2 is the fallback if batching alone is not enough. |
 | Q2 | Is `block_change` a stored envelope? | B2 | **Decided 2026-10-24, option 2:** advisory for `block_change` (the state is already in the next send's `blocked_by`), but keep a **stored, coalesced** removal notice for `roster_change`, because a removed member must learn it while offline. |
-| Q3 | Truncate, stream or refuse a huge export? | B15 | Option 1: cap each section and say what was left out (`truncated`, `total`). |
-| Q4 | Ship the platform-credential backup wrap? | B17 | Option 3: keep the capability, but `open` always falls back to the recovery secret. No product caller passes a platform key today, and the trap (stale key + correct phrase = failure) is removed without a new keystore dependency. |
-| Q5 | Cap the Argon2id work an envelope may demand? | B17 | Option 3: keep the ceiling, and confirm with the person before a restore that will cost more than the app's own defaults. |
-| Q6 | How is "session ended" recovered? (new) | B5 | Option (a): let a sign-in whose server account id equals the local one replace the identity and session, keeping chats and messages. It matches the documented promise and is engine-only. |
-| Q7 | How many devices may one account hold? (new) | B14 | 20 (phones, tablets, an old PC), enforced in `addDevice` with `quota_exceeded`; no forced revocation of existing devices. |
-| Q8 | Ship an in-app "stop wake-ups" control? (new) | T4 | Ship it: the client method and the server route exist, and the alternative is a promise no screen keeps. If not shipped this cycle, delete `PushService.unregister` and record the decision. |
-| Q9 | Do call-quality telemetry and ICE restart ship? (new) | B8, T4 | Delete both dead paths: the quality sampler, `sendMetrics`, the `call_metrics` table and its sweep, the renegotiation event and `restartIce`. Nothing calls them, and deleting removes AUD-6-1's storage exposure outright. Re-add with bounds (and a protocol kind, for restart) only if the product wants call quality. |
-| Q10 | Is the anomaly queue per server? (new) | B24 | Tag an entry with the account/server it was recorded under and send only that server's entries; pre-sign-in entries stay queued, but they are no longer sent to whichever server signs in next. Numbers, routes and types only, so no content question — a scope question. |
+| Q3 | Truncate, stream or refuse a huge export? | B15 | **Decided 2026-10-25, option 1:** cap every section and report `truncated`/`total`; S5's shape for each module. No streaming, no refusal, no schema change. |
+| Q4 | Ship the platform-credential backup wrap? | B17 | **Decided 2026-10-25, option 2 (not the audit's):** delete the platform wrap — backups are recovery-secret only, ADR-030 documents one wrap, and the engine keeps no keystore dependency. |
+| Q5 | Cap the Argon2id work an envelope may demand? | B17 | **Decided 2026-10-25, option 3:** keep the ceiling, and confirm with the person before a restore that will cost more than the app's own defaults. |
+| Q6 | How is "session ended" recovered? (new) | B5 | **Decided 2026-10-25, option 1:** let a sign-in whose server account id equals the local one replace the identity and session, keeping chats and messages. Engine-only; matches the documented promise. |
+| Q7 | How many devices may one account hold? (new) | B14 | **Decided 2026-10-25, option 2 (tighter than the audit's 20):** cap at 10, enforced in `addDevice` with `quota_exceeded`; no forced revocation, so the device screen must make revoking easy. |
+| Q8 | Ship an in-app "stop wake-ups" control? (new) | T4 | **Decided 2026-10-25, option 1:** ship the per-device toggle — `PushService.unregister` on off, register on on, on the route that already exists. |
+| Q9 | Do call-quality telemetry and ICE restart ship? (new) | B8, T4 | **Decided 2026-10-25, option 1:** delete both dead paths (sampler, `sendMetrics`, `call_metrics` and its sweep, the renegotiation event and `restartIce`); AUD-6-1 closes by removal, and dropping the table is a new migration. |
+| Q10 | Is the anomaly queue per server? (new) | B24 | **Decided 2026-10-25, option 1:** tag each entry with the account/server it was recorded under and send only that server's entries; one additive field and a small queue split. |
 
 Q1–Q3 are protocol-visible only through documentation and one additive export
 field; none changes a wire shape. Q4 and Q5 are app/crypto only. Q6 changes
