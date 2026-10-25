@@ -43,6 +43,16 @@ abstract final class AttachmentCrypto {
     return headerLength + plaintextLength + chunks * Aead.tagLength;
   }
 
+  /// The longest ciphertext a legal writer can produce for [plaintextLength].
+  ///
+  /// The writer picks the chunk size, and a smaller chunk size means more
+  /// chunks and so more tags: the bound uses [minChunkSize]. A reader that
+  /// fetches the whole object - the sealing chunk size is not on the wire -
+  /// bounds it with this, never with [ciphertextLength] at [maxChunkSize],
+  /// which is the *shortest* possible ciphertext for that plaintext.
+  static int maxCiphertextLength(int plaintextLength) =>
+      ciphertextLength(plaintextLength, chunkSize: minChunkSize);
+
   static Stream<Uint8List> encrypt(
     Stream<List<int>> plaintext,
     List<int> key, {

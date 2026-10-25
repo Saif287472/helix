@@ -298,7 +298,9 @@ void main() {
           password: password,
           options: world.options(
             compress: false,
-            segmentBytes: 20000,
+            // Over one 64 KiB chunk: a receiver's cap built from the largest
+            // legal chunk size was 16 bytes short of a segment this size.
+            segmentBytes: 70000,
             frameBytes: 6000,
           ),
         );
@@ -312,14 +314,24 @@ void main() {
 
         final id = await alice.engine.backup.sendHistory();
         final relayIds = await alice.outgoingRelayIds();
-        expect(relayIds.length, greaterThan(5), reason: 'several segments');
+        expect(
+          relayIds.length,
+          greaterThan(1),
+          reason: 'a segment and the manifest',
+        );
+        final first = await alice.api.media.download(relayIds.first);
+        expect(
+          first.bytes.length,
+          greaterThan(64 * 1024),
+          reason: 'the segment is over one chunk',
+        );
         await settle(() async {
           expect((await laptop.engine.backup.offers()), hasLength(1));
         });
 
         // The relay loses a segment (a gap): the transfer cannot be applied,
         // nothing is half-imported, and the offer ends as expired.
-        await alice.api.media.delete(relayIds[2]);
+        await alice.api.media.delete(relayIds.first);
         await expectLater(
           laptop.engine.backup.acceptOffer(id),
           throwsA(

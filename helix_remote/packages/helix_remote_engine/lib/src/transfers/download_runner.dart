@@ -137,11 +137,9 @@ final class DownloadRunner {
         mediaId,
         start: have,
         end: stop - 1,
-        // The object cannot be longer than the pointer's size implies.
-        maxBytes: AttachmentCrypto.ciphertextLength(
-          attachment.size,
-          chunkSize: AttachmentCrypto.maxChunkSize,
-        ),
+        // Whatever the server sends (a range, or the whole object from a
+        // server that ignores `Range`) fits what the pointer's size implies.
+        maxBytes: AttachmentCrypto.maxCiphertextLength(attachment.size),
         cancel: control.token,
       );
       // A server that ignored the range sent the whole object.
@@ -268,10 +266,7 @@ final class DownloadRunner {
     if (pointer.size <= 0 || pointer.size > _config.maxThumbnailBytes) return;
     // Whatever the server sends is bounded by what the pointer says: longer
     // is dropped while it streams in.
-    final limit = AttachmentCrypto.ciphertextLength(
-      pointer.size,
-      chunkSize: AttachmentCrypto.maxChunkSize,
-    );
+    final limit = AttachmentCrypto.maxCiphertextLength(pointer.size);
     final download = await _media.download(
       pointer.id,
       maxBytes: limit,

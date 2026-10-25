@@ -360,6 +360,59 @@ void main() {
       expect(out.digest, sha256(c));
     }
   });
+
+  test('§12 maxCiphertextLength bounds every legal chunk size', () async {
+    const sizes = [
+      0,
+      1,
+      AttachmentCrypto.minChunkSize,
+      AttachmentCrypto.defaultChunkSize - 1,
+      AttachmentCrypto.defaultChunkSize,
+      AttachmentCrypto.defaultChunkSize + 1,
+      100 * 1024,
+      AttachmentCrypto.maxChunkSize,
+      4 * 1024 * 1024,
+    ];
+    const chunkSizes = [
+      AttachmentCrypto.minChunkSize,
+      1024,
+      AttachmentCrypto.defaultChunkSize,
+      AttachmentCrypto.maxChunkSize,
+    ];
+    for (final size in sizes) {
+      for (final chunkSize in chunkSizes) {
+        expect(
+          AttachmentCrypto.maxCiphertextLength(size),
+          greaterThanOrEqualTo(
+            AttachmentCrypto.ciphertextLength(size, chunkSize: chunkSize),
+          ),
+          reason: 'a writer at chunk $chunkSize',
+        );
+      }
+    }
+
+    // The whole-object cap the readers used to apply (the largest chunk size)
+    // is shorter than what a default writer produces for the same plaintext.
+    const plain = 100 * 1024;
+    final sealed = await AttachmentCrypto.encryptBytes(
+      Uint8List(plain),
+      AttachmentCrypto.newKey(SeededRandom('att-max')),
+      random: SeededRandom('att-max'),
+    );
+    expect(
+      sealed.ciphertext.length,
+      greaterThan(
+        AttachmentCrypto.ciphertextLength(
+          plain,
+          chunkSize: AttachmentCrypto.maxChunkSize,
+        ),
+      ),
+    );
+    expect(
+      sealed.ciphertext.length,
+      lessThanOrEqualTo(AttachmentCrypto.maxCiphertextLength(plain)),
+    );
+  });
 }
 
 final class _NoKeys implements SenderKeyStore {

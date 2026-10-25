@@ -207,4 +207,29 @@ final class MediaClient {
       }
     }
   }
+
+  /// Uploads a body produced by [bytes] (exactly [length] bytes) to a
+  /// presigned [target], sending it as it is produced instead of buffering
+  /// it: a large ciphertext never has to be held in memory. Only a presigned
+  /// target can take a stream; a resumable target continues from an offset
+  /// and is uploaded with [upload].
+  Future<void> uploadStream(
+    UploadTarget target,
+    Stream<List<int>> bytes, {
+    required int length,
+    CancellationToken? cancel,
+  }) async {
+    final url = Uri.parse(target.url);
+    if (!url.hasScheme) {
+      throw ArgumentError.value(target.url, 'target', 'not presigned');
+    }
+    await _t.external(
+      target.method,
+      url,
+      headers: target.headers,
+      stream: bytes,
+      contentLength: length,
+      cancel: cancel,
+    );
+  }
 }

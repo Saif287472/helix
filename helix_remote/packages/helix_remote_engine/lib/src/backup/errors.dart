@@ -102,6 +102,15 @@ final class BackupException implements Exception {
         return const BackupException(BackupFailure.wrongKey);
       case CryptoV2Exception():
         return const BackupException(BackupFailure.corrupt, 'crypto');
+      // A body the transport refused to finish reading, or an answer that is
+      // not what the contract says: the data cannot be used, it is not a
+      // passing outage or a bug in this device.
+      case ResponseTooLargeException():
+        return const BackupException(BackupFailure.corrupt, 'oversized');
+      case RangeNotHonoredException():
+        return const BackupException(BackupFailure.corrupt, 'range');
+      case MalformedResponseException():
+        return const BackupException(BackupFailure.corrupt, 'malformed');
       default:
         return error;
     }

@@ -561,11 +561,9 @@ final class DeviceTransferJob {
     try {
       ciphertext = await _relay.download(
         pointer.id,
-        // Whatever the relay sends is bounded by what the pointer promised.
-        maxBytes: AttachmentCrypto.ciphertextLength(
-          pointer.size,
-          chunkSize: AttachmentCrypto.maxChunkSize,
-        ),
+        // Whatever the relay sends is bounded by what the pointer promised
+        // (at whatever chunk size the sender sealed it).
+        maxBytes: AttachmentCrypto.maxCiphertextLength(pointer.size),
         cancel: token,
       );
     } on ApiException catch (e) {

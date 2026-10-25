@@ -353,6 +353,30 @@ void main() {
       expect(att.localPath, isNull);
     });
 
+    test('a thumbnail over one chunk still fetches whole', () async {
+      // The sender seals it at the default 64 KiB chunk size, so its
+      // ciphertext carries two tags and is 16 bytes longer than a cap built
+      // from the largest legal chunk size.
+      final thumbnail = thumbnailBytes(100 * 1024);
+      await start(aliceProcessor: FakeProcessor(thumbnail: thumbnail));
+      await alice.engine.media.sendMedia(chat, [
+        MediaInput.bytes(
+          bytes: patterned(2000),
+          kind: MediaItemKind.video,
+          mime: 'video/mp4',
+        ),
+      ]);
+      await alice.settle();
+      await bob.settle();
+      final video = (await bob.messages(
+        alice,
+      )).lastWhere((m) => m.kind == 'media');
+      final att = (await bob.attachments(video)).single;
+      final path = att.thumbnailPath;
+      expect(path, isNotNull, reason: 'the preview is under its cap');
+      expect(bob.blobs.bytesOf(path!), thumbnail);
+    });
+
     test('a size limit applies per kind, and settings change it', () async {
       await start();
       await bob.engine.settings.set(MediaSettings.autoDownloadImages, 1000);

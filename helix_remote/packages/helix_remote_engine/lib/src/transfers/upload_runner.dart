@@ -114,9 +114,14 @@ final class UploadRunner {
     }
 
     if (target != null && !target.resumable) {
-      // Presigned: exactly `size` bytes in one request.
-      final bytes = await _blobs.readBytes(staging);
-      await _media.upload(target, bytes, cancel: control.token);
+      // Presigned: exactly `size` bytes in one request, streamed from the
+      // staging file so a large ciphertext is never held in memory.
+      await _media.uploadStream(
+        target,
+        _blobs.read(staging, end: expected),
+        length: expected,
+        cancel: control.token,
+      );
       offset = expected;
       await control.progress(offset);
     } else {

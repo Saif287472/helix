@@ -76,15 +76,12 @@ final class ApiGroupPictureStore implements GroupPictureStore {
       final cached = _cache[parsed.id];
       if (cached != null) return cached;
       if (parsed.size <= 0 || parsed.size > kMaxGroupPictureBytes) return null;
-      final download = await _api.media.download(parsed.id);
-      // Whatever the server sends is bounded by what the pointer says.
-      if (download.bytes.length >
-          AttachmentCrypto.ciphertextLength(
-            parsed.size,
-            chunkSize: AttachmentCrypto.maxChunkSize,
-          )) {
-        return null;
-      }
+      // Whatever the server sends is bounded by what the pointer says (at
+      // whatever chunk size the uploader sealed it).
+      final download = await _api.media.download(
+        parsed.id,
+        maxBytes: AttachmentCrypto.maxCiphertextLength(parsed.size),
+      );
       final bytes = await AttachmentCrypto.decryptBytes(
         download.bytes,
         parsed.key,

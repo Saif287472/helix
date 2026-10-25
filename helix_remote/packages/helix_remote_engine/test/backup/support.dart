@@ -145,6 +145,11 @@ final class FakeRelay implements RelayStore {
     if (bytes == null) {
       throw const ApiException(status: 404, code: ErrorCode.notFound);
     }
+    final limit = maxBytes;
+    if (limit != null && bytes.length > limit) {
+      // The real relay is read through the API's capped reader.
+      throw ResponseTooLargeException(limit: limit);
+    }
     final hook = tamper;
     return hook == null ? bytes : hook(mediaId, Uint8List.fromList(bytes));
   }

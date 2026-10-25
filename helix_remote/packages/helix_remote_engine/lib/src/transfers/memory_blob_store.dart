@@ -17,6 +17,9 @@ final class MemoryBlobStore implements BlobStore {
   /// Reads come in pieces this large, so streaming code is exercised.
   final int readChunk;
 
+  /// Called for every read with its range (tests see how a file was read).
+  void Function(String path, int start, int? end)? onRead;
+
   final Map<String, _Entry> _files = {};
   int _counter = 0;
 
@@ -66,6 +69,7 @@ final class MemoryBlobStore implements BlobStore {
 
   @override
   Stream<List<int>> read(String path, {int start = 0, int? end}) async* {
+    onRead?.call(path, start, end);
     final entry = _files[path];
     if (entry == null) throw StateError('no such file');
     final data = entry.bytes;

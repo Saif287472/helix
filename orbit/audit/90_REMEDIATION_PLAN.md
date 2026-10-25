@@ -1835,6 +1835,50 @@ upload pairs with B7's chunk protocol but does not require it.
   reconnects instead of waiting for it to catch up".
   Gate: api **215 green** (210 before, +5); `flutter analyze` clean. No wire
   change, no app change; no APK needed.
+- S5 (AUD-12n-4, AUD-12o-1, AUD-12r-1) — one arithmetic error at three
+  readers, and one unbounded read at the writer's far end. A whole-object
+  download cap was computed with the *largest* legal chunk size, but a
+  ciphertext grows with *more* chunks: a thumbnail sealed at the default
+  64 KiB and larger than 64 KiB, a file from a server that answers the first
+  ranged GET with the whole object, and every device-transfer segment over
+  64 KiB were each longer than their own cap, so the API's capped reader threw
+  `ResponseTooLargeException` and the transfer ended `size_mismatch` (or, for
+  a transfer, as an unknown error that left the offer stuck). The presigned
+  upload branch read the entire staged ciphertext into memory with no
+  ceiling.
+  **What changed:** `AttachmentCrypto.maxCiphertextLength(size)` is the
+  longest ciphertext a legal writer can produce (the formula at
+  `minChunkSize`, the most chunks the plaintext can imply); `_fetch`,
+  `_fetchThumbnail` and the app's group-picture reader use it, and the app
+  reader also passes it as `maxBytes` so a hostile body is cut while it
+  streams. `MediaClient.uploadStream(target, bytes, length:)` sends a
+  presigned PUT from a stream (the transport's `external(stream:)` form), and
+  the upload runner feeds it `read(staging, end: expected)` instead of
+  `readBytes`: the ciphertext never has to fit in memory. Segments stay
+  sealed at the default chunk size, so a new receiver still reads objects an
+  older device already uploaded. `BackupException.translate` maps the
+  transport's `ResponseTooLargeException`, `RangeNotHonoredException` and
+  `MalformedResponseException` to `corrupt`, so a refused body names a
+  backup problem instead of vanishing into `unknown`.
+  Tests: `layout_test.dart` "§12 maxCiphertextLength bounds every legal chunk
+  size" (a property over 0, 64 KiB ± 1, 100 KiB, 1 MiB and 4 MiB at the
+  minimum, 1 KiB, default and maximum chunk sizes, plus a default-sealed
+  100 KiB object longer than the old cap). `transfer_test.dart` "a
+  default-size transfer moves a segment over 64 KiB" (the 4 MiB default, 800
+  messages, `FakeRelay.download` now enforcing `maxBytes`);
+  `media_flow_test.dart` "a thumbnail over one chunk still fetches whole"
+  (100 KiB, on-demand video); `transfer_worker_test.dart` "a presigned upload
+  streams the staging file" (`MemoryBlobStore.onRead`: every staging read
+  names its end) and "a server that ignores Range still delivers" now moves
+  90 KB. The server e2e "a large history" runs 70 000-byte segments (above
+  one chunk), proves the first relay object is over 64 KiB before deleting
+  it, and still recovers after the gap. Each of the three new reader tests
+  was confirmed to fail with the old arithmetic before the fix stayed.
+  Gate: crypto **75 green** (74 before, +1), api **215 green**, engine **349
+  green**, the app's group tests **107 green**, the server backup e2e **10/10
+  on Postgres**, `flutter analyze` clean. No wire change, no migration. The
+  app's group-picture reader changed too, so a new APK would carry that half;
+  the engine, server and transfer fixes need no APK.
 
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**

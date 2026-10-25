@@ -229,6 +229,27 @@ void main() {
       expect(await receivedBytes(bob, alice), data);
     });
 
+    test('a presigned upload streams the staging file', () async {
+      media.presigned = true;
+      await start();
+      final staged = <(int, int?)>[];
+      alice.blobs.onRead = (path, start, end) {
+        if (path.contains('/staging/')) staged.add((start, end));
+      };
+      final data = patterned(20000);
+      await sendDoc(data);
+      await alice.engine.drainTransfers();
+      expect(staged, isNotEmpty);
+      expect(
+        staged.every((read) => read.$2 != null),
+        isTrue,
+        reason: 'the ciphertext goes out as it is read, never in one go',
+      );
+      await alice.settle();
+      await bob.settle();
+      expect(await receivedBytes(bob, alice), data);
+    });
+
     test('an empty-but-for-the-header size is still one chunk', () async {
       await start();
       final sent = await sendDoc(patterned(1));
@@ -303,7 +324,9 @@ void main() {
     test('a server that ignores Range still delivers', () async {
       media.ignoreRange = true;
       await start();
-      final data = patterned(9000, seed: 4);
+      // Over one 64 KiB chunk: the whole body is longer than a cap built
+      // from the largest legal chunk size.
+      final data = patterned(90000, seed: 4);
       await sendDoc(data);
       await alice.settle();
       await bob.settle();

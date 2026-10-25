@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -113,6 +114,25 @@ void main() {
         HistoryTransferPhase.done,
       ]),
     );
+  });
+
+  test('a default-size transfer moves a segment over 64 KiB', () async {
+    // The product defaults: 4 MiB segments. A segment over one 64 KiB chunk
+    // is longer than a receive cap built from the largest legal chunk size.
+    world = BackupWorld(compress: false);
+    alice = await world.register('alice', phone: '+8801711000001');
+    alice2 = await world.link(alice, 'alice2');
+    await addHistory(alice, bobId, 800, prefix: 'large segment');
+
+    final id = await offer();
+    final largest = world.relay.objects.values
+        .map((object) => object.length)
+        .reduce(math.max);
+    expect(largest, greaterThan(64 * 1024), reason: 'a segment over a chunk');
+
+    final result = await alice2.backup.acceptOffer(id);
+    expect(result.added, 800);
+    expect(await historyDigest(alice2), await historyDigest(alice));
   });
 
   test('the relay holds only ciphertext; the profile key travels, the '
