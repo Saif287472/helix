@@ -4,7 +4,11 @@ import 'dart:typed_data';
 import 'package:helix_remote_crypto/v2.dart' show AttachmentCrypto;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/context.dart';
+import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
+import 'package:helix_remote_engine/src/groups/group_ids.dart';
+import 'package:helix_remote_engine/src/groups/group_keyring.dart';
+import 'package:helix_remote_engine/src/groups/group_ops.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/transfers/blob_store.dart';
@@ -125,7 +129,9 @@ final class _Prepared {
 /// then nothing later in the chat is sent. A failed upload fails the op and
 /// the message; retry and cancel are here too.
 ///
-/// Direct chats only until the group send path lands (see [_peerOf]).
+/// A direct chat or a group can hold the message: a group send is the same
+/// upload with the group as its conversation, and the outbox encrypts it with
+/// this device's sender key like any other group message (see [_routeOf]).
 final class OutboundMedia {
   OutboundMedia(
     this._ctx,
@@ -163,7 +169,7 @@ final class OutboundMedia {
       throw ArgumentError.value(inputs.length, 'inputs', 'is 1 to 30 items');
     }
     _checkCaption(caption);
-    final peer = _peerOf(conversationId);
+    final route = await _routeOf(conversationId);
     final prepared = <_Prepared>[];
     try {
       for (final input in inputs) {
@@ -172,7 +178,7 @@ final class OutboundMedia {
       }
       return await _write(
         conversationId,
-        peer,
+        route,
         prepared,
         caption: caption,
         reply: replyTo,
@@ -195,7 +201,7 @@ final class OutboundMedia {
   /// (the server keeps objects 30 days) is uploaded again from the local
   /// copy under a new key. View-once messages cannot be forwarded.
   Future<MessageRow> forward(int messageRowid, String toConversationId) async {
-    final peer = _peerOf(toConversationId);
+    final route = await _routeOf(toConversationId);
     final source = await _db.messagesDao.byRowid(messageRowid);
     if (source == null ||
         source.kind != MediaBody.typeName ||
@@ -216,7 +222,7 @@ final class OutboundMedia {
       }
       return await _write(
         toConversationId,
-        peer,
+        route,
         prepared,
         caption: source.body,
         reply: null,
@@ -372,7 +378,7 @@ final class OutboundMedia {
 
   Future<MessageRow> _write(
     String conversationId,
-    String peer,
+    _Route route,
     List<_Prepared> prepared, {
     required String? caption,
     required MessageRef? reply,
@@ -394,7 +400,7 @@ final class OutboundMedia {
       final content = ContentMessage(
         id: _ctx.ids.next(),
         sentAt: now,
-        conversation: DirectConversation(to: peer),
+        conversation: route.conversation,
         body: body,
         reply: reply,
         expireSeconds: expire,
@@ -441,19 +447,29 @@ final class OutboundMedia {
         );
       }
       await _db.conversationsDao.setDraft(conversationId, null);
+      final group = route.groupId;
       if (needsUpload) {
         await _db.outboxDao.enqueueHeld(
-          kind: OutboxKinds.sendContent,
+          kind: group == null
+              ? OutboxKinds.sendContent
+              : GroupOutboxKinds.sendGroupContent,
           idempotencyKey: content.id,
           payload: HeldMediaPayload.text,
           conversationId: conversationId,
           messageRowid: row.localRowid,
           now: now,
         );
+      } else if (group != null) {
+        await _outbox.enqueueGroupContent(
+          content: content,
+          groupId: group,
+          conversationId: conversationId,
+          messageRowid: row.localRowid,
+        );
       } else {
         await _outbox.enqueueContent(
           content: content,
-          audience: [peer, self.accountId],
+          audience: [route.peer, self.accountId],
           conversationId: conversationId,
           messageRowid: row.localRowid,
         );
@@ -553,7 +569,7 @@ final class OutboundMedia {
     if (message == null) return;
     final ops = [
       for (final op in await _db.outboxDao.forMessage(messageRowid))
-        if (op.kind == OutboxKinds.sendContent && OutboxDao.isHeld(op)) op,
+        if (_isSend(op) && OutboxDao.isHeld(op)) op,
     ];
     if (ops.isEmpty) return;
     final body = MediaBody(
@@ -565,19 +581,32 @@ final class OutboundMedia {
       ContentCodec.split(body).payload,
     );
     final updated = (await _db.messagesDao.byRowid(messageRowid))!;
-    final peer = _peerOf(updated.conversationId);
+    final conversation = _conversationOf(updated.conversationId);
+    final group = switch (conversation) {
+      final GroupConversation g => g.group,
+      _ => null,
+    };
+    final peer = switch (conversation) {
+      final DirectConversation d => d.to,
+      _ => null,
+    };
     final profileKey = (await _db.accountDao.current())?.profileKey;
     final content = ContentCodec.rebuild(
       updated,
-      to: peer,
+      to: group ?? peer!,
+      conversation: conversation,
       profileKey: profileKey == null ? null : Uint8List.fromList(profileKey),
     );
     await _db.outboxDao.release(
       ops.first.id,
-      payload: SendContentPayload(
-        content: content,
-        audience: {peer, _ctx.identity.accountId}.toList()..sort(),
-      ).encode(),
+      payload: peer == null
+          // A group op: the worker encrypts it under this device's sender key
+          // and addresses the roster itself, so no audience is carried.
+          ? SendGroupContentPayload(groupId: group!, content: content).encode()
+          : SendContentPayload(
+              content: content,
+              audience: {peer, _ctx.identity.accountId}.toList()..sort(),
+            ).encode(),
       now: _ctx.now(),
     );
   }
@@ -617,7 +646,7 @@ final class OutboundMedia {
       final message = await _db.messagesDao.byRowid(attachment.messageRowid);
       if (message == null || message.status != MessageStatus.pending) return;
       for (final op in await _db.outboxDao.forMessage(message.localRowid)) {
-        if (op.kind == OutboxKinds.sendContent && OutboxDao.isHeld(op)) {
+        if (_isSend(op) && OutboxDao.isHeld(op)) {
           await _db.outboxDao.fail(op.id, errorCode: failure.wire);
         }
       }
@@ -664,7 +693,7 @@ final class OutboundMedia {
       );
     }
     for (final op in await _db.outboxDao.forMessage(messageRowid)) {
-      if (op.kind == OutboxKinds.sendContent &&
+      if (_isSend(op) &&
           (op.state == OutboxState.failed || OutboxDao.isHeld(op))) {
         await _db.outboxDao.hold(op.id, payload: HeldMediaPayload.text);
       }
@@ -685,7 +714,7 @@ final class OutboundMedia {
       if (message == null) return;
       final ops = [
         for (final op in await _db.outboxDao.forMessage(messageRowid))
-          if (op.kind == OutboxKinds.sendContent) op,
+          if (_isSend(op)) op,
       ];
       final unsent = ops.any(
         (op) => OutboxDao.isHeld(op) || op.state == OutboxState.failed,
@@ -728,7 +757,7 @@ final class OutboundMedia {
   /// every later message of that chat back for ever.
   Future<void> reapHeld() async {
     for (final op in await _db.outboxDao.heldOps()) {
-      if (op.kind != OutboxKinds.sendContent) continue;
+      if (!_isSend(op)) continue;
       final rowid = op.messageRowid;
       final message = rowid == null
           ? null
@@ -743,19 +772,50 @@ final class OutboundMedia {
 
   // ------------------------------------------------------------- helpers
 
+  static bool _isSend(OutboxOpRow op) =>
+      op.kind == OutboxKinds.sendContent ||
+      op.kind == GroupOutboxKinds.sendGroupContent;
+
   void _checkCaption(String? caption) {
     if (caption != null && caption.length > ContentLimits.maxCaptionLength) {
       throw ArgumentError.value('<${caption.length} chars>', 'caption');
     }
   }
 
-  /// Direct chats only: the group send path (sender keys, `group_message`)
-  /// belongs to the groups feature. When it lands, this is the place to
-  /// resolve a group conversation to its audience and `conv`.
-  String _peerOf(String conversationId) {
+  /// Where an attachment message goes: the peer of a direct chat, or the group
+  /// - and this device must still belong to that group and be allowed to speak
+  /// in it. The group's encryption is not done here: the op carries the group
+  /// id, and the outbox sends it under this device's sender key like any other
+  /// group message.
+  Future<_Route> _routeOf(String conversationId) async {
+    if (!GroupIds.isGroupConversation(conversationId)) {
+      return _Route.direct(_directPeerOf(conversationId));
+    }
+    final groupId = GroupIds.groupIdOf(conversationId);
+    final member = await _db.groupsDao.selfMembership(groupId);
+    if (member == null) throw const GroupException(GroupFailure.notAMember);
+    if (member.role == 'member') {
+      final settings = (await GroupKeyring(_ctx).meta(groupId)).settings;
+      if (settings.sendMessages == GroupPermission.admins) {
+        throw const GroupException(GroupFailure.notAllowed);
+      }
+    }
+    return _Route.group(groupId);
+  }
+
+  /// The conversation a chat id addresses, with no checks. What a held upload
+  /// was addressed to is what its release must address, even if the group
+  /// changed while the bytes went up: the send then fails the way a group send
+  /// fails, rather than the message sitting held forever.
+  static ConversationRef _conversationOf(String conversationId) =>
+      GroupIds.isGroupConversation(conversationId)
+      ? GroupConversation(group: GroupIds.groupIdOf(conversationId))
+      : DirectConversation(to: _directPeerOf(conversationId));
+
+  static String _directPeerOf(String conversationId) {
     const prefix = 'direct:';
     if (!conversationId.startsWith(prefix)) {
-      throw UnsupportedError('media in groups is not available yet');
+      throw ArgumentError.value(conversationId, 'conversationId');
     }
     return conversationId.substring(prefix.length);
   }
@@ -776,4 +836,26 @@ final class OutboundMedia {
       return null;
     }
   }
+}
+
+/// The destination of one attachment send: the conversation the message
+/// addresses, and the group id when a group's sender key must carry it.
+final class _Route {
+  _Route.direct(String peer)
+    : conversation = DirectConversation(to: peer),
+      groupId = null;
+
+  _Route.group(String groupId)
+    : conversation = GroupConversation(group: groupId),
+      groupId = groupId;
+
+  final ConversationRef conversation;
+
+  final String? groupId;
+
+  /// The peer of a direct send, which is also its audience.
+  String get peer => switch (conversation) {
+    final DirectConversation d => d.to,
+    _ => throw StateError('a group send has no peer'),
+  };
 }

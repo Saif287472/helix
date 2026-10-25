@@ -171,6 +171,68 @@ void main() {
         },
       );
 
+      test('a voice note and a photo reach every member of a group', () async {
+        await start();
+        final alice = await world.register(
+          'alice',
+          aliceNumber,
+          processor: _Thumbnailer(),
+        );
+        final bob = await world.register('bob', bobNumber);
+        final carol = await world.register('carol', '+8801711000005');
+        final created = await alice.engine.groups.create(
+          name: 'Weekend',
+          members: [bob.account, carol.account],
+        );
+        for (final user in [alice, bob, carol]) {
+          await _inGroup(user, created.groupId);
+        }
+
+        final photo = _png(640, 480, 40 * 1024);
+        final voice = _bytes(21 * 1024, seed: 8);
+        final sent = await alice.engine.media
+            .sendMedia(GroupIds.conversationId(created.groupId), [
+              MediaInput.bytes(
+                bytes: voice,
+                kind: MediaItemKind.voiceNote,
+                mime: 'audio/ogg',
+                durationMs: 7300,
+              ),
+              MediaInput.bytes(
+                bytes: photo,
+                kind: MediaItemKind.image,
+                mime: 'image/png',
+              ),
+            ], caption: 'evening');
+
+        // One message, encrypted once under Alice's sender key; each member's
+        // own device fetches the ciphertext and decrypts the bytes.
+        for (final user in [bob, carol]) {
+          await settle(() async {
+            final row = (await _groupMedia(user, created.groupId)).single;
+            expect(row.sender, alice.account);
+            expect(row.body, 'evening');
+            final views = await user.engine.media.viewsOf(row.localRowid);
+            expect(
+              [for (final v in views) v.phase],
+              [TransferPhase.ready, TransferPhase.ready],
+              reason: '${user.name} has not fetched both files',
+            );
+            final items = await _attachmentsOf(user, row);
+            expect(
+              user.blobs.bytesOf(
+                (await user.engine.media.openLocalPath(items.first.id))!,
+              ),
+              voice,
+            );
+          });
+        }
+        await settle(() async {
+          final row = await alice.db.messagesDao.byRowid(sent.localRowid);
+          expect(row!.status, MessageStatus.delivered);
+        });
+      });
+
       test(
         'an upload cut off in the middle resumes where the server stopped',
         () async {
@@ -501,6 +563,27 @@ Future<List<MessageRow>> _mediaMessages(_User user, _User peer) async => [
   for (final m in await _messages(user, peer))
     if (m.kind == 'media') m,
 ];
+
+/// The group has reached [user]: its roster row and the chat it opened.
+Future<void> _inGroup(_User user, String groupId) => settle(() async {
+  expect(await user.db.groupsDao.byId(groupId), isNotNull);
+  expect(
+    await user.db.conversationsDao.byId(GroupIds.conversationId(groupId)),
+    isNotNull,
+    reason: '${user.name} has no group chat yet',
+  );
+});
+
+Future<List<MessageRow>> _groupMedia(_User user, String groupId) async {
+  final page = await user.db.messagesDao.pageOlder(
+    GroupIds.conversationId(groupId),
+    limit: 200,
+  );
+  return [
+    for (final m in page.messages)
+      if (m.kind == 'media') m,
+  ];
+}
 
 Future<MessageRow> _waitForText(_User user, _User peer, String text) async {
   late MessageRow found;
