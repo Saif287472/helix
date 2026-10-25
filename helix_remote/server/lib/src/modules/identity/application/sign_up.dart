@@ -118,6 +118,13 @@ final class SignUp {
       );
     } on SmsFailed catch (e) {
       c.log.warn('sms_failed', {'reason': e.reason});
+      // The text did not leave, so nothing is spent (AUD-2-1): the number
+      // may ask again at once and the server's day is not used up by an
+      // outage. Charged first so concurrent callers cannot all pass the
+      // budget, refunded here.
+      await c.credentials.deleteChallenge(c.db, id);
+      await c.rateLimiter.refund(_perPhone, encodeBytes(phoneHash));
+      await c.rateLimiter.refund(_dailyBudget, 'all');
       throw const ApiError(
         ErrorCode.smsUnavailable,
         message: 'The text could not be sent.',

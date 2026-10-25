@@ -50,6 +50,20 @@ import.
   revoke all go through `IdentityContext.revokeDevice` (device list change,
   security event and `device_revoked` signal to the account's other
   devices); `revokeAll` revokes in device-id order.
+  `IdentityStore.revokeDevice` takes the account and matches on it
+  (`WHERE id AND account_id AND status = 'active'`), so a caller that skipped
+  its own check cannot revoke another account's device (AUD-2-3).
+- **At most ten devices per account** (`IdentityContext.maxDevices`, owner
+  ruling Q7): `addDevice` takes the account's row lock, counts the active
+  devices and refuses the eleventh with `quota_exceeded`, so two sign-ins at
+  once cannot both take the last place. Nothing is revoked to make room; an
+  account at the cap removes a device itself (AUD-2-2). Existing accounts over
+  the cap keep their devices and cannot add more.
+- **A text that did not leave costs nothing:** when the SMS gateway fails,
+  `requestPhoneChallenge` deletes the challenge row (the resend gap reads it)
+  and refunds the per-number and the daily budget tokens
+  (`RateLimiter.refund`). The charge is still taken first, so concurrent
+  callers cannot all pass the budget (AUD-2-1).
 - **Deliveries lock devices:** `IdentityApi.lockActiveDevices` returns the
   active devices among a set and holds `FOR SHARE` on their rows (in id
   order) until the caller's transaction ends. Messaging stores envelopes

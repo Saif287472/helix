@@ -186,6 +186,23 @@ final class IdentityStore {
     return r == null ? null : device(r);
   }
 
+  /// Takes the account's row lock, so adding devices to one account is
+  /// serial: the count in [IdentityContext.addDevice] cannot be raced past
+  /// [IdentityContext.maxDevices] by two sign-ins at once.
+  Future<void> lockAccount(Tx tx, String accountId) => tx.execute(
+    'SELECT 1 FROM $s.accounts WHERE id = @a:uuid FOR UPDATE',
+    {'a': accountId},
+  );
+
+  Future<int> activeDeviceCount(SqlSession db, String accountId) async {
+    final r = await db.queryOne(
+      "SELECT count(*) AS n FROM $s.devices "
+      "WHERE account_id = @a:uuid AND status = 'active'",
+      {'a': accountId},
+    );
+    return r!.integer('n');
+  }
+
   Future<List<DeviceRecord>> activeDevices(
     SqlSession db,
     String accountId,
@@ -254,16 +271,21 @@ final class IdentityStore {
   }
 
   /// Marks a device revoked; returns it if it was active.
+  /// Revokes [deviceId] if it is an active device of [accountId]; null
+  /// otherwise (another account's device, a revoked one, none) with nothing
+  /// changed. The owner is part of the statement, so a caller that skipped
+  /// its own check cannot revoke across accounts (AUD-2-3).
   Future<DeviceRecord?> revokeDevice(
     Tx tx,
+    String accountId,
     String deviceId,
     String reason,
   ) async {
     final r = await tx.queryOne(
       "UPDATE $s.devices SET status = 'revoked', revoked_at = now(), revoke_reason = @r:text, "
-      "tokens_valid_after = now() WHERE id = @id:uuid AND status = 'active' "
-      "RETURNING $_deviceColumns",
-      {'id': deviceId, 'r': reason},
+      "tokens_valid_after = now() WHERE id = @id:uuid AND account_id = @a:uuid "
+      "AND status = 'active' RETURNING $_deviceColumns",
+      {'id': deviceId, 'a': accountId, 'r': reason},
     );
     if (r == null) return null;
     await tx.execute(

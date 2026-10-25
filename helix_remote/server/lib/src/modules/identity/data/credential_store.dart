@@ -234,6 +234,13 @@ final class CredentialStore {
     );
   }
 
+  /// Removes a challenge whose text never left, which also gives the number
+  /// its resend gap back (the gap reads the newest challenge row).
+  Future<void> deleteChallenge(SqlSession db, String id) => db.execute(
+    'DELETE FROM $s.phone_challenges WHERE id = @id:uuid',
+    {'id': id},
+  );
+
   Future<Row?> challengeForUpdate(Tx tx, String id) => tx.queryOne(
     'SELECT id, phone_hash, purpose, code_hash, discovery_index, last4, attempts, '
     'expires_at, consumed_at '

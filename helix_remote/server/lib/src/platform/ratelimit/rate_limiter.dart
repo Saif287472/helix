@@ -36,6 +36,11 @@ abstract interface class RateLimiter {
   /// large request is slow, never impossible.
   Future<RateDecision> hit(RateLimitPolicy policy, String key, {int cost = 1});
 
+  /// Gives [cost] tokens back to [key] (never above the capacity): for a
+  /// charge whose work did not happen, such as a text that never left. A
+  /// bucket that is gone is already full, so nothing changes.
+  Future<void> refund(RateLimitPolicy policy, String key, {int cost = 1});
+
   /// Drops buckets that are full again (one policy window after their last
   /// hit): a missing bucket starts full, so dropping one earlier would reset
   /// it.
@@ -71,6 +76,22 @@ final class InMemoryRateLimiter implements RateLimiter {
     }
     _buckets[id] = (refilled, now);
     return RateDecision.denied(_wait(refilled, policy, take));
+  }
+
+  @override
+  Future<void> refund(
+    RateLimitPolicy policy,
+    String key, {
+    int cost = 1,
+  }) async {
+    final id = '${policy.name}:$key';
+    final bucket = _buckets[id];
+    if (bucket == null) return;
+    final (tokens, at) = bucket;
+    _buckets[id] = (
+      math.min(policy.capacity.toDouble(), tokens + _charge(policy, cost)),
+      at,
+    );
   }
 
   @override
@@ -150,6 +171,18 @@ final class PostgresRateLimiter implements RateLimiter {
     if (row!.boolean('allowed')) return const RateDecision.allowed();
     return RateDecision.denied(_wait(row.float('tokens'), policy, take));
   }
+
+  @override
+  Future<void> refund(RateLimitPolicy policy, String key, {int cost = 1}) =>
+      _db.execute(
+        'UPDATE $_table SET tokens = LEAST(@cap:float8, tokens + @give:float8) '
+        'WHERE key = @k:text',
+        {
+          'cap': policy.capacity.toDouble(),
+          'give': _charge(policy, cost).toDouble(),
+          'k': '${policy.name}:$key',
+        },
+      );
 
   @override
   Future<int> sweep() =>

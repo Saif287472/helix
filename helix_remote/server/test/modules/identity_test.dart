@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/identity/application/context.dart';
+import 'package:helix_remote_server/src/modules/identity/sms.dart'
+    show SmsFailed;
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -920,6 +923,120 @@ void main() {
         ]),
       );
     });
+  });
+
+  group('what a failed text costs and what a device may do', () {
+    late Harness h;
+
+    setUp(() async => h = await Harness.start());
+    tearDown(() async => h.stop());
+
+    Future<TestResponse> askForCode(String number) => h.api.call(
+      Routes.phoneChallenge,
+      body: PhoneChallengeRequest(
+        phoneNumber: number,
+        purpose: PhonePurpose.register,
+      ).toJson(),
+    );
+
+    /// A provider outage used to leave the challenge row (which holds the
+    /// resend gap) and both charges behind, so the number and the server's
+    /// day were spent by texts that never left (AUD-2-1).
+    test('a text that did not leave costs nothing', () async {
+      h.sms.failWith = const SmsFailed('gateway_error');
+      for (var i = 0; i < 8; i++) {
+        expect((await askForCode(alice)).status, 503, reason: 'try $i');
+      }
+      final db = h.env.platform.db;
+      final schema = h.env.platform.schemas.of('identity');
+      expect(
+        (await db.queryOne(
+          'SELECT count(*) AS n FROM $schema.phone_challenges',
+        ))!.integer('n'),
+        0,
+        reason: 'no challenge nobody has the code of',
+      );
+      // The outage ends: the same number is not throttled by its failures
+      // (five a hour would have locked it out), and gets its text.
+      h.sms.failWith = null;
+      expect((await askForCode(alice)).status, 200);
+      expect(h.sms.sent, hasLength(1));
+    });
+
+    /// Q7: ten devices; the eleventh is refused and nothing is revoked for it
+    /// (AUD-2-2).
+    test('an account holds at most ten devices', () async {
+      final first = await h.registerGlobal(alice);
+      final devices = [first, await secondDevice(h, first, alice)];
+      final signIn = PasswordSignInRequest(
+        phoneNumber: alice,
+        authKey: bytes(32, 9),
+      );
+      Future<TestResponse> addOne() async {
+        final step1 = PasswordSignInResponse.fromJson(
+          (await h.api.call(Routes.passwordSignIn, body: signIn.toJson())).json,
+        );
+        final device = await first.account.newDevice(name: 'More');
+        final response = await h.api.call(
+          Routes.addDevice,
+          body: AddDeviceRequest(
+            device: await device.registration(),
+            prekeys: await device.prekeys(),
+            signInToken: step1.signInToken,
+          ).toJson(),
+        );
+        if (response.status == 201) {
+          device.session = Session.fromJson(response.json);
+          devices.add(device);
+        }
+        return response;
+      }
+
+      while (devices.length < IdentityContext.maxDevices) {
+        expect((await addOne()).status, 201);
+      }
+      final refused = await addOne();
+      expect(refused.status, 422);
+      expect(refused.json.object('error').string('code'), 'quota_exceeded');
+      final list = DeviceList.fromJson(
+        (await h.api.call(Routes.devices, bearer: first.bearer)).json,
+      );
+      expect(list.devices, hasLength(IdentityContext.maxDevices));
+
+      // Revoking one makes room for exactly one.
+      final revoke = await h.api.call(
+        Routes.revokeDevice,
+        bearer: first.bearer,
+        params: {'device_id': devices.last.id},
+        query: {'reason': 'lost'},
+      );
+      expect(revoke.status, 204);
+      expect((await addOne()).status, 201);
+      expect((await addOne()).status, 422);
+    });
+
+    /// The primitive names the account it acts for (AUD-2-3).
+    test(
+      'a device of another account cannot be revoked through the context',
+      () async {
+        final a = await h.registerGlobal(alice);
+        final b = await h.registerGlobal(bob);
+        final c = h.identity.signUp.c;
+        final revoked = await h.env.platform.db.tx(
+          (tx) => c.revokeDevice(tx, a.accountId, b.id, 'user'),
+        );
+        expect(revoked, isFalse);
+        final stillThere = DeviceList.fromJson(
+          (await h.api.call(Routes.devices, bearer: b.bearer)).json,
+        );
+        expect(stillThere.devices.single.deviceId, b.id);
+        expect(
+          (await h.api.call(Routes.account, bearer: b.bearer)).status,
+          200,
+          reason: 'its session still works',
+        );
+      },
+    );
   });
 
   group('code resend throttle', skip: databaseTestSkipReason, () {

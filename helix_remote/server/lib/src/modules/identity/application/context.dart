@@ -363,7 +363,12 @@ final class IdentityContext {
     final devices = [...await store.activeDevices(tx, accountId)]
       ..sort((a, b) => a.id.compareTo(b.id));
     for (final device in devices) {
-      final revoked = await store.revokeDevice(tx, device.id, reason);
+      final revoked = await store.revokeDevice(
+        tx,
+        device.accountId,
+        device.id,
+        reason,
+      );
       if (revoked != null) {
         await hooks.deviceRevoked(tx, revoked);
         tx.afterCommit(
@@ -383,7 +388,7 @@ final class IdentityContext {
     String deviceId,
     String reason,
   ) async {
-    final revoked = await store.revokeDevice(tx, deviceId, reason);
+    final revoked = await store.revokeDevice(tx, accountId, deviceId, reason);
     if (revoked == null) return false;
     await hooks.deviceRevoked(tx, revoked);
     await hooks.deviceListChanged(tx, accountId);
@@ -408,7 +413,15 @@ final class IdentityContext {
     return true;
   }
 
-  /// Adds a verified device, runs the hooks and mints its session.
+  /// The most devices one account may hold (ruled by the owner, Q7). An
+  /// account at the cap revokes one itself to add another: nothing is revoked
+  /// for it.
+  static const maxDevices = 10;
+
+  /// Adds a verified device, runs the hooks and mints its session. Refused
+  /// with `quota_exceeded` when the account already holds [maxDevices]
+  /// active ones, counted under the account's row lock so two sign-ins at
+  /// once cannot both take the last place (AUD-2-2).
   Future<Session> addDevice(
     Tx tx, {
     required String accountId,
@@ -417,6 +430,15 @@ final class IdentityContext {
     required SecurityEventKind event,
     bool notifyOthers = true,
   }) async {
+    await store.lockAccount(tx, accountId);
+    if (await store.activeDeviceCount(tx, accountId) >= maxDevices) {
+      throw const ApiError(
+        ErrorCode.quotaExceeded,
+        message:
+            'This account has the most devices it can hold. '
+            'Remove one in Devices first.',
+      );
+    }
     await store.insertDevice(tx, accountId, device);
     final record = (await store.deviceById(tx, device.deviceId))!;
     await hooks.deviceAdded(tx, record, prekeys);

@@ -3339,6 +3339,31 @@ handed out.
 non-retryable. The trusted-proxy rule becomes a start-up check — check the
 production environment's proxy header setting before deploying.
 
+- S1 (AUD-2-1, AUD-2-2, AUD-2-3) — three identity fixes, all server-only.
+  **2-1:** `requestPhoneChallenge` charged the per-number bucket (5 an hour)
+  and the server's daily text budget, and committed the challenge row, before
+  calling the gateway; a provider outage therefore spent both and kept the
+  resend gap for texts that never left. When `sms.send` throws it now deletes
+  the challenge row (`CredentialStore.deleteChallenge`) and gives both charges
+  back through the new `RateLimiter.refund` (in-memory and Postgres; capped at
+  capacity). The charge stays up front so concurrent callers cannot all pass
+  the budget. **2-2:** `IdentityContext.maxDevices = 10` (the owner's Q7
+  ruling, tighter than the audit's 20); `addDevice` takes the account row lock
+  (`lockAccount`), counts the active devices and refuses the eleventh with
+  `quota_exceeded`, nothing revoked for it; no migration. **2-3:**
+  `IdentityStore.revokeDevice` takes the account id and matches on it, so a
+  cross-account revoke returns null with nothing changed. Tests
+  (`identity_test.dart`): eight failed sends leave no challenge row and
+  nobody is throttled (503, then a 200 once the provider works; fails on the
+  old code with a 429 from the resend gap); an account takes ten devices, the
+  eleventh is `quota_exceeded`, revoking one makes room for exactly one; and
+  a device of another account cannot be revoked through the context. The
+  last two use members that did not exist, so they fail on the old code by
+  construction. `RecordingSmsProvider` gained `failWith`. Gate: identity tests
+  23 green on Postgres, analyze and format clean. Server-only: no migration, no
+  `.env` line; `quota_exceeded` is an existing code. A client at the cap
+  sees it on sign-in or link, and an old client treats it like any refusal.
+
 ## B15 — People, reports and the export must be honest about their bounds
 **S + W (additive) · ~3 days · people module migration · depends on Q3**
 

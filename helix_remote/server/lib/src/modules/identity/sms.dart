@@ -107,6 +107,9 @@ final class BulkSmsBdProvider implements SmsProvider {
 final class RecordingSmsProvider implements SmsProvider {
   final List<({String phoneNumber, String message})> sent = [];
 
+  /// When set, every send fails with it (a provider outage, in tests).
+  SmsFailed? failWith;
+
   @override
   bool get isConfigured => true;
 
@@ -115,6 +118,8 @@ final class RecordingSmsProvider implements SmsProvider {
     required String phoneNumber,
     required String message,
   }) async {
+    final failure = failWith;
+    if (failure != null) throw failure;
     sent.add((phoneNumber: phoneNumber, message: message));
   }
 
