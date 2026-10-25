@@ -3661,6 +3661,40 @@ message stays as it is.
   number (the OS keyboard and autofill are not simulated) is still the owner's.**
   A new APK is needed to see it; no server change.
 
+- S2 (AUD-15-5 to -15-8, AUD-12q-3) — the backup flows and two docs, app
+  only. **15-6:** `RestoreFlowController` and the recovery backup's `create`,
+  `restore` and `deleteBackup` wrote `state` after an `await`, on a notifier
+  the page had already disposed (Riverpod throws `UnmountedRefException`); all
+  now check the same `_disposed` flag the recovery controller's other methods
+  used, including the restore progress listener and `reset`. **15-8:**
+  `TransferView.copyWith` gained `clearProblem`, and `_onProgress` clears the
+  problem when the new event has none, so a resumed transfer sheds its old
+  failure. **12q-3:** the gateway no longer throws `accountMismatch` after the
+  merge when a full backup was made under an earlier key of the same account
+  (the engine's header check already proved it is this account's); the
+  outcome is marked `earlierKey` and the recovery page adds "It was made before
+  your account key changed, so it may not hold your newest messages." to its
+  "Restored N messages." **15-5, 15-7 (docs):** `post_sign_in.dart` now says
+  a take-over deliberately does not offer the restore step, and why (the
+  server replaces the identity key, so a backup under the old identity cannot
+  be opened), and `FEATURE.md` says the recovery secret is the engine's 160
+  random bits and cannot be chosen. Tests (`page_flows_test.dart`): leaving
+  the page mid-restore throws nothing (**fails on the old providers**; the
+  recovery-backup variant passes before too, because the fake answers before
+  the page is disposed, so it pins rather than proves); a resumed transfer's
+  problem clears; a restore marked `earlierKey` reaches the page as a success
+  with no error. The `accountMismatch` refusal on the engine side
+  (`identityMatches`) is unchanged and still tested there. Gate: **full app
+  suite 1,074 green**, `flutter analyze` and `dart format` clean.
+  **Batch report.** B17's nine findings are closed (S1 `25dfeb8`, S2 below).
+  Not built from the batch text: Q4's platform-credential fallback and Q5's
+  cost prompt, which that batch names as landing "in the restore flow here"
+  but which no B17 finding asks for; they stay with the owner's rulings in
+  `99_OPEN_QUESTIONS.md`, to be scheduled. **Owner-facing:** a new APK; no
+  server change. A real-device check of a national-format number remains
+  yours.
+- Next: B18 (admin console), then B19 onward.
+
 ## B18 — Admin console: never strand the operator or destroy the only code
 **A · ~1–2 days · no migration · no server change**
 

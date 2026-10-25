@@ -66,9 +66,8 @@ RecoveryModel recoveryModel(
     createdNothing: state.created?.skipped ?? false,
     restored: restored == null
         ? null
-        : restored.added == 0
-        ? 'The backup is already on this phone.'
-        : 'Restored ${messageCount(restored.added)} messages.',
+        : '${restored.added == 0 ? 'The backup is already on this phone.' : 'Restored ${messageCount(restored.added)} messages.'}'
+              '${restored.earlierKey ? ' It was made before your account key changed, so it may not hold your newest messages.' : ''}',
     handoffNote: state.handoffNote,
     error: state.error,
     busy: state.busy,

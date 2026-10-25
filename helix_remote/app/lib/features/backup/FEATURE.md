@@ -17,9 +17,11 @@ in `presentation/` (`BackupScreen`, `RestoreScreen`, `TransferScreen` and
 - `/backup/transfer` both sides of a device transfer: send (progress, cancel),
   and offers from other devices (accept, decline, pause, resume).
 - `/backup/recovery` a second backup sealed under a secret only the person
-  holds. The secret is generated in the app (24 characters, no lookalikes) or
-  typed, shown once, never stored, sent, copied or logged, and never
-  recoverable by Helix. Its Create and Restore tabs share one screen; the
+  holds. The secret is made by the engine (160 bits of randomness) and cannot
+  be chosen: a phrase a person picks can be guessed offline. It is shown once
+  and never stored, sent or logged (copying it hands it to the clipboard for a
+  minute, on request); it is never recoverable by Helix. The restore tab
+  accepts a typed or pasted secret. Its Create and Restore tabs share one screen; the
   danger zone deletes the server copy.
 
 ## Decisions

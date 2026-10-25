@@ -234,8 +234,13 @@ final restoreFlowProvider =
     );
 
 final class RestoreFlowController extends Notifier<RestoreFlowState> {
+  var _disposed = false;
+
   @override
-  RestoreFlowState build() => const RestoreFlowState();
+  RestoreFlowState build() {
+    ref.onDispose(() => _disposed = true);
+    return const RestoreFlowState();
+  }
 
   Future<void> restore() async {
     if (state.stage == RestoreStage.running) return;
@@ -245,7 +250,7 @@ final class RestoreFlowController extends Notifier<RestoreFlowState> {
     );
     final gateway = ref.read(backupGatewayProvider);
     final progress = gateway.restoreProgress.listen((p) {
-      if (state.stage != RestoreStage.running) return;
+      if (_disposed || state.stage != RestoreStage.running) return;
       state = RestoreFlowState(
         stage: RestoreStage.running,
         phase: switch (p.phase) {
@@ -266,19 +271,24 @@ final class RestoreFlowController extends Notifier<RestoreFlowState> {
     }, onError: (_) {});
     try {
       final outcome = await gateway.restoreHistory();
+      if (_disposed) return;
       state = RestoreFlowState(
         stage: RestoreStage.done,
         added: outcome.added,
         existing: outcome.existing,
       );
     } on BackupProblemException catch (e) {
+      if (_disposed) return;
       state = RestoreFlowState(stage: RestoreStage.failed, problem: e.problem);
     } finally {
       await progress.cancel();
     }
   }
 
-  void reset() => state = const RestoreFlowState();
+  void reset() {
+    if (_disposed) return;
+    state = const RestoreFlowState();
+  }
 }
 
 // ---------------------------------------------------------------- transfers
@@ -340,7 +350,10 @@ final class TransfersController extends Notifier<TransfersState> {
                 stage: view.stage,
                 done: view.done,
                 total: view.total,
+                // A resumed transfer reports no problem: the old one goes
+                // (AUD-15-8).
                 problem: view.problem,
+                clearProblem: view.problem == null,
               ),
       },
     );
@@ -580,6 +593,7 @@ final class RecoveryBackupController extends Notifier<RecoveryBackupState> {
       final outcome = await ref
           .read(backupGatewayProvider)
           .createRecoveryBackup(state.secret);
+      if (_disposed) return;
       // Shown once: from here the secret is gone from this phone's memory.
       state = RecoveryBackupState(
         stage: RecoveryStage.created,
@@ -587,6 +601,7 @@ final class RecoveryBackupController extends Notifier<RecoveryBackupState> {
         written: true,
       );
     } on BackupProblemException catch (e) {
+      if (_disposed) return;
       state = state.copyWith(
         stage: RecoveryStage.choose,
         error: backupProblemText(e.problem),
@@ -601,8 +616,10 @@ final class RecoveryBackupController extends Notifier<RecoveryBackupState> {
       final outcome = await ref
           .read(backupGatewayProvider)
           .restoreRecoveryBackup(secret.trim());
+      if (_disposed) return;
       state = state.copyWith(stage: RecoveryStage.restored, restored: outcome);
     } on BackupProblemException catch (e) {
+      if (_disposed) return;
       state = state.copyWith(
         stage: RecoveryStage.choose,
         error: backupProblemText(e.problem),
@@ -613,8 +630,10 @@ final class RecoveryBackupController extends Notifier<RecoveryBackupState> {
   Future<void> deleteBackup() async {
     try {
       await ref.read(backupGatewayProvider).deleteRecoveryBackup();
+      if (_disposed) return;
       state = state.copyWith(clearError: true);
     } on BackupProblemException catch (e) {
+      if (_disposed) return;
       state = state.copyWith(error: backupProblemText(e.problem));
     }
   }

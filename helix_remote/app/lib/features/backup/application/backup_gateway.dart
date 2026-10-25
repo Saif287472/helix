@@ -230,21 +230,23 @@ final class EngineBackupGateway implements BackupGateway {
       });
 
   @override
-  Future<RestoreOutcome> restoreRecoveryBackup(String recoverySecret) =>
-      _guard(() async {
-        final restored = await (await _backup).restoreFullBackup(
-          recoverySecret: recoverySecret,
-        );
-        // The archive also carries this account's identity secrets. They are
-        // for recovering an account whose key was lost; a signed-in device
-        // already has its key, and nothing here uses or shows them.
-        if (restored.secrets != null && !restored.identityMatches) {
-          throw const engine.BackupException(
-            engine.BackupFailure.accountMismatch,
-          );
-        }
-        return _outcome(restored.result);
-      });
+  Future<RestoreOutcome> restoreRecoveryBackup(String recoverySecret) => _guard(
+    () async {
+      final restored = await (await _backup).restoreFullBackup(
+        recoverySecret: recoverySecret,
+      );
+      // The archive also carries this account's identity secrets. They are
+      // for recovering an account whose key was lost; a signed-in device
+      // already has its key, and nothing here uses or shows them. A backup
+      // made under an earlier key of this account (a takeover or a recovery
+      // since) was merged all the same - the header check already proved it
+      // is this account's - so it is reported as restored, with that said,
+      // instead of refused after the fact (AUD-12q-3).
+      final earlierKey = restored.secrets != null && !restored.identityMatches;
+      final outcome = _outcome(restored.result);
+      return earlierKey ? outcome.withEarlierKey() : outcome;
+    },
+  );
 
   @override
   Future<void> deleteRecoveryBackup() =>

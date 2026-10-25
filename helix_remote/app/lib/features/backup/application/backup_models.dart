@@ -107,7 +107,23 @@ final class RestoreOutcome {
     required this.existing,
     this.invalid = 0,
     this.truncated = false,
+    this.earlierKey = false,
   });
+
+  /// This outcome, marked as from a backup made under an earlier key of the
+  /// account (AUD-12q-3).
+  RestoreOutcome withEarlierKey() => RestoreOutcome(
+    added: added,
+    existing: existing,
+    invalid: invalid,
+    truncated: truncated,
+    earlierKey: true,
+  );
+
+  /// The backup was made before this account's key changed (a takeover or a
+  /// recovery): its messages were added, but it is not a copy of today's
+  /// state.
+  final bool earlierKey;
 
   final int added;
   final int existing;
@@ -210,6 +226,7 @@ final class TransferView {
     int? done,
     int? total,
     BackupProblem? problem,
+    bool clearProblem = false,
     String? deviceName,
   }) => TransferView(
     id: id,
@@ -217,7 +234,7 @@ final class TransferView {
     stage: stage ?? this.stage,
     done: done ?? this.done,
     total: total ?? this.total,
-    problem: problem ?? this.problem,
+    problem: clearProblem ? null : problem ?? this.problem,
     deviceName: deviceName ?? this.deviceName,
   );
 
