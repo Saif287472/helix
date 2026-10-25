@@ -23,3 +23,9 @@ Body limits: history 16 MiB of data; a full backup up to
 before decoding at most 32 levels deep and 100,000 JSON values
 (`maxEnvelopeDepth`, `maxEnvelopeValues`; `bad_request` otherwise), so a
 body of tiny values cannot expand into gigabytes of objects.
+
+Both `PUT`s are rate-limited per account - 6 a minute for a full backup, 12
+for the history - and answer `rate_limited` beyond that. Each request scans,
+decodes and re-encodes its body, so without a limit one account could keep a
+node parsing JSON continuously (AUD-5-6). Backups are occasional (a device
+start or a settings change), so the allowance is headroom, not a schedule.

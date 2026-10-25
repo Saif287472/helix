@@ -1449,6 +1449,22 @@ bytes.
 and an expiry for `persistent`, with a backfill of existing orphans before the
 constraint (expand → backfill → migrate → contract). No wire change.
 
+- S1 (AUD-5-6) — the two backup `PUT`s had no per-route policy while every
+  other heavy authenticated write did. Each request buffers up to 64 MiB,
+  scans it byte by byte, decodes it and re-encodes it into a parameter, so
+  one account could keep a node parsing JSON at the global 10 requests a
+  second.
+  **What changed:** `putFullBackup` is limited to 6 a minute per account and
+  `putHistoryBackup` to 12; past that the answer is `rate_limited`, before
+  the body is read. Backups are occasional (a device start or a settings
+  change), so the allowance is headroom, not a schedule.
+  Tests: `test/modules/media_backup_test.dart` "both backup PUTs are limited
+  per account" — six full-backup PUTs and twelve history PUTs succeed, the
+  next of each is `rate_limited`.
+  Gate: `test/modules/media_backup_test.dart` **8 green**, `dart analyze`
+  clean on the changed files. No schema change, no wire change, no app
+  change; no APK needed. Docs: backup MODULE.md.
+
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**
 

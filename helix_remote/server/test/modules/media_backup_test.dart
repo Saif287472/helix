@@ -229,6 +229,44 @@ void main() {
 
     tearDown(() async => h.stop());
 
+    test('both backup PUTs are limited per account', () async {
+      Future<TestResponse> putFull(int version) => h.api.call(
+        Routes.putFullBackup,
+        bearer: alice.bearer,
+        body: FullBackup(
+          backupId: Uuid.v7(),
+          version: version,
+          envelope: const {'ciphertext': 'x'},
+        ).toJson(),
+      );
+      for (var version = 1; version <= 6; version++) {
+        expect(
+          (await putFull(version)).status,
+          204,
+          reason: 'version $version',
+        );
+      }
+      expect(
+        (await putFull(7)).errorCode,
+        'rate_limited',
+        reason: 'each PUT parses up to 64 MiB of JSON (AUD-5-6)',
+      );
+
+      Future<TestResponse> putHistory(int version) => h.api.call(
+        Routes.putHistoryBackup,
+        bearer: alice.bearer,
+        body: HistoryBackup(version: version, data: bytes(10)).toJson(),
+      );
+      for (var version = 1; version <= 12; version++) {
+        expect(
+          (await putHistory(version)).status,
+          204,
+          reason: 'version $version',
+        );
+      }
+      expect((await putHistory(13)).errorCode, 'rate_limited');
+    });
+
     test('history backup: only newer versions replace it', () async {
       Future<TestResponse> put(int version, int seed) => h.api.call(
         Routes.putHistoryBackup,

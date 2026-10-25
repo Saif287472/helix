@@ -8,6 +8,7 @@ import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
+import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:shelf/shelf.dart';
 
 /// Encrypted backups (F2, CRYPTO_V2.md §13). The server stores ciphertext
@@ -33,6 +34,20 @@ final class BackupModule extends ModuleBase implements ProvidesAccountExport {
   }
 
   final MediaApi media;
+
+  /// Each request scans, decodes and re-encodes up to 64 MiB, so a loop of
+  /// them is CPU the node cannot spend elsewhere (AUD-5-6). Backups are
+  /// occasional: one per device start or settings change, not a stream.
+  static final _fullLimit = RateLimitPolicy.per(
+    'backup.put_full',
+    6,
+    const Duration(minutes: 1),
+  );
+  static final _historyLimit = RateLimitPolicy.per(
+    'backup.put_history',
+    12,
+    const Duration(minutes: 1),
+  );
 
   /// Whether backups exist, with sizes and dates (both are encrypted).
   @override
@@ -107,6 +122,7 @@ CREATE TABLE $s.full_backups (
         name,
         Routes.putHistoryBackup,
         _putHistory,
+        rateLimit: _historyLimit,
         maxBodyBytes: historyBody,
       )
       ..add(name, Routes.getHistoryBackup, _getHistory, allowSuspended: true)
@@ -116,7 +132,13 @@ CREATE TABLE $s.full_backups (
         _deleteHistoryRoute,
         allowSuspended: true,
       )
-      ..add(name, Routes.putFullBackup, _putFull, maxBodyBytes: fullBody)
+      ..add(
+        name,
+        Routes.putFullBackup,
+        _putFull,
+        rateLimit: _fullLimit,
+        maxBodyBytes: fullBody,
+      )
       ..add(name, Routes.getFullBackup, _getFull, allowSuspended: true)
       ..add(name, Routes.deleteFullBackup, _deleteFull, allowSuspended: true)
       ..add(name, Routes.getFullBackupMeta, _getFullMeta, allowSuspended: true);
