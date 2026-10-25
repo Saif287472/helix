@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
+import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
@@ -64,7 +65,17 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
   /// Both are best effort: an offline device resuming is the normal case, and
   /// the engine's own backoff and reconnect do the rest.
   Future<void> unawaitedResume() async {
-    final runtime = await ref.read(runtimeProvider.future);
+    // Nobody signed in (the sign-in page) is the normal state, not a crash:
+    // there is nothing to reconnect (AUD-14b-4). Asked first, because the
+    // runtime provider retries a failure with a backoff, so awaiting it with
+    // no account would hold this call open for a minute before it threw.
+    if (ref.read(activeAccountProvider) == null) return;
+    final HelixRuntime runtime;
+    try {
+      runtime = await ref.read(runtimeProvider.future);
+    } on NoServerChosen {
+      return;
+    }
     if (runtime.engine.status != EngineStatus.running) return;
     runtime.engine.reconnect();
     try {

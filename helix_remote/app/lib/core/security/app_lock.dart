@@ -64,6 +64,7 @@ abstract final class AppLock {
     _backgroundedAt = null;
     _authenticating = false;
     _forced = false;
+    _relockOwed = false;
     locked.value = false;
     callInProgress.value = false;
     coldStartDone.value = false;
@@ -102,6 +103,7 @@ abstract final class AppLock {
     _callActive = null;
     _backgroundedAt = null;
     _forced = false;
+    _relockOwed = false;
     locked.value = false;
   }
 
@@ -109,11 +111,26 @@ abstract final class AppLock {
 
   static int get _relockAfter => _read?.call()?.$2 ?? 60;
 
-  /// Locks now, if the lock is on and no call is live.
+  /// A relock was due while a call was live: the call hid it, it did not
+  /// cancel it (AUD-14b-2).
+  static bool _relockOwed = false;
+
+  /// Locks now, if the lock is on and no call is live. While a call is live
+  /// the relock is owed instead, and paid by [onCallEnded].
   static void lockIfEnabled() {
     if (!enabled) return;
-    if (_callActive?.call() ?? false) return;
+    if (_callActive?.call() ?? false) {
+      _relockOwed = true;
+      return;
+    }
     locked.value = true;
+  }
+
+  /// The call ended: a relock that came due during it applies now.
+  static void onCallEnded() {
+    if (!_relockOwed) return;
+    _relockOwed = false;
+    lockIfEnabled();
   }
 
   /// The pause the unlock prompt itself causes is not a backgrounding.
@@ -146,6 +163,7 @@ abstract final class AppLock {
       final ok = await authenticator(reason);
       if (ok) {
         _forced = false;
+        _relockOwed = false;
         locked.value = false;
       }
       return ok;
@@ -326,9 +344,34 @@ class _LockScreenState extends ConsumerState<_LockScreen> {
     });
   }
 
+  /// Why the last prompt failed, when it has a cure: the phone has no screen
+  /// lock any more (AUD-14b-3). Null for a real mismatch or a cancel.
+  String? _failure;
+
   Future<void> _unlock() async {
     final ok = await ref.read(_unlockAction)();
-    if (mounted) setState(() => _failed = !ok);
+    String? failure;
+    if (!ok) {
+      // The lock follows the phone's own credential. If the person removed
+      // it, "try again" is a dead end that reads like lost data: say what is
+      // missing. It never fails open.
+      final supported = await AppLock.deviceSupportsLock();
+      if (!supported) {
+        failure = Platform.isWindows
+            ? 'Orbit is locked with Windows Hello, and this PC no longer has '
+                  'a sign-in PIN or Hello set up. Set one in Windows settings, '
+                  'then unlock again.'
+            : "Orbit is locked with your phone's screen lock, and this phone "
+                  'no longer has one. Set a PIN, pattern or fingerprint in the '
+                  "phone's settings, then unlock again.";
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _failed = !ok;
+        _failure = failure;
+      });
+    }
   }
 
   @override
@@ -343,6 +386,7 @@ class _LockScreenState extends ConsumerState<_LockScreen> {
               ? 'Windows Hello (your face, fingerprint or PIN)'
               : 'your fingerprint, face or phone PIN',
           failed: _failed,
+          failure: _failure,
         ),
         actions: LockActions(onUnlock: _unlock),
       ),

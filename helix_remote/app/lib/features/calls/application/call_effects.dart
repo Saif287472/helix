@@ -32,6 +32,7 @@ final class CallEffects {
     required this.ringer,
     required this.audio,
     required this.setLockBypass,
+    this.onCallEnded = _nothing,
   });
 
   final CallPlatform platform;
@@ -41,6 +42,12 @@ final class CallEffects {
   /// Lets a connecting or active call through the app lock
   /// (`AppLock.callInProgress`); never a ringing one.
   final void Function({required bool value}) setLockBypass;
+
+  /// Called after the lock bypass is dropped at the end of a call: a relock
+  /// that came due during the call applies now (AUD-14b-2).
+  final void Function() onCallEnded;
+
+  static void _nothing() {}
 
   String? _ringingFor;
   String? _serviceFor;
@@ -106,6 +113,7 @@ final class CallEffects {
     audio.end();
     await platform.setCallActive(active: false, keepScreenOn: false);
     setLockBypass(value: false);
+    onCallEnded();
   }
 
   Future<void> _stopRinging(String callId) async {
@@ -158,6 +166,7 @@ final callEffectsProvider = Provider<CallEffects>((ref) {
     ringer: ref.watch(callRingerProvider),
     audio: ref.read(callAudioProvider.notifier),
     setLockBypass: ({required value}) => AppLock.callInProgress.value = value,
+    onCallEnded: AppLock.onCallEnded,
   );
   ref.listen<CallScreenState?>(callScreenStateProvider, (previous, next) {
     // Only the changes that decide an effect: not every tick of the notice.

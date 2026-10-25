@@ -3903,6 +3903,35 @@ account chosen and asserts nothing was written to a counting anomaly sink.
 **Rollout:** app only. No schema, no wire, no server. The lock change is
 user-visible only in the missing-credential message.
 
+- S1 (AUD-14b-2, -14b-3, -14b-4) — the app's answers to its own process
+  events, app only. **14b-2:** a relock that comes due while a call is live is
+  now owed, not forgotten: `lockIfEnabled` records it and `AppLock.onCallEnded`
+  (called by `CallEffects._finish` right after it drops the bypass) pays it,
+  so the app is locked after a hang-up that followed a long call; an unlock or
+  a sign-out clears it. **14b-3:** when an unlock fails the lock screen asks
+  `deviceSupportsLock()`; if the phone no longer has a screen lock it says so
+  and says what to set (a Windows variant names Hello), never failing open and
+  never offering a wipe; a real mismatch still says "Not unlocked. Try
+  again." (`LockModel.failure`, new in `orbit_ui`). **14b-4:** `unawaitedResume`
+  returns at once when no account is active, and still catches
+  `NoServerChosen` from the provider. It does not await the runtime provider
+  first because, in Riverpod 3.4, a provider that throws is **retried with a
+  backoff**, so awaiting it signed out held the call open for a minute before
+  the exception reached the zone handler as a crash; the audit assumed it threw
+  at once. Tests: `app_lock_test.dart` (a 10-minute call with the phone on the
+  table owes the relock and the app locks at hang-up; a 5-second absence
+  owes nothing; with no screen lock the screen names it, with one it says try
+  again), and `lifecycle_resume_test.dart` (resuming signed out; **fails on
+  the old host**, which leaves the retrying provider loading). The two
+  `AppLock` timing tests were not run against the old `AppLock` (the new
+  method is a compile dependency). Gate: **app 1,079 green, orbit_ui 249
+  green**, analyze and format clean.
+  **Batch report.** B20's three findings are closed. **Owner-facing:** a new
+  APK; no server change. Worth knowing, not fixed: other `ref.read(runtimeProvider
+  .future)` callers see the same retry behaviour when signed out; none was
+  audited as crashing.
+- Next: B21 (attachments), then B22 onward.
+
 ## B21 — An attachment is what it is, cleaned, or it does not go
 **A · ~1 day · no migration, no wire**
 

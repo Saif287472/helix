@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -240,6 +241,83 @@ void main() {
       now = now.subtract(const Duration(hours: 1));
       AppLock.onResumed();
       expect(AppLock.locked.value, isTrue);
+    });
+
+    /// A call hides the relock, it does not cancel it: hanging up after a
+    /// long call leaves the app locked (AUD-14b-2).
+    testWidgets('a relock that came due during a call applies at hang-up', (
+      tester,
+    ) async {
+      await settled(tester, 60);
+      var now = DateTime(2026, 1, 1, 12);
+      AppLock.clock = () => now;
+      AppLock.onBackgrounded();
+      AppLock.callInProgress.value = true; // a call, phone on the table
+      now = now.add(const Duration(minutes: 10));
+      AppLock.onResumed(); // the call screen comes back
+      await tester.pump();
+      expect(locked, findsNothing, reason: 'the call UI is not covered');
+
+      AppLock.callInProgress.value = false; // hung up
+      AppLock.onCallEnded();
+      await tester.pump();
+      expect(locked, findsOneWidget);
+    });
+
+    testWidgets('a short absence during a call owes nothing', (tester) async {
+      await settled(tester, 60);
+      var now = DateTime(2026, 1, 1, 12);
+      AppLock.clock = () => now;
+      AppLock.onBackgrounded();
+      AppLock.callInProgress.value = true;
+      now = now.add(const Duration(seconds: 5));
+      AppLock.onResumed();
+      AppLock.callInProgress.value = false;
+      AppLock.onCallEnded();
+      await tester.pump();
+      expect(locked, findsNothing);
+    });
+  });
+
+  /// The lock follows the phone's own screen lock. When that is gone,
+  /// "try again" is a dead end that reads like lost data (AUD-14b-3).
+  group('a phone without a screen lock', () {
+    Future<void> lockedApp(WidgetTester tester) async {
+      await pump(
+        tester,
+        restore: SessionRestore.restored,
+        lockOn: true,
+        initial: AppAuthState.ready,
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      // The prompt opens by itself, fails, and the screen asks why.
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    testWidgets('the screen names the missing screen lock', (tester) async {
+      AppLock.deviceSupportsLock = () async => false;
+      await lockedApp(tester);
+      expect(locked, findsOneWidget);
+      expect(
+        find.textContaining(
+          Platform.isWindows
+              ? 'no longer has a sign-in PIN'
+              : 'no longer has one',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Not unlocked. Try again.'), findsNothing);
+      expect(AppLock.locked.value, isTrue, reason: 'it never fails open');
+    });
+
+    testWidgets('a real mismatch still says try again', (tester) async {
+      AppLock.deviceSupportsLock = () async => true;
+      await lockedApp(tester);
+      expect(find.text('Not unlocked. Try again.'), findsOneWidget);
+      expect(find.textContaining('no longer has'), findsNothing);
     });
   });
 }

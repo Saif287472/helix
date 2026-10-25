@@ -955,12 +955,17 @@ class LockModel {
   const LockModel({
     this.unlockWith = 'your fingerprint, face or phone PIN',
     this.failed = false,
+    this.failure,
   });
 
   /// "your fingerprint, face or phone PIN"; "Windows Hello (your face,
   /// fingerprint or PIN)" on Windows.
   final String unlockWith;
   final bool failed;
+
+  /// What to say when [failed], in place of "Not unlocked. Try again.": the
+  /// reason that has a cure (the phone no longer has a screen lock).
+  final String? failure;
 }
 
 /// `LockActions` (`contracts/signin.md`).
@@ -1007,9 +1012,11 @@ class LockScreen extends StatelessWidget {
                 ),
               ),
               if (model.failed)
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: _InlineError('Not unlocked. Try again.'),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: _InlineError(
+                    model.failure ?? 'Not unlocked. Try again.',
+                  ),
                 ),
             ],
           ),
