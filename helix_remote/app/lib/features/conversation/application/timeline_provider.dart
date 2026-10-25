@@ -4,11 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
+import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/message_mapper.dart';
 import 'package:helix_remote/features/conversation/application/timeline_builder.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart' show FailedAction;
 import 'package:orbit_ui/models.dart';
 
 /// What opens a conversation: which one, how many messages to start with
@@ -257,8 +259,10 @@ Stream<TimelineSnapshot> _snapshots({
   late final StreamController<TimelineSnapshot> controller;
   StreamSubscription<List<MessageRow>>? messagesSub;
   StreamSubscription<List<ReactionRow>>? reactionsSub;
+  StreamSubscription<List<FailedAction>>? failuresSub;
   var rows = const <MessageRow>[];
   var reactions = const <ReactionRow>[];
+  var failures = const <FailedAction>[];
   String? reactionsFrom;
   Timer? pending;
   var first = true;
@@ -291,6 +295,12 @@ Stream<TimelineSnapshot> _snapshots({
     for (final r in reactions) {
       (byRowid[r.messageRowid] ??= []).add(r);
     }
+    // The engine lists the newest failure first: the latest action on a
+    // message is the one its line speaks for.
+    final failedByRow = <int, String>{};
+    for (final f in failures) {
+      failedByRow.putIfAbsent(f.targetRowid, () => failedActionLabel(f));
+    }
     controller.add(
       buildTimeline(
         rows: rows,
@@ -298,6 +308,7 @@ Stream<TimelineSnapshot> _snapshots({
         reactions: byRowid,
         quotes: quotes,
         open: open,
+        failedActions: failedByRow,
         // Heuristic: a full window may have more behind it. Paging an empty
         // page back is a no-op, so being wrong costs one query.
         hasOlder: !window.isLatest || rows.length >= window.limit,
@@ -340,11 +351,16 @@ Stream<TimelineSnapshot> _snapshots({
         }
         schedule();
       }, onError: controller.addError);
+      failuresSub = gateway.watchFailedActions(conversationId).listen((value) {
+        failures = value;
+        schedule();
+      }, onError: controller.addError);
     },
     onCancel: () async {
       pending?.cancel();
       await messagesSub?.cancel();
       await reactionsSub?.cancel();
+      await failuresSub?.cancel();
     },
   );
   return controller.stream;

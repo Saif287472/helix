@@ -689,6 +689,7 @@ class HelixMessage extends HelixValue {
     this.expiresLabel,
     this.starred = false,
     this.highlighted = false,
+    this.failedAction,
   });
 
   final String id;
@@ -727,6 +728,12 @@ class HelixMessage extends HelixValue {
   /// Briefly highlighted after jumping to it from a quote or search.
   final bool highlighted;
 
+  /// What an action *on this message* (a reaction, an edit, a delete) that
+  /// did not reach the others says under the bubble ("Couldn't delete for
+  /// everyone"); null when nothing failed. Separate from [status], which is
+  /// about the message's own delivery.
+  final String? failedAction;
+
   /// This message with some fields replaced: what an app does when a bubble's
   /// content or highlight comes from somewhere other than the list row (media
   /// transfer state, a jump).
@@ -752,6 +759,7 @@ class HelixMessage extends HelixValue {
     expiresLabel: expiresLabel,
     starred: starred,
     highlighted: highlighted ?? this.highlighted,
+    failedAction: failedAction,
   );
 
   @override
@@ -774,6 +782,7 @@ class HelixMessage extends HelixValue {
     expiresLabel,
     starred,
     highlighted,
+    failedAction,
   ];
 }
 

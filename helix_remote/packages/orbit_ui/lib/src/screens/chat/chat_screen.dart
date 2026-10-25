@@ -222,6 +222,7 @@ class ChatActions {
     this.onDeleteForEveryone,
     this.onReact,
     this.onRetry,
+    this.onRetryAction,
     this.onRetryLoad,
     this.onConfirmMember,
     this.onRemoveMember,
@@ -283,7 +284,13 @@ class ChatActions {
 
   /// The same emoji again takes it back; another swaps it.
   final void Function(String messageId, String emoji)? onReact;
+
+  /// Retries a message that was not sent.
   final ValueChanged<String>? onRetry;
+
+  /// Retries a failed action on a message (a delete for everyone that did
+  /// not reach the others).
+  final ValueChanged<String>? onRetryAction;
   final VoidCallback? onRetryLoad;
 
   /// Confirm or remove a pending member; returns a sentence to show.
@@ -743,6 +750,8 @@ class _ChatScreenState extends State<ChatScreen> {
   );
 
   void _retry(String id) => widget.actions.onRetry?.call(id);
+
+  void _retryAction(String id) => widget.actions.onRetryAction?.call(id);
 
   // ------------------------------------------------------------ actions
 
@@ -1620,6 +1629,7 @@ class _ChatScreenState extends State<ChatScreen> {
       item: shown,
       group: group,
       onRetry: _retry,
+      onRetryAction: _retryAction,
       onTapMessage: _tapMessage,
       onLongPressMessage: _longPress,
       // While selecting, a touch anywhere on a message ticks it.

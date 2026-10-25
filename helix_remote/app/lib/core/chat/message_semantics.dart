@@ -4,6 +4,8 @@ import 'package:helix_remote/core/groups/pending_member_copy.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart';
+import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:orbit_ui/models.dart';
 
 /// What a stored message *means*, shared by the chat list (its preview line)
@@ -82,6 +84,18 @@ HelixDeliveryStatus? deliveryStatusOf(MessageRow row) {
     MessageStatus.received => HelixDeliveryStatus.sent,
   };
 }
+
+/// The words under a message whose action (a reaction, an edit, a delete, a
+/// vote, an RSVP) did not reach the others for good. The local change is
+/// already applied; Retry re-sends only the action.
+String failedActionLabel(FailedAction failure) => switch (failure.action) {
+  ReactionBody.typeName => "Couldn't send your reaction",
+  EditBody.typeName => "Couldn't send your edit",
+  DeleteBody.typeName => "Couldn't delete for everyone",
+  PollVoteBody.typeName => "Couldn't send your vote",
+  RsvpBody.typeName => "Couldn't send your answer",
+  _ => "Couldn't send your change",
+};
 
 /// Message kinds that are notices in the timeline rather than bubbles.
 bool isNoticeKind(String kind) => kind == 'system' || kind == 'call_log';

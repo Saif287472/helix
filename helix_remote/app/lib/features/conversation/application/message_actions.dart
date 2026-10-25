@@ -197,6 +197,16 @@ final class ConversationActions {
 
   Future<void> retry(int rowid) async => (await _gateway).retrySend(rowid);
 
+  /// Re-queues every action on [rowid] that failed for good (a delete for
+  /// everyone the others never saw). The engine names the target on each
+  /// action op, so the message's own retry does not find them.
+  Future<void> retryActions(int rowid) async {
+    final gateway = await _gateway;
+    for (final f in await gateway.failedActions(conversationId)) {
+      if (f.targetRowid == rowid) await gateway.retryAction(f.opId);
+    }
+  }
+
   /// Sends [rowids] on to every conversation in [targets]; returns how many
   /// sends failed (a view-once or deleted message cannot be forwarded).
   Future<int> forward(

@@ -30,6 +30,7 @@ final class SendContentPayload {
     required this.content,
     required this.audience,
     this.urgent = true,
+    this.targetRowid,
   });
 
   final ContentMessage content;
@@ -39,10 +40,16 @@ final class SendContentPayload {
   final List<String> audience;
   final bool urgent;
 
+  /// The local row of the message an *action* op (a reaction, an edit, a
+  /// delete) is about. Never `outbox_ops.message_rowid`, which means "this
+  /// op delivers this message" and moves its status (AUD-12i-1).
+  final int? targetRowid;
+
   String encode() => jsonEncode({
     'content': content.toJson(),
     'audience': audience,
     'urgent': urgent,
+    if (targetRowid != null) 'target_rowid': targetRowid,
   });
 
   static SendContentPayload decode(String payload) {
@@ -51,6 +58,7 @@ final class SendContentPayload {
       content: ContentMessage.fromJson(json.object('content')),
       audience: json.strings('audience'),
       urgent: json.flag('urgent', orElse: true),
+      targetRowid: json.optInt('target_rowid'),
     );
   }
 }
@@ -102,6 +110,7 @@ final class OutboxService {
     required Iterable<String> audience,
     String? conversationId,
     int? messageRowid,
+    int? targetRowid,
     String? requestId,
     bool urgent = true,
   }) => _ctx.db.outboxDao.enqueue(
@@ -111,6 +120,7 @@ final class OutboxService {
       content: content,
       audience: audience.toSet().toList()..sort(),
       urgent: urgent,
+      targetRowid: targetRowid,
     ).encode(),
     conversationId: conversationId,
     messageRowid: messageRowid,
@@ -125,6 +135,7 @@ final class OutboxService {
     required String groupId,
     required String conversationId,
     int? messageRowid,
+    int? targetRowid,
     String? requestId,
     bool urgent = true,
     List<DeviceAddress> redistribute = const [],
@@ -136,6 +147,7 @@ final class OutboxService {
       content: content,
       urgent: urgent,
       redistribute: redistribute,
+      targetRowid: targetRowid,
     ).encode(),
     conversationId: conversationId,
     messageRowid: messageRowid,

@@ -113,6 +113,7 @@ TimelineSnapshot buildTimeline({
   required OpenInfo open,
   required bool hasOlder,
   required bool hasNewer,
+  Map<int, String> failedActions = const {},
   String? highlightMessageId,
 }) {
   final entries = <TimelineEntry>[];
@@ -198,6 +199,7 @@ TimelineSnapshot buildTimeline({
       reply: quote,
       reactions: reactions[row.localRowid] ?? const [],
       highlighted: row.messageId == highlightMessageId,
+      failedAction: failedActions[row.localRowid],
     );
     segment.add(entries.length);
     entries.add(

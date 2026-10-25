@@ -42,7 +42,7 @@ and `runMaintenance()`.
 |---|---|
 | `account` | phone code, register (Global or personal server, password optional, SMS takeover), password sign-in, link as the new device (`beginLink` -> `NewDeviceLink`), device-key sign-in (wired as `HelixApi.auth.reauthenticate`) |
 | `devices` | device list (watch), rename, revoke, revoke others, security events, approve another device's link (`approveLink`) |
-| `chats` | chat list, messages, search (watch queries); send text/reply/mentions and the blob-free content types; react, edit, delete, vote, RSVP; mark read (read receipts), view-once, disappearing timer, pin/mute/archive/draft, retry a failed send; the same for group chats (`group:<id>`) |
+| `chats` | chat list, messages, search (watch queries); send text/reply/mentions and the blob-free content types; react, edit, delete, vote, RSVP; mark read (read receipts), view-once, disappearing timer, pin/mute/archive/draft, retry a failed send or a failed action; the same for group chats (`group:<id>`) |
 | `groups` | create, rename, description, picture, settings, add/remove members, roles, leave, ban/unban, delete, invite links (create, preview, join, revoke), join requests, refresh; see "Groups (Phase C4-G)" |
 | `people` | phone-book discovery by salted hash (`PhoneBook` is injected), lookup by number or `~name`, profiles (encrypted: name, about line and picture - see "Profiles and the profile photo"), nickname (synced to own devices and written to the phone book), block/unblock, report (`report`), the profile's about line (`aboutOf`/`watchAbout`), safety number and verified flag, display-name order helper `PersonNaming` (a rename the phone accepted also updates the stored phone-book name) |
 | `settings` | typed local settings (`EngineSettings`, any `Setting<T>`), server-side privacy, the `~Helix name` |
@@ -210,6 +210,18 @@ re-asking is cheap and a rotated group generates no op at all; a duty that keeps
 failing is re-asked `GroupLimits.rekeyDutyRetries` times and then left failed for
 an admin, because a pass that re-asked forever would be its own unbounded cost.
 Asking by hand (`GroupsService.rotateKey`, a roster envelope) is never bounded.
+
+An **action** op (reaction, edit, delete, vote, RSVP) has a message it is
+about but delivers no message of its own, so `outbox_ops.message_rowid` stays
+null and the target rides the payload (`target_rowid`, never
+`message_rowid`, which would advance the message's own status). When one gives
+up, the chat reads it back by conversation (`ChatsService.watchFailedActions`
+/ `failedActions`): the target message draws the failure and a retry
+(`retryAction(opId)` puts the same op back in the queue) while its own status
+does not change. A new attempt at the same action on the same message
+discards the superseded failed op first, so a stale failure line cannot
+outlive the redo and its retry cannot re-send what the person has since
+undone.
 
 Every visible send, action, edit, delete and `read` receipt also goes to this
 account's own other devices (they get the same content; `conv.to` names the

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart' show FailedAction;
 import 'package:orbit_ui/orbit_ui.dart';
 
 import 'support/a3b_fakes.dart' show FakeLocalSettings;
@@ -73,6 +74,28 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       '',
     );
+  });
+
+  chatTest('an action that failed for good is shown on its message and retried '
+      'from there', (tester, gateway) async {
+    final chat = (await tester.runAsync(() => gateway.chatWith('bob')))!;
+    final row = (await tester.runAsync(
+      () => gateway.outgoing(chat, 'see you at 5'),
+    ))!;
+    gateway.actionFailures.add(
+      FailedAction(
+        opId: 42,
+        targetRowid: row.localRowid,
+        action: 'delete',
+        errorCode: 'forbidden',
+      ),
+    );
+    await open(tester, gateway, chat);
+
+    expect(find.text("Couldn't delete for everyone"), findsOneWidget);
+    await tester.tap(find.text('RETRY'));
+    await settle(tester, rounds: 5);
+    expect(gateway.log, contains('retryAction:42'));
   });
 
   chatTest('the unread divider is drawn once and messages are marked read', (

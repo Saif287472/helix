@@ -236,6 +236,21 @@ class TestChatGateway extends ChatGateway {
   @override
   Future<void> retrySend(int rowid) async => log.add('retry:$rowid');
 
+  /// What the timeline should show as failed actions (the real ones live in
+  /// the outbox, which a test builds only when it needs to).
+  final List<FailedAction> actionFailures = [];
+
+  @override
+  Stream<List<FailedAction>> watchFailedActions(String conversationId) =>
+      Stream.value(actionFailures);
+
+  @override
+  Future<List<FailedAction>> failedActions(String conversationId) async =>
+      actionFailures;
+
+  @override
+  Future<void> retryAction(int opId) async => log.add('retryAction:$opId');
+
   @override
   Future<void> forward(int rowid, String toConversationId) async =>
       log.add('forward:$rowid:$toConversationId');

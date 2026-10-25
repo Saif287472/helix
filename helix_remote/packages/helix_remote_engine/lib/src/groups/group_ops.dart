@@ -23,6 +23,7 @@ final class SendGroupContentPayload {
     required this.content,
     this.urgent = true,
     this.redistribute = const [],
+    this.targetRowid,
   });
 
   final String groupId;
@@ -33,12 +34,17 @@ final class SendGroupContentPayload {
   /// (§13a): the sender key is sent to them again with this send.
   final List<DeviceAddress> redistribute;
 
+  /// The local row of the message an *action* op is about; see
+  /// `SendContentPayload.targetRowid`.
+  final int? targetRowid;
+
   String encode() => jsonEncode({
     'group_id': groupId,
     'content': content.toJson(),
     'urgent': urgent,
     if (redistribute.isNotEmpty)
       'redistribute': [for (final d in redistribute) d.toJson()],
+    if (targetRowid != null) 'target_rowid': targetRowid,
   });
 
   static SendGroupContentPayload decode(String payload) {
@@ -48,6 +54,7 @@ final class SendGroupContentPayload {
       content: ContentMessage.fromJson(json.object('content')),
       urgent: json.flag('urgent', orElse: true),
       redistribute: json.optObjects('redistribute', DeviceAddress.fromJson),
+      targetRowid: json.optInt('target_rowid'),
     );
   }
 }

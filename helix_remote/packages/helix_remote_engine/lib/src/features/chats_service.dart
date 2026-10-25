@@ -7,11 +7,39 @@ import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
+import 'package:helix_remote_engine/src/groups/group_ops.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+
+/// An action (a reaction, an edit, a delete, a vote, an RSVP) whose send
+/// failed for good (AUD-12i-1). The op itself stays in the outbox; the chat
+/// draws the failure under [targetRowid]'s message and
+/// [ChatsService.retryAction] puts it back in the queue. A failed action
+/// changes nothing about the message's own status: the local effect (the
+/// edited text, the deleted row, the reaction) is already applied.
+final class FailedAction {
+  const FailedAction({
+    required this.opId,
+    required this.targetRowid,
+    required this.action,
+    required this.errorCode,
+  });
+
+  final int opId;
+
+  /// The local row of the message the action is about.
+  final int targetRowid;
+
+  /// The content body type (`reaction`, `edit`, `delete`, `poll_vote`,
+  /// `rsvp`), for the chat's words.
+  final String action;
+
+  /// Why the last attempt failed (`forbidden`, `expired`, ...).
+  final String errorCode;
+}
 
 /// Chats and messages (direct chats and group chats): lists as watch
 /// queries, and every user action as one transaction that writes the
@@ -539,6 +567,20 @@ final class ChatsService {
     }
   }
 
+  /// The actions of [conversationId] that failed for good, newest first,
+  /// live. Unlike a message (whose row turns `failed`), an action leaves no
+  /// row to read, so the op in the outbox is what the chat shows the retry
+  /// for.
+  Stream<List<FailedAction>> watchFailedActions(String conversationId) =>
+      _db.outboxDao.watchForConversation(conversationId).map(_failedActionsOf);
+
+  /// [watchFailedActions], read once.
+  Future<List<FailedAction>> failedActions(String conversationId) async =>
+      _failedActionsOf(await _db.outboxDao.forConversation(conversationId));
+
+  /// Puts a failed action back in the queue (the retry under its message).
+  Future<void> retryAction(int opId) => _outbox.retry(opId);
+
   // ----------------------------------------------------------- chat state
 
   Future<void> setPinned(String id, {required bool pinned}) =>
@@ -608,6 +650,7 @@ final class ChatsService {
     String conversationId,
     ContentMessage content, {
     int? messageRowid,
+    int? targetRowid,
     bool urgent = true,
   }) {
     final group = route.groupId;
@@ -617,6 +660,7 @@ final class ChatsService {
         groupId: group,
         conversationId: conversationId,
         messageRowid: messageRowid,
+        targetRowid: targetRowid,
         urgent: urgent,
       );
     }
@@ -625,6 +669,7 @@ final class ChatsService {
       audience: [route.peer!, _ctx.identity.accountId],
       conversationId: conversationId,
       messageRowid: messageRowid,
+      targetRowid: targetRowid,
       urgent: urgent,
     );
   }
@@ -681,9 +726,11 @@ final class ChatsService {
   }
 
   /// Sends an action on [target]'s chat to the peer and this account's
-  /// other devices.
+  /// other devices. The op names [target] in its payload so a terminal
+  /// failure can be shown on it and retried (AUD-12i-1).
   Future<void> _sendAction(MessageRow target, ContentBody body) async {
     final route = await _routeOf(target.conversationId, sending: true);
+    await _discardSuperseded(target, body.type);
     return _enqueue(
       route,
       target.conversationId,
@@ -693,8 +740,68 @@ final class ChatsService {
         conversation: route.conversation,
         body: body,
       ),
+      targetRowid: target.localRowid,
       // Actions on a message are not worth waking the recipient's phone.
       urgent: false,
+    );
+  }
+
+  /// A new attempt at the same action replaces an earlier failed one: its
+  /// failure line would otherwise outlive the fix, and its retry would
+  /// re-send an action the person has since redone.
+  Future<void> _discardSuperseded(MessageRow target, String action) async {
+    final ops = await _db.outboxDao.forConversation(target.conversationId);
+    for (final op in ops) {
+      if (op.state != OutboxState.failed) continue;
+      final failure = _actionOf(op);
+      if (failure == null ||
+          failure.targetRowid != target.localRowid ||
+          failure.action != action) {
+        continue;
+      }
+      await _db.outboxDao.discard(op.id);
+    }
+  }
+
+  /// The failed actions among [ops], newest first (the query orders them).
+  static List<FailedAction> _failedActionsOf(List<OutboxOpRow> ops) {
+    final out = <FailedAction>[];
+    for (final op in ops) {
+      if (op.state != OutboxState.failed) continue;
+      final action = _actionOf(op);
+      if (action != null) out.add(action);
+    }
+    return out;
+  }
+
+  /// [op] as a failed action, or null when it is not an action op (a
+  /// message send, a rekey) or its payload cannot be read.
+  static FailedAction? _actionOf(OutboxOpRow op) {
+    final ContentMessage content;
+    final int? target;
+    try {
+      if (op.kind == OutboxKinds.sendContent) {
+        final payload = SendContentPayload.decode(op.payload);
+        content = payload.content;
+        target = payload.targetRowid;
+      } else if (op.kind == GroupOutboxKinds.sendGroupContent) {
+        final payload = SendGroupContentPayload.decode(op.payload);
+        content = payload.content;
+        target = payload.targetRowid;
+      } else {
+        return null;
+      }
+    } on ProtocolFormatException {
+      // A corrupt payload has its own failure ('bad_payload'); it names no
+      // message to show it on.
+      return null;
+    }
+    if (target == null) return null;
+    return FailedAction(
+      opId: op.id,
+      targetRowid: target,
+      action: content.body.type,
+      errorCode: op.lastError ?? 'failed',
     );
   }
 }

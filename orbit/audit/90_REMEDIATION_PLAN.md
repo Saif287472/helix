@@ -1274,6 +1274,47 @@ update to be protected.
   all) and no wire change; no APK needed. Docs: engine MODULE.md "State kept in
   settings", "Writes that cannot drop each other" and the pending-members
   bullet.
+- S8 (AUD-12i-1) — an action op (reaction, edit, delete, vote, RSVP) was
+  enqueued with a conversation but no message, so a terminal failure emitted
+  `SendFailedEvent(messageRowid: null)`: no line, no retry, and a failed
+  "delete for everyone" could not be expressed again because the local row was
+  already marked deleted.
+  **What changed:** the target rides the op payload (`target_rowid` in
+  `SendContentPayload` and `SendGroupContentPayload`, absent on message ops),
+  never `outbox_ops.message_rowid` - that column means "this op delivers this
+  message" and drives status advances, so an action under it would move the
+  message's own ticks. `OutboxDao.forConversation`/`watchForConversation` read
+  a chat's ops newest first and `discard` drops a superseded failure;
+  `ChatsService.watchFailedActions` decodes the failed
+  `send_content`/`send_group_content` ops into `FailedAction` (op id, target
+  row, body type, last error code), `retryAction(opId)` goes back through
+  `OutboxService.retry`, and a new action of the same type on the same message
+  discards the older failed op with it. A payload that does not decode is
+  skipped (that op already failed as `bad_payload`), and a failed message send
+  is not reported as an action failure.
+  **UI:** `HelixMessage.failedAction` draws a second failed line under the
+  bubble ("Couldn't delete for everyone", "Couldn't send your edit", ...) with
+  RETRY; the timeline entry resolves the content id back to its local row and
+  retries every failed action on it. The message's own ticks stay its own (a
+  sent message whose reaction failed still shows sent).
+  Not done from the sketch: no `SendFailedEvent` consumer for actions - the
+  app reads the outbox rows instead, so a failure survives a restart - and
+  `retrySend` still handles only message ops, because a row can owe several
+  actions and they retry by op.
+  Tests: `packages/helix_remote_engine/test/outbox_test.dart` - "a delete for
+  everyone that fails is shown on its message and can be retried; the
+  message's own status does not change" (before this change `failedActions`
+  is empty and nothing can re-express the delete) and "a new attempt at the
+  same action clears its old failure" (the superseded op is gone and only the
+  new edit arrives); "a failed message is not a failed action" guards message
+  ops. `app/test/conversation_test.dart` "an action that failed for good is
+  shown on its message and retried from there" draws the line and taps RETRY.
+  Gate: engine suite **336 green**, db suite **140 green**, orbit_ui suite
+  **232 green**, app `conversation_test.dart` **22 green**, `dart analyze`
+  clean in engine, db, orbit_ui and app, and
+  `server/test/client/engine/groups_test.dart` **16 green** against Postgres.
+  No schema change (the target is in the payload) and no wire change; no APK
+  needed. Docs: engine MODULE.md outbound pipeline and the `chats` row.
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

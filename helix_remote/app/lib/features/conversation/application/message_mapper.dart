@@ -31,13 +31,16 @@ HelixMediaContent mediaPlaceholderContent([String caption = '']) =>
 /// One bubble from a database row.
 ///
 /// [reply] is the quote (looked up by the caller, because the quoted message
-/// may be outside the window being drawn); [reactions] are the row's reactions.
+/// may be outside the window being drawn); [reactions] are the row's
+/// reactions; [failedAction] is the label of a failed action on the message
+/// (AUD-12i-1).
 HelixMessage mapMessage(
   MessageRow row,
   MapperContext ctx, {
   HelixReplyQuote? reply,
   List<ReactionRow> reactions = const [],
   bool highlighted = false,
+  String? failedAction,
 }) {
   final outgoing = row.outgoing;
   final showAuthor = ctx.isGroup && !outgoing;
@@ -63,6 +66,7 @@ HelixMessage mapMessage(
         ? null
         : formatDisappearing(row.expireSeconds!),
     highlighted: highlighted,
+    failedAction: failedAction,
   );
 }
 

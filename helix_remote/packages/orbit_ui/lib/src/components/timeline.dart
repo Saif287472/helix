@@ -104,6 +104,7 @@ class OrbitTimeline extends StatelessWidget {
     required this.items,
     this.group = false,
     this.onRetry,
+    this.onRetryAction,
     this.onTapMessage,
     this.onLongPressMessage,
     this.bubble = OrbitBubbleActions.none,
@@ -114,6 +115,9 @@ class OrbitTimeline extends StatelessWidget {
   /// A group chat: incoming messages show their author and picture.
   final bool group;
   final ValueChanged<String>? onRetry;
+
+  /// Retries a failed action on a message, by message id.
+  final ValueChanged<String>? onRetryAction;
   final ValueChanged<String>? onTapMessage;
   final ValueChanged<String>? onLongPressMessage;
   final OrbitBubbleActions bubble;
@@ -140,6 +144,7 @@ class OrbitTimeline extends StatelessWidget {
               item: it,
               group: group,
               onRetry: onRetry,
+              onRetryAction: onRetryAction,
               onTapMessage: onTapMessage,
               onLongPressMessage: onLongPressMessage,
               bubble: bubble,
@@ -158,6 +163,7 @@ class OrbitTimelineEntry extends StatelessWidget {
     required this.item,
     this.group = false,
     this.onRetry,
+    this.onRetryAction,
     this.onTapMessage,
     this.onLongPressMessage,
     this.bubble = OrbitBubbleActions.none,
@@ -166,6 +172,7 @@ class OrbitTimelineEntry extends StatelessWidget {
   final HelixTimelineItem item;
   final bool group;
   final ValueChanged<String>? onRetry;
+  final ValueChanged<String>? onRetryAction;
   final ValueChanged<String>? onTapMessage;
   final ValueChanged<String>? onLongPressMessage;
   final OrbitBubbleActions bubble;
@@ -188,6 +195,9 @@ class OrbitTimelineEntry extends StatelessWidget {
       group: group,
       selected: m.selected,
       onRetry: onRetry == null ? null : () => onRetry!(m.message.id),
+      onRetryAction: onRetryAction == null
+          ? null
+          : () => onRetryAction!(m.message.id),
       onTap: onTapMessage == null ? null : () => onTapMessage!(m.message.id),
       onLongPress: onLongPressMessage == null
           ? null
@@ -636,6 +646,7 @@ class OrbitMessageBubble extends StatelessWidget {
     this.group = false,
     this.selected = false,
     this.onRetry,
+    this.onRetryAction,
     this.onTap,
     this.onLongPress,
     this.actions = OrbitBubbleActions.none,
@@ -646,6 +657,10 @@ class OrbitMessageBubble extends StatelessWidget {
   final bool group;
   final bool selected;
   final VoidCallback? onRetry;
+
+  /// Retries a failed action on the message (a delete for everyone that did
+  /// not reach the others).
+  final VoidCallback? onRetryAction;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -720,6 +735,12 @@ class OrbitMessageBubble extends StatelessWidget {
           _PullUp(by: 5, child: _Reactions(m.reactions)),
         if (out && m.status == HelixDeliveryStatus.failed)
           _FailedLine(onRetry: onRetry),
+        if (m.failedAction != null)
+          _FailedLine(
+            label: m.failedAction!,
+            semanticsLabel: 'Retry this action',
+            onRetry: onRetryAction,
+          ),
       ],
     );
 
@@ -3111,12 +3132,22 @@ class _Pop extends StatelessWidget {
   }
 }
 
-/// `.failed-line`: under a message that was not sent. A filled warning,
-/// "Not sent" at `--t-caption` in `--danger`, and Retry in mono 11px at
-/// weight 700, tracked, upper case.
+/// `.failed-line`: under a message that was not sent, or that an action on
+/// it did not reach the others. A filled warning, the [label] at
+/// `--t-caption` in `--danger`, and Retry in mono 11px at weight 700,
+/// tracked, upper case.
 class _FailedLine extends StatelessWidget {
-  const _FailedLine({this.onRetry});
+  const _FailedLine({
+    this.label = 'Not sent',
+    this.semanticsLabel = 'Retry sending',
+    this.onRetry,
+  });
 
+  final String label;
+
+  /// What the Retry button is called to a screen reader (the message's
+  /// failure and an action's failure do different things).
+  final String semanticsLabel;
   final VoidCallback? onRetry;
 
   @override
@@ -3135,13 +3166,13 @@ class _FailedLine extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           OrbitText(
-            'Not sent',
+            label,
             style: t.font.style(size: OrbitType.caption, color: t.danger),
           ),
           const SizedBox(width: 6),
           Semantics(
             button: true,
-            label: 'Retry sending',
+            label: semanticsLabel,
             child: OrbitTapArea(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,

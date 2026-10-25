@@ -183,6 +183,17 @@ class ChatGateway {
 
   Future<void> retrySend(int rowid) => _chats.retrySend(rowid);
 
+  /// Actions of the chat that failed for good, live: the timeline shows each
+  /// under its message with a retry (AUD-12i-1).
+  Stream<List<FailedAction>> watchFailedActions(String conversationId) =>
+      _chats.watchFailedActions(conversationId);
+
+  /// [watchFailedActions], read once.
+  Future<List<FailedAction>> failedActions(String conversationId) =>
+      _chats.failedActions(conversationId);
+
+  Future<void> retryAction(int opId) => _chats.retryAction(opId);
+
   /// Sends the message [rowid] on to [toConversationId]: a media message
   /// reuses its uploaded object, a text message is sent again as text.
   /// Anything else cannot be forwarded and throws a [StateError].

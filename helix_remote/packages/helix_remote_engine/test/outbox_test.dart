@@ -186,6 +186,75 @@ void main() {
       expect(op.state, OutboxState.failed);
       expect(op.lastError, 'not_found');
     });
+
+    test('a failed message is not a failed action', () async {
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      final row = await alice.engine.chats.sendText(chat.id, 'plain');
+      peers.server.failNext(Routes.sendMessage, code: ErrorCode.forbidden);
+      await alice.engine.drainOutbox();
+      expect(await statusOf(row), MessageStatus.failed);
+      expect(await alice.engine.chats.failedActions(chat.id), isEmpty);
+    });
+  });
+
+  group('actions', () {
+    test('a delete for everyone that fails is shown on its message and can be '
+        'retried; the message\'s own status does not change', () async {
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      final row = await alice.engine.chats.sendText(chat.id, 'delete me');
+      await alice.engine.drainOutbox();
+      await bob.sync();
+
+      peers.server.failNext(Routes.sendMessage, code: ErrorCode.forbidden);
+      await alice.engine.chats.deleteForEveryone(row.localRowid);
+      await alice.engine.drainOutbox();
+
+      final failed = await alice.engine.chats.failedActions(chat.id);
+      expect(failed, hasLength(1));
+      expect(failed.single.targetRowid, row.localRowid);
+      expect(failed.single.action, 'delete');
+      expect(failed.single.errorCode, 'forbidden');
+      // The action names its target in the payload, never as the op's
+      // message row: that one means "this op delivers this message".
+      final op = await alice.db.outboxDao.byId(failed.single.opId);
+      expect(op!.state, OutboxState.failed);
+      expect(op.messageRowid, isNull);
+      expect(
+        await statusOf(row),
+        MessageStatus.sent,
+        reason: 'the local delete already applied; only its send failed',
+      );
+
+      await alice.engine.chats.retryAction(failed.single.opId);
+      expect(await alice.engine.chats.failedActions(chat.id), isEmpty);
+      await alice.engine.drainOutbox();
+      await bob.sync();
+      expect((await bob.messages(alice)).single.deletedAt, isNotNull);
+    });
+
+    test('a new attempt at the same action clears its old failure', () async {
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      final row = await alice.engine.chats.sendText(chat.id, 'v1');
+      await alice.engine.drainOutbox();
+
+      peers.server.failNext(Routes.sendMessage, code: ErrorCode.forbidden);
+      await alice.engine.chats.edit(row.localRowid, 'v2');
+      await alice.engine.drainOutbox();
+      final failed = await alice.engine.chats.failedActions(chat.id);
+      expect(failed.single.action, 'edit');
+
+      await alice.engine.chats.edit(row.localRowid, 'v3');
+      expect(
+        await alice.engine.chats.failedActions(chat.id),
+        isEmpty,
+        reason: 'the second edit replaces the failed one',
+      );
+      expect(await alice.db.outboxDao.byId(failed.single.opId), isNull);
+
+      await alice.engine.drainOutbox();
+      await bob.sync();
+      expect(await bob.texts(alice), ['v3']);
+    });
   });
 
   group('ordering', () {

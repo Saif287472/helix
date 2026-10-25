@@ -212,8 +212,29 @@ class OutboxDao extends DatabaseAccessor<HelixDb> with _$OutboxDaoMixin {
     outboxOps,
   )..where((o) => o.messageRowid.equals(messageRowid))).get();
 
+  /// Every op of a chat, newest first: the failed actions among them are
+  /// what the chat shows a retry for (their target is in the payload, so
+  /// they cannot be looked up by message).
+  Future<List<OutboxOpRow>> forConversation(String conversationId) =>
+      (select(outboxOps)
+            ..where((o) => o.conversationId.equals(conversationId))
+            ..orderBy([(o) => OrderingTerm.desc(o.id)]))
+          .get();
+
+  /// [forConversation], live.
+  Stream<List<OutboxOpRow>> watchForConversation(String conversationId) =>
+      (select(outboxOps)
+            ..where((o) => o.conversationId.equals(conversationId))
+            ..orderBy([(o) => OrderingTerm.desc(o.id)]))
+          .watch();
+
   /// The op was sent: it leaves the queue.
   Future<void> complete(int id) =>
+      (delete(outboxOps)..where((o) => o.id.equals(id))).go();
+
+  /// Drops a failed op that no longer needs sending (an action the person
+  /// has redone since).
+  Future<void> discard(int id) =>
       (delete(outboxOps)..where((o) => o.id.equals(id))).go();
 
   /// The attempt failed and will be retried at [nextAttemptAt]. [errorCode]

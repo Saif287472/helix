@@ -26,7 +26,7 @@ export 'src/config.dart' show EngineConfig;
 export 'src/engine.dart' show Engine, HardWipe;
 export 'src/errors.dart';
 export 'src/events.dart';
-export 'src/features/chats_service.dart' show ChatsService;
+export 'src/features/chats_service.dart' show ChatsService, FailedAction;
 export 'src/features/people_service.dart'
     show PeopleService, PersonNaming, PhoneBookSyncResult;
 export 'src/features/phone_book.dart';

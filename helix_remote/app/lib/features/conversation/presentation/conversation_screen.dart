@@ -535,6 +535,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
           final rowid = _rowid(id);
           if (rowid != null) unawaited(_actions.retry(rowid));
         },
+        onRetryAction: (id) {
+          final rowid = _rowid(id);
+          if (rowid != null) unawaited(_actions.retryActions(rowid));
+        },
         onRetryLoad: () {
           // Opening failed: open it again; loading failed: load it again.
           final args = _args;
