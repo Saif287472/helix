@@ -47,8 +47,30 @@ abstract final class MediaSettings {
     _ => autoDownloadDocuments,
   };
 
+  /// The kinds the Storage page counts, and "free up space" frees, as photos
+  /// and videos. One mapping for all three views (AUD-12m-4): [groupOf].
+  static const photoVideoKinds = {
+    'image',
+    'video',
+    'video_note',
+    'gif',
+    'sticker',
+  };
+
+  /// How the Storage page groups an attachment of [kind]: photos and videos,
+  /// voice notes, or files - which is also where a kind from a newer client
+  /// lands, so what is counted as a file is what "free up files" frees.
+  static MediaKindGroup groupOf(String kind) => photoVideoKinds.contains(kind)
+      ? MediaKindGroup.photoVideo
+      : kind == 'voice_note'
+      ? MediaKindGroup.voice
+      : MediaKindGroup.file;
+
   /// Whether an attachment of [size] bytes is fetched by itself under
   /// [limit].
   static bool allows(int limit, int size) =>
       limit == unlimited || (limit > 0 && size <= limit);
 }
+
+/// What the Storage page shows an attachment as ([MediaSettings.groupOf]).
+enum MediaKindGroup { photoVideo, voice, file }

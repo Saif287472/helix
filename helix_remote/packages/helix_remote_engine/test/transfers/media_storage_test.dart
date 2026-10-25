@@ -1,5 +1,6 @@
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
+import 'package:helix_remote_engine/src/transfers/media_settings.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
@@ -208,5 +209,66 @@ void main() {
       FreeKind.photosVideos,
     );
     expect((await bob.engine.media.storageUsage()).photosVideosBytes, 40000);
+  });
+
+  /// Media this account sent keeps the app's copy as the only file its bubble
+  /// has; once the server drops the object (30 days) it cannot be fetched
+  /// again, so the Storage page does not count it and "free up space" does
+  /// not delete it (AUD-12m-1).
+  test('sent media is neither counted nor freed', () async {
+    await alice.engine.media.sendMedia(chat, [
+      MediaInput.bytes(
+        bytes: patterned(12000, seed: 3),
+        kind: MediaItemKind.image,
+        mime: 'image/png',
+      ),
+    ]);
+    await alice.settle();
+    final sent = (await alice.attachments(
+      (await alice.messages(bob)).single,
+    )).single;
+    expect(sent.localPath, isNotNull);
+
+    expect((await alice.engine.media.storageUsage()).totalBytes, 0);
+    expect(await alice.engine.media.biggestChats(), isEmpty);
+    expect(
+      await alice.engine.media.freeChatSpace(chat, FreeKind.photosVideos),
+      0,
+    );
+    final after = (await alice.db.messagesDao.attachmentById(sent.id))!;
+    expect(after.transfer, AttachmentTransfer.ready);
+    expect(alice.blobs.bytesOf(after.localPath!), patterned(12000, seed: 3));
+  });
+
+  /// One mapping for the three views (AUD-12m-4): whatever the Storage page
+  /// counts as a file, `FreeKind.documents` frees - a kind from a newer client
+  /// included - and the totals and the per-chat list add up.
+  test('the page and the free action agree on every kind', () async {
+    final attachments = await receiveMedia();
+    // A kind this version has never heard of, downloaded here.
+    final stranger = attachments['document']!;
+    await bob.db.customStatement(
+      "UPDATE attachments SET kind = 'hologram' WHERE id = ?",
+      [stranger.id],
+    );
+    final usage = await bob.engine.media.storageUsage();
+    final chats = await bob.engine.media.biggestChats();
+    expect(usage.filesBytes, 9000);
+    expect(
+      usage.totalBytes - usage.voiceNoteBytes,
+      chats.fold<int>(0, (sum, c) => sum + c.totalBytes),
+    );
+
+    expect(
+      await bob.engine.media.freeChatSpace(
+        bob.chatWith(alice),
+        FreeKind.documents,
+      ),
+      9000,
+    );
+    expect((await bob.engine.media.storageUsage()).filesBytes, 0);
+    expect(MediaSettings.groupOf('video_note'), MediaKindGroup.photoVideo);
+    expect(MediaSettings.groupOf('voice_note'), MediaKindGroup.voice);
+    expect(MediaSettings.groupOf('hologram'), MediaKindGroup.file);
   });
 }

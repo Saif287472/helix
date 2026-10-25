@@ -5,6 +5,7 @@ import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/transfers/blob_store.dart';
 import 'package:helix_remote_engine/src/transfers/media_janitor.dart';
+import 'package:helix_remote_engine/src/transfers/media_settings.dart';
 import 'package:helix_remote_engine/src/transfers/media_storage.dart';
 import 'package:helix_remote_engine/src/transfers/outbound_media.dart';
 import 'package:helix_remote_engine/src/transfers/transfer_config.dart';
@@ -139,22 +140,31 @@ final class MediaService {
   Future<void> cancel(int attachmentId) async {
     final blobs = _store;
     final a = await _db.messagesDao.attachmentById(attachmentId);
-    final job = a == null ? null : await _db.transfersDao.byAttachment(a.id);
-    if (a == null || job == null) return;
-    if (job.kind == 'upload') {
+    final first = a == null ? null : await _db.transfersDao.byAttachment(a.id);
+    if (a == null || first == null) return;
+    if (first.kind == 'upload') {
       await cancelSend(a.messageRowid);
       return;
     }
-    await _db.transaction(() async {
+    // The decision is made inside the transaction, from what is there now: a
+    // download that finished since the read above is `ready` with its file
+    // and is not reset to "not downloaded" (AUD-12m-2).
+    final job = await _db.transaction(() async {
+      final job = await _db.transfersDao.byAttachment(a.id);
+      if (job == null || job.kind == 'upload') return null;
+      final now = await _db.messagesDao.attachmentById(a.id);
       await _db.transfersDao.remove(job.id);
-      if (a.transfer == AttachmentTransfer.downloading ||
-          a.transfer == AttachmentTransfer.failed) {
+      if (now != null &&
+          (now.transfer == AttachmentTransfer.downloading ||
+              now.transfer == AttachmentTransfer.failed)) {
         await _db.messagesDao.updateAttachment(
           a.id,
           transfer: AttachmentTransfer.remote,
         );
       }
+      return job;
     });
+    if (job == null) return;
     _cancelRunning(job.id);
     for (final path in await TransferFiles.allFor(blobs, job.id)) {
       await blobs.delete(path);
@@ -224,9 +234,6 @@ final class MediaService {
 
   // -------------------------------------------------------------- storage
 
-  static const _photoKinds = {'image', 'video', 'video_note', 'gif'};
-  static const _documentKinds = {'document', 'unknown'};
-
   /// What downloaded attachments take on this device, by kind: photos and
   /// videos, voice notes, and files. Read from the database; no file I/O.
   Future<MediaStorageUsage> storageUsage() async {
@@ -234,12 +241,13 @@ final class MediaService {
     var voice = 0;
     var files = 0;
     for (final row in await _db.messagesDao.storedMediaByKind()) {
-      if (_photoKinds.contains(row.kind)) {
-        photos += row.bytes;
-      } else if (row.kind == 'voice_note') {
-        voice += row.bytes;
-      } else {
-        files += row.bytes;
+      switch (MediaSettings.groupOf(row.kind)) {
+        case MediaKindGroup.photoVideo:
+          photos += row.bytes;
+        case MediaKindGroup.voice:
+          voice += row.bytes;
+        case MediaKindGroup.file:
+          files += row.bytes;
       }
     }
     return MediaStorageUsage(
@@ -258,16 +266,19 @@ final class MediaService {
       readyOnly: true,
     )) {
       final current = byChat[row.conversationId] ?? (photos: 0, files: 0);
-      if (_photoKinds.contains(row.kind)) {
-        byChat[row.conversationId] = (
-          photos: current.photos + row.bytes,
-          files: current.files,
-        );
-      } else if (_documentKinds.contains(row.kind)) {
-        byChat[row.conversationId] = (
-          photos: current.photos,
-          files: current.files + row.bytes,
-        );
+      switch (MediaSettings.groupOf(row.kind)) {
+        case MediaKindGroup.photoVideo:
+          byChat[row.conversationId] = (
+            photos: current.photos + row.bytes,
+            files: current.files,
+          );
+        case MediaKindGroup.file:
+          byChat[row.conversationId] = (
+            photos: current.photos,
+            files: current.files + row.bytes,
+          );
+        case MediaKindGroup.voice:
+          break;
       }
     }
     final chats =
@@ -294,13 +305,17 @@ final class MediaService {
   /// freed; a file that was already gone counts zero.
   Future<int> freeChatSpace(String conversationId, FreeKind kind) async {
     final blobs = _store;
-    final rows = await _db.messagesDao.detachLocalMedia(
-      conversationId,
-      kinds: switch (kind) {
-        FreeKind.photosVideos => _photoKinds,
-        FreeKind.documents => _documentKinds,
-      },
-    );
+    final rows = switch (kind) {
+      FreeKind.photosVideos => await _db.messagesDao.detachLocalMedia(
+        conversationId,
+        kinds: MediaSettings.photoVideoKinds,
+      ),
+      // Every kind `biggestChats` counts as a file, a newer client's too.
+      FreeKind.documents => await _db.messagesDao.detachLocalMedia(
+        conversationId,
+        excluding: {...MediaSettings.photoVideoKinds, 'voice_note'},
+      ),
+    };
     var freed = 0;
     for (final a in rows) {
       final path = a.localPath;

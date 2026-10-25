@@ -3124,6 +3124,39 @@ the migration and dump that go with it).
   the app and CLI get it from the packages, and the phone needs a new APK to
   see it. Tombstones start empty on upgrade, so deletions made before this
   build are not protected.
+- S7 (AUD-12m-1, -2, -3, -4) — the four media-service findings.
+  **12m-1:** `storedMediaByKind` (the Storage page and `biggestChats`) and
+  `detachLocalMedia` ("free up space") now carry `m.outgoing = 0`. The app's
+  copy of media this account sent is the only file its bubble has and cannot
+  be fetched again after the server's 30 days, so it is neither counted as
+  "downloaded" nor deleted. **12m-4:** one mapping,
+  [`MediaSettings.groupOf`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/transfers/media_settings.dart)
+  (photo/video, voice, file, with `photoVideoKinds`), read by `storageUsage`,
+  `biggestChats` and `freeChatSpace`; the two private kind sets are gone.
+  `detachLocalMedia` takes either `kinds` or `excluding`, and
+  `FreeKind.documents` frees every kind outside photo/video and voice, so a
+  kind from a newer client is freed with the files it is counted with (before,
+  it was counted and could not be freed). `sticker` joins photo/video, as
+  `forKind` already treated it. **12m-2:** `MediaService.cancel` re-reads the
+  job and the attachment inside its transaction and returns what it removed,
+  so a download that completed since the first read is not reset to "not
+  downloaded". **12m-3:** `retryFailed` lost its outer transaction; each
+  retry and enqueue is already transactional, so a long sweep no longer holds
+  the one connection against the worker's progress writes and one failing job
+  no longer undoes the rest.
+  Tests: `media_storage_test.dart` "sent media is neither counted nor freed"
+  and "the page and the free action agree on every kind" (a kind named
+  `hologram` is counted as a file and freed by `FreeKind.documents`; totals
+  equal the per-chat sum plus voice); both fail on the code before this step
+  (12000 counted; 59000 against 50000). `transfer_worker_test.dart` "cancelling
+  a download that already finished keeps its file" pins the finished case but
+  **passes on the old code too**: the race itself (a completion between
+  `cancel`'s read and its transaction) cannot be staged without a hook in the
+  runner, so 12m-2 and 12m-3 are fixed by construction and pinned, not proven
+  by a failing test. The 40,000-attachment test from S2 now uses an incoming
+  message. Gate: db **161 green**, engine **361 green** (358 before), server
+  `media_test.dart` 9 green on Postgres, analyze and format clean. No schema,
+  wire or server change; the phone needs a new APK to see it.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

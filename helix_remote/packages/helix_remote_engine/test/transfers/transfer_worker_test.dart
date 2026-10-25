@@ -787,6 +787,30 @@ void main() {
       expect(await receivedBytes(bob, alice), patterned(40000));
     });
 
+    test(
+      'cancelling a download that already finished keeps its file',
+      () async {
+        // The decision is made from what is there when the transaction runs, so
+        // a download that completed first stays ready (AUD-12m-2).
+        await start();
+        await sendDoc(patterned(8000));
+        await alice.settle();
+        await bob.settle();
+        await bob.engine.drainTransfers();
+        final received = (await bob.messages(alice)).single;
+        final att = (await bob.attachments(received)).single;
+        final before = (await bob.db.messagesDao.attachmentById(att.id))!;
+        expect(before.transfer, AttachmentTransfer.ready);
+
+        await bob.engine.media.cancel(att.id);
+
+        final after = (await bob.db.messagesDao.attachmentById(att.id))!;
+        expect(after.transfer, AttachmentTransfer.ready);
+        expect(after.localPath, before.localPath);
+        expect(await receivedBytes(bob, alice), patterned(8000));
+      },
+    );
+
     test('cancelling an upload by attachment cancels the send', () async {
       await start();
       final sent = await sendDoc(patterned(2000));

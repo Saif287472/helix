@@ -558,7 +558,10 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
 
   /// The bytes of downloaded attachments, grouped by chat and kind. Only a
   /// kept file counts ([AttachmentRow.localPath]); a thumbnail alone is not
-  /// the media. With [readyOnly], only completed transfers count.
+  /// the media. With [readyOnly], only completed transfers count. Media this
+  /// account sent is left out: the app's copy is the only file its bubble
+  /// owns, and it is not something "downloaded" that can be fetched again
+  /// (AUD-12m-1).
   Future<List<StoredMediaByKind>> storedMediaByKind({
     bool readyOnly = false,
   }) async {
@@ -567,7 +570,7 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
       'coalesce(sum(a.size), 0) AS bytes '
       'FROM attachments a '
       'JOIN messages m ON m.local_rowid = a.message_rowid '
-      'WHERE a.local_path IS NOT NULL'
+      'WHERE a.local_path IS NOT NULL AND m.outgoing = 0'
       '${readyOnly ? ' AND a.transfer = ?' : ''} '
       'GROUP BY m.conversation_id, a.kind',
       variables: [
@@ -585,15 +588,19 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     ];
   }
 
-  /// Marks the downloaded attachments of [conversationId] whose [kinds] were
-  /// asked for as `remote` and clears their file pointers, so the caller can
-  /// delete the files. Only completed transfers are touched. Returns the rows
-  /// as they were.
+  /// Marks the downloaded attachments of [conversationId] as `remote` and
+  /// clears their file pointers, so the caller can delete the files: those of
+  /// [kinds], or, when [kinds] is null, every kind except [excluding] (so a
+  /// kind from a newer client is freed with the files it is counted with).
+  /// Only completed transfers of incoming messages are touched: the copy of
+  /// media this account sent is the only one its bubble has (AUD-12m-1).
+  /// Returns the rows as they were.
   Future<List<AttachmentRow>> detachLocalMedia(
     String conversationId, {
-    required Set<String> kinds,
+    Set<String>? kinds,
+    Set<String> excluding = const {},
   }) => transaction(() async {
-    if (kinds.isEmpty) return const [];
+    if (kinds != null && kinds.isEmpty) return const [];
     final query =
         select(attachments).join([
           innerJoin(
@@ -602,7 +609,10 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
           ),
         ])..where(
           messages.conversationId.equals(conversationId) &
-              attachments.kind.isIn(kinds) &
+              messages.outgoing.equals(false) &
+              (kinds != null
+                  ? attachments.kind.isIn(kinds)
+                  : attachments.kind.isNotIn(excluding)) &
               attachments.transfer.equalsValue(AttachmentTransfer.ready) &
               attachments.localPath.isNotNull(),
         );

@@ -22,8 +22,11 @@ final class TransfersService {
   /// How many transfers are queued or running.
   Future<int> pendingCount() async => (await _db.transfersDao.pending()).length;
 
-  /// Queues every failed transfer again. Returns how many.
-  Future<int> retryFailed() => _db.transaction(() async {
+  /// Queues every failed transfer again. Returns how many. Each retry is its
+  /// own transaction, not one around the lot: a long sweep would hold the one
+  /// database connection against the workers' progress writes, and one
+  /// failing job would undo all the others (AUD-12m-3).
+  Future<int> retryFailed() async {
     var count = 0;
     for (final job in await _db.transfersDao.live()) {
       if (job.state != TransferState.failed) continue;
@@ -53,7 +56,7 @@ final class TransfersService {
       count++;
     }
     return count;
-  });
+  }
 
   /// Runs everything that is due and waits until it is done (jobs backing
   /// off stay queued). For headless hosts and tests; a running worker does

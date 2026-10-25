@@ -478,8 +478,8 @@ void main() {
         MessagesCompanion.insert(
           messageId: 'bulk',
           conversationId: chat,
-          sender: 'me',
-          outgoing: true,
+          sender: 'bob',
+          outgoing: false,
           sortKey: SortKey.of(at(1), 'bulk'),
           sentAt: at(1),
           receivedAt: at(1),
