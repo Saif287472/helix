@@ -313,7 +313,13 @@ account's limit", 21 s), the same `hardening_db_test.dart` send limit (12 s) and
 the same `test/modules/messaging_test.dart` blocked-send case - which there also
 failed twice as its whole file, and was green in 5 s when run by name with
 nothing else on the machine, so the refill of its own token bucket is the cause
-rather than anything in the file.
+rather than anything in the file. Seen 2026-10-25 in the B13 S6 gate, and no
+longer only under load: `test/client/engine/messaging_test.dart` ("two engines
+talking at once never corrupt a session") failed 4 of 4 runs **alone** at the
+step's code and 2 of 3 alone in a clean worktree at `f43f7a1` (before any B13
+S2-S6 change), always the same shape - one device's own outgoing rows out of
+order (`a8` before `a7`) when 25 sends start at once, never an undecryptable
+row. It is the order check, not the session check, that fails.
 
 Add any failure you confirm is pre-existing here, with the date.
 

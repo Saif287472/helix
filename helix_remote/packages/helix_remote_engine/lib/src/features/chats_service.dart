@@ -476,11 +476,14 @@ final class ChatsService {
 
   /// Removes messages from this device only. A message still queued for
   /// sending is cancelled with it (AUD-12i-2): deleting is the only removal
-  /// offered on an unsent message, and it must not deliver it later.
+  /// offered on an unsent message, and it must not deliver it later. And it is
+  /// recorded as deleted here, so a backup merge - a restore, or the catch-up
+  /// inside an ordinary backup - does not bring it back (AUD-12q-1).
   Future<void> deleteForMe(Iterable<int> rowids) => _db.transaction(() async {
     final ids = rowids.toSet();
     if (ids.isEmpty) return;
     await _discardQueuedActionsAbout(ids);
+    await _db.tombstonesDao.recordMessages(ids);
     await _db.messagesDao.removeMessages(ids);
   });
 
@@ -601,16 +604,23 @@ final class ChatsService {
   Future<void> setDraft(String id, String? draft) =>
       _db.conversationsDao.setDraft(id, draft);
 
-  /// Removes every message of the chat from this device; the chat stays.
+  /// Removes every message of the chat from this device; the chat stays. The
+  /// chat is recorded as cleared here, so no backup merge fills it again
+  /// (AUD-12q-1); what arrives from now on is kept as usual.
   Future<void> clearChat(String id) async {
-    await _db.messagesDao.clearConversation(id);
+    await _db.transaction(() async {
+      await _db.tombstonesDao.recordConversation(id);
+      await _db.messagesDao.clearConversation(id);
+    });
     _onExpiryChanged();
   }
 
   /// Deletes the chat and its messages from this device; anything still
-  /// queued for it is cancelled with it.
+  /// queued for it is cancelled with it. Recorded as deleted here, so no
+  /// backup merge creates it again (AUD-12q-1).
   Future<void> deleteChat(String id) => _db.transaction(() async {
     await _db.outboxDao.cancelForConversation(id);
+    await _db.tombstonesDao.recordConversation(id);
     await _db.conversationsDao.deleteConversation(id);
   });
 

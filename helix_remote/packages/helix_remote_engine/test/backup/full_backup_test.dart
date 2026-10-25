@@ -101,6 +101,40 @@ void main() {
     expect(await historyDigest(second), await historyDigest(alice));
   });
 
+  test('restoring on the device that deleted brings nothing back', () async {
+    // AUD-12q-1: the full backup was made before the deletes, so it still
+    // holds every one of them; a restore here must not undo them.
+    const carol = 'cccccccc-0000-4000-8000-000000000002';
+    final chat = await alice.db.messagesDao.pageOlder(
+      directConversationId(bobId),
+      limit: 10,
+    );
+    final cleared = await addHistory(alice, carol, 2, prefix: 'carol');
+    await alice.backup.createFullBackup(recoverySecret: secret);
+    final deleted = chat.messages.first;
+    await alice.engine.chats.deleteForMe([deleted.localRowid]);
+    await alice.engine.chats.clearChat(directConversationId(carol));
+
+    final restored = await alice.backup.restoreFullBackup(
+      recoverySecret: secret,
+    );
+    expect(restored.result.added, 0);
+    expect(
+      await alice.db.messagesDao.find(
+        deleted.messageId,
+        sender: deleted.sender,
+      ),
+      isNull,
+    );
+    for (final row in cleared) {
+      expect(
+        await alice.db.messagesDao.find(row.messageId, sender: row.sender),
+        isNull,
+      );
+    }
+    expect(await HistoryStore(alice.db).messageCount(), 7);
+  });
+
   test('a weak recovery secret is refused before anything is sent', () async {
     final e = await failureOf(
       alice.backup.createFullBackup(recoverySecret: 'too short'),

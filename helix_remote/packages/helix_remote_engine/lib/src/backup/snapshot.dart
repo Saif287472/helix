@@ -43,6 +43,10 @@ final class ImportReport {
   /// Messages this device already had (merged, never overwritten).
   int messagesExisting = 0;
 
+  /// Messages this device deleted - for me, or in a chat it cleared or
+  /// deleted - and so left out (AUD-12q-1).
+  int messagesDeletedHere = 0;
+
   /// Records that did not parse or failed a sanity check (skipped).
   int invalidRecords = 0;
   int conversations = 0;
@@ -51,7 +55,7 @@ final class ImportReport {
   @override
   String toString() =>
       'ImportReport(added: $messagesAdded, existing: $messagesExisting, '
-      'invalid: $invalidRecords)';
+      'deleted here: $messagesDeletedHere, invalid: $invalidRecords)';
 }
 
 /// Reads the local database a page at a time into an archive (CRYPTO_V2.md
@@ -432,6 +436,7 @@ final class ImportSession {
 
   bool _headerSeen;
   final Set<String> _knownChats = {};
+  final Map<String, bool> _chatsDeletedHere = {};
 
   HelixDb get _db => _ctx.db;
 
@@ -617,10 +622,20 @@ final class ImportSession {
     );
   }
 
+  /// Whether this device cleared or deleted [chat] (AUD-12q-1), asked once per
+  /// chat and import.
+  Future<bool> _deletedHere(String chat) async => _chatsDeletedHere[chat] ??=
+      await _db.tombstonesDao.conversationDeleted(chat);
+
   Future<void> _conversation(JsonReader r) async {
     final id = _id(r, 'id');
     final chatKind = ConversationKind.values.asNameMap()[r.string('kind')];
     if (chatKind == null) throw ProtocolFormatException('conversation kind');
+    // A chat deleted here is not created again. One cleared here still
+    // exists, and its settings merge like any other chat's.
+    if (await _deletedHere(id) && await _db.conversationsDao.byId(id) == null) {
+      return;
+    }
     await HistoryStore(_db).mergeConversation(
       id: id,
       kind: chatKind,
@@ -682,6 +697,16 @@ final class ImportSession {
     final editedAt = r.optTime('edited');
     final payload = r.optString('payload');
 
+    // What this device deleted stays deleted (AUD-12q-1): another device's
+    // backup still holds it, and putting it back - an incoming one unread -
+    // would undo the person's choice, most often inside the catch-up of an
+    // ordinary nightly backup. Nothing of a chat cleared or deleted here comes
+    // back either, so a deleted chat is never created again from a message.
+    if (await _deletedHere(chat) ||
+        await _db.tombstonesDao.messageDeleted(id, author: from)) {
+      report.messagesDeletedHere++;
+      return;
+    }
     await _ensureChat(chat, sentAt);
     touched.add(chat);
     final existing = await _db.messagesDao.find(id, sender: from);

@@ -599,6 +599,129 @@ void main() {
     });
   });
 
+  /// "Delete for me", clear chat and delete chat used to leave no trace, so
+  /// any merge of another device's backup - which still holds those messages
+  /// - put them back, an incoming one unread. The usual way it happened was
+  /// not the restore button but the catch-up inside an ordinary backup that
+  /// finds the server a version ahead (AUD-12q-1).
+  group('what this device deleted stays deleted', () {
+    const carol = 'cccccccc-0000-4000-8000-000000000002';
+    const dave = 'dddddddd-0000-4000-8000-000000000003';
+
+    Future<MessageRow?> find(BackupPeer peer, MessageRow row) =>
+        peer.db.messagesDao.find(row.messageId, sender: row.sender);
+
+    test(
+      'through the catch-up inside a backup, and a restore after it',
+      () async {
+        final shared = await addHistory(alice, bobId, 6, prefix: 'shared');
+        final toClear = await addHistory(alice, carol, 3, prefix: 'carol');
+        final toDelete = await addHistory(alice, dave, 3, prefix: 'dave');
+        await alice.backup.backUpNow();
+        // The account's other device takes all of it and moves the server's
+        // backup a version past what this one knows.
+        final second = await world.link(alice, 'alice2');
+        await second.backup.restoreHistory();
+        await second.backup.backUpNow();
+        expect(await HistoryStore(second.db).messageCount(), 12);
+        expect(world.remote.stored!.version, 2);
+
+        // Here: one incoming and one outgoing message deleted for me, one chat
+        // cleared, one deleted.
+        await alice.engine.chats.deleteForMe([
+          shared[1].localRowid,
+          shared[2].localRowid,
+        ]);
+        await alice.engine.chats.clearChat(directConversationId(carol));
+        await alice.engine.chats.deleteChat(directConversationId(dave));
+        // There: a message deleted for everyone, which must still land here.
+        final gone = (await find(second, shared[3]))!;
+        await second.db.messagesDao.deleteForEveryone(
+          gone.localRowid,
+          deletedAt: world.clock.now,
+        );
+        await second.backup.backUpNow();
+
+        // This device's next backup is refused as out of date, merges the
+        // server's, and uploads on top of it.
+        expect(world.remote.stored!.version, 3);
+        final result = await alice.backup.backUpNow();
+        expect(result.version, 4, reason: 'it knew 1, merged 3, wrote 4');
+
+        Future<void> expectStillDeleted() async {
+          expect(await find(alice, shared[1]), isNull);
+          expect(await find(alice, shared[2]), isNull);
+          for (final kept in [shared[0], shared[4], shared[5]]) {
+            expect(await find(alice, kept), isNotNull);
+          }
+          expect(
+            (await find(alice, shared[3]))!.deletedAt,
+            isNotNull,
+            reason: 'the other device\'s delete for everyone still lands',
+          );
+          final cleared = (await alice.db.conversationsDao.byId(
+            directConversationId(carol),
+          ))!;
+          expect(
+            (await alice.db.messagesDao.pageOlder(
+              cleared.id,
+              limit: 10,
+            )).messages,
+            isEmpty,
+          );
+          expect(cleared.unreadCount, 0);
+          expect(
+            await alice.db.conversationsDao.byId(directConversationId(dave)),
+            isNull,
+          );
+          expect(await HistoryStore(alice.db).messageCount(), 4);
+        }
+
+        await expectStillDeleted();
+        // And this device's own upload does not carry them again.
+        final records = await openStored(alice);
+        final ids = {
+          for (final r in records)
+            if (r.string('t') == 'msg') r.string('id'),
+        };
+        for (final row in [shared[1], shared[2], ...toClear, ...toDelete]) {
+          expect(ids, isNot(contains(row.messageId)));
+        }
+        expect([
+          for (final r in records)
+            if (r.string('t') == 'conv') r.string('id'),
+        ], isNot(contains(directConversationId(dave))));
+
+        // Restoring by hand afterwards changes nothing either.
+        final back = await alice.backup.restoreHistory();
+        expect(back.added, 0);
+        await expectStillDeleted();
+      },
+    );
+
+    test('what arrives in a cleared chat after the clear is kept', () async {
+      await addHistory(alice, carol, 3, prefix: 'before');
+      await alice.backup.backUpNow();
+      await alice.engine.chats.clearChat(directConversationId(carol));
+      final after = await addHistory(
+        alice,
+        carol,
+        2,
+        prefix: 'after',
+        from: DateTime.utc(2026, 4, 1),
+      );
+      await alice.backup.restoreHistory();
+      final left = (await alice.db.messagesDao.pageOlder(
+        directConversationId(carol),
+        limit: 10,
+      )).messages;
+      expect(
+        {for (final m in left) m.messageId},
+        {for (final m in after) m.messageId},
+      );
+    });
+  });
+
   group('size', () {
     test('a large history is paged, framed and restored whole', () async {
       final big = BackupWorld(pageSize: 7, frameBytes: 2000);

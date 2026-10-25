@@ -236,6 +236,18 @@ messages. An in-flight op is left alone - its request may already be on the
 wire. Deleting a pending message is therefore a cancel, never a delayed send
 (AUD-12i-2).
 
+The same three user deletes - not the disappearing sweep - also record what
+they removed in `delete_tombstones` (`TombstonesDao`, in the same
+transaction): `deleteForMe` each message by id and author, `clearChat` and
+`deleteChat` the whole chat. The backup importer (`ImportSession`) skips a
+tombstoned message and every message of a cleared or deleted chat, and does
+not create a deleted chat again from its `conv` record, so neither a restore
+nor the catch-up inside an ordinary backup undoes the person's choice
+(AUD-12q-1); they count as `ImportReport.messagesDeletedHere`. A delete for
+everyone made on another device still lands, and so does whatever arrives
+live in a cleared chat. Tombstones are this device's own: never exported,
+wiped on sign-out, so a new device recovers everything.
+
 Every visible send, action, edit, delete and `read` receipt also goes to this
 account's own other devices (they get the same content; `conv.to` names the
 peer). `delivered` receipts go to the author only. Retried sends re-encrypt

@@ -17,6 +17,7 @@ import 'package:helix_remote_db/src/daos/messages_dao.dart';
 import 'package:helix_remote_db/src/daos/outbox_dao.dart';
 import 'package:helix_remote_db/src/daos/people_dao.dart';
 import 'package:helix_remote_db/src/daos/settings_dao.dart';
+import 'package:helix_remote_db/src/daos/tombstones_dao.dart';
 import 'package:helix_remote_db/src/daos/transfers_dao.dart';
 import 'package:helix_remote_db/src/database.steps.dart';
 import 'package:helix_remote_db/src/opening.dart';
@@ -82,6 +83,7 @@ part 'database.g.dart';
     GroupsDao,
     TransfersDao,
     CallsDao,
+    TombstonesDao,
   ],
 )
 class HelixDb extends _$HelixDb {

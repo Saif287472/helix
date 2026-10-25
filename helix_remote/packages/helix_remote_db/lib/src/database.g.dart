@@ -15651,6 +15651,7 @@ abstract class _$HelixDb extends GeneratedDatabase {
   late final GroupsDao groupsDao = GroupsDao(this as HelixDb);
   late final TransfersDao transfersDao = TransfersDao(this as HelixDb);
   late final CallsDao callsDao = CallsDao(this as HelixDb);
+  late final TombstonesDao tombstonesDao = TombstonesDao(this as HelixDb);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();

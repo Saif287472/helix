@@ -249,8 +249,8 @@ for a migration:
   worker's writes go `WHERE id = ? AND version = ?`, so a job that became
   something else while the worker held it cannot be completed by that worker.
   Rows written before schema 5 sit at 0 and the first claim moves them to 1.
-  The column is here now; the DAO starts compare-and-setting it in this
-  batch's AUD-10-3 step.
+  `TransfersDao` compare-and-sets it since this batch's AUD-10-3 step (the
+  rule is under "Rules" above).
 - **`transfer_jobs_purpose`** is a unique index on `purpose`. A standalone job
   (a group avatar, a backup blob) is the only one of its kind, so two racing
   calls cannot both queue it. Attachment jobs leave `purpose` null, and SQLite
@@ -271,6 +271,14 @@ for a migration:
   delete-chat paths, not inside `MessagesDao.removeMessages` — that is shared
   with the disappearing-message sweep and with replacing a placeholder row,
   neither of which is a user choosing to delete something.
+  `TombstonesDao` (AUD-12q-1 step) is the only access: `recordMessages`
+  (from the rows themselves, one `INSERT … SELECT` per run of
+  `statementIdLimit`, before they are removed), `recordConversation` (a
+  cleared or deleted chat, one row), `messageDeleted` and
+  `conversationDeleted` for the importer. A conversation row is the whole
+  chat as of the clear or delete: the importer brings back nothing of that
+  chat, and does not create a deleted one again, while what arrives live
+  afterwards is kept like any message.
 
 `test/drift/helix/migration_test.dart` proves the step keeps every job at
 revision 0, refuses a second row for a purpose, and starts the tombstone table

@@ -3061,6 +3061,69 @@ the migration and dump that go with it).
   Gate: db **157 green** (154 before), `dart analyze` and `dart format` clean.
   Nothing outside the db package calls it, so no other suite is affected. No
   schema, wire or server change.
+- S6 (AUD-12q-1, P2) — "delete for me", clear chat and delete chat removed
+  rows and left no trace, so merging another device's backup - which still
+  held them - put them back, an incoming message unread. The usual trigger was
+  not the restore button but the catch-up inside an ordinary backup that
+  finds the server a version ahead. Reproduced before the fix: in the new
+  catch-up test the deleted incoming message is back as `received`, and the
+  full-restore test re-adds 3 messages.
+  **What changed:** a new
+  [`TombstonesDao`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/daos/tombstones_dao.dart)
+  (registered in `HelixDb.daos`, exported; codegen regenerated, no schema
+  change) over S1's table: `recordMessages(rowids)` reads each row's wire id
+  and author with one `INSERT OR IGNORE … SELECT` per run of
+  `statementIdLimit`, `recordConversation(id)` records a whole chat, and
+  `messageDeleted`/`conversationDeleted` answer the importer by primary key.
+  [`ChatsService`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/features/chats_service.dart)'s
+  `deleteForMe` records the messages before removing them, and `clearChat`
+  (now in a transaction) and `deleteChat` record the chat, each in the same
+  transaction as the delete. [`ImportSession`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/backup/snapshot.dart)
+  skips a `msg` that is tombstoned or whose chat is (asked once per chat and
+  import), before `_ensureChat`, so a deleted chat is never created again from
+  a message; a `conv` record of a deleted chat that does not exist here is
+  skipped, while a cleared chat's settings still merge. Skipped messages count
+  in the new `ImportReport.messagesDeletedHere`.
+  **One deliberate choice:** a cleared or deleted chat is one conversation
+  tombstone, not a tombstone per message. Per message would miss history this
+  device never held (a device linked later, then cleared; another device's
+  backup still has the older messages and would fill the cleared chat with
+  them). The cost of the whole-chat rule is that a later merge brings nothing
+  of that chat, even a message this device somehow lacks from after the
+  clear; every live message still arrives normally, and this device receives
+  every message sent after it was linked, so in practice that is nothing.
+  Tests: engine
+  [`history_backup_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/test/backup/history_backup_test.dart)
+  "what this device deleted stays deleted": the account's second device takes
+  the history and moves the server to v2; this device deletes one incoming and
+  one outgoing message for me, clears one chat and deletes another; the second
+  device deletes a third message for everyone and uploads v3; this device's
+  next `backUpNow` knows v1, merges v3 and writes v4 - and afterwards the two
+  messages are gone, the cleared chat is empty with no unread, the deleted
+  chat does not exist, the delete for everyone **did** land, its own v4 holds
+  none of the deleted messages or the deleted chat, and a manual
+  `restoreHistory` afterwards adds nothing. A second test keeps what arrives
+  in a cleared chat after the clear. `full_backup_test.dart` "restoring on the
+  device that deleted brings nothing back" covers `restoreFullBackup`. db
+  [`tombstones_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/test/tombstones_test.dart):
+  a message is recorded by id and author (another author's same id is not it),
+  records are idempotent, a chat is recorded once, 1,200 rows past one
+  statement's parameters are recorded whole, and a sign-out forgets them. The
+  three engine tests fail on the importer before this step.
+  Gate: db **161 green** (157 before), engine **358 green** (355 before), cli
+  **13 green**, and on Postgres the server's engine client tests
+  `backup_test` and `restore_test` green. `messaging_test.dart` ("two engines
+  talking at once never corrupt a session") failed, and failed again alone
+  4 of 4 times; it also fails 2 of 3 alone in a clean worktree at `f43f7a1`,
+  before any B13 S2-S6 change, with the same shape (one device's own outgoing
+  rows out of order when 25 sends start at once). Pre-existing, unrelated
+  (nothing in S2-S6 touches sending), and recorded in `AGENTS.md`; it is no
+  longer only a load flake and deserves its own look. `dart analyze` clean on
+  db and engine, `flutter analyze` clean on the workspace, `dart format`
+  clean, `tool/codegen.dart --check` clean. No schema, wire or server change;
+  the app and CLI get it from the packages, and the phone needs a new APK to
+  see it. Tombstones start empty on upgrade, so deletions made before this
+  build are not protected.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**
