@@ -58,6 +58,13 @@ expiring an object gives both back.
   a store that cannot finish leaves the rest to the sweep (AUD-5-2).
   `media.sweep_orphans` (weekly) lists the store
   (`ObjectStorage.list`) and deletes blobs under a kind's prefix whose id has
-  no row and that are older than a day (`orphanGrace`).
+  no row and that are older than a day (`orphanGrace`). `media.reconcile`
+  (weekly, `reconcileBudget` 4 minutes) walks the distinct owners in keyset
+  batches and, for an owner `IdentityApi.account` does not know, deletes its
+  objects blob-first and drops its usage row: `persistent` objects never
+  expire and a dead row keeps its blob from looking like an orphan, so this
+  is the backstop for a purge job that dead-lettered (AUD-5-1). It also
+  reports `account_usage` rows that disagree with the stored objects
+  (`quotaDrift`); it never corrects them silently.
 - **What the server never learns:** which message uses an object
   (there is no reference tracking, unlike v1), or what is in it.

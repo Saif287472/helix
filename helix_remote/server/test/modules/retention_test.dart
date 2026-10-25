@@ -95,28 +95,36 @@ void main() {
     String objects() => '${h.env.platform.schemas.of('media')}.objects';
     String usage() => '${h.env.platform.schemas.of('media')}.account_usage';
 
-    Future<({int bytes, int objects})?> usageRow(String account) async {
+    Future<({int bytes, int objects})?> usageRow(
+      String account, {
+      String kind = 'attachment',
+    }) async {
       final row = await h.env.platform.db.queryOne(
         'SELECT bytes, objects FROM ${usage()} '
-        "WHERE account_id = @a:uuid AND kind = 'attachment'",
-        {'a': account},
+        'WHERE account_id = @a:uuid AND kind = @k:text',
+        {'a': account, 'k': kind},
       );
       return row == null
           ? null
           : (bytes: row.integer('bytes'), objects: row.integer('objects'));
     }
 
-    Future<String> upload(List<int> bytes) async {
+    Future<String> upload(
+      List<int> bytes, {
+      TestDevice? owner,
+      MediaKind kind = MediaKind.attachment,
+    }) async {
+      final device = owner ?? alice;
       final r = await h.api.call(
         Routes.createUpload,
-        bearer: alice.bearer,
-        body: CreateUploadRequest(size: bytes.length).toJson(),
+        bearer: device.bearer,
+        body: CreateUploadRequest(size: bytes.length, kind: kind).toJson(),
       );
       final target = UploadTarget.fromJson(r.json);
       final put = await http.put(
         h.server.baseUri.resolve(target.url),
         headers: {
-          'authorization': 'Bearer ${alice.bearer}',
+          'authorization': 'Bearer ${device.bearer}',
           'upload-offset': '0',
           'content-type': 'application/octet-stream',
         },
@@ -133,8 +141,8 @@ void main() {
         ) !=
         null;
 
-    Future<bool> blobExists(String id) async =>
-        await blobs.size('attachment/$id') != null;
+    Future<bool> blobExists(String id, {String kind = 'attachment'}) async =>
+        await blobs.size('$kind/$id') != null;
 
     test('an expired blob that cannot be deleted keeps its row, and goes on '
         'the next run', () async {
@@ -242,6 +250,60 @@ void main() {
       expect(await blobExists(ids.last), isFalse);
       expect(await usageRow(alice.accountId), isNull);
     });
+
+    test('the weekly reconcile deletes the media of an account whose purge '
+        'job died', () async {
+      await h.env.platform.jobs.stop();
+      await h.env.platform.periodic.stop();
+      final bob = await h.registerGlobal(bobNumber);
+      final gone = await upload([1, 2, 3], kind: MediaKind.persistent);
+      final kept = await upload([4, 5], owner: bob, kind: MediaKind.persistent);
+      await h.env.platform.db.tx(
+        (tx) => h.identity.api.deleteAccount(tx, alice.accountId),
+      );
+      await h.env.platform.db.execute(
+        'UPDATE ${h.env.platform.schemas.platform}.jobs '
+        "SET status = 'dead' WHERE kind = @k:text",
+        {'k': MediaModule.purgeJob},
+      );
+      expect(await rowExists(gone), isTrue, reason: 'the purge job never ran');
+      expect(await usageRow(alice.accountId, kind: 'persistent'), isNotNull);
+
+      final result = await media().reconcile();
+
+      expect(result.deleted, 1);
+      expect(await rowExists(gone), isFalse);
+      expect(await blobExists(gone, kind: 'persistent'), isFalse);
+      expect(await usageRow(alice.accountId, kind: 'persistent'), isNull);
+      expect(
+        await rowExists(kept),
+        isTrue,
+        reason: 'a live account is not touched',
+      );
+      expect(await blobExists(kept, kind: 'persistent'), isTrue);
+      expect(result.drift, 0);
+    });
+
+    test(
+      'the reconcile reports quota drift instead of correcting it',
+      () async {
+        final id = await upload([1, 2, 3]);
+        await h.env.platform.db.execute(
+          'UPDATE ${usage()} SET bytes = bytes + 10 WHERE account_id = @a:uuid',
+          {'a': alice.accountId},
+        );
+
+        final result = await media().reconcile();
+
+        expect(result.drift, 1);
+        expect(await rowExists(id), isTrue);
+        expect(
+          (await usageRow(alice.accountId))!.bytes,
+          13,
+          reason: 'reported, not silently overwritten',
+        );
+      },
+    );
 
     test('the weekly sweep deletes blobs with no row once they are a day '
         'old', () async {

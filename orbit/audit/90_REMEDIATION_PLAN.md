@@ -1532,6 +1532,30 @@ constraint (expand → backfill → migrate → contract). No wire change.
   **6 green**; `dart analyze` clean on the changed files. No schema change,
   no wire change, no app change; no APK needed. Docs: backup and media
   MODULE.md.
+- S5 (AUD-5-1) — account deletion had exactly one path to its media bytes:
+  the `media.purge_account` job. If it dead-lettered, timed out or the store
+  stayed unreachable through its 8 attempts, the rows stayed for ever:
+  `persistent` objects never expire and a live row keeps its blob from
+  looking like an orphan. Nothing tied objects to an existing account.
+  **What changed:** a weekly `media.reconcile` walks the distinct owners in
+  keyset batches of 200 under `reconcileBudget` (4 minutes) and, for an
+  owner `IdentityApi.account` does not know, deletes its objects blob-first
+  and drops its usage row. Existence is asked through the identity facade,
+  never by SQL into another schema; a live account is not touched. The
+  purge job now shares the same batched deletion helper, and the reconcile
+  also reports `account_usage` rows that disagree with the stored objects
+  (`quotaDrift`) instead of silently correcting them.
+  Tests: `test/modules/retention_test.dart` "the weekly reconcile deletes
+  the media of an account whose purge job died" (the job runner and
+  scheduler are stopped, the account is deleted through the identity
+  facade, the purge row is marked dead: the reconcile removes the object,
+  its blob and its usage row and leaves a second, live account's media
+  alone) and "the reconcile reports quota drift instead of correcting it".
+  Gate: retention **12 green**, media/backup **14 green**, server **5
+  green** in the same run; `dart analyze` clean on the changed files. No
+  schema change, no wire change, no app change; no APK needed. Docs: media
+  MODULE.md, and `media.reconcile` added to the periodic-jobs invariant in
+  `test/server_test.dart`.
 
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**

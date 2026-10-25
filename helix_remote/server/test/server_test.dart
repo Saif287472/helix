@@ -103,6 +103,7 @@ void main() {
           'messaging.expire',
           'people.purge_reports',
           'media.sweep_orphans',
+          'media.reconcile',
         ]),
         reason: 'this checks the whole server, not a fixture',
       );

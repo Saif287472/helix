@@ -13,7 +13,7 @@ import 'package:shelf/shelf.dart';
 /// Encrypted media objects (CRYPTO_V2.md §12). Random ids, no link to the
 /// messages that use them, expiry instead of reference counting.
 final class MediaModule extends ModuleBase implements ProvidesAccountExport {
-  MediaModule(super.context, {required IdentityApi identity}) {
+  MediaModule(super.context, {required this.identity}) {
     api = _MediaFacade(this);
     identity.onAccountDeleted(
       (tx, accountId) =>
@@ -29,6 +29,10 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   }
 
   late final MediaApi api;
+
+  /// Only for the reconcile's "does this owner still exist" question; media
+  /// never otherwise looks at identity (ADR-026).
+  final IdentityApi identity;
 
   static const purgeJob = 'media.purge_account';
 
@@ -70,6 +74,13 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   /// (AUD-5-2). A normal backup names a handful; the cap is for a
   /// pathological one.
   Duration deleteBudget = const Duration(seconds: 10);
+
+  /// How many distinct owners one reconcile batch examines.
+  static const reconcileAccounts = 200;
+
+  /// The reconcile's budget: below the periodic scheduler's timeout, so a
+  /// run stops cleanly and the next one continues (AUD-5-1).
+  Duration reconcileBudget = const Duration(minutes: 4);
 
   /// Where the sweeps read their deadline from. Null is the module's clock;
   /// a test replaces it to move time without sleeping.
@@ -171,6 +182,12 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
       'media.sweep_orphans',
       const Duration(days: 7),
       () => sweepOrphans(),
+    ),
+    PeriodicJob(
+      'media.reconcile',
+      const Duration(days: 7),
+      reconcile,
+      timeout: const Duration(minutes: 5),
     ),
   ];
 
@@ -512,30 +529,17 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
   /// is committed, and the usage row stays for the rest (AUD-5-3).
   Future<void> _purgeAccount(Map<String, Object?> payload) async {
     final account = payload['account']! as String;
-    final deadline = _sweepNow().add(purgeBudget);
-    var after = _noId;
-    while (true) {
-      final rows = await context.db.query(
-        'SELECT id, owner_account, kind, size FROM $s.objects '
-        'WHERE owner_account = @a:uuid AND id > @after:uuid ORDER BY id '
-        'LIMIT $sweepBatch',
-        {'a': account, 'after': after},
+    final result = await _deleteAccountObjects(
+      account,
+      deadline: _sweepNow().add(purgeBudget),
+    );
+    if (!result.done) {
+      throw StateError(
+        'media purge of $account stopped at its budget with rows left',
       );
-      if (rows.isEmpty) break;
-      var failed = 0;
-      for (final r in rows) {
-        if (_sweepNow().isAfter(deadline)) {
-          throw StateError(
-            'media purge of $account stopped at its budget with rows left',
-          );
-        }
-        if (!await _deleteObject(r)) failed++;
-      }
-      if (failed > 0) {
-        throw StateError('$failed media blobs could not be deleted');
-      }
-      after = rows.last.string('id');
-      if (rows.length < sweepBatch) break;
+    }
+    if (result.failed > 0) {
+      throw StateError('${result.failed} media blobs could not be deleted');
     }
     // Every row is gone, so the account has no usage left to count. A
     // deletion that stopped on a blob failure keeps its rows (and counter)
@@ -545,6 +549,116 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
       {'a': account},
     );
   }
+
+  /// Deletes every object row of [account] in keyset batches, blob before
+  /// row, until the rows run out or [deadline] passes. A blob that cannot
+  /// be deleted keeps its row and is counted in [failed].
+  Future<({int deleted, int failed, bool done})> _deleteAccountObjects(
+    String account, {
+    DateTime? deadline,
+  }) async {
+    var after = _noId;
+    var deleted = 0;
+    var failed = 0;
+    while (true) {
+      final rows = await context.db.query(
+        'SELECT id, owner_account, kind, size FROM $s.objects '
+        'WHERE owner_account = @a:uuid AND id > @after:uuid ORDER BY id '
+        'LIMIT $sweepBatch',
+        {'a': account, 'after': after},
+      );
+      if (rows.isEmpty) {
+        return (deleted: deleted, failed: failed, done: true);
+      }
+      for (final r in rows) {
+        if (deadline != null && _sweepNow().isAfter(deadline)) {
+          return (deleted: deleted, failed: failed, done: false);
+        }
+        if (await _deleteObject(r)) {
+          deleted++;
+        } else {
+          failed++;
+        }
+      }
+      after = rows.last.string('id');
+      if (rows.length < sweepBatch) {
+        return (deleted: deleted, failed: failed, done: true);
+      }
+    }
+  }
+
+  /// Deletes the media of accounts that no longer exist, blob before row,
+  /// and reports quota counters that disagree with the rows. Weekly and
+  /// bounded: the backstop for an account purge that dead-lettered or was
+  /// killed with objects left, since `persistent` rows never expire and a
+  /// dead row still keeps its blob from looking like an orphan (AUD-5-1).
+  /// Live accounts are never touched - existence is asked through
+  /// [IdentityApi], not SQL. Returns what it examined and found (public for
+  /// tests).
+  Future<({int accounts, int deleted, int failed, int drift})>
+  reconcile() async {
+    final deadline = _sweepNow().add(reconcileBudget);
+    var after = _noId;
+    var accounts = 0;
+    var deleted = 0;
+    var failed = 0;
+    var stopped = false;
+    while (!stopped) {
+      final owners = await context.db.query(
+        'SELECT DISTINCT owner_account FROM $s.objects '
+        'WHERE owner_account > @after:uuid ORDER BY owner_account '
+        'LIMIT $reconcileAccounts',
+        {'after': after},
+      );
+      if (owners.isEmpty) break;
+      for (final owner in owners) {
+        if (_sweepNow().isAfter(deadline)) {
+          stopped = true;
+          break;
+        }
+        final account = owner.string('owner_account');
+        accounts++;
+        if (await identity.account(context.db, account) != null) continue;
+        final result = await _deleteAccountObjects(account, deadline: deadline);
+        deleted += result.deleted;
+        failed += result.failed;
+        if (!result.done) {
+          stopped = true;
+          break;
+        }
+        // No account, no quota: its counters have nothing left to describe.
+        await context.db.execute(
+          'DELETE FROM $s.account_usage WHERE account_id = @a:uuid',
+          {'a': account},
+        );
+      }
+      after = owners.last.string('owner_account');
+      if (owners.length < reconcileAccounts) break;
+    }
+    final drift = await quotaDrift();
+    if (deleted > 0 || failed > 0 || drift > 0) {
+      log.info('media_reconciled', {
+        'accounts': accounts,
+        'deleted': deleted,
+        'failed': failed,
+        'drift': drift,
+      });
+    }
+    return (accounts: accounts, deleted: deleted, failed: failed, drift: drift);
+  }
+
+  /// Counter rows whose bytes or object count disagree with the objects
+  /// actually stored. Reported, never silently corrected: a disagreement is
+  /// a bug or a crash between a reservation and its release, and
+  /// overwriting it would hide that.
+  Future<int> quotaDrift() async => (await context.db.queryOne('''
+SELECT count(*)::int8 AS n FROM $s.account_usage u
+LEFT JOIN (
+  SELECT owner_account, kind, sum(size)::bigint AS bytes, count(*)::bigint AS objects
+  FROM $s.objects GROUP BY owner_account, kind
+) o ON o.owner_account = u.account_id AND o.kind = u.kind
+WHERE u.bytes <> coalesce(o.bytes, 0) OR u.objects <> coalesce(o.objects, 0)
+'''))!.integer('n');
 
   /// Deletes one object's blob, then its row. False (row kept) when the
   /// blob delete failed.
