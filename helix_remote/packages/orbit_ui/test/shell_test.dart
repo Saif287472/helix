@@ -299,6 +299,91 @@ void main() {
     });
   });
 
+  group('OrbitDockArea', () {
+    testWidgets('lifts its controls clear of the navigation bar', (
+      tester,
+    ) async {
+      // Three-button navigation: Android draws a 48px bar over the bottom of
+      // the window. The band still reaches the edge, so its fade has somewhere
+      // to go, but the dock and the round button sit above the bar.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OrbitTheme.of(themes['orbit']!),
+          home: MediaQuery(
+            data: const MediaQueryData(
+              viewPadding: EdgeInsets.only(bottom: 48),
+            ),
+            child: Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: OrbitDockArea(
+                  dock: OrbitDock(
+                    items: [
+                      OrbitDockItem(
+                        icon: OrbitIcons.chatsCircle,
+                        label: 'Chats',
+                        on: true,
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                  fab: OrbitFab(
+                    icon: OrbitIcons.chatCircleDots,
+                    tooltip: 'New chat',
+                    size: 62,
+                    onPressed: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final screenBottom = tester.getBottomLeft(find.byType(Scaffold)).dy;
+      expect(tester.getSize(find.byType(OrbitDockArea)).height, 120 + 48);
+      expect(
+        tester.getBottomLeft(find.byType(OrbitFab)).dy,
+        closeTo(screenBottom - 48 - 22, 0.5),
+      );
+    });
+
+    testWidgets('a gesture-navigation phone keeps the band as it was', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OrbitTheme.of(themes['orbit']!),
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: OrbitDockArea(
+                dock: OrbitDock(
+                  items: [
+                    OrbitDockItem(
+                      icon: OrbitIcons.chatsCircle,
+                      label: 'Chats',
+                      on: true,
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+                fab: OrbitFab(
+                  icon: OrbitIcons.chatCircleDots,
+                  tooltip: 'New chat',
+                  size: 62,
+                  onPressed: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(tester.getSize(find.byType(OrbitDockArea)).height, 120);
+    });
+  });
+
   test('a CSS angle runs the gradient the way CSS does', () {
     const g = OrbitCssGradient(
       angle: 90,

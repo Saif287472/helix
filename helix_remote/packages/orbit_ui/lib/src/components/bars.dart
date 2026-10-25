@@ -669,6 +669,13 @@ class OrbitDock extends StatelessWidget {
 /// `.dock-area` (`css/components.css`): the 120px band at the bottom of Home,
 /// fading from `--bg` (solid for its lowest 30%) to clear, with the [dock]
 /// and the 62px round [fab] 12px apart, centred, 22px up from the bottom.
+///
+/// The band reaches the screen edge so its fade has something to fade into, but
+/// its controls ride above the system navigation bar: a phone driven by the
+/// three navigation buttons draws that bar over the bottom of every window, and
+/// a dock set 22px from the edge would sit half under it. `viewPadding` rather
+/// than `padding`, so an open keyboard cannot shift the controls; a gesture-nav
+/// phone has no inset there and nothing moves.
 class OrbitDockArea extends StatelessWidget {
   const OrbitDockArea({super.key, required this.dock, required this.fab});
 
@@ -678,13 +685,14 @@ class OrbitDockArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
+    final inset = MediaQuery.viewPaddingOf(context).bottom;
     return Container(
-      height: 120,
-      padding: const EdgeInsets.fromLTRB(
+      height: 120 + inset,
+      padding: EdgeInsets.fromLTRB(
         OrbitSpace.gutter,
         0,
         OrbitSpace.gutter,
-        22,
+        22 + inset,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
