@@ -1,9 +1,19 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
 import 'support.dart';
+
+/// The bodies library declares one registry and one set of sized field
+/// reads; both are properties of the source, so they are checked from it.
+List<File> _bodySources() => [
+  File('lib/src/content/bodies.dart'),
+  ...Directory(
+    'lib/src/content/bodies',
+  ).listSync().whereType<File>().where((file) => file.path.endsWith('.dart')),
+];
 
 MediaPointer _pointer({bool thumb = true}) => MediaPointer(
   id: 'media-1',
@@ -413,6 +423,43 @@ void main() {
         'devices': [for (var i = 0; i <= ContentLimits.maxDevices; i++) 'd'],
       },
     );
+    // The id fields a body used to read with the reader's 64 KiB default;
+    // `Bounded.id` gives them the contract's own size.
+    refused('a call log id of any size', 'call_log', {
+      'call_id': 'c' * (ContentLimits.maxIdLength + 1),
+      'media': 'audio',
+      'outcome': 'answered',
+    });
+    refused('a system notice kind of any size', 'system', {
+      'kind': 'k' * (ContentLimits.maxNameLength + 1),
+    });
+    refused(
+      'a sender-key distribution for a group of any size',
+      'sender_key_distribution',
+      {
+        'group_id': 'g' * (ContentLimits.maxIdLength + 1),
+        'dist_id': 'd',
+        'iteration': 1,
+        'chain_key': encodeBytes(bytes(32, 1)),
+        'signing_key': encodeBytes(bytes(32, 2)),
+      },
+    );
+    refused('a group key for a group of any size', 'group_key', {
+      'group_id': 'g' * (ContentLimits.maxIdLength + 1),
+      'epoch': 1,
+      'key': encodeBytes(bytes(32, 1)),
+    });
+    refused(
+      'a decryption error naming a device of any size',
+      'decryption_error',
+      {
+        'message_id': messageM,
+        'sender_device': 'd' * (ContentLimits.maxIdLength + 1),
+      },
+    );
+    refused('a transfer offer of any size', 'device_transfer_offer', {
+      'transfer_id': 't' * (ContentLimits.maxIdLength + 1),
+    });
     refused('a media pointer whose key is not 32 bytes', 'media', {
       'items': [
         {
@@ -634,6 +681,49 @@ void main() {
           'signing_key': encodeBytes(bytes(32, 2)),
         },
       ),
+    );
+  });
+
+  test('every body class is in the decode registry', () {
+    final registry = File('lib/src/content/bodies.dart').readAsStringSync();
+    final declared = RegExp(
+      r'^final class (\w+Body) extends ContentBody',
+      multiLine: true,
+    );
+    final missing = <String>[];
+    for (final source in _bodySources()) {
+      for (final match in declared.allMatches(source.readAsStringSync())) {
+        final name = match.group(1)!;
+        // UnknownBody takes its type from the wire, so it is not registered.
+        if (name == 'UnknownBody') continue;
+        if (!registry.contains('$name.typeName: $name.fromJson,')) {
+          missing.add(name);
+        }
+      }
+    }
+    expect(missing, isEmpty, reason: 'add these to ContentBody._registry');
+    expect(registry, isNot(contains('_ =>')));
+    expect(registry, isNot(contains('switch (type)')));
+  });
+
+  test('a body reads a sized field only through Bounded', () {
+    final unbounded = RegExp(
+      r'json\.(string|optString|nonEmpty|strings|optStrings|objects|'
+      r'optObjects|bytes|optBytes)\(',
+    );
+    final offenders = <String>[];
+    for (final source in _bodySources()) {
+      final lines = source.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        if (unbounded.hasMatch(lines[i])) {
+          offenders.add('${source.path}:${i + 1} ${lines[i].trim()}');
+        }
+      }
+    }
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'a forgotten limit is the default reader size',
     );
   });
 }

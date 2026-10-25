@@ -43,7 +43,8 @@ could read (2026-10-01 survey).
   `JsonReader` while decoding, so a peer cannot make a client retain or render
   an oversize value: a string is at most 64 KiB of text unless the field's own
   limit is smaller (`ContentLimits` names the size of a title, name, label,
-  caption, url, emoji and phone number), a base64 field at most 1 MiB decoded
+  caption, url, emoji, phone number and identifier — an id on the wire is at
+  most 512 characters), a base64 field at most 1 MiB decoded
   unless the contract fixes its length (keys and digests are exactly 32 bytes)
   or names a bigger one (a history backup), and a list at most 20 000 entries
   unless the field is counted (`ContentLimits`: 30 media items, 12 poll options

@@ -2600,6 +2600,58 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   green**, `dart analyze` and `dart format` clean on crypto and engine. Stored
   bytes, wire format and schema unchanged; no migration; the app and CLI get
   it from the packages.
+- S7 (the batch's structure proposal, S7 in
+  [08_protocol.md](file:///J:/Projects/helix/orbit/audit/08_protocol.md)) —
+  `content/bodies.dart` was 1 279 lines with 24 content types in it, and its
+  only registry was the string `switch` in `ContentBody.decode`, which ended in
+  `_ => UnknownBody`. A type someone forgot to add therefore compiled, was sent
+  by that build, and showed "needs a newer version of Helix" in every client —
+  the same default that let B4's S5 find strings reading at the reader's own
+  64 KiB default, because nothing in that file forced a new body to use a
+  limit. It was also the merge point for every parallel content feature.
+  **What changed:** the library is split by family.
+  [`bodies.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies.dart) keeps `ContentLimits`,
+  `MessageRef`, `ContentBody` and `UnknownBody` (177 lines) and
+  [`bodies/visible.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies/visible.dart),
+  [`actions.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies/actions.dart),
+  [`control.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies/control.dart) and
+  [`transfer.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies/transfer.dart) are part files of it,
+  matching the contract's §2/§3/§4, so the types stay one library and the
+  registry can name them. The switch is a
+  [`const Map<String, ContentBody Function(JsonReader)>`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies.dart#L116)
+  and [`decode`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies.dart#L156) reaches `UnknownBody` only for
+  a name that is not in it, so an unregistered body cannot sit quietly;
+  [`knownTypes`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies.dart#L146) is that map's keys, so a new
+  type is asked for its golden fixture in the same change.
+  [`bodies/bounded.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies/bounded.dart) holds
+  [`Bounded`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/lib/src/content/bodies/bounded.dart#L14), an extension on
+  `JsonReader` with one read per field role — `id`/`optId`/`ids`,
+  `name`/`optName`, `label`, `text`/`optText`, `caption`/`optCaption`, `url`,
+  `emoji`/`optEmoji`, `optNumbers`, and `many`/`optMany`, where the item count
+  is a required argument instead of a default. The 44 sized field reads in the
+  five files now go through it, so a limit cannot be left out of a new body.
+  **One behaviour change:** the eight fields that had no limit of their own
+  (`system.kind`, `call_log.call_id`, `sender_key_distribution.group_id` and
+  `.dist_id`, `group_key.group_id`, `decryption_error.message_id` and
+  `.sender_device`, `device_transfer_offer.transfer_id`) are capped at 512 like
+  every other id and name, where they had accepted 64 KiB.
+  Tests: two source-shape tests —
+  [`every body class is in the decode registry`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/test/content_test.dart#L687), which
+  fails a `final class XBody extends ContentBody` that the map does not name
+  (`UnknownBody` excepted, its type comes from the wire) or a wildcard default
+  restored, and
+  [`a body reads a sized field only through Bounded`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_protocol/test/content_test.dart#L709),
+  which fails a direct `json.string`/`nonEmpty`/`optString`/`strings`/
+  `objects`/`bytes` call in any body file — plus six `refused` rows pinning the
+  newly capped fields. The other 34 `refused` rows, every fixture file and
+  every encoder are untouched — the test diff is 90 added lines with
+  none changed, which is the no-behaviour-change proof for the moves.
+  Gate: protocol `content_test.dart` **63 green** (55 before), full protocol
+  suite **289 green** (281 before), engine **352 green**, `dart analyze` clean
+  on the package, its tests, the server and `tool`, `dart format` clean.
+  `CONTENT_V2.md` §1's bound list now names the identifier limit. No wire,
+  stored or schema change; no migration; the app gets the tightened reads from
+  the package.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**
