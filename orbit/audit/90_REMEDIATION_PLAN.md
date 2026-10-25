@@ -1576,6 +1576,34 @@ constraint (expand → backfill → migrate → contract). No wire change.
   Gate: media/backup **15 green**, the new test also green three runs alone;
   `dart analyze` clean on the changed file. No schema change, no wire change,
   no app change; no APK needed.
+  **Batch report.** All six B7 findings are closed. B7's steps: S1 `7567303`,
+  S2 `e85da5f`, S3 `b0e4c35`, S4 `9a9205c`, S5 `7cb97e4`, S6 `c176dbe`.
+  B7's gate: **514 tests** on Postgres at `--concurrency=3`, 513 green, the
+  one failure the `messaging_test.dart` token-bucket timing flake already
+  listed in `AGENTS.md` (green alone in 2 s straight after), and
+  `dart analyze server tool` clean. No app or admin code changed.
+  **Residual, deliberate:** the weekly reconcile asks whether an owner still
+  exists; it does not compare rows to blobs. A row whose blob vanished still
+  fails its download and holds its quota until expiry, and a blob without a
+  row is left to `media.sweep_orphans` - the two are separate stores and
+  comparing them costs a full listing per run. For the same reason
+  `quotaDrift` reports a counter that disagrees with the rows and never
+  rewrites it: the disagreement is the evidence. Because the reconcile is
+  weekly, a dead purge's guarantee is "bounded by a week", not "immediate";
+  the purge job remains the prompt path. `quotaDrift` is one aggregate over
+  `objects` run after the account walk, outside `reconcileBudget` - a scan,
+  not a write, so a timeout can lose a report but never progress; a much
+  larger node would want it batched.
+  **Owner-facing, whole batch:** production owes **media migration 2
+  (`media_usage`)** at the next start (`bin/migrate.dart` or the node's own
+  migration): it creates `media.account_usage` and backfills it from
+  `media.objects` in the same migration, before the node serves. Platform
+  migrations 3, 4 and 5 are still owed with it. A new weekly job
+  `media.reconcile` runs by itself; no `.env` line. The two backup PUTs now
+  refuse a burst per account (6 full and 12 history a minute) with
+  `rate_limited`; the app's backup schedule is far below that. No wire
+  change, no app change, so no APK.
+- Next: B8 waits on Q8/Q9, so B9.
 
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**
