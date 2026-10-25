@@ -262,7 +262,10 @@ final class InboundProcessor {
 
     final now = _ctx.now();
     if (content.body is TypingBody) {
-      await _commitSessionOnly(result);
+      // A *stored* typing envelope must be recorded like any other, or it is
+      // delivered again on the next reconnect (AUD-12f-2); an ephemeral one
+      // has no seq, so marking is a no-op.
+      await _commitSessionOnly(result, record: envelope, at: now);
       _typing(sender, content);
       return const InboundResult(EnvelopeOutcome.ignored);
     }
@@ -331,14 +334,24 @@ final class InboundProcessor {
     );
   }
 
-  Future<void> _commitSessionOnly(PairwiseDecryptResult result) =>
-      _db.transaction(() async {
-        await _ctx.sessionStore.save(result.sessions, now: _ctx.now());
-        final used = result.consumedOneTimePrekeyId;
-        if (used != null) {
-          await _db.cryptoDao.deletePrekey(PrekeyKind.oneTime, used);
-        }
-      });
+  /// Commits the ratchet without applying anything (a typing indicator or
+  /// content that does not decode). With [record], the envelope is marked
+  /// processed in the same transaction.
+  Future<void> _commitSessionOnly(
+    PairwiseDecryptResult result, {
+    Envelope? record,
+    DateTime? at,
+  }) => _db.transaction(() async {
+    final now = at ?? _ctx.now();
+    await _ctx.sessionStore.save(result.sessions, now: now);
+    final used = result.consumedOneTimePrekeyId;
+    if (used != null) {
+      await _db.cryptoDao.deletePrekey(PrekeyKind.oneTime, used);
+    }
+    if (record != null) {
+      await _mark(record, EnvelopeOutcome.ignored, now);
+    }
+  });
 
   // ------------------------------------------------ decryption failures
 

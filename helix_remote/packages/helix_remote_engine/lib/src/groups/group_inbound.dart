@@ -162,7 +162,10 @@ final class GroupInbound {
           typing: (content.body as TypingBody).state == TypingState.started,
         );
       }
-      return const InboundResult(EnvelopeOutcome.ignored);
+      // A stored typing envelope is recorded like any other, so it is not
+      // delivered again on reconnect (AUD-12f-2); ephemeral ones have no
+      // seq and marking is a no-op.
+      return _record(envelope, mark, EnvelopeOutcome.ignored);
     }
     await prepare(sender, content, groupId: groupId);
 

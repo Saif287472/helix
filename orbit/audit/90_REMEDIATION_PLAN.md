@@ -1365,6 +1365,27 @@ update to be protected.
   Gate: engine suite **341 green**, `dart analyze` clean; the db package is
   untouched (its **140 green** is the S9 gate). No schema change, no wire
   change, no app change; no APK needed. Docs: engine MODULE.md inbound rules.
+- S11 (AUD-12f-2) — typing took a shortcut: it committed the ratchet (or the
+  group chain) and returned `ignored` without recording the envelope. The
+  `ephemeral` flag belongs to the sender, so a stored `TypingBody` came back
+  on every reconnect while it stayed the newest: a second chain iteration,
+  and outside the skipped-key window a quarantine (or an undecryptable row
+  for an urgent one). This client only sends typing as ephemeral, so Helix
+  itself could not hit it.
+  **What changed:** the direct branch commits the session and marks the
+  envelope in one transaction (`_commitSessionOnly(record:, at:)`); the group
+  branch returns `_record(envelope, mark, ignored)` after committing the
+  chain. `_mark` already ignores `seq == null`, so ephemeral typing is still
+  never stored or acked.
+  Tests: `test/inbound_test.dart` "a stored typing envelope is processed
+  once" and `test/groups/groups_test.dart` "a stored typing envelope is
+  processed once" - each sends a non-ephemeral `TypingBody` through the
+  outbox/group send and asserts `processed_envelopes` holds it and the
+  cursor reaches its seq (before this change both stay behind). The direct
+  test guards the transaction shape; the group test guards the early return.
+  Gate: engine suite **343 green**, `dart analyze` clean. No schema change,
+  no wire change, no app change; no APK needed. Docs: engine MODULE.md
+  inbound rules (the ephemeral bullet).
 
 ## B7 — Media must not outlive its row or its quota
 **S · ~3–4 days · media module migration · needs B4's request timeout**

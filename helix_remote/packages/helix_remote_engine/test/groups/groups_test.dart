@@ -1077,6 +1077,35 @@ void main() {
       expect(await texts(g.carol, g.chat), ['works', 'after']);
     });
 
+    test('a stored typing envelope is processed once', () async {
+      final g = await trio();
+      final before = (await g.bob.db.inboxDao.cursor())?.lastProcessedSeq ?? 0;
+      final content = ContentMessage(
+        id: Uuid.v7(),
+        sentAt: peers.clock.now,
+        conversation: GroupConversation(group: g.id),
+        body: const TypingBody(state: TypingState.started),
+      );
+      await g.alice.engine.debugSendRawGroup(g.id, content.encode());
+      final envelope = peers.server.device(g.bob.device).mailbox.last;
+      expect(envelope.seq, isNotNull, reason: 'not ephemeral');
+
+      await g.bob.sync();
+      expect(
+        await g.bob.db.inboxDao.isProcessed(
+          envelope.id,
+          senderDevice: envelope.from?.device,
+        ),
+        isTrue,
+        reason: 'a stored typing envelope must not replay on reconnect',
+      );
+      expect(
+        (await g.bob.db.inboxDao.cursor())!.lastProcessedSeq,
+        envelope.seq,
+      );
+      expect(envelope.seq!, greaterThan(before));
+    });
+
     test('group content from outside the group is dropped', () async {
       final g = await trio();
       final mallory = await peers.register('mallory', phone: '+8801711000009');

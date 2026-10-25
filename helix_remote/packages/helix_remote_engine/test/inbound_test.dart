@@ -101,6 +101,32 @@ void main() {
       expect(cursor.lastAckedSeq, 2);
     });
 
+    test('a stored typing envelope is processed once', () async {
+      await alice.engine.debugSend(
+        ContentMessage(
+          id: Uuid.v7(),
+          sentAt: peers.clock.now,
+          conversation: DirectConversation(to: bob.account),
+          body: const TypingBody(state: TypingState.started),
+        ),
+        audience: [bob.account],
+      );
+      await alice.engine.drainOutbox();
+      final envelope = peers.server.device(bob.device).mailbox.last;
+      expect(envelope.seq, isNotNull, reason: 'not ephemeral');
+
+      await bob.sync();
+      expect(
+        await bob.db.inboxDao.isProcessed(
+          envelope.id,
+          senderDevice: envelope.from?.device,
+        ),
+        isTrue,
+        reason: 'a stored typing envelope must not replay on reconnect',
+      );
+      expect((await bob.db.inboxDao.cursor())!.lastProcessedSeq, envelope.seq);
+    });
+
     test(
       'a muted chat still stores the message, flagged for no alert',
       () async {

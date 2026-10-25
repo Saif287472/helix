@@ -152,7 +152,9 @@ Rules:
   not this account) is dropped.
 - **Actions wait for their message** up to 7 days (`deferred_actions`).
 - **Ephemeral envelopes** (typing) are decrypted (the ratchet moves and is
-  committed), reported through `TypingEvent`, and never stored or acked.
+  committed), reported through `TypingEvent`, and never stored or acked. A
+  *stored* typing envelope (the sender's flag is untrusted) is recorded like
+  any other, so it is not delivered again on reconnect (AUD-12f-2).
 - **Blocked senders** are decrypted and ignored (the ratchet must move).
 - Call signals are acked and ignored until the calls feature lands. Group
   envelopes and group key material are handled by the group pipeline (see
