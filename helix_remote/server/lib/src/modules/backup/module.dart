@@ -220,7 +220,11 @@ CREATE TABLE $s.full_backups (
       );
     }
     await context.storage.check();
-    await context.db.tx((tx) async {
+    // A replacement that names fewer objects drops the rest: mark them in the
+    // same transaction that stores the new envelope, then delete them now.
+    // The expiry is the backstop (AUD-5-2) - a blob delete that fails leaves
+    // a row the sweep still collects.
+    final dropped = await context.db.tx<List<String>>((tx) async {
       final n = await tx.execute(
         'INSERT INTO $schema.full_backups (account_id, backup_id, version, envelope, media_ids) '
         'VALUES (@a:uuid, @b:uuid, @v:int4, @e:jsonb, @m:_uuid) '
@@ -242,7 +246,13 @@ CREATE TABLE $s.full_backups (
         );
       }
       await media.extendBackupMedia(tx, q.device.accountId, req.mediaIds);
+      return media.expireBackupMediaExcept(
+        tx,
+        q.device.accountId,
+        req.mediaIds,
+      );
     });
+    await media.deleteBackupMedia(context.db, q.device.accountId, dropped);
     return noContent();
   }
 
@@ -280,11 +290,27 @@ CREATE TABLE $s.full_backups (
     );
   }
 
+  /// Removes the backup and the ciphertext it alone referenced. The ids are
+  /// marked expired in the transaction that drops the row, so a delete that
+  /// cannot finish (a slow or failing store) still ends with the sweep
+  /// collecting the rest (AUD-5-2).
   Future<Response> _deleteFull(HelixRequest q) async {
-    await context.db.execute(
-      'DELETE FROM $schema.full_backups WHERE account_id = @a:uuid',
-      {'a': q.device.accountId},
-    );
+    final ids = await context.db.tx<List<String>>((tx) async {
+      final r = await tx.queryOne(
+        'SELECT media_ids FROM $schema.full_backups '
+        'WHERE account_id = @a:uuid FOR UPDATE',
+        {'a': q.device.accountId},
+      );
+      if (r == null) return const [];
+      final ids = r.strings('media_ids');
+      await media.expireBackupMedia(tx, q.device.accountId, ids);
+      await tx.execute(
+        'DELETE FROM $schema.full_backups WHERE account_id = @a:uuid',
+        {'a': q.device.accountId},
+      );
+      return ids;
+    });
+    await media.deleteBackupMedia(context.db, q.device.accountId, ids);
     return noContent();
   }
 }

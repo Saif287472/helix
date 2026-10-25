@@ -65,6 +65,12 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   /// committed and the job retries the rest (AUD-5-3).
   Duration purgeBudget = const Duration(seconds: 45);
 
+  /// How long a request that deletes a dropped backup's media may spend on
+  /// blobs before it answers and leaves the rest to the expiry sweep
+  /// (AUD-5-2). A normal backup names a handful; the cap is for a
+  /// pathological one.
+  Duration deleteBudget = const Duration(seconds: 10);
+
   /// Where the sweeps read their deadline from. Null is the module's clock;
   /// a test replaces it to move time without sleeping.
   DateTime Function()? sweepClock;
@@ -610,6 +616,10 @@ final class _MediaFacade implements MediaApi {
 
   final MediaModule _m;
 
+  /// An empty `ANY(...)` would make an untyped array parameter; no object
+  /// has this id (ids are server-generated v7).
+  static const _noIds = ['00000000-0000-0000-0000-000000000000'];
+
   @override
   Future<int> extendBackupMedia(
     SqlSession db,
@@ -622,5 +632,74 @@ final class _MediaFacade implements MediaApi {
       "WHERE owner_account = @a:uuid AND kind = 'backup' AND id = ANY(@ids:_uuid)",
       {'a': accountId, 'ids': ids},
     );
+  }
+
+  @override
+  Future<List<String>> expireBackupMedia(
+    Tx tx,
+    String accountId,
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) return const [];
+    return _expiredIds(
+      await tx.query(
+        'UPDATE ${_m.s}.objects SET expires_at = now() '
+        "WHERE owner_account = @a:uuid AND kind = 'backup' AND id = ANY(@ids:_uuid) "
+        'AND (expires_at IS NULL OR expires_at > now()) RETURNING id',
+        {'a': accountId, 'ids': ids},
+      ),
+    );
+  }
+
+  @override
+  Future<List<String>> expireBackupMediaExcept(
+    Tx tx,
+    String accountId,
+    List<String> keep,
+  ) async => _expiredIds(
+    await tx.query(
+      'UPDATE ${_m.s}.objects SET expires_at = now() '
+      "WHERE owner_account = @a:uuid AND kind = 'backup' "
+      'AND NOT (id = ANY(@keep:_uuid)) '
+      'AND (expires_at IS NULL OR expires_at > now()) RETURNING id',
+      {'a': accountId, 'keep': keep.isEmpty ? _noIds : keep},
+    ),
+  );
+
+  static List<String> _expiredIds(List<Row> rows) => [
+    for (final r in rows) r.string('id'),
+  ];
+
+  @override
+  Future<int> deleteBackupMedia(
+    SqlSession db,
+    String accountId,
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) return 0;
+    final deadline = _m._sweepNow().add(_m.deleteBudget);
+    var deleted = 0;
+    while (true) {
+      final rows = await db.query(
+        'SELECT id, owner_account, kind, size FROM ${_m.s}.objects '
+        "WHERE owner_account = @a:uuid AND kind = 'backup' AND id = ANY(@ids:_uuid) "
+        'ORDER BY id LIMIT ${MediaModule.sweepBatch}',
+        {'a': accountId, 'ids': ids},
+      );
+      if (rows.isEmpty) break;
+      var failed = 0;
+      for (final r in rows) {
+        if (_m._sweepNow().isAfter(deadline)) return deleted;
+        if (await _m._deleteObject(r)) {
+          deleted++;
+        } else {
+          failed++;
+        }
+      }
+      // A blob that could not be deleted keeps its row (already expired by
+      // the caller); the sweep retries it rather than this loop spinning.
+      if (failed > 0 || rows.length < MediaModule.sweepBatch) break;
+    }
+    return deleted;
   }
 }

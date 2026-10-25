@@ -52,7 +52,11 @@ expiring an object gives both back.
   killed mid-sweep (AUD-5-3). A sweep that runs out of budget returns with
   every finished object committed; a purge that does throws, with its
   finished objects committed and the usage row kept, so the retry deletes
-  only what is left. `media.sweep_orphans` (weekly) lists the store
+  only what is left. A deleted or replaced full backup (backup module) has
+  its dropped ids expired in the same transaction, then deleted at once
+  under `deleteBudget` (10 seconds), so its ciphertext and quota go now and
+  a store that cannot finish leaves the rest to the sweep (AUD-5-2).
+  `media.sweep_orphans` (weekly) lists the store
   (`ObjectStorage.list`) and deletes blobs under a kind's prefix whose id has
   no row and that are older than a day (`orphanGrace`).
 - **What the server never learns:** which message uses an object

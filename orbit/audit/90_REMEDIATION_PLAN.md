@@ -1508,6 +1508,30 @@ constraint (expand → backfill → migrate → contract). No wire change.
   Gate: retention **10 green**, media/backup **11 green**, availability
   **6 green**; `dart analyze` clean on the changed files. No schema change,
   no wire change, no app change; no APK needed. Docs: media MODULE.md.
+- S4 (AUD-5-2) — deleting the recovery backup removed only its row, and a
+  higher-version replacement extended only the ids it named: the dropped
+  ids' ciphertext stayed downloadable for 90 days and kept its 1 GiB of
+  backup quota.
+  **What changed:** `MediaApi` gained `expireBackupMedia`,
+  `expireBackupMediaExcept` and `deleteBackupMedia`, all owner- and
+  kind-scoped (a client-supplied `media_ids` can never name an attachment
+  or another account's object). `DELETE /v1/backups/full` locks and reads
+  the row, marks its ids expired and drops the row in one transaction,
+  then deletes the objects (blob first, quota released) under a 10-second
+  `deleteBudget`; a replacement `PUT` marks the objects the new `media_ids`
+  no longer name in the same transaction as the upsert, then deletes them
+  the same way. Expiry-first makes both crash-safe: an object the request
+  could not finish is still collected by `media.expire`, so the ciphertext
+  and quota never outlive the backup indefinitely.
+  Tests: `test/modules/media_backup_test.dart` "deleting a full backup
+  deletes its media and frees the quota" (download 404, usage counter back
+  to zero, the room reusable), "a replacement full backup deletes the media
+  it stopped naming" (dropped 404, kept 200, one object left), "a backup
+  delete never touches media of another kind".
+  Gate: media/backup **14 green**, retention **10 green**, availability
+  **6 green**; `dart analyze` clean on the changed files. No schema change,
+  no wire change, no app change; no APK needed. Docs: backup and media
+  MODULE.md.
 
 ## B8 — Calls: the newest caller rings, and the log is bounded
 **S + A · ~2–3 days · calls module migration · depends on B1**

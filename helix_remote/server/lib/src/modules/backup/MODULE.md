@@ -7,6 +7,15 @@ Encrypted backups (F2, CRYPTO_V2.md §13). Schema `backup`.
 | `history_backups` | the automatic text-history backup, keyed by the AIK | at most 16 MiB; only a higher `version` replaces it; deleted on `onIdentityKeyChanged` (recovery, replacement), because the old key can no longer open it |
 | `full_backups` | the user-secret backup envelope (opaque JSON) | only a higher `version` replaces it; refused if any key at any depth is `backup_key`, `passphrase` or `recovery_phrase`; its `media_ids` (backup-kind media) get their 90-day retention restarted |
 
+A full backup owns the media it names, so its ciphertext does not outlive it
+(AUD-5-2). `DELETE /v1/backups/full` deletes those `backup`-kind objects
+(blob first, then row, quota released); a higher-version `PUT` deletes the
+ones the new `media_ids` no longer names. Both mark the ids expired in the
+same transaction that changes the row, so an object the request cannot
+finish (a slow or failing store) is still collected by `media.expire`; only
+`backup`-kind objects of the caller's own account are ever touched, whatever
+ids the client sent.
+
 Account deletion removes both. While the server is over its storage budget
 (`HELIX_STORAGE_BUDGET_BYTES`), both `PUT`s answer `quota_exceeded`
 (`reason: server_storage`); the stored backup stays as it was.

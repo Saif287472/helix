@@ -322,6 +322,129 @@ void main() {
 
     tearDown(() async => h.stop());
 
+    String mediaSchema() => h.env.platform.schemas.of('media');
+
+    Future<bool> objectExists(String id) async =>
+        await h.env.platform.db.queryOne(
+          'SELECT 1 FROM ${mediaSchema()}.objects WHERE id = @id:uuid',
+          {'id': id},
+        ) !=
+        null;
+
+    Future<({int bytes, int objects})?> backupUsage() async {
+      final row = await h.env.platform.db.queryOne(
+        'SELECT bytes, objects FROM ${mediaSchema()}.account_usage '
+        "WHERE account_id = @a:uuid AND kind = 'backup'",
+        {'a': alice.accountId},
+      );
+      return row == null
+          ? null
+          : (bytes: row.integer('bytes'), objects: row.integer('objects'));
+    }
+
+    Future<String> upload(
+      List<int> data, {
+      MediaKind kind = MediaKind.backup,
+    }) async {
+      final r = await h.api.call(
+        Routes.createUpload,
+        bearer: alice.bearer,
+        body: CreateUploadRequest(size: data.length, kind: kind).toJson(),
+      );
+      expect(r.status, 201, reason: r.body);
+      final target = UploadTarget.fromJson(r.json);
+      final put = await http.put(
+        h.server.baseUri.resolve(target.url),
+        headers: {
+          'authorization': 'Bearer ${alice.bearer}',
+          'upload-offset': '0',
+          'content-type': 'application/octet-stream',
+        },
+        body: data,
+      );
+      expect(put.statusCode, 204);
+      return target.mediaId;
+    }
+
+    Future<void> putFull(int version, List<String> mediaIds) async {
+      final r = await h.api.call(
+        Routes.putFullBackup,
+        bearer: alice.bearer,
+        body: FullBackup(
+          backupId: Uuid.v7(),
+          version: version,
+          envelope: const {'ciphertext': 'x'},
+          mediaIds: mediaIds,
+        ).toJson(),
+      );
+      expect(r.status, 204, reason: r.body);
+    }
+
+    Future<TestResponse> download(String id) => h.api.call(
+      Routes.downloadContent,
+      params: {'media_id': id},
+      bearer: alice.bearer,
+    );
+
+    test(
+      'deleting a full backup deletes its media and frees the quota',
+      () async {
+        final id = await upload([1, 2, 3]);
+        await putFull(1, [id]);
+        expect(await backupUsage(), (bytes: 3, objects: 1));
+
+        expect(
+          (await h.api.call(
+            Routes.deleteFullBackup,
+            bearer: alice.bearer,
+          )).status,
+          204,
+        );
+
+        expect(await objectExists(id), isFalse);
+        expect((await download(id)).status, 404);
+        expect(
+          await backupUsage(),
+          (bytes: 0, objects: 0),
+          reason: 'the ciphertext and its quota went with the backup (AUD-5-2)',
+        );
+        // The freed room is real: the same size uploads again and counts.
+        expect(await upload([4, 5, 6]), isNotEmpty);
+        expect(await backupUsage(), (bytes: 3, objects: 1));
+      },
+    );
+
+    test(
+      'a replacement full backup deletes the media it stopped naming',
+      () async {
+        final dropped = await upload([1]);
+        final kept = await upload([2, 3]);
+        await putFull(1, [dropped, kept]);
+
+        await putFull(2, [kept]);
+
+        expect(await objectExists(dropped), isFalse);
+        expect((await download(dropped)).status, 404);
+        expect(await objectExists(kept), isTrue);
+        expect((await download(kept)).status, 200);
+        expect(await backupUsage(), (bytes: 2, objects: 1));
+      },
+    );
+
+    test('a backup delete never touches media of another kind', () async {
+      final attachment = await upload([9, 9], kind: MediaKind.attachment);
+      await putFull(1, [attachment]);
+
+      await h.api.call(Routes.deleteFullBackup, bearer: alice.bearer);
+
+      expect(
+        await objectExists(attachment),
+        isTrue,
+        reason: 'media_ids is client input; only backup-kind objects are its',
+      );
+      expect((await download(attachment)).status, 200);
+    });
+
     test('both backup PUTs are limited per account', () async {
       Future<TestResponse> putFull(int version) => h.api.call(
         Routes.putFullBackup,
