@@ -45,11 +45,8 @@ final class MessagingModule extends ModuleBase
     _wakes = PushTrail(log, context.metrics);
     context.metrics.collectedGauge(
       'helix_mailbox_backlog',
-      'Undelivered envelopes, cluster-wide (counted up to 1,000,000)',
-      () async => (await context.db.queryOne(
-        'SELECT count(*)::int8 AS n FROM '
-        '(SELECT 1 FROM $schema.mailbox LIMIT 1000000) b',
-      ))!.integer('n').toDouble(),
+      'Undelivered envelopes, cluster-wide (sum of device_seq.pending)',
+      () async => (await _store.backlog(context.db)).toDouble(),
     );
   }
 

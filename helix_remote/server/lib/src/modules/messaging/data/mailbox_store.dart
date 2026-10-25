@@ -198,6 +198,21 @@ final class MailboxStore {
     return r!.integer('m');
   }
 
+  /// Undelivered envelopes across every device.
+  ///
+  /// Read from the counter the quota already maintains: one narrow row per
+  /// device that ever got mail, instead of counting up to ten thousand rows
+  /// for each of them across sixteen partitions on every scrape (AUD-3-11).
+  /// No index: the table is bounded by the device count, while an index on
+  /// `pending` would make every send's `pending ± 1` a non-HOT update.
+  Future<int> backlog(SqlSession db) async {
+    final r = await db.queryOne(
+      'SELECT coalesce(sum(pending), 0)::int8 AS n FROM $s.device_seq '
+      'WHERE pending > 0',
+    );
+    return r!.integer('n');
+  }
+
   /// The highest `seq` ever given to [deviceId] (0 if none): unlike
   /// [lastSeq] it survives acks, so a client cursor above it means the
   /// database was restored from a backup.

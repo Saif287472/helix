@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -289,6 +290,26 @@ void main() {
           await expectIndexed(db, log);
         },
       );
+
+      test('the backlog gauge counts device_seq, not mailbox rows', () async {
+        final log = <Statement>[];
+        expect(
+          await MailboxStore(msg).backlog(Recording(db, log)),
+          mailDeviceCount * mailPerDevice,
+        );
+        final rows = await db.query(
+          'EXPLAIN (FORMAT JSON) ${log.single.sql}',
+          log.single.params,
+        );
+        final plan = rows.single['QUERY PLAN'];
+        expect(
+          sequentialScans(plan is String ? jsonDecode(plan) : plan),
+          {'device_seq'},
+          reason:
+              'the gauge reads one narrow row per device; walking the '
+              'partitioned mailbox on every scrape is AUD-3-11',
+        );
+      });
 
       test(
         'the guard bites: the same query is sequential without its index',

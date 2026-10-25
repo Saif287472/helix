@@ -2337,6 +2337,31 @@ table at implementation time.
   test green, `dart analyze` clean on the changed files. No wire change, no
   migration, no app change, no APK; a server restart (or the next deploy)
   picks it up.
+- S5 (AUD-3-11) — the `helix_mailbox_backlog` collected gauge ran
+  `SELECT count(*) FROM (SELECT 1 FROM mailbox LIMIT 1000000)` on every
+  scrape: a bounded but expensive index-only walk of every partition, on the
+  node an operator is watching, during exactly the incidents that produce a
+  backlog. `device_seq.pending` already counts the same undelivered rows
+  transactionally (quota, trim, ack, expiry and device purge all settle it -
+  AUD-3-2), so the mailbox need not be walked at all.
+  **What changed:** [`MailboxStore.backlog`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/messaging/data/mailbox_store.dart#L208)
+  sums `pending` where it is positive - one narrow row per device that ever
+  got mail - and the
+  [gauge](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/messaging/module.dart#L46)
+  reads it. No partial index on `pending`: the table is bounded by the device
+  count, whereas an index on the column every send increments would turn each
+  send's update into a non-HOT one (the migration the batch allowed is not
+  needed). `messaging/MODULE.md` states the source.
+  Tests: [`query_plans_test.dart`](file:///J:/Projects/helix/helix_remote/server/test/platform/query_plans_test.dart#L294)
+  runs the store method through the recording session on the seeded 20,000
+  device schema, checks the reply is the 50,000 seeded pending envelopes, and
+  asserts the `EXPLAIN (FORMAT JSON)` plan's only sequential scan is
+  `device_seq` - no mailbox partition appears. The metrics-route test
+  (`hardening_db_test.dart`, D4) still reads `helix_mailbox_backlog 0.0` on an
+  empty schema.
+  Gate: the plan test green, the D4 metrics test green, `dart analyze` clean
+  on the changed files. No wire change, no migration, no app change, no APK; a
+  server restart (or the next deploy) picks it up.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**

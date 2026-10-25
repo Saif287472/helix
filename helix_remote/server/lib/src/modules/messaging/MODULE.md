@@ -89,7 +89,9 @@ ephemeral delivery is read once per send, not once per device
 fan-out writes its push jobs and its parked envelopes one statement
 each (`Outbox.enqueueMany`, `EphemeralStore.putAll`): the cost of a send
 is bounded by its work, not by its device count (AUD-3-1). The
-`helix_mailbox_backlog` gauge counts undelivered rows at scrape time.
+`helix_mailbox_backlog` gauge sums `device_seq.pending` at scrape time -
+one narrow row per device, not a walk of the partitioned mailbox
+(AUD-3-11).
 
 1. **Validate:** ids, payload sizes (256 KiB per device), at most 1,100
    devices, never the sending device itself.
