@@ -47,6 +47,61 @@ void main() {
     });
   });
 
+  /// A peer that forwards for others without being a listed proxy is a proxy
+  /// the configuration forgot: its address is every client behind it, so
+  /// sign-in says so and does not treat it as a LAN host (AUD-7-1).
+  group(
+    'a proxy missing from the trusted list',
+    skip: databaseTestSkipReason,
+    () {
+      Future<Harness> start(Map<String, String> proxies) => Harness.start(
+        extra: {'HELIX_ADMIN_PASSWORD': adminPassword, ...proxies},
+      );
+
+      Future<TestResponse> signIn(Harness h, {String? from}) => h.api.call(
+        Routes.adminSignIn,
+        headers: {'x-forwarded-for': ?from},
+        body: const AdminPasswordRequest(password: 'wrong password!!').toJson(),
+      );
+
+      test('is reported, and a listed one is not', () async {
+        final unlisted = await start({'HELIX_TRUSTED_PROXIES': '203.0.113.77'});
+        try {
+          await signIn(unlisted, from: '198.51.100.9');
+          expect(
+            unlisted.env.log.lines.where(
+              (l) => l.contains('admin_untrusted_proxy'),
+            ),
+            hasLength(1),
+          );
+          await signIn(unlisted);
+          expect(
+            unlisted.env.log.lines.where(
+              (l) => l.contains('admin_untrusted_proxy'),
+            ),
+            hasLength(1),
+            reason:
+                'a direct client with no forwarding header is just a client',
+          );
+        } finally {
+          await unlisted.stop();
+        }
+        final listed = await start(const {});
+        try {
+          await signIn(listed, from: '198.51.100.9');
+          expect(
+            listed.env.log.lines.where(
+              (l) => l.contains('admin_untrusted_proxy'),
+            ),
+            isEmpty,
+          );
+        } finally {
+          await listed.stop();
+        }
+      });
+    },
+  );
+
   group('admin hardening', skip: databaseTestSkipReason, () {
     late Harness h;
 

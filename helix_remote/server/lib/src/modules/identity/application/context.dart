@@ -177,6 +177,23 @@ final class IdentityContext {
     return VerifiedPhone.decode(raw);
   }
 
+  /// [verification], for a flow that names the purposes it accepts: a token
+  /// the person asked for another reason is refused (AUD-2-8). A flow without
+  /// a token passes null through, as [verification] does.
+  Future<VerifiedPhone?> verificationFor(
+    String? token, {
+    required Set<PhonePurpose> purposes,
+  }) async {
+    final verified = await verification(token);
+    if (verified != null && !purposes.contains(verified.purpose)) {
+      throw const ApiError(
+        ErrorCode.invalidCode,
+        message: 'verification was for another purpose',
+      );
+    }
+    return verified;
+  }
+
   Future<void> spendVerification(String token) =>
       ephemeral.delete('$verificationPrefix${tokenKey(token)}');
 

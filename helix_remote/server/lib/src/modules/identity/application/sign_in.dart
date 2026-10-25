@@ -139,6 +139,8 @@ final class SignIn {
     );
   }
 
+  static const _linkPollEvery = Duration(seconds: 1);
+
   /// Long-polls until the link is approved or [wait] passes. An approved
   /// link is handed over once, then forgotten.
   Future<LinkPollResponse> pollLink(
@@ -146,7 +148,7 @@ final class SignIn {
     String? bearer,
     Duration wait,
   ) async {
-    final deadline = DateTime.now().add(wait);
+    final deadline = c.clock.now().add(wait);
     final key = '${IdentityContext.linkPrefix}$linkId';
     while (true) {
       final raw = await c.ephemeral.get(key);
@@ -169,10 +171,13 @@ final class SignIn {
           linkToken: state['link_token']! as String,
         );
       }
-      if (!DateTime.now().isBefore(deadline)) {
+      if (!c.clock.now().isBefore(deadline)) {
         return const LinkPollResponse(status: LinkStatus.pending);
       }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      // A second between reads (30 for a full poll, not 120): approval is a
+      // person tapping a button, and the answer reaches the new device within
+      // a second of it (AUD-2-5).
+      await Future<void>.delayed(_linkPollEvery);
     }
   }
 

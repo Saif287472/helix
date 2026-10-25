@@ -64,6 +64,16 @@ import.
   and refunds the per-number and the daily budget tokens
   (`RateLimiter.refund`). The charge is still taken first, so concurrent
   callers cannot all pass the budget (AUD-2-1).
+- **Verification purposes:** `IdentityContext.verificationFor(token,
+  purposes:)` is how every flow reads a phone-verification token. Register
+  accepts `register` and `sign_in`; recovery redeem `recover`, `register` and
+  `sign_in`; a password change or ownership check `sign_in`, `reset_password`
+  and `register` (clients still send `register` as the default). A code asked
+  for to recover cannot change a password (AUD-2-8).
+- **Seen-today write:** `Sessions.device` writes `last_seen_on` once a day per
+  device and node (an in-process map, cleared when the day turns), not on
+  every authenticated request (AUD-2-4). A link long-poll reads the ephemeral
+  store once a second, against the server clock (AUD-2-5).
 - **Deliveries lock devices:** `IdentityApi.lockActiveDevices` returns the
   active devices among a set and holds `FOR SHARE` on their rows (in id
   order) until the caller's transaction ends. Messaging stores envelopes

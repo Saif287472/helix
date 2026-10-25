@@ -35,7 +35,11 @@ hash with its parameters, lockout counters, `tokens_valid_after`) and
   operator at home; one signing in from the internet can still be locked
   out by it (with the hardened Caddyfile the admin API is LAN-only anyway).
   This relies on `HELIX_TRUSTED_PROXIES` naming the proxy: otherwise every
-  request looks like loopback and only the per-address lock applies. Each attempt is counted in SQL *before* the password is
+  request looks like loopback and only the per-address lock applies. A peer
+  that is not a trusted proxy but sends `X-Forwarded-For` or `X-Real-IP` is
+  taken for exactly that misconfiguration (`HelixRequest.clientIpUntrusted`):
+  it is not exempted as a LAN host, and sign-in logs `admin_untrusted_proxy`
+  (AUD-7-1) - fix the setting when you see it. Each attempt is counted in SQL *before* the password is
   checked, with the admin row locked, so parallel requests get no extra
   guesses (`password_locked` with `Retry-After`). A success clears both.
   Quiet unlocked addresses are purged after two days

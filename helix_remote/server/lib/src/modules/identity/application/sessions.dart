@@ -161,12 +161,32 @@ final class IdentityAuthenticator implements Authenticator {
     final state = await store.authState(db, claims.deviceId);
     if (state == null || !state.active) return null;
     if (claims.issuedAt.isBefore(state.tokensValidAfter)) return null;
-    await store.touchLastSeen(db, claims.deviceId);
+    await _touch(claims.deviceId);
     return DevicePrincipal(
       accountId: claims.accountId,
       deviceId: claims.deviceId,
       suspended: state.accountStatus == 'suspended',
     );
+  }
+
+  /// The day each device was last written as seen, on this node. The column
+  /// is a date, so once today is recorded the statement would change nothing:
+  /// it is skipped, and each node writes a device at most once a day
+  /// (AUD-2-4). Cleared when the day turns, so it never outgrows one day's
+  /// devices.
+  final Map<String, DateTime> _seenToday = {};
+  DateTime _seenDay = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+
+  Future<void> _touch(String deviceId) async {
+    final now = clock.now().toUtc();
+    final day = DateTime.utc(now.year, now.month, now.day);
+    if (day != _seenDay) {
+      _seenToday.clear();
+      _seenDay = day;
+    }
+    if (_seenToday.containsKey(deviceId)) return;
+    await store.touchLastSeen(db, deviceId);
+    _seenToday[deviceId] = day;
   }
 
   @override

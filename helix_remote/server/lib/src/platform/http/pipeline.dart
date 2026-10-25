@@ -54,6 +54,7 @@ final class HttpPipeline {
       context: {
         HttpContextKeys.requestId: requestId,
         HttpContextKeys.clientIp: clientIp,
+        HttpContextKeys.untrustedForward: _untrustedForward(request),
       },
     );
 
@@ -141,6 +142,19 @@ final class HttpPipeline {
       path.startsWith('v1/health') ||
       path.startsWith('v1/admin') ||
       path.startsWith('v1/ops');
+
+  /// Whether a peer that is not a trusted proxy sent `X-Forwarded-For` or
+  /// `X-Real-IP`: a real client has no reason to, so the peer is probably a
+  /// proxy the configuration does not list (AUD-7-1).
+  bool _untrustedForward(Request request) {
+    final info = request.context['shelf.io.connection_info'];
+    final peer = info is HttpConnectionInfo
+        ? info.remoteAddress.address
+        : 'unknown';
+    if (trustedProxies.contains(peer)) return false;
+    return request.headers.containsKey('x-forwarded-for') ||
+        request.headers.containsKey('x-real-ip');
+  }
 
   /// The peer address, or the forwarded client address when the peer is a
   /// trusted proxy (Caddy on the same host): the rightmost

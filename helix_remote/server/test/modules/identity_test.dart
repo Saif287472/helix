@@ -1039,6 +1039,102 @@ void main() {
     );
   });
 
+  group('verification purposes and the seen-today write', () {
+    late Harness h;
+
+    setUp(() async => h = await Harness.start());
+    tearDown(() async => h.stop());
+
+    Future<TestResponse> setPasswordWith(
+      TestDevice device,
+      PhoneVerifyResponse verified,
+    ) => h.api.call(
+      Routes.setPassword,
+      bearer: device.bearer,
+      body: SetPasswordRequest(
+        password: PasswordSetup(
+          kdf: const KdfParams(),
+          salt: bytes(16, 40),
+          authKey: bytes(32, 41),
+          wrappedIdentityKey: WrappedKey(
+            nonce: bytes(12, 42),
+            ciphertext: bytes(48, 43),
+          ),
+        ),
+        verificationToken: verified.verificationToken,
+      ).toJson(),
+    );
+
+    /// A code asked for to recover an account proves the number only for
+    /// recovering it; every flow now names the purposes it accepts
+    /// (AUD-2-8).
+    test('a recovery code does not change the password', () async {
+      final device = await h.registerGlobal(alice);
+      // An account that has a password changes it with the current one or
+      // with a code for its number.
+      expect(
+        (await h.api.call(
+          Routes.setPassword,
+          bearer: device.bearer,
+          body: SetPasswordRequest(
+            password: PasswordSetup(
+              kdf: const KdfParams(),
+              salt: bytes(16, 40),
+              authKey: bytes(32, 44),
+              wrappedIdentityKey: WrappedKey(
+                nonce: bytes(12, 42),
+                ciphertext: bytes(48, 43),
+              ),
+            ),
+          ).toJson(),
+        )).status,
+        204,
+      );
+      final recover = await h.verifyPhone(alice, purpose: PhonePurpose.recover);
+      expect(
+        (await setPasswordWith(device, recover)).errorCode,
+        'invalid_code',
+      );
+      final reset = await h.verifyPhone(
+        alice,
+        purpose: PhonePurpose.resetPassword,
+      );
+      expect((await setPasswordWith(device, reset)).status, 204);
+    });
+
+    /// `last_seen_on` is a date: once a node has written today it does not
+    /// write it again, however many requests follow (AUD-2-4).
+    test(
+      'a device is written as seen once a day, not on every request',
+      () async {
+        final device = await h.registerGlobal(alice);
+        final db = h.env.platform.db;
+        final devices = '${h.env.platform.schemas.of('identity')}.devices';
+        Future<String?> seen() async => (await db.queryOne(
+          'SELECT last_seen_on::text AS d FROM $devices WHERE id = @i:uuid',
+          {'i': device.id},
+        ))!.optString('d');
+        expect(
+          (await h.api.call(Routes.account, bearer: device.bearer)).status,
+          200,
+        );
+        final today = await seen();
+        expect(today, isNotNull);
+        // Yesterday is put back by hand: a second request the same day must
+        // not touch it (it would, with an UPDATE on every request).
+        await db.execute(
+          "UPDATE $devices SET last_seen_on = current_date - 1 WHERE id = @i:uuid",
+          {'i': device.id},
+        );
+        expect(
+          (await h.api.call(Routes.account, bearer: device.bearer)).status,
+          200,
+        );
+        expect(await seen(), isNot(today));
+      },
+    );
+  });
+
   group('code resend throttle', skip: databaseTestSkipReason, () {
     test('a second code to the same number waits', () async {
       final h = await Harness.start(extra: {'HELIX_OTP_RESEND_SECONDS': '30'});

@@ -59,6 +59,34 @@ void main() {
       },
     );
 
+    /// A fetch that finds no one-time prekey must not use up the hour's gap:
+    /// the next fetch, after the target uploads more, gets one (AUD-2-6).
+    test('the one-time gap is spent only when a key was handed out', () async {
+      final alice = await h.registerGlobal('+8801711000001', oneTime: 0);
+      final bob = await h.registerGlobal('+8801711000002');
+      Future<AccountKeys> fetch() async => AccountKeys.fromJson(
+        (await h.api.call(
+          Routes.accountKeys,
+          params: {'account': alice.accountId},
+          bearer: bob.bearer,
+        )).json,
+      );
+      expect((await fetch()).devices.single.oneTimePrekey, isNull);
+      await h.api.call(
+        Routes.addOneTimePrekeys,
+        bearer: alice.bearer,
+        body: AddOneTimePrekeysRequest(
+          keys: await alice.oneTimePrekeys(5),
+        ).toJson(),
+      );
+      expect((await fetch()).devices.single.oneTimePrekey, isNotNull);
+      expect(
+        (await fetch()).devices.single.oneTimePrekey,
+        isNull,
+        reason: 'the gap still holds once a key went out',
+      );
+    });
+
     test(
       'the certificate in a bundle verifies under the account key',
       () async {

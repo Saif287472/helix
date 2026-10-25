@@ -408,6 +408,11 @@ final class RouteRegistry {
 /// Keys of values the pipeline stores in shelf request/response contexts.
 abstract final class HttpContextKeys {
   static const clientIp = 'helix.client_ip';
+
+  /// True when a peer that is not a trusted proxy sent forwarding headers:
+  /// [clientIp] is then that peer, probably a proxy missing from
+  /// `HELIX_TRUSTED_PROXIES` standing in for every client behind it.
+  static const untrustedForward = 'helix.untrusted_forward';
   static const requestId = 'helix.request_id';
   static const route = 'helix.route';
 }

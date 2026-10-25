@@ -303,6 +303,15 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     if (admin == null || req.password.length > AdminPasswordRequest.maxLength) {
       throw const ApiError(ErrorCode.invalidCredentials);
     }
+    // A peer that forwards for others without being a trusted proxy is a
+    // proxy missing from HELIX_TRUSTED_PROXIES, so this address is every
+    // client behind it: it is not exempted from the global cap as a LAN
+    // host would be, and the operator is told (AUD-7-1).
+    if (q.clientIpUntrusted) {
+      log.warn('admin_untrusted_proxy', {
+        'peer_is_local': isLocalNetworkAddress(q.clientIp),
+      });
+    }
     final locked = await context.db.tx(
       (tx) => _store.reserveAttempt(
         tx,
@@ -311,7 +320,9 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
         perIp: lockAfter,
         firstLock: firstLock,
         maxLock: maxLock,
-        global: isLocalNetworkAddress(q.clientIp) ? null : globalLockAfter,
+        global: isLocalNetworkAddress(q.clientIp) && !q.clientIpUntrusted
+            ? null
+            : globalLockAfter,
         globalLock: globalLock,
       ),
     );

@@ -15,6 +15,16 @@ final class Accounts {
 
   final IdentityContext c;
 
+  /// What proves the account's number for a password change or for confirming
+  /// ownership: a code asked for to sign in, to reset the password or (by the
+  /// default clients still send) to register. A code asked for to recover the
+  /// account is not one of them (AUD-2-8).
+  static const _ownershipPurposes = {
+    PhonePurpose.signIn,
+    PhonePurpose.resetPassword,
+    PhonePurpose.register,
+  };
+
   /// Password changes per account. The current-password check also shares
   /// password sign-in's failure counter and lockout.
   static final passwordChangeLimit = RateLimitPolicy.per(
@@ -78,7 +88,10 @@ final class Accounts {
         );
         if (error != null) throw error;
       } else {
-        final verified = await c.verification(req.verificationToken);
+        final verified = await c.verificationFor(
+          req.verificationToken,
+          purposes: _ownershipPurposes,
+        );
         final phoneHash = await c.store.phoneHashOf(c.db, me.accountId);
         if (verified == null ||
             phoneHash == null ||
@@ -140,7 +153,10 @@ final class Accounts {
       return;
     }
     if (verificationToken != null && textable) {
-      final verified = await c.verification(verificationToken);
+      final verified = await c.verificationFor(
+        verificationToken,
+        purposes: _ownershipPurposes,
+      );
       if (verified != null &&
           constantTimeEquals(verified.phoneHash, phoneHash)) {
         await c.spendVerification(verificationToken);

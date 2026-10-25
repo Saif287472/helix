@@ -31,13 +31,10 @@ final class Registration {
     if (c.config.globalMode && req.termsVersion != c.config.termsVersion) {
       throw const ApiError(ErrorCode.termsNotAccepted);
     }
-    final verified = await c.verification(req.verificationToken);
-    if (verified != null && !_verificationPurposes.contains(verified.purpose)) {
-      throw const ApiError(
-        ErrorCode.invalidCode,
-        message: 'verification was for another purpose',
-      );
-    }
+    final verified = await c.verificationFor(
+      req.verificationToken,
+      purposes: _verificationPurposes,
+    );
     if (c.config.globalMode && verified == null) {
       throw const ApiError(
         ErrorCode.badRequest,
@@ -194,7 +191,14 @@ final class Registration {
     );
     if (accountId == null) throw const ApiError(ErrorCode.invalidCode);
     if (await _needsVerification(accountId)) {
-      final verified = await c.verification(req.verificationToken);
+      final verified = await c.verificationFor(
+        req.verificationToken,
+        purposes: const {
+          PhonePurpose.recover,
+          PhonePurpose.register,
+          PhonePurpose.signIn,
+        },
+      );
       final phoneHash = await c.store.phoneHashOf(c.db, accountId);
       if (verified == null ||
           !constantTimeEquals(verified.phoneHash, phoneHash!)) {

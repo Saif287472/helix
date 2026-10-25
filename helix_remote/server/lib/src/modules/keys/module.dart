@@ -291,6 +291,11 @@ CREATE TABLE $s.one_time_prekeys (
             oneTimePrekeyGap,
           );
       final otk = hand ? await _store.takeOneTime(db, device.id) : null;
+      if (hand && otk == null && requester != null) {
+        // Nothing was handed out, so the hour's gap is not spent: the next
+        // fetch, after the target uploads more, may take one (AUD-2-6).
+        await context.ephemeral.delete('keys:otk:$requester:${device.id}');
+      }
       final remaining = await _store.oneTimeCount(db, device.id);
       if (remaining < KeyStatus.lowWatermark) low.add((device.id, remaining));
       bundles.add(

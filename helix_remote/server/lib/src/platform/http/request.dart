@@ -75,6 +75,11 @@ final class HelixRequest {
   final String requestId;
   final String clientIp;
 
+  /// [clientIp] is a peer that sent forwarding headers without being a
+  /// trusted proxy (see `HttpContextKeys.untrustedForward`): it may stand for
+  /// every client behind a proxy the configuration does not list.
+  bool get clientIpUntrusted => raw.context['helix.untrusted_forward'] == true;
+
   /// Path parameters by name (percent-decoded once, in the router).
   final Map<String, String> params;
 

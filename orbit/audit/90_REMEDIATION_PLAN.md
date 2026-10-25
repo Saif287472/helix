@@ -3364,6 +3364,49 @@ production environment's proxy header setting before deploying.
   `.env` line; `quota_exceeded` is an existing code. A client at the cap
   sees it on sign-in or link, and an old client treats it like any refusal.
 
+- S2 (AUD-2-4, -2-5, -2-6, -2-8, AUD-7-1) — five smaller identity and
+  config findings, server only. **2-4:** `Sessions.device` writes
+  `last_seen_on` once a day per device and node (an in-process map, cleared
+  when the day turns) instead of an `UPDATE` on every authenticated request.
+  **2-5:** a link long-poll reads the ephemeral store once a second (30 reads
+  for a full poll, not 120) and counts its deadline on the server clock; the
+  bus-wake the audit suggested was not built, a second of latency on a person
+  tapping Approve is fine. **2-6:** `keys:otk:` marker is deleted when a fetch
+  finds no one-time prekey, so the first fetch after the target uploads more
+  gets one. **2-8:** `IdentityContext.verificationFor(token, purposes:)`
+  replaces the register-only check: register accepts `register`/`sign_in`,
+  recovery redeem `recover`/`register`/`sign_in`, a password change and the
+  ownership check `sign_in`/`reset_password`/`register` (the clients' default
+  purpose is still `register`, so it stays accepted); a recovery code can no
+  longer change a password. **7-1:** the pipeline marks a request whose peer
+  is not a trusted proxy but sent `X-Forwarded-For`/`X-Real-IP`
+  (`HelixRequest.clientIpUntrusted`): that peer is probably the proxy the
+  configuration forgot, so admin sign-in no longer exempts it from the global
+  cap as a LAN host and logs `admin_untrusted_proxy`. **This does not stop the
+  shared per-address lock** (one row for every client behind the unlisted
+  proxy): the lock cannot tell them apart, so the fix is the operator's, and
+  the log line is how they find out. The audit's start-up refusal was not
+  built: no start-up check can know the proxy's address.
+  Tests: a recovery-purpose code is refused by `setPassword` and a reset code
+  is accepted; a device is written as seen once (yesterday put back by hand
+  stays); a bundle fetch that finds no one-time prekey leaves the next fetch,
+  after an upload, one; an unlisted forwarding peer is logged once and a
+  listed one never; each fails on the code before this step. 2-5 is a timing
+  change with no test.
+  **Batch report.** B14's eight findings are closed (S1 `651f873`, S2 below).
+  Gate: server suite on Postgres at `--concurrency=3`, 533 tests; the first
+  full run had 14 failures, every one of them a test this file already lists
+  as load-sensitive or passed when its file was rerun alone (the identity,
+  availability and federation files, 62 tests, all green serially;
+  `devices_test` "replays what the socket missed" failed twice alone and then
+  passed). `dart analyze` and `dart format` clean. **Owner-facing:** no
+  migration and no `.env` line. After deploying, look for `admin_untrusted_proxy`
+  in the server log: if it appears, `HELIX_TRUSTED_PROXIES` is missing your
+  proxy. An account with more than ten devices keeps them and cannot add one
+  until it removes some; the app has no Devices-screen text for the
+  `quota_exceeded` refusal yet. No new APK needed.
+- Next: B15 (people, reports, export), then B16 and the later batches.
+
 ## B15 — People, reports and the export must be honest about their bounds
 **S + W (additive) · ~3 days · people module migration · depends on Q3**
 
