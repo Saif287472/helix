@@ -29,6 +29,10 @@ final class RealtimeModule extends ModuleBase {
       'helix_ws_connections_total',
       'WebSocket connections opened',
     );
+    _refreshSkipped = context.metrics.counter(
+      'helix_ws_refresh_skipped_total',
+      'Route refresh ticks skipped because one was still running',
+    );
     context.metrics.gauge(
       'helix_ws_open',
       'WebSocket connections open on this node',
@@ -46,7 +50,9 @@ final class RealtimeModule extends ModuleBase {
   final Set<Future<void>> _tasks = {};
   Timer? _routeTimer;
   Timer? _nodeTimer;
+  bool _refreshing = false;
   late final Counter _connected;
+  late final Counter _refreshSkipped;
 
   static const heartbeat = Duration(seconds: 25);
   static const window = 100;
@@ -206,12 +212,26 @@ final class RealtimeModule extends ModuleBase {
   /// expired or predates a session cut-off (4001), whose account was
   /// suspended (4004) or that went quiet (4010). A full window re-checks
   /// for credit that REST acks released.
+  ///
+  /// A tick that arrives while a pass is still running is skipped and
+  /// counted: the pass awaits a store CAS and a token check per socket, so
+  /// one stalled pass would otherwise overlap the next and double that
+  /// traffic at the worst moment (AUD-3-4).
   Future<void> refreshConnections() async {
-    for (final c in _connections.values.toList()) {
-      if (!await c.refreshRoute()) continue;
-      if (!await c.checkSession()) continue;
-      c.checkIdle();
-      c.reconcileCredit();
+    if (_refreshing) {
+      _refreshSkipped.inc();
+      return;
+    }
+    _refreshing = true;
+    try {
+      for (final c in _connections.values.toList()) {
+        if (!await c.refreshRoute()) continue;
+        if (!await c.checkSession()) continue;
+        c.checkIdle();
+        c.reconcileCredit();
+      }
+    } finally {
+      _refreshing = false;
     }
   }
 

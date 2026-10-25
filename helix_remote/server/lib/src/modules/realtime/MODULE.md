@@ -23,6 +23,10 @@ with 4029.
    (`EphemeralStore.replace`): a refresh that finds another connection's
    route closes this socket (4008) instead of overwriting it, and closing
    deletes the route only if it is still this connection's (`deleteIf`).
+   The sweep is single-flight: a tick that fires while the previous pass is
+   still awaiting the store and the authenticator is skipped and counted
+   (`helix_ws_refresh_skipped_total`), so a stalled pass cannot overlap the
+   next (AUD-3-4).
    `Presence` (kernel) reads it, so messaging can choose between socket and
    push.
    A route alone is not reachability: it is what a crash leaves behind. So

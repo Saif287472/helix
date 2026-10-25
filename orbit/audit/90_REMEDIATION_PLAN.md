@@ -2239,6 +2239,26 @@ assertion; a re-auth cache (if adopted) never serves a revoked device.
 **Rollout:** server-only. No wire change. If the gauge needs a partial index,
 it is platform migration 5 or a messaging migration — choose whichever owns the
 table at implementation time.
+- S1 (AUD-3-4) — the 25 s sweep started a new pass on every tick, finished or
+  not, and a pass awaits an ephemeral compare-and-set plus a token check (a
+  database read) per socket, one socket at a time. A store or pool stall — or
+  a node with thousands of sockets — therefore doubled that traffic at the
+  worst moment, and a long enough stall could add a third pass on top.
+  **What changed:**
+  [`refreshConnections`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L220)
+  is single-flight: a tick that arrives while a pass is still running returns
+  at once and increments `helix_ws_refresh_skipped_total`, and a `try/finally`
+  clears the flag so the next tick runs normally. `realtime/MODULE.md` states
+  it. `allModules` (and `Harness.start`) gained a test-only authenticator
+  override beside the existing SMS one, so a sweep can be held mid-pass.
+  Tests: `server/test/modules/realtime_test.dart` gained a `refresh sweep`
+  group: with one open socket and an authenticator gated after its first
+  device check, a second `refreshConnections()` returns within a 2 s timeout,
+  the device-check count stays at 1 and the counter reads 1; once the gate
+  opens the held pass finishes and the following tick checks again (count 2).
+  Gate: the realtime file **20 green** (19 before), `dart analyze` clean on
+  the changed files. No wire change, no migration, no app change, no APK; a
+  server restart (or the next deploy) picks it up.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**

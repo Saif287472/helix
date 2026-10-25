@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/helix_remote_server.dart';
@@ -7,6 +9,9 @@ import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
+import 'package:helix_remote_server/src/platform/http/request.dart';
+import 'package:helix_remote_server/src/platform/http/routes.dart';
+import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -417,6 +422,46 @@ void main() {
     });
   });
 
+  group('realtime refresh sweep', skip: databaseTestSkipReason, () {
+    test('a sweep already running is not started a second time', () async {
+      final gated = _GatedAuthenticator();
+      final h = await Harness.start(realtimeAuthenticator: gated);
+      try {
+        gated.inner = h.identity.authenticator;
+        final b1 = await h.registerGlobal(bobNumber);
+        final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+        await socket.hello();
+        final gate = Completer<void>();
+        gated.gate = gate;
+        final running = h.realtime.refreshConnections();
+        await eventually(() async => expect(gated.deviceCalls, 1));
+
+        await h.realtime.refreshConnections().timeout(
+          const Duration(seconds: 2),
+        );
+        expect(
+          gated.deviceCalls,
+          1,
+          reason: 'the overlapping tick did nothing',
+        );
+        expect(
+          h.env.platform.metrics.render(),
+          contains('helix_ws_refresh_skipped_total 1'),
+        );
+
+        gated.gate = null;
+        gate.complete();
+        await running;
+        await h.realtime.refreshConnections();
+        expect(gated.deviceCalls, 2, reason: 'the pass after it runs normally');
+        await socket.close();
+      } finally {
+        gated.gate = null;
+        await h.stop();
+      }
+    });
+  });
+
   group('realtime token expiry', skip: databaseTestSkipReason, () {
     test('the route refresh closes sockets whose token expired', () async {
       final clock = _OffsetClock();
@@ -441,6 +486,32 @@ final class _OffsetClock implements Clock {
 
   @override
   DateTime now() => DateTime.now().toUtc().add(offset);
+}
+
+/// Identity's authenticator behind a gate: [device] counts the call and waits
+/// at [gate] before answering, so a sweep can be held in flight.
+final class _GatedAuthenticator implements Authenticator {
+  Authenticator? inner;
+  Completer<void>? gate;
+  int deviceCalls = 0;
+
+  @override
+  Future<DevicePrincipal?> device(String bearerToken) async {
+    deviceCalls++;
+    final gate = this.gate;
+    if (gate != null) await gate.future;
+    return inner!.device(bearerToken);
+  }
+
+  @override
+  Future<AdminPrincipal?> admin(String bearerToken) async =>
+      throw UnsupportedError(
+        'the realtime gateway never checks an admin token',
+      );
+
+  @override
+  Future<ServerPrincipal?> server(Request request, Uint8List body) async =>
+      throw UnsupportedError('the realtime gateway never checks a server');
 }
 
 /// Another node on the same database and schema prefix as [h].
