@@ -35,6 +35,12 @@ enum TransferFailure {
   /// The transfer kept failing on the network until it ran out of time.
   gaveUp('gave_up'),
 
+  /// This device could not read or write the file again and again (a full
+  /// disk, a changed permission, a store that is gone): retrying the same
+  /// local step does not help, and a held send must not block its chat for
+  /// the 30 days of [TransferConfig.maxAge] (AUD-12n-3).
+  localIo('local_io'),
+
   /// Anything else.
   unknown('unknown');
 

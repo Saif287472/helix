@@ -718,6 +718,79 @@ void main() {
     });
   });
 
+  /// A step that keeps failing on this device is not the network (AUD-12n-3).
+  group('local failures', () {
+    test(
+      'a disk that cannot be written fails the send, not the chat',
+      () async {
+        await start();
+        final sent = await sendDoc(patterned(8000));
+        final text = await alice.engine.chats.sendText(chat, 'still here');
+        // The disk fills after the file was copied in, before it is encrypted.
+        alice.blobs.writeError = StateError('no space left on device');
+        for (var i = 0; i < 6; i++) {
+          await alice.engine.drainTransfers();
+          world.clock.advance(const Duration(minutes: 10));
+        }
+        final job = await jobOf(alice, sent);
+        expect(job.state, TransferState.failed);
+        expect(job.lastError, TransferFailure.localIo.wire);
+        expect(job.attempts, lessThanOrEqualTo(5));
+
+        // The held send is dropped with its failure, and the chat goes on.
+        alice.blobs.writeError = null;
+        await alice.engine.drainOutbox();
+        expect(
+          world.server.sends.map((s) => s.request.id),
+          contains(text.messageId),
+        );
+        expect(
+          (await alice.db.messagesDao.byRowid(sent.localRowid))!.status,
+          MessageStatus.failed,
+        );
+      },
+    );
+  });
+
+  /// A job whose lease lapsed under an attempt that is still running is not
+  /// started a second time (AUD-12n-2).
+  group('a lapsed lease', () {
+    test('is not claimed again while its attempt still runs', () async {
+      await start();
+      await sendDoc(patterned(40000));
+      await alice.settle();
+      final reached = Completer<void>();
+      final gate = Completer<void>();
+      media.onGet = (object) async {
+        if (!reached.isCompleted) {
+          reached.complete();
+          await gate.future;
+        }
+      };
+      await bob.engine.syncOnce();
+      final first = bob.engine.drainTransfers();
+      await reached.future;
+      final att = (await bob.attachments(
+        (await bob.messages(alice)).single,
+      )).single;
+      // The lease runs out while the attempt is blocked in its first request.
+      await bob.db.customStatement(
+        'UPDATE transfer_jobs SET lease_until = 1 WHERE attachment_rowid = ?',
+        [att.id],
+      );
+      final second = bob.engine.drainTransfers();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(
+        media.of('GET').where((r) => r.offset == null || r.offset == 0),
+        hasLength(1),
+        reason: 'one attempt, not two',
+      );
+      gate.complete();
+      await Future.wait([first, second]);
+      expect(await receivedBytes(bob, alice), patterned(40000));
+    });
+  });
+
   group('cancellation', () {
     test(
       'cancelling a send mid-upload stops it and cleans everything',

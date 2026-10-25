@@ -603,6 +603,13 @@ another kind (a thumbnail the person opened as a file) changes nothing on
 it - a download it finishes keeps no file, an upload it finishes does not
 release the message, a failure it gives up on notifies nobody - and the
 worker does not claim an id it is still running.
+
+`stop()` is a barrier (AUD-12n-1): a pass inside `claim` hands back what it
+claimed, and every running attempt is cancelled and awaited. A heartbeat whose
+renewal throws twice in a row ends its attempt (AUD-12n-2). A step that fails
+with an error the classifier does not know is tried `maxLocalAttempts` times
+and then ends the job as `local_io`, so a full disk fails one message instead
+of holding its chat for `maxAge` (AUD-12n-3).
 `registerStandalone` lets other features (group pictures, backup blobs) run
 jobs without an attachment under their `purpose`; jobs of a purpose nobody
 registered are left alone.

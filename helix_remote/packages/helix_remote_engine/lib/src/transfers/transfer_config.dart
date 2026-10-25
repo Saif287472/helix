@@ -17,6 +17,7 @@ final class TransferConfig {
       max: Duration(minutes: 5),
     ),
     this.maxAge = const Duration(days: 30),
+    this.maxLocalAttempts = 5,
     this.idlePoll = const Duration(minutes: 1),
     this.maxDownloadBytes = 2 * 1024 * 1024 * 1024,
     this.maxThumbnailBytes = 512 * 1024,
@@ -50,6 +51,12 @@ final class TransferConfig {
   /// here would fail it first (review H-06).
   final Duration maxAge;
 
+  /// How many times a step that fails for no network or server reason (an
+  /// error the classifier does not know: a full disk, an unwritable store) is
+  /// tried before the job fails as [TransferFailure.localIo]. The network's
+  /// patience is [maxAge]; this is not the network.
+  final int maxLocalAttempts;
+
   /// With nothing queued the worker still looks at the queue this often: an
   /// FCM isolate may have queued a download that this isolate's change stream
   /// cannot see.
@@ -81,6 +88,7 @@ final class TransferConfig {
     Duration? lease,
     Backoff? backoff,
     Duration? maxAge,
+    int? maxLocalAttempts,
     Duration? idlePoll,
     int? maxDownloadBytes,
     int? maxThumbnailBytes,
@@ -95,6 +103,7 @@ final class TransferConfig {
     lease: lease ?? this.lease,
     backoff: backoff ?? this.backoff,
     maxAge: maxAge ?? this.maxAge,
+    maxLocalAttempts: maxLocalAttempts ?? this.maxLocalAttempts,
     idlePoll: idlePoll ?? this.idlePoll,
     maxDownloadBytes: maxDownloadBytes ?? this.maxDownloadBytes,
     maxThumbnailBytes: maxThumbnailBytes ?? this.maxThumbnailBytes,

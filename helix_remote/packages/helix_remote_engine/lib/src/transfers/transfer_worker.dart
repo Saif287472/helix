@@ -85,6 +85,7 @@ final class TransferWorker {
   bool _stopping = false;
   bool _pumping = false;
   bool _again = false;
+  Future<void> _pumpRun = Future.value();
 
   HelixDb get _db => _ctx.db;
 
@@ -126,10 +127,17 @@ final class TransferWorker {
     await _subscription?.cancel();
     _subscription = null;
     _stopping = true;
-    for (final job in _running.values) {
-      job.token.cancel();
+    // A barrier (AUD-12n-1): a pass already inside `claim` finishes first, and
+    // hands back what it claimed (see `_fill`), then every running attempt is
+    // cancelled and waited for, until none is left.
+    await _pumpRun;
+    while (_running.isNotEmpty) {
+      final running = _running.values.toList();
+      for (final job in running) {
+        job.token.cancel();
+      }
+      await Future.wait([for (final job in running) job.done]);
     }
-    await Future.wait([for (final job in _running.values) job.done]);
     _stopping = false;
   }
 
@@ -148,6 +156,8 @@ final class TransferWorker {
       return;
     }
     _pumping = true;
+    final run = Completer<void>();
+    _pumpRun = run.future;
     try {
       do {
         _again = false;
@@ -157,6 +167,7 @@ final class TransferWorker {
       // The database closed under us (sign-out, wipe): nothing to run.
     } finally {
       _pumping = false;
+      run.complete();
     }
     if (_active) await _arm();
   }
@@ -186,6 +197,15 @@ final class TransferWorker {
         running: _running.keys.toSet(),
       );
       if (job == null) return;
+      if (!_active && !_draining) {
+        // Stopped while the claim was in flight: not started, handed back.
+        await _db.transfersDao.release(
+          job.id,
+          version: job.version,
+          at: _ctx.now(),
+        );
+        return;
+      }
       _start(job);
     }
   }
@@ -258,6 +278,7 @@ final class TransferWorker {
   /// changes nothing on it (AUD-10-3).
   Future<void> _execute(TransferRow job, _Running running) async {
     final control = _Control(this, job, running);
+    var failedRenewals = 0;
     final heartbeat = Timer.periodic(_config.lease ~/ 3, (_) async {
       try {
         final held = await _db.transfersDao.renewLease(
@@ -265,9 +286,13 @@ final class TransferWorker {
           version: job.version,
           until: _ctx.now().add(_config.lease),
         );
+        failedRenewals = 0;
         if (!held) running.token.cancel();
       } on Object {
-        // The database is closing.
+        // One miss is the database busy or closing. A second in a row means
+        // this attempt can no longer keep its lease (AUD-12n-2): it ends,
+        // rather than running on past it, and the job is claimed again.
+        if (++failedRenewals >= 2) running.token.cancel();
       }
     });
     try {
@@ -332,6 +357,14 @@ final class TransferWorker {
         case RetryTransfer():
           if (_ctx.now().difference(job.createdAt) > _config.maxAge) {
             await _giveUp(job, TransferFailure.gaveUp);
+            return;
+          }
+          if (outcome.code == 'internal' &&
+              job.attempts + 1 >= _config.maxLocalAttempts) {
+            // Not the network and not the server: a step on this device that
+            // keeps throwing. The message fails now, and the chat behind it
+            // goes on (AUD-12n-3).
+            await _giveUp(job, TransferFailure.localIo);
             return;
           }
           var delay = _config.backoff.delay(

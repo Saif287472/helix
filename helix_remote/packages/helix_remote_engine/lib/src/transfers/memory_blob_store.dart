@@ -20,6 +20,9 @@ final class MemoryBlobStore implements BlobStore {
   /// Called for every read with its range (tests see how a file was read).
   void Function(String path, int start, int? end)? onRead;
 
+  /// When set, every write throws it (tests: a full or read-only disk).
+  Object? writeError;
+
   final Map<String, _Entry> _files = {};
   int _counter = 0;
 
@@ -83,6 +86,8 @@ final class MemoryBlobStore implements BlobStore {
 
   @override
   Future<BlobSink> openWrite(String path, {int keep = 0}) async {
+    final failure = writeError;
+    if (failure != null) throw failure;
     final existing = _files[path];
     if (existing == null && keep != 0) {
       throw StateError('cannot keep bytes of a missing file');

@@ -3157,6 +3157,38 @@ the migration and dump that go with it).
   message. Gate: db **161 green**, engine **361 green** (358 before), server
   `media_test.dart` 9 green on Postgres, analyze and format clean. No schema,
   wire or server change; the phone needs a new APK to see it.
+- S8 (AUD-12n-1, -2, -3; -2's first two mechanisms were S4) — three worker
+  findings in
+  [`transfer_worker.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/transfers/transfer_worker.dart).
+  **12n-1, `stop()` is a barrier:** `_fill` re-checks `_active || _draining`
+  after its `claim` returns and hands the job back (`release`, no attempt
+  counted) instead of starting it; `stop()` first awaits the pass that may be
+  inside that claim (`_pumpRun`), then cancels and waits for every running
+  attempt in a loop until none is left. **12n-2, the renewal that throws:**
+  the heartbeat no longer swallows every error for ever; a second renewal in a
+  row that throws cancels the attempt, so it cannot run on past its lease (the
+  job is claimable again, and S4's `running:` filter and stale-claim writes
+  keep the old attempt from doing harm meanwhile). **12n-3, a local failure
+  must not freeze a chat for 30 days:** the engine has no `dart:io`, so it
+  cannot name `FileSystemException`; instead an error the classifier does not
+  know (`internal`) is tried `TransferConfig.maxLocalAttempts` (5) times, not
+  until `maxAge`, then the job fails as the new `TransferFailure.localIo`
+  (`local_io`) and the message and its held send fail with it, so the chat's
+  later messages go. The network keeps its 30 days. `MemoryBlobStore` gained
+  `writeError` (a full or read-only disk for tests).
+  Tests: `transfer_worker_test.dart` "a disk that cannot be written fails the
+  send, not the chat" (an unwritable store: the job ends `failed`/`local_io`
+  within 5 attempts, the message is `failed`, and a text sent after it
+  leaves) fails on the worker before this step (the job is still pending);
+  "a lapsed lease is not claimed again while its attempt still runs" expires
+  a blocked download's lease by hand and expects one request, which fails
+  when S4's `running:` filter is taken out. **12n-1 has no failing test:** the
+  window is one `claim` round trip, which cannot be held open without a DAO
+  fake the engine does not have (the plan's own "fault-injection seam" cost),
+  so it is fixed by construction. The 12n-2 renewal-throw rule is likewise
+  untested. Gate: engine **363 green** (361 before), server `media_test` and
+  `backup_test` 19 green on Postgres, analyze and format clean. No schema,
+  wire or server change; the phone needs a new APK to see it.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**
