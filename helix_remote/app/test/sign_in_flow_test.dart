@@ -18,7 +18,7 @@ import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_view.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show AccountStatusResponse;
+    show AccountStatusResponse, HelixLegalDocuments;
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 import 'package:orbit_ui/orbit_ui.dart' show OrbitTokens;
 
@@ -527,7 +527,8 @@ void main() {
       expect(m.countries.first, ('+880', 'Bangladesh'));
       expect(m.serverBadge, isNull);
       expect(m.showTerms, isTrue);
-      expect(m.legal.terms.version, SignInState.termsVersion);
+      // The version shown is the one registration sends (AUD-15-3).
+      expect(m.legal.terms.version, HelixLegalDocuments.termsVersion);
 
       final server = global.copyWith(
         mode: SignInMode.advanced,
@@ -727,13 +728,17 @@ void main() {
         'chat.example.org · signed in',
       );
       expect(
-        signedInAccountLines(const [slot], unread: const {'x1': 5}).single
-            .detail,
+        signedInAccountLines(
+          const [slot],
+          unread: const {'x1': 5},
+        ).single.detail,
         'chat.example.org · 5 unread · signed in',
       );
       expect(
-        signedInAccountLines(const [slot], unread: const {'x1': 0}).single
-            .detail,
+        signedInAccountLines(
+          const [slot],
+          unread: const {'x1': 0},
+        ).single.detail,
         'chat.example.org · signed in',
       );
     });

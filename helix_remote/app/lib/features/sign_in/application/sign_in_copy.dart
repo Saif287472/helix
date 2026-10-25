@@ -57,10 +57,6 @@ abstract final class SignInCopy {
   static const phoneTooShort =
       'This number looks too short. Check it and try again.';
 
-  static const phoneAlreadyRegistered =
-      'This phone number already has an account on this server. Ask your '
-      'server admin for a recovery code to sign back in.';
-
   // ----------------------------------------------------------------- the code
   static const emptyPassword = 'Enter your password.';
 
@@ -115,13 +111,12 @@ abstract final class SignInCopy {
     if (error is ApiException) {
       switch (error.code) {
         case ErrorCode.passwordLocked:
-          final until = error.details?['locked_until'];
-          final seconds = until is int ? until : null;
-          return seconds == null
+          // The wire carries epoch milliseconds; `lockedUntil` is the one
+          // parser of it (AUD-15-2).
+          final until = error.lockedUntil;
+          return until == null
               ? passwordLocked
-              : passwordLockedUntil(
-                  DateTime.fromMillisecondsSinceEpoch(seconds * 1000),
-                );
+              : passwordLockedUntil(until.toLocal());
         case ErrorCode.invalidCredentials:
           return passwordNotRight;
         case ErrorCode.accountBanned:

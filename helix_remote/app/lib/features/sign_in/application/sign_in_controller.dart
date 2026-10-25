@@ -16,9 +16,8 @@ import 'package:helix_remote/features/sign_in/application/sign_in_view.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_countries.dart';
-import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show AccountStatusResponse, ErrorCode;
+    show AccountStatusResponse;
 
 /// The Helix Global server. Sign-in opens here and nowhere else unless a
 /// code, a link or the hidden corner says otherwise.
@@ -428,9 +427,6 @@ final class SignInController extends Notifier<SignInState> {
       state = state.copyWith(page: SignInPage.otp, isLoading: false);
       return true;
     } on Object catch (error) {
-      if (_isAccountExists(error)) {
-        return _fail(SignInCopy.phoneAlreadyRegistered, loading: false);
-      }
       return _fail(SignInCopy.connectFailure(error), loading: false);
     }
   }
@@ -724,9 +720,6 @@ final class SignInController extends Notifier<SignInState> {
     );
     return false;
   }
-
-  bool _isAccountExists(Object error) =>
-      error is ApiException && error.code == ErrorCode.accountExists;
 }
 
 /// True when [raw] starts with a Helix prefix but carries no payload after it.

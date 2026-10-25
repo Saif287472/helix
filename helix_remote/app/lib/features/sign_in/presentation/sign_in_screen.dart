@@ -189,8 +189,10 @@ orbit.SignInStep _stepOf(SignInState s) => switch (s.page) {
   SignInPage.name => orbit.SignInStep.takeOver,
 };
 
-/// The real documents: they are what people agree to (`termsVersion` is
-/// sent at registration).
+/// The real documents: they are what people agree to. The version shown is
+/// `HelixLegalDocuments.termsVersion`; registration sends the protocol
+/// package's copy of the same constant, and a test keeps the two equal
+/// (AUD-15-3).
 const _legal = orbit.LegalDocumentsModel(
   terms: orbit.LegalDocumentModel(
     title: HelixLegalDocuments.termsTitle,

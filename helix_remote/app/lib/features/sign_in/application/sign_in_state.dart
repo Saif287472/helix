@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show immutable;
+import 'package:helix_remote/core/platform/phone_numbers.dart';
 
 /// Which entry the person came in by.
 ///
@@ -47,8 +48,6 @@ final class SignInState {
 
   /// Bangladesh, because that is where Helix Global starts.
   static const defaultCountryCode = '+880';
-
-  static const termsVersion = '2026-09-25';
 
   final SignInMode mode;
   final SignInPage page;
@@ -136,8 +135,19 @@ final class SignInState {
       digits.isEmpty ? countryCode : '$countryCode $digits';
 
   /// E.164, or null when the number is not complete enough to send.
+  ///
+  /// A number typed the way the country writes it carries a trunk `0`
+  /// (`01711 000001`), which is not part of the E.164 number: it is dropped,
+  /// once, as [PhoneNumbers.normalize] does everywhere else in the app. A
+  /// number pasted whole (`+8801711000001`, `008801711000001`) keeps its own
+  /// country code and ignores the dialling code on screen (AUD-15-1).
   String? get e164 {
-    final national = digits.replaceAll(RegExp(r'\D'), '');
+    final typed = digits.trim();
+    if (typed.startsWith('+') || typed.startsWith('00')) {
+      return PhoneNumbers.normalize(typed);
+    }
+    var national = typed.replaceAll(RegExp(r'\D'), '');
+    if (national.startsWith('0')) national = national.substring(1);
     if (national.isEmpty) return null;
     return '$countryCode$national';
   }

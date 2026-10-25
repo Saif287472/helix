@@ -3636,6 +3636,31 @@ Docs updated in the same change (15-5, 15-7).
 **Rollout:** app-only. No server change. If 15-4's copy is removed, the server
 message stays as it is.
 
+- S1 (AUD-15-1 to -15-4) — the sign-in page's four plain bugs, app only.
+  **15-1:** `SignInState.e164` concatenated the dialling code and whatever was
+  typed, so `01711 000001` became `+88001711000001`. It now drops one trunk `0`
+  the way `PhoneNumbers.normalize` does everywhere else, and a number pasted
+  whole (`+880…`, `00880…`) keeps its own country code through that normaliser.
+  **15-2:** the lockout sentence read `details.locked_until` as seconds and
+  multiplied by 1000; it now uses `ApiException.lockedUntil`, the one parser,
+  in local time. **15-3:** the unread third copy of the terms version
+  (`SignInState.termsVersion`) is gone and the screen's comment says what is
+  true; a test keeps the shown version (domain package) equal to the one
+  registration sends (protocol package), terms and privacy. **15-4:** the
+  `accountExists` branch of `useCodeInstead` and its sentence are deleted: the
+  server's `requestPhoneChallenge` never raises that code (texting an existing
+  number is the password-reset path). Tests (`sign_in_numbers_test.dart`): the
+  national, spaced, dashed, pasted and `00` forms of one number all give
+  `+8801711000001`, another country's pasted number ignores the dialling code,
+  empty or a lone zero is not a number; the lockout sentence names the real
+  minute from milliseconds, and says only "later" without a time; the two
+  legal versions agree. `sign_in_flow_test` compared the screen with the
+  deleted copy and now compares it with the protocol constant. The first two
+  groups fail on the old code. Gate: sign-in, server-link and phone-number tests
+  91 green, analyze and format clean. **A real-device check for a national
+  number (the OS keyboard and autofill are not simulated) is still the owner's.**
+  A new APK is needed to see it; no server change.
+
 ## B18 — Admin console: never strand the operator or destroy the only code
 **A · ~1–2 days · no migration · no server change**
 
