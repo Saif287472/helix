@@ -13,10 +13,14 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// v2 error code: a 401 means "refresh the token", a 403 `device_revoked`
 /// means "stop", and `WebSocket.connect` reports both as the same
 /// `WebSocketException`.
+///
+/// [timeout] bounds the response headers and the body of a refusal (a server
+/// that answers and then stalls must not hold the caller in `connecting`).
 Future<RealtimeSocket> connectPlatformSocket(
   Uri uri, {
   required Map<String, String> headers,
   required List<String> protocols,
+  Duration timeout = const Duration(seconds: 30),
 }) async {
   final client = HttpClient()
     ..connectionTimeout = const Duration(seconds: 20)
@@ -25,6 +29,7 @@ Future<RealtimeSocket> connectPlatformSocket(
   final nonce = base64.encode([
     for (var i = 0; i < 16; i++) random.nextInt(256),
   ]);
+  var detached = false;
   try {
     final request = await client.openUrl(
       'GET',
@@ -41,9 +46,9 @@ Future<RealtimeSocket> connectPlatformSocket(
     if (protocols.isNotEmpty) {
       request.headers.set('sec-websocket-protocol', protocols.join(', '));
     }
-    final response = await request.close().timeout(const Duration(seconds: 30));
+    final response = await request.close().timeout(timeout);
     if (response.statusCode != HttpStatus.switchingProtocols) {
-      final body = await _readCapped(response, 64 * 1024);
+      final body = await _readCapped(response, 64 * 1024, timeout: timeout);
       throw RealtimeUpgradeException(
         ApiException.fromResponse(
           status: response.statusCode,
@@ -62,8 +67,18 @@ Future<RealtimeSocket> connectPlatformSocket(
       (await response.detachSocket()).destroy();
       throw const WebSocketException('bad Sec-WebSocket-Accept');
     }
+    // The server's choice must be one that was offered (RFC 6455, 4.2.2):
+    // an intermediary that drops or rewrites it must not get a connection.
     final protocol = response.headers.value('sec-websocket-protocol');
+    final agreed = protocol == null
+        ? protocols.isEmpty
+        : protocols.contains(protocol);
+    if (!agreed) {
+      (await response.detachSocket()).destroy();
+      throw WebSocketException('bad Sec-WebSocket-Protocol: $protocol');
+    }
     final socket = await response.detachSocket();
+    detached = true;
     return _IoSocket(
       WebSocket.fromUpgradedSocket(
         socket,
@@ -72,15 +87,51 @@ Future<RealtimeSocket> connectPlatformSocket(
       ),
     );
   } finally {
-    client.close();
+    // A graceful close leaves a timed-out or refused request running; an
+    // upgraded connection is detached from the client already.
+    client.close(force: !detached);
   }
 }
 
-Future<List<int>> _readCapped(Stream<List<int>> stream, int max) async {
+/// Reads at most [max] bytes of a refusal body, giving up after [timeout]:
+/// the subscription is cancelled whatever ends the read.
+Future<List<int>> _readCapped(
+  Stream<List<int>> stream,
+  int max, {
+  required Duration timeout,
+}) async {
   final bytes = <int>[];
-  await for (final chunk in stream) {
-    bytes.addAll(chunk.take(max - bytes.length));
-    if (bytes.length >= max) break;
+  final done = Completer<void>();
+  late final StreamSubscription<List<int>> subscription;
+  final timer = Timer(timeout, () {
+    unawaited(subscription.cancel());
+    if (!done.isCompleted) {
+      done.completeError(TimeoutException('refusal body', timeout));
+    }
+  });
+  subscription = stream.listen(
+    (chunk) {
+      bytes.addAll(chunk.take(max - bytes.length));
+      if (bytes.length >= max) {
+        timer.cancel();
+        unawaited(subscription.cancel());
+        if (!done.isCompleted) done.complete();
+      }
+    },
+    onError: (Object error, StackTrace stack) {
+      timer.cancel();
+      if (!done.isCompleted) done.completeError(error, stack);
+    },
+    onDone: () {
+      timer.cancel();
+      if (!done.isCompleted) done.complete();
+    },
+    cancelOnError: true,
+  );
+  try {
+    await done.future;
+  } finally {
+    timer.cancel();
   }
   return bytes;
 }

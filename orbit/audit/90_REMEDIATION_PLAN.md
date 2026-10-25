@@ -1808,6 +1808,33 @@ upload pairs with B7's chunk protocol but does not require it.
   Gate: protocol **121 green** (120 before, +1), api **210 green** (209
   before, +1); `flutter analyze` clean on both. No wire change, no app change;
   no APK needed.
+- S4 (AUD-11b-1..4) — four edges of the socket lifecycle. A refused upgrade
+  read its error body with no deadline, so a server that answered the headers
+  and stalled held `_open` in `connecting` forever while a `HttpClient` closed
+  without force kept the request alive; the 101's negotiated subprotocol was
+  never compared with the offered one; `reconnect()` after `dispose()` built a
+  live socket whose first frame threw into a closed controller; and the silence
+  detector diffed wall-clock times, so a backward clock step suppressed it and
+  a forward one killed a healthy connection.
+  **What changed:** `connectPlatformSocket` takes a `timeout` (30 s) that
+  bounds the response headers *and* the refusal body (the read cancels its
+  subscription on expiry), and closes its client with `force: true` unless the
+  socket was detached. A 101 must name one of the offered protocols; an absent
+  header is accepted only when nothing was offered (the admin log stream offers
+  none). `reconnect()` after dispose throws the same `StateError` as `start`,
+  `_open` refuses to run when stopped, and envelope/wake/error adds check
+  `isClosed` like `_emit`. Heartbeat and backoff decisions use elapsed time
+  from a monotonic `Stopwatch` by default (the test seam is now `elapsed:`,
+  replacing `now:`), and a source that moves backwards is treated as a silent
+  server, not a fresh one.
+  Tests: new `io_socket_test.dart` (real loopback server): a stalled refusal
+  body fails within the injected deadline; a 101 that omits or rewrites the
+  offered subprotocol is refused; an accepted upgrade still carries a frame
+  after the client is closed. `realtime_client_test.dart` "reconnect after
+  dispose throws and opens nothing" and "a time source that steps backwards
+  reconnects instead of waiting for it to catch up".
+  Gate: api **215 green** (210 before, +5); `flutter analyze` clean. No wire
+  change, no app change; no APK needed.
 
 ## B10 — A theme pack the app cannot draw must be refused before it is chosen
 **A (+ C for the server half) · ~2–3 days · no migration, no wire**

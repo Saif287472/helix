@@ -17,14 +17,13 @@ final class Rig {
     CountingAuth? auth,
     Random? random,
   }) : auth = auth ?? CountingAuth() {
-    final start = DateTime.utc(2026, 10, 2);
     client = RealtimeClient(
       baseUrl: Uri.parse('https://helix.test'),
       auth: this.auth,
       connect: sockets.connect,
       policy: policy,
       random: random ?? Random(7),
-      now: () => start.add(async.elapsed),
+      elapsed: () => async.elapsed + elapsedOffset,
     );
     client.states.listen(states.add);
     client.envelopes.listen(envelopes.add);
@@ -40,6 +39,10 @@ final class Rig {
   final List<Envelope> envelopes = [];
   final List<RealtimeProtocolError> errors = [];
   int wakes = 0;
+
+  /// Moves the injected time source without moving the timers, to stand in
+  /// for a wall clock that is adjusted.
+  Duration elapsedOffset = Duration.zero;
 
   RealtimePhase get phase => client.state.phase;
 
@@ -94,6 +97,18 @@ void main() {
         expect(socket.closedByClient, isTrue);
         expect(socket.closeCode, 1000);
         expect(r.phase, RealtimePhase.stopped);
+        expect(r.sockets.opened, hasLength(1));
+      });
+    });
+
+    test('reconnect after dispose throws and opens nothing', () {
+      fakeAsync((async) {
+        final r = Rig(async);
+        r.connect();
+        r.client.dispose();
+        async.flushMicrotasks();
+        expect(r.client.reconnect, throwsStateError);
+        r.settle(const Duration(minutes: 5));
         expect(r.sockets.opened, hasLength(1));
       });
     });
@@ -282,6 +297,20 @@ void main() {
         r.settle();
         expect(r.phase, RealtimePhase.connected);
         expect(r.sockets.opened, hasLength(1));
+      });
+    });
+
+    test('a time source that steps backwards reconnects instead of waiting '
+        'for it to catch up', () {
+      fakeAsync((async) {
+        final r = Rig(async);
+        final socket = r.connect(heartbeat: 10);
+        // A wall clock would now be ten minutes behind the last frame; a
+        // negative age must not read as "fresh".
+        r.elapsedOffset = const Duration(minutes: -10);
+        r.settle(const Duration(seconds: 2));
+        expect(socket.closedByClient, isTrue);
+        expect(r.phase, RealtimePhase.waiting);
       });
     });
   });

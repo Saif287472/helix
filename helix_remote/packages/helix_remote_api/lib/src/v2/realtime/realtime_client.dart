@@ -153,13 +153,20 @@ final class RealtimeClient {
     this.clientName,
     this.idleGrace = const Duration(seconds: 5),
     Random? random,
-    DateTime Function()? now,
+    Duration Function()? elapsed,
   }) : _auth = auth,
        _random = random ?? Random(),
-       _now = now ?? DateTime.now {
+       _elapsed = elapsed ?? _monotonic() {
     if (auth.audience != RouteAccess.device) {
       throw ArgumentError.value(auth.audience, 'auth', 'needs device tokens');
     }
+  }
+
+  /// A source that only moves forward, so a wall-clock step can never make a
+  /// dead connection look fresh or a healthy one look stale (AUD-11b-4).
+  static Duration Function() _monotonic() {
+    final watch = Stopwatch()..start();
+    return () => watch.elapsed;
   }
 
   final Uri baseUrl;
@@ -172,7 +179,10 @@ final class RealtimeClient {
   final AuthProvider _auth;
   final RealtimeSocketFactory _connect;
   final Random _random;
-  final DateTime Function() _now;
+
+  /// Elapsed time for heartbeat and backoff decisions (monotonic by default;
+  /// tests inject fake time).
+  final Duration Function() _elapsed;
 
   final StreamController<RealtimeState> _states = StreamController.broadcast();
   final StreamController<Envelope> _envelopes = StreamController.broadcast();
@@ -194,9 +204,9 @@ final class RealtimeClient {
   String? _token;
   Timer? _retryTimer;
   Timer? _heartbeatTimer;
-  DateTime _connectedAt = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _lastHeard = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _lastSent = DateTime.fromMillisecondsSinceEpoch(0);
+  Duration _connectedAt = Duration.zero;
+  Duration _lastHeard = Duration.zero;
+  Duration _lastSent = Duration.zero;
   Duration _heartbeat = const Duration(seconds: 25);
   HelloFrame? _hello;
 
@@ -237,6 +247,7 @@ final class RealtimeClient {
   /// delay (the app came to the foreground). Not after revoked or signed
   /// out unless the caller has a new session.
   void reconnect() {
+    if (_states.isClosed) throw StateError('RealtimeClient is disposed');
     _abandon();
     _running = true;
     unawaited(_open());
@@ -270,6 +281,7 @@ final class RealtimeClient {
   // ------------------------------------------------------------ connection
 
   Future<void> _open() async {
+    if (!_running || _states.isClosed) return;
     final generation = ++_generation;
     _retryTimer?.cancel();
     _emit(RealtimeState(RealtimePhase.connecting, attempt: _attempt));
@@ -308,7 +320,7 @@ final class RealtimeClient {
       return;
     }
 
-    final now = _now();
+    final now = _elapsed();
     _socket = socket;
     _token = token;
     _connectedAt = now;
@@ -361,7 +373,7 @@ final class RealtimeClient {
   void _onClosed(int generation, RealtimeSocket socket) {
     if (generation != _generation) return;
     final code = socket.closeCode;
-    final lived = _now().difference(_connectedAt);
+    final lived = _elapsed() - _connectedAt;
     final hadHello = _hello != null;
     _teardown();
     if (hadHello && lived >= policy.resetAfter) _attempt = 0;
@@ -377,7 +389,7 @@ final class RealtimeClient {
       case RealtimeCloseCode.rateLimited:
         _retry(closeCode: code, atLeast: policy.rateLimitedDelay);
       case RealtimeCloseCode.protocolError:
-        _errors.add(
+        _protocolError(
           RealtimeProtocolError('close_4400', message: socket.closeReason),
         );
         _retry(closeCode: code);
@@ -466,12 +478,12 @@ final class RealtimeClient {
   // ---------------------------------------------------------------- frames
 
   void _onText(String text) {
-    _lastHeard = _now();
+    _lastHeard = _elapsed();
     final ServerFrame frame;
     try {
       frame = ServerFrame.decode(text);
     } on FormatException {
-      _errors.add(const RealtimeProtocolError('bad_frame'));
+      _protocolError(const RealtimeProtocolError('bad_frame'));
       return;
     }
     switch (frame) {
@@ -503,11 +515,11 @@ final class RealtimeClient {
       case EnvelopeFrame(:final envelope):
         _onEnvelope(envelope);
       case WakeFrame():
-        _wakes.add(null);
+        _wake();
       case PongFrame():
         break;
       case ErrorFrame(:final code, :final message):
-        _errors.add(
+        _protocolError(
           RealtimeProtocolError('error_frame', code: code, message: message),
         );
       case UnknownServerFrame(:final seq):
@@ -518,7 +530,7 @@ final class RealtimeClient {
   void _onEnvelope(Envelope envelope) {
     final seq = envelope.seq;
     if (seq == null) {
-      _envelopes.add(envelope);
+      _deliver(envelope);
       return;
     }
     if (seq <= _cursor) return; // Replay of something already processed.
@@ -527,7 +539,7 @@ final class RealtimeClient {
       return;
     }
     if (!_outstanding.add(seq)) return; // Sent twice on this connection.
-    _envelopes.add(envelope);
+    _deliver(envelope);
   }
 
   void _skip(int seq) {
@@ -559,7 +571,7 @@ final class RealtimeClient {
     final socket = _socket;
     if (socket == null) return;
     socket.send(frame.encode());
-    _lastSent = _now();
+    _lastSent = _elapsed();
   }
 
   // ------------------------------------------------------------- heartbeat
@@ -578,19 +590,36 @@ final class RealtimeClient {
   void _beat() {
     final socket = _socket;
     if (socket == null) return;
-    final now = _now();
-    if (now.difference(_lastHeard) > _heartbeat * 2 + idleGrace) {
-      // The server went quiet (a dead network does not always close).
+    final now = _elapsed();
+    final heard = now - _lastHeard;
+    if (heard.isNegative || heard > _heartbeat * 2 + idleGrace) {
+      // The server went quiet (a dead network does not always close), or the
+      // time source moved backwards: reconnect rather than wait for it.
       _abandon();
       _retry(error: const NetworkException(timedOut: true));
       return;
     }
-    if (now.difference(_lastSent) >= _heartbeat * 0.6) _send(const PingFrame());
+    final sent = now - _lastSent;
+    if (sent.isNegative || sent >= _heartbeat * 0.6) _send(const PingFrame());
   }
 
   void _emit(RealtimeState state) {
     _state = state;
     if (!_states.isClosed) _states.add(state);
+  }
+
+  // A frame can arrive while [dispose] is closing the controllers; an add to
+  // a closed stream would surface as an unhandled zone error.
+  void _deliver(Envelope envelope) {
+    if (!_envelopes.isClosed) _envelopes.add(envelope);
+  }
+
+  void _wake() {
+    if (!_wakes.isClosed) _wakes.add(null);
+  }
+
+  void _protocolError(RealtimeProtocolError error) {
+    if (!_errors.isClosed) _errors.add(error);
   }
 
   static Duration _max(Duration a, Duration? b) => b != null && b > a ? b : a;
