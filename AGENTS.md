@@ -294,7 +294,10 @@ receives nothing" - the send answered 409 `the sender is still a member` over
 its 200). When another agent session is editing the server while a suite
 runs, whole files can also fail to *load* on a compile error that is already
 gone by the time the report is read - re-`dart analyze` the file before treating
-a load failure as a result.
+a load failure as a result. On the app side,
+`test/media/voice_composer_test.dart` ("holding and letting go sends the note
+and deletes the file") failed once in a full `flutter test` on 2026-10-25 and
+passed alone in 10 s; the rest of that app run (1024 tests) was green.
 
 Add any failure you confirm is pre-existing here, with the date.
 
