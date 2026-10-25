@@ -205,8 +205,8 @@ final class SenderKeyState {
         return SenderKeyState(
           groupId: json.nonEmpty('group_id'),
           distributionId: json.nonEmpty('dist_id'),
-          iteration: json.integer('it'),
-          chainKey: json.bytes('ck'),
+          iteration: stateCounter(json, 'it', what: 'sender key iteration'),
+          chainKey: stateKey(json, 'ck', what: 'sender chain key'),
           signingKey: Ed25519KeyPair.restore(
             json.bytes('sig_seed'),
             json.bytes('sig_pub'),
@@ -250,8 +250,8 @@ final class SkippedSenderKey {
   };
 
   factory SkippedSenderKey.fromJson(JsonReader json) => SkippedSenderKey(
-    iteration: json.integer('it'),
-    messageKey: json.bytes('mk'),
+    iteration: stateCounter(json, 'it', what: 'skipped sender iteration'),
+    messageKey: stateKey(json, 'mk', what: 'skipped sender message key'),
     storedAt: json.time('at'),
   );
 }
@@ -329,9 +329,9 @@ final class ReceivedSenderKey {
           sender: DeviceAddress.fromJson(json.object('sender')),
           groupId: json.nonEmpty('group_id'),
           distributionId: json.nonEmpty('dist_id'),
-          iteration: json.integer('it'),
-          chainKey: json.bytes('ck'),
-          signingKey: json.bytes('sig_pub'),
+          iteration: stateCounter(json, 'it', what: 'sender key iteration'),
+          chainKey: stateKey(json, 'ck', what: 'sender chain key'),
+          signingKey: stateKey(json, 'sig_pub', what: 'sender signing key'),
           skipped: List.unmodifiable(
             json.objects('skipped', SkippedSenderKey.fromJson),
           ),

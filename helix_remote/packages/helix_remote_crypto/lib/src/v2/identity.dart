@@ -176,8 +176,10 @@ final class DeviceIdentity {
     'cert': certificate.toJson(),
   };
 
+  /// Wire input (a provisioning message from the approving device), so a
+  /// failure is malformed input rather than this device's damaged state.
   factory DeviceIdentity.fromJson(JsonReader json) =>
-      readState('device identity', () {
+      readWire('device identity', () {
         requireVersion(json, 1, 'device identity');
         return DeviceIdentity(
           address: DeviceAddress.fromJson(json.object('address')),
@@ -282,23 +284,25 @@ final class LocalDeviceKeys {
     'cert': certificate.toJson(),
   };
 
-  factory LocalDeviceKeys.fromJson(JsonReader json) =>
-      readState('local device keys', () {
-        requireVersion(json, 1, 'local device keys');
-        return LocalDeviceKeys(
-          address: DeviceAddress.fromJson(json.object('address')),
-          accountIdentityKey: json.bytes('aik'),
-          identityKey: X25519KeyPair.restore(
-            json.bytes('dik_priv'),
-            json.bytes('dik'),
-          ),
-          signingKey: Ed25519KeyPair.restore(
-            json.bytes('dsk_seed'),
-            json.bytes('dsk'),
-          ),
-          certificate: DeviceCertificate.fromJson(json.object('cert')),
-        );
-      });
+  factory LocalDeviceKeys.fromJson(JsonReader json) => readState(
+    'local device keys',
+    () {
+      requireVersion(json, 1, 'local device keys');
+      return LocalDeviceKeys(
+        address: DeviceAddress.fromJson(json.object('address')),
+        accountIdentityKey: stateKey(json, 'aik', what: 'account identity key'),
+        identityKey: X25519KeyPair.restore(
+          json.bytes('dik_priv'),
+          json.bytes('dik'),
+        ),
+        signingKey: Ed25519KeyPair.restore(
+          json.bytes('dsk_seed'),
+          json.bytes('dsk'),
+        ),
+        certificate: DeviceCertificate.fromJson(json.object('cert')),
+      );
+    },
+  );
 
   Uint8List encode() => encodeStateJson(toJson());
 

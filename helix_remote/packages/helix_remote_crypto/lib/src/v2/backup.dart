@@ -143,8 +143,10 @@ final class BackupEnvelope {
     'key_wraps': [for (final w in keyWraps) w.toJson()],
   };
 
+  /// Fetched from the server, so a failure is malformed input rather than
+  /// this device's damaged state (the envelope is opened, never stored here).
   factory BackupEnvelope.fromJson(JsonReader json) =>
-      readState('backup envelope', () {
+      readWire('backup envelope', () {
         if (json.string('format') != format) {
           throw const MalformedCryptoInputException('not a v2 backup');
         }

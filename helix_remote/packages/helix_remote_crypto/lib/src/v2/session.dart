@@ -38,7 +38,7 @@ final class PendingPrekey {
   };
 
   factory PendingPrekey.fromJson(JsonReader json) => PendingPrekey(
-    ephemeralKey: json.bytes('ek'),
+    ephemeralKey: stateKey(json, 'ek', what: 'pending ephemeral key'),
     signedPrekeyId: json.integer('spk'),
     oneTimePrekeyId: json.optInt('opk'),
   );
@@ -120,11 +120,23 @@ final class PairwiseSession {
         requireVersion(json, 1, 'pairwise session');
         return PairwiseSession(
           remote: DeviceAddress.fromJson(json.object('remote')),
-          remoteIdentityKey: json.bytes('remote_dik'),
-          remoteAccountIdentityKey: json.bytes('remote_aik'),
-          localIdentityKey: json.bytes('local_dik'),
+          remoteIdentityKey: stateKey(
+            json,
+            'remote_dik',
+            what: 'remote device identity key',
+          ),
+          remoteAccountIdentityKey: stateKey(
+            json,
+            'remote_aik',
+            what: 'remote account identity key',
+          ),
+          localIdentityKey: stateKey(
+            json,
+            'local_dik',
+            what: 'local device identity key',
+          ),
           associatedData: json.bytes('ad'),
-          baseKey: json.bytes('base_key'),
+          baseKey: stateKey(json, 'base_key', what: 'session base key'),
           initiator: json.boolean('initiator'),
           pendingPrekey: json.has('pending')
               ? PendingPrekey.fromJson(json.object('pending'))
@@ -253,7 +265,8 @@ final class DeviceSessions {
             json.objects('previous', PairwiseSession.fromJson),
           ),
           retiredBaseKeys: List.unmodifiable([
-            for (final k in json.strings('retired')) decodeBytes(k),
+            for (final k in json.strings('retired'))
+              checkedStateKey(decodeBytes(k), 'retired base key'),
           ]),
         );
       });

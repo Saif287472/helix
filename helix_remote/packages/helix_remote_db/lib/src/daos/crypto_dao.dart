@@ -101,15 +101,44 @@ class CryptoDao extends DatabaseAccessor<HelixDb> with _$CryptoDaoMixin {
   ///
   /// This drops the revision, so it is for a full wipe (sign-out, revocation)
   /// and never for replacing a record: use [saveSessions].
-  Future<void> deleteSessions(String account, {String? device}) =>
-      (delete(sessions)..where(
-            (s) =>
-                s.peerAccountId.equals(account) &
-                (device == null
-                    ? const Constant(true)
-                    : s.peerDeviceId.equals(device)),
-          ))
-          .go();
+  ///
+  /// With [expectedVersion] it is a compare-and-set on one device's record,
+  /// like [saveSessions]: the delete only lands while the stored revision is
+  /// still that one, and **returns false**, changing nothing, when another
+  /// engine wrote the record first. That is how one unreadable record is
+  /// dropped without discarding a good one that replaced it meanwhile.
+  Future<bool> deleteSessions(
+    String account, {
+    String? device,
+    int? expectedVersion,
+  }) async {
+    Future<int> wipe() =>
+        (delete(sessions)..where(
+              (s) =>
+                  s.peerAccountId.equals(account) &
+                  (device == null
+                      ? const Constant(true)
+                      : s.peerDeviceId.equals(device)),
+            ))
+            .go();
+    if (expectedVersion == null) {
+      await wipe();
+      return true;
+    }
+    if (device == null) {
+      throw ArgumentError.value(
+        device,
+        'device',
+        'a compare-and-set delete names one device',
+      );
+    }
+    return transaction(() async {
+      final existing = await sessionsWith(account, device);
+      if (_versionOf(existing) != expectedVersion) return false;
+      await wipe();
+      return true;
+    });
+  }
 
   // ----------------------------------------------------------- prekeys
 

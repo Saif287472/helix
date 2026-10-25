@@ -295,6 +295,33 @@ void main() {
     );
   });
 
+  test('a damaged stored key is refused when it is decoded', () async {
+    await send(a1, [b1], 'x');
+    final stored = b1.store.received.values.single;
+    final original =
+        jsonDecode(utf8.decode(stored.encode())) as Map<String, Object?>;
+
+    Map<String, Object?> damaged(String field, Object? value) {
+      final copy = jsonDecode(jsonEncode(original)) as Map<String, Object?>;
+      copy[field] = value;
+      return copy;
+    }
+
+    for (final (field, value) in <(String, Object?)>[
+      ('ck', encodeBytes(Uint8List(16))),
+      ('sig_pub', encodeBytes(Uint8List(31))),
+      ('it', 1 << 32),
+    ]) {
+      expect(
+        () => ReceivedSenderKey.decode(
+          utf8.encode(jsonEncode(damaged(field, value))),
+        ),
+        throwsA(isA<CorruptStateException>()),
+        reason: field,
+      );
+    }
+  });
+
   test('the sending device must not be in its own roster', () async {
     await expectLater(
       a1.protocol.encrypt(roster: roster(a1, [a1, b1]), content: [1]),

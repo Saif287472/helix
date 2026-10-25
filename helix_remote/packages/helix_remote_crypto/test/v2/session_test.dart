@@ -100,7 +100,51 @@ void main() {
       expect(DeviceSessions.decode(stored).encode(), stored);
       expect(
         () => DeviceSessions.decode(utf8.encode('{"v":9}')),
-        throwsA(isA<MalformedCryptoInputException>()),
+        throwsA(isA<CorruptStateException>()),
+      );
+    });
+
+    test('a damaged stored record is refused when it is decoded', () async {
+      await a.startSessionWith(b);
+      await b.receive(a, await a.send(b, 'x'));
+      final stored = b.sessions.rows[a.address]!;
+      final original = jsonDecode(utf8.decode(stored)) as Map<String, Object?>;
+
+      Map<String, Object?> damaged(String field, Object? value) {
+        final copy = jsonDecode(jsonEncode(original)) as Map<String, Object?>;
+        ((copy['active'] as Map<String, Object?>)['ratchet']
+                as Map<String, Object?>)[field] =
+            value;
+        return copy;
+      }
+
+      for (final (field, value) in <(String, Object?)>[
+        // HKDF and HMAC take a key of any length, so these would otherwise
+        // load and silently derive a chain the peer cannot follow.
+        ('rk', encodeBytes(Uint8List(16))),
+        ('cks', encodeBytes(Uint8List(31))),
+        ('ckr', encodeBytes(Uint8List(16))),
+        ('dhr', encodeBytes(Uint8List(16))),
+        ('ns', -1),
+        ('pn', 1 << 32),
+        ('nr', 'many'),
+      ]) {
+        expect(
+          () => DeviceSessions.decode(
+            utf8.encode(jsonEncode(damaged(field, value))),
+          ),
+          throwsA(isA<CorruptStateException>()),
+          reason: field,
+        );
+      }
+
+      final missing = jsonDecode(jsonEncode(original)) as Map<String, Object?>;
+      ((missing['active'] as Map<String, Object?>)['ratchet']
+              as Map<String, Object?>)
+          .remove('rk');
+      expect(
+        () => DeviceSessions.decode(utf8.encode(jsonEncode(missing))),
+        throwsA(isA<CorruptStateException>()),
       );
     });
 

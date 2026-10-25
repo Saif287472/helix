@@ -237,6 +237,64 @@ void main() {
       await first.save(retried, now: peers.clock.now);
       expect((await first.load(remote))!.version, greaterThan(after.version));
     });
+
+    test(
+      'a damaged stored record is dropped and rebuilt by the next send',
+      () async {
+        final peers = Peers();
+        addTearDown(peers.dispose);
+        final alice = await peers.register('alice');
+        final bob = await peers.register('bob');
+        final chat = await alice.engine.chats.openDirect(bob.account);
+        await alice.engine.chats.sendText(chat.id, 'before the damage');
+        await alice.engine.drainOutbox();
+
+        final remote = DeviceAddress(bob.account, bob.device);
+        final rows = await alice.db.cryptoDao.sessionsWith(
+          bob.account,
+          bob.device,
+        );
+        expect(rows, isNotEmpty);
+        final head =
+            jsonDecode(utf8.decode(rows.first.state)) as Map<String, Object?>;
+        // One damaged key is enough: HKDF would take it and derive a chain
+        // bob can never follow (AUD-9-1).
+        ((head['active'] as Map<String, Object?>)['ratchet']
+            as Map<String, Object?>)['rk'] = encodeBytes(
+          Uint8List(16),
+        );
+        expect(
+          await alice.db.cryptoDao.saveSessions(
+            bob.account,
+            bob.device,
+            [
+              Uint8List.fromList(utf8.encode(jsonEncode(head))),
+              for (final row in rows.skip(1)) row.state,
+            ],
+            now: peers.clock.now,
+            expectedVersion: rows.first.version,
+          ),
+          isTrue,
+        );
+
+        // The send loads the record, finds it unreadable, drops it and starts
+        // a fresh session instead of failing on the same bytes forever.
+        await alice.engine.chats.sendText(chat.id, 'after the damage');
+        await alice.engine.drainOutbox();
+        final rebuilt = (await DbSessionStore(alice.db).load(remote))!;
+        expect(rebuilt.active, isNotNull);
+        expect(
+          (await alice.db.cryptoDao.sessionsWith(bob.account, bob.device)),
+          hasLength(1),
+        );
+
+        await bob.sync();
+        expect(
+          await bob.texts(alice),
+          containsAll(['before the damage', 'after the damage']),
+        );
+      },
+    );
   });
 
   group('content codec', () {

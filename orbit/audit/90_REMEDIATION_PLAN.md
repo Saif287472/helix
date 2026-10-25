@@ -2532,6 +2532,42 @@ a new `unknown` error code treats it as non-retryable, which is safe.
   Gate: `fixtures_test.dart` **167 green** (9 before), full protocol suite
   **281 green**, `dart analyze` and `dart format` clean. No migration; no
   server or app change (both already speak these shapes).
+- S5 (AUD-9-1 + S9-1) — the stored-state factories read keys and counters with
+  no length or range check: HKDF and HMAC take a key of any length, so a
+  damaged `rk`/`cks`/`ck` loaded, encrypted under a chain the peer could never
+  derive and committed the advance, while a damaged `dhr` wedged sends forever
+  (the record stayed, and a reset could not overwrite it).
+  **S9-1:** [`CorruptStateException`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_crypto/lib/src/v2/errors.dart#L30)
+  (`requestsSessionReset = true`) is raised only at the local decode boundary:
+  `decodeStateJson`/`readState`, `requireVersion`, the key-pair `restore`
+  helpers (now via `requireStateLength`), and the state factories, which
+  validate every field AUD-9-1 lists - `rk`, `cks`, `ckr`, `dhr`, skipped
+  `mk`/`dh`, sender `ck`/`sig_pub`, `remote_dik`/`remote_aik`/`local_dik`/
+  `base_key`, retired keys and prekey restores as 32 bytes, and `ns`, `pn`,
+  `nr`, `it` as `u32`
+  ([`codec.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_crypto/lib/src/v2/codec.dart#L43)).
+  The two wire paths that used the local codec now call `readWire`, which
+  keeps `MalformedCryptoInputException`: provisioning's `DeviceIdentity`
+  and the server-fetched `BackupEnvelope`.
+  **AUD-9-1:** [`DbSessionStore.load`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart#L31)
+  catches the new type and drops the record with a compare-and-set
+  ([`CryptoDao.deleteSessions(expectedVersion:)`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/daos/crypto_dao.dart#L110))
+  - a plain delete could erase a good record another engine just wrote - and
+  reports no session, so the send path starts and stores a fresh one.
+  [`DbSenderKeyStore`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_engine/lib/src/groups/sender_key_store.dart#L39)
+  drops a damaged own key (the protocol then creates and distributes a new
+  one) or a damaged received key (the message is reported unreadable and the
+  sender redistributes), instead of failing every group send or read.
+  Tests: crypto `session_test.dart` decodes a state with a 16-byte `rk`/`cks`/
+  `ckr`/`dhr`, out-of-range and non-integer counters and a missing `rk`, and
+  `sender_keys_test.dart` a 16-byte `ck`, a 31-byte `sig_pub` and an `it` past
+  `u32`; the unsupported-version expectation moved to the new type. Engine
+  `util_test.dart` writes a 16-byte `rk` into alice's stored session and
+  asserts the next send rebuilds the record and bob reads both texts.
+  Gate: crypto **77 green** (74 before), engine **352 green**, db **140
+  green**, `dart analyze` clean on crypto, db, engine and cli. No wire or
+  stored-format change (the bytes written stay identical); no migration; an
+  app needs the new packages.
 
 ## B13 — Local maintenance must survive a large history
 **A · ~1–2 days · no schema change**

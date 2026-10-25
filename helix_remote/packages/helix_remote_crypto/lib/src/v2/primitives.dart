@@ -105,6 +105,14 @@ void requireLength(List<int> bytes, int length, String what) {
   }
 }
 
+/// [requireLength] for state this device wrote itself: a wrong length is a
+/// damaged record, not a peer's message (AUD-9-1).
+void requireStateLength(List<int> bytes, int length, String what) {
+  if (bytes.length != length) {
+    throw CorruptStateException('$what must be $length bytes');
+  }
+}
+
 // ----------------------------------------------------------------- hashes
 
 Uint8List sha256(List<int> data) =>
@@ -249,8 +257,8 @@ final class X25519KeyPair {
   /// Rebuilds a pair whose public key is already known (no scalar
   /// multiplication). Only for state this device wrote itself.
   factory X25519KeyPair.restore(List<int> privateKey, List<int> publicKey) {
-    requireLength(privateKey, 32, 'X25519 private key');
-    requireLength(publicKey, 32, 'X25519 public key');
+    requireStateLength(privateKey, 32, 'X25519 private key');
+    requireStateLength(publicKey, 32, 'X25519 public key');
     return X25519KeyPair._(copyBytes(privateKey), copyBytes(publicKey));
   }
 
@@ -307,8 +315,8 @@ final class Ed25519KeyPair {
   /// Rebuilds a pair whose public key is already known. Only for state this
   /// device wrote itself.
   factory Ed25519KeyPair.restore(List<int> seed, List<int> publicKey) {
-    requireLength(seed, 32, 'Ed25519 seed');
-    requireLength(publicKey, 32, 'Ed25519 public key');
+    requireStateLength(seed, 32, 'Ed25519 seed');
+    requireStateLength(publicKey, 32, 'Ed25519 public key');
     return Ed25519KeyPair._(copyBytes(seed), copyBytes(publicKey));
   }
 

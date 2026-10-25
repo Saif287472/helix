@@ -57,9 +57,9 @@ final class SkippedMessageKey {
   };
 
   factory SkippedMessageKey.fromJson(JsonReader json) => SkippedMessageKey(
-    ratchetKey: json.bytes('dh'),
-    index: json.integer('n'),
-    messageKey: json.bytes('mk'),
+    ratchetKey: stateKey(json, 'dh', what: 'skipped ratchet key'),
+    index: stateCounter(json, 'n', what: 'skipped message index'),
+    messageKey: stateKey(json, 'mk', what: 'skipped message key'),
     storedAt: json.time('at'),
   );
 }
@@ -171,29 +171,31 @@ final class RatchetState {
     'retired': [for (final k in retiredRemoteRatchetKeys) encodeBytes(k)],
   };
 
-  factory RatchetState.fromJson(JsonReader json) =>
-      readState('ratchet state', () {
-        requireVersion(json, 1, 'ratchet state');
-        return RatchetState(
-          rootKey: json.bytes('rk'),
-          sendingRatchetKey: X25519KeyPair.restore(
-            json.bytes('dhs_priv'),
-            json.bytes('dhs'),
-          ),
-          remoteRatchetKey: json.optBytes('dhr'),
-          sendingChainKey: json.optBytes('cks'),
-          sendCount: json.integer('ns'),
-          previousSendCount: json.integer('pn'),
-          receivingChainKey: json.optBytes('ckr'),
-          receiveCount: json.integer('nr'),
-          skipped: List.unmodifiable(
-            json.objects('skipped', SkippedMessageKey.fromJson),
-          ),
-          retiredRemoteRatchetKeys: List.unmodifiable([
-            for (final k in json.strings('retired')) decodeBytes(k),
-          ]),
-        );
-      });
+  factory RatchetState.fromJson(
+    JsonReader json,
+  ) => readState('ratchet state', () {
+    requireVersion(json, 1, 'ratchet state');
+    return RatchetState(
+      rootKey: stateKey(json, 'rk', what: 'ratchet root key'),
+      sendingRatchetKey: X25519KeyPair.restore(
+        json.bytes('dhs_priv'),
+        json.bytes('dhs'),
+      ),
+      remoteRatchetKey: optStateKey(json, 'dhr', what: 'remote ratchet key'),
+      sendingChainKey: optStateKey(json, 'cks', what: 'sending chain key'),
+      sendCount: stateCounter(json, 'ns', what: 'send count'),
+      previousSendCount: stateCounter(json, 'pn', what: 'previous count'),
+      receivingChainKey: optStateKey(json, 'ckr', what: 'receiving chain key'),
+      receiveCount: stateCounter(json, 'nr', what: 'receive count'),
+      skipped: List.unmodifiable(
+        json.objects('skipped', SkippedMessageKey.fromJson),
+      ),
+      retiredRemoteRatchetKeys: List.unmodifiable([
+        for (final k in json.strings('retired'))
+          checkedStateKey(decodeBytes(k), 'retired ratchet key'),
+      ]),
+    );
+  });
 
   static String? _opt(Uint8List? bytes) =>
       bytes == null ? null : encodeBytes(bytes);

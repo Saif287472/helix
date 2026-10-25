@@ -34,9 +34,22 @@ final class DbSessionStore implements PairwiseSessionStore {
       remote.device,
     );
     if (rows.isEmpty) return null;
-    return decode(remote, [
-      for (final row in rows) row.state,
-    ], version: rows.first.version);
+    try {
+      return decode(remote, [
+        for (final row in rows) row.state,
+      ], version: rows.first.version);
+    } on CorruptStateException {
+      // A record this device wrote no longer parses (AUD-9-1). Drop it while
+      // it is still the one just read, then report no session, so the normal
+      // start-a-session path rebuilds it; leaving it in place would make every
+      // send to this device fail on the same bytes forever.
+      await _db.cryptoDao.deleteSessions(
+        remote.account,
+        device: remote.device,
+        expectedVersion: rows.first.version,
+      );
+      return null;
+    }
   }
 
   /// Writes [sessions] (call inside the transaction of the message's effect).

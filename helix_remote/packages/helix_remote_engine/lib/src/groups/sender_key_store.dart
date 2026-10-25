@@ -43,12 +43,28 @@ final class DbSenderKeyStore implements SenderKeyStore {
       account: self.accountId,
       device: self.deviceId,
     );
+    SenderKeyState? key;
+    if (row != null) {
+      try {
+        key = SenderKeyState.decode(row.state);
+      } on CorruptStateException {
+        // A key this device wrote no longer parses (AUD-9-1). Dropping it
+        // makes the protocol create a fresh key and distribute it, instead of
+        // every send to this group failing on the same bytes.
+        await _db.cryptoDao.deleteSenderKey(
+          groupId: groupId,
+          account: self.accountId,
+          device: self.deviceId,
+          distId: row.distId,
+        );
+      }
+    }
     _ownVersions[groupId] = await _db.cryptoDao.ownSenderKeyVersion(
       groupId: groupId,
       account: self.accountId,
       device: self.deviceId,
     );
-    return row == null ? null : SenderKeyState.decode(row.state);
+    return key;
   }
 
   @override
@@ -63,7 +79,21 @@ final class DbSenderKeyStore implements SenderKeyStore {
       device: sender.device,
       distId: distributionId,
     );
-    return row == null ? null : ReceivedSenderKey.decode(row.state);
+    if (row == null) return null;
+    try {
+      return ReceivedSenderKey.decode(row.state);
+    } on CorruptStateException {
+      // The message cannot be read without the key, and reporting it missing
+      // asks the sender for the distribution again (AUD-9-1); keeping the
+      // damaged row would leave every message from this device unreadable.
+      await _db.cryptoDao.deleteSenderKey(
+        groupId: groupId,
+        account: sender.account,
+        device: sender.device,
+        distId: row.distId,
+      );
+      return null;
+    }
   }
 
   /// Writes the state changes a crypto call returned.

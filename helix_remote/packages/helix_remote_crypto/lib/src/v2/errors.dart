@@ -23,6 +23,19 @@ final class MalformedCryptoInputException extends CryptoV2Exception {
   const MalformedCryptoInputException(super.message);
 }
 
+/// A stored record this device wrote itself no longer parses: a damaged
+/// database page, a bad restore of the file, or a step-migration that rewrote
+/// the blob. Not a peer's message - that is [MalformedCryptoInputException] -
+/// so the record is ours to throw away and rebuild (AUD-9-1).
+final class CorruptStateException extends CryptoV2Exception {
+  const CorruptStateException(super.message);
+
+  /// Rebuilding is a reset: without the stored session there is no state to
+  /// read the peer's next message with.
+  @override
+  bool get requestsSessionReset => true;
+}
+
 /// An AEAD tag did not verify: tampering, a wrong key, or wrong associated
 /// data.
 final class DecryptionFailedException extends CryptoV2Exception {
