@@ -47,15 +47,16 @@ void main() {
   testWidgets('the sheet covers just over two thirds of the screen', (
     tester,
   ) async {
-    // On a phone, because that is where a sheet that fills the screen hurts:
-    // the operator is left with a drag handle and nothing to get back with.
+    // On a phone, because a sheet that fills the screen hurts: the operator is
+    // left with a drag handle and nothing to get back with. The handle's band
+    // counts inside it, so what is left above the keyboard holds the whole view.
     await h.startPhone(tester);
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
     await h.tapRowAction(tester, 'Show log');
 
-    // startPhone's surface is 800 dp tall, and the sheet counts its own drag
-    // handle, so the height is the share the operator sees.
+    // startPhone's surface is 800 dp tall, so the height is the share the
+    // operator sees.
     expect(
       tester.getSize(find.byType(BottomSheet)).height,
       closeTo(800 * 0.68, 1),
@@ -101,6 +102,24 @@ void main() {
     expect(find.text('No lines match the filter'), findsOneWidget);
     await tapText(tester, 'Clear filter');
     expect(find.textContaining('server_started'), findsOneWidget);
+  });
+
+  testWidgets('filtering on a phone keeps the sheet above the keyboard', (
+    tester,
+  ) async {
+    await h.startPhone(tester);
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    await h.tapRowAction(tester, 'Show log');
+    tester.view.viewInsets = const FakeViewPadding(bottom: 330);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('No lines match the filter'), findsOneWidget);
+    final field = tester.getRect(find.byType(TextField));
+    expect(field.bottom, lessThanOrEqualTo(800 - 330));
   });
 
   testWidgets('copies the shown lines', (tester) async {

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -17,9 +19,10 @@ Future<T?> showConsoleSheet<T>({
   double heightFactor = 0.68,
   double maxWidth = 720,
 }) {
-  // Capped on the route, not inside the body: a bottom sheet fills whatever
-  // height it is allowed, so the cap has to be the thing it is measured against.
-  // The drag-handle band sits inside this height too.
+  // Its height is set in the body, not on the route: an open keyboard lifts the
+  // sheet above it, and the room left is only known there. The drag-handle band
+  // (48 px, with no route cap to make room for it) counts inside that height,
+  // so the share the operator sees is always `heightFactor` of the screen.
   final height = MediaQuery.sizeOf(context).height * heightFactor;
   return showModalBottomSheet<T>(
     context: context,
@@ -32,15 +35,32 @@ Future<T?> showConsoleSheet<T>({
       side: BorderSide(color: HelixConsoleColors.border),
     ),
     // On a wide window the sheet stays a centred column, not a full-width band.
-    constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: height),
-    builder: (_) => ScaffoldMessenger(
-      // The sheet is drawn over the shell's Scaffold, and it covers the bottom
-      // of the screen where that Scaffold shows a short line - so a sheet that
-      // reports a problem carries a messenger and a Scaffold of its own.
-      child: Scaffold(
-        backgroundColor: HelixConsoleColors.surface,
-        body: child,
-      ),
-    ),
+    constraints: BoxConstraints(maxWidth: maxWidth),
+    builder: (sheet) {
+      final keyboard = MediaQuery.viewInsetsOf(sheet).bottom;
+      final room = MediaQuery.sizeOf(sheet).height - keyboard;
+      return Padding(
+        padding: EdgeInsets.only(bottom: keyboard),
+        child: SizedBox(
+          height: math.min(height, room) - _dragHandleBand,
+          child: ScaffoldMessenger(
+            // The sheet is drawn over the shell's Scaffold, and it covers the
+            // bottom of the screen where that Scaffold shows a short line - so
+            // a sheet that reports a problem carries a messenger and a Scaffold
+            // of its own.
+            child: Scaffold(
+              // Only the padding above lifts it; a second squeeze would take
+              // the room twice and leave the view too short for its own header.
+              resizeToAvoidBottomInset: false,
+              backgroundColor: HelixConsoleColors.surface,
+              body: child,
+            ),
+          ),
+        ),
+      );
+    },
   );
 }
+
+/// The band the bottom sheet puts its drag handle in, inside its own height.
+const _dragHandleBand = 48.0;
