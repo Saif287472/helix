@@ -108,7 +108,11 @@ final class ThemePackActions {
       await _refresh();
       if (change == PackChange.alreadyCurrent) return 'Already up to date.';
       final pack = await store.load(id);
-      return '${pack?.name ?? id} theme downloaded.';
+      // The store proves a pack is readable before it moves it into place, so
+      // this is a folder that changed between the two reads - and a download
+      // that cannot be drawn is not one to say "downloaded" about.
+      if (pack == null) return 'That theme cannot be used on this phone.';
+      return '${pack.name} theme downloaded.';
     } on PackNotHosted {
       return 'That theme is no longer on offer.';
     } on PackRefused catch (e) {
@@ -125,7 +129,11 @@ final class ThemePackActions {
   Future<String?> remove(String id) async {
     final store = _ref.read(themePackStoreProvider);
     try {
-      final name = (await store.load(id))?.name;
+      // Named from the library this app already read, not by opening the folder
+      // again: a pack that has stopped being readable cannot be on screen, but
+      // its bytes are still on this phone, and deleting them must not depend on
+      // a read that is expected to fail.
+      final name = _ref.read(themeLibraryProvider)[id]?.meta.name;
       if (!await store.remove(id)) return 'That theme is not on this device.';
       await _refresh();
       return '${name ?? id} theme deleted.';

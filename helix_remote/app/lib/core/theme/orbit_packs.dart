@@ -267,6 +267,27 @@ final class PackFolder<T> {
     }
 
     final root = await AppPaths.packsDirectory();
+    // Nothing is moved into place until the app has proved it can use it: a
+    // decode that failed after the rename would leave bytes no page can offer,
+    // and no page can delete either. The folder named here is the one the pack
+    // would have; nothing is written to it.
+    final probe = PackBytes(
+      id: manifest.id,
+      revision: manifest.revision,
+      manifest: manifest,
+      folder: p.join(root.path, manifest.id, 'r${manifest.revision}'),
+      files: files,
+      bytes:
+          manifestBytes.length +
+          files.values.fold<int>(0, (sum, bytes) => sum + bytes.length),
+    );
+    if (_decode(probe) == null) {
+      throw const PackRefused(
+        OrbitPackFailure.badTheme,
+        'this app cannot read what it carries, so it could not be offered',
+      );
+    }
+
     final staging = Directory(
       p.join(
         root.path,
@@ -387,7 +408,9 @@ final class PackFolder<T> {
         manifest = OrbitPackManifest.fromJson(
           jsonDecode(utf8.decode(manifestBytes)) as Map<String, Object?>,
         );
-      } on FormatException {
+      } on Object {
+        // Not JSON, not an object, or not a manifest: none of these is a pack,
+        // and none may take the folder read down with it.
         return null;
       }
       // The folder is how the app finds a pack and the revision it offers is
@@ -422,7 +445,7 @@ final class PackFolder<T> {
         files: files,
         bytes: bytes,
       );
-      final value = decode(pack);
+      final value = _decode(pack);
       // A pack the gate allowed but this app cannot use is not a pack on screen
       // today: the theme document is not the 111 tokens the gate read, or the
       // sound is not a file this platform can point a ringtone at.
@@ -430,6 +453,21 @@ final class PackFolder<T> {
       return PackOf(pack: pack, value: value);
     } on FileSystemException {
       return null; // A file that cannot be read is not a pack today.
+    }
+  }
+
+  /// [decode], with anything it throws read as "not a pack today".
+  ///
+  /// This is the folder's contract and not the decoder's promise: one stored
+  /// theme a build cannot parse must not take every other pack's read down
+  /// with it, and a later decoder is free to raise something other than
+  /// `FormatException`. Nothing else in a read is allowed to throw for a bad
+  /// pack either; a decoded value that cannot be made is simply absent.
+  T? _decode(PackBytes pack) {
+    try {
+      return decode(pack);
+    } on Object {
+      return null;
     }
   }
 

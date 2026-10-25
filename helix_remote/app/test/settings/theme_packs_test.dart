@@ -190,11 +190,12 @@ void main() {
       );
     });
 
-    test('a theme that parses but is missing tokens is not a theme', () async {
-      // AUD-16-1: a signed document can pass the gate and still not be
-      // drawable. The store's own words are that drawing needs every token,
-      // so that is checked when the pack is read - before it can be chosen
-      // and saved, and throw above the router on every later launch.
+    test('a theme that parses but is missing tokens is refused before it is '
+        'stored', () async {
+      // AUD-16-1/16-6: a signed document can pass the gate and still not be
+      // drawable. The store proves it can read a pack before it moves it into
+      // place, so one that could never be offered leaves no folder behind -
+      // and the page can say so instead of "downloaded".
       final thin = themed(id: 'synthwave', name: 'Synthwave');
       final tokens = thin['tokens']! as Map;
       for (final group in tokens.keys.toList()) {
@@ -204,11 +205,117 @@ void main() {
 
       final store = ThemePackStore(trustedPublishers: trusted);
       final pack = await signedPack(by: publisherKey, theme: thin);
-      await store.install(FakePackSource([pack]), 'synthwave');
-
+      await expectLater(
+        store.install(FakePackSource([pack]), 'synthwave'),
+        throwsA(
+          isA<PackRefused>().having(
+            (e) => e.failure,
+            'failure',
+            OrbitPackFailure.badTheme,
+          ),
+        ),
+      );
+      final root = await packsRoot();
+      expect(Directory('$root/synthwave').existsSync(), isFalse);
       expect(await store.load('synthwave'), isNull);
       expect(await store.themeTokens(), isEmpty);
     });
+
+    test('a token this build cannot read is refused by the page, and leaves '
+        'no folder', () async {
+      // AUD-16-6: the gate checks that a theme names the tokens, not that
+      // every value is one this app can draw with. A length that is a word
+      // passes the gate and fails the parse, and that failure has to reach the
+      // page before a download is called a download.
+      final doc = themed(id: 'synthwave', name: 'Synthwave');
+      ((doc['tokens']! as Map)['lengthPx'] as Map)['r-md'] = 'wide';
+      final container = libraryContainer(
+        source: FakePackSource([
+          await signedPack(by: publisherKey, theme: doc),
+        ]),
+      );
+
+      expect(
+        await container.read(themePackActionsProvider).install('synthwave'),
+        'That pack cannot be used: a theme document that is not well-formed.',
+      );
+      final root = await packsRoot();
+      expect(Directory('$root/synthwave').existsSync(), isFalse);
+      expect(Directory('$root/.staging').existsSync(), isFalse);
+      expect(
+        container.read(themeLibraryProvider).containsKey('synthwave'),
+        isFalse,
+      );
+    });
+
+    test(
+      'a stored pack this build cannot parse does not hide the others',
+      () async {
+        // AUD-14j-1: the library is read whole at every start. One folder a
+        // later build stopped understanding - here a transform name this app
+        // has not got - must read as one absent pack, not as an error for the
+        // rest of the folder.
+        final good = await signedPack(by: publisherKey);
+        final doc = themed(id: 'oldtheme', name: 'Old Theme');
+        ((doc['tokens']! as Map)['transform'] as Map)['display-transform'] =
+            'wobble';
+        final stale = await signedPack(
+          by: publisherKey,
+          id: 'oldtheme',
+          name: 'Old Theme',
+          theme: doc,
+        );
+
+        final store = ThemePackStore(trustedPublishers: trusted);
+        await store.install(FakePackSource([good]), 'synthwave');
+        await placePack(stale);
+
+        expect((await store.installed()).map((p) => p.id), ['synthwave']);
+        expect((await store.themeTokens()).keys, ['synthwave']);
+        expect(await store.load('oldtheme'), isNull);
+
+        // And its bytes are still deletable: removal never has to open a pack
+        // that a read is expected to refuse.
+        final container = libraryContainer();
+        await container.read(downloadedThemesProvider.notifier).reload();
+        expect(container.read(downloadedThemesProvider).keys, ['synthwave']);
+        expect(
+          await container.read(themePackActionsProvider).remove('oldtheme'),
+          'oldtheme theme deleted.',
+        );
+        expect(
+          Directory('${await packsRoot()}/oldtheme').existsSync(),
+          isFalse,
+        );
+        expect(
+          container.read(themeLibraryProvider).containsKey('oldtheme'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'a decoder bug is one absent pack, not a folder that cannot be read',
+      () async {
+        // AUD-14j-1: [PackFolder] promises that one stored pack never takes the
+        // scan down, whatever the decoder raises - a later decoder is free to
+        // throw something other than FormatException.
+        final folder = PackFolder<String>(
+          contents: 'theme',
+          decode: (_) => throw StateError('a decoder bug'),
+          trustedPublishers: trusted,
+        );
+        await placePack(await signedPack(by: publisherKey));
+
+        expect(await folder.stored(), isEmpty);
+        expect(await folder.load('synthwave'), isNull);
+        // The scan itself did not throw, and the bytes are still there.
+        expect(
+          Directory('${await packsRoot()}/synthwave/r1').existsSync(),
+          isTrue,
+        );
+      },
+    );
 
     test('a pack the host does not list is not installed', () async {
       final store = ThemePackStore(trustedPublishers: trusted);
@@ -969,6 +1076,22 @@ void main() {
 // ------------------------------------------------------------------ fixtures
 
 // The signed packs, the fake hosts and the keys are in `../support/pack_fixtures.dart`, shared with the sounds store's tests.
+
+/// A signed pack written straight into the pack folder, the way an older app -
+/// or a person's own copy of the bytes - leaves one there. Used where
+/// [ThemePackStore.install] would refuse the pack today.
+Future<void> placePack(HostedPack pack) async {
+  final folder =
+      '${await packsRoot()}/${pack.manifest.id}/'
+      'r${pack.manifest.revision}';
+  Directory('$folder/files').createSync(recursive: true);
+  File('$folder/manifest.json').writeAsBytesSync(pack.manifestBytes);
+  for (final file in pack.manifest.files) {
+    File(
+      '$folder/files/${file.sha256}',
+    ).writeAsBytesSync(pack.files[file.path]!);
+  }
+}
 
 /// A container with the themes [main] would seed, this test's anchor, and one
 /// temp folder to write into.

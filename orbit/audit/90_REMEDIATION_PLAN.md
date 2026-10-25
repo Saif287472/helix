@@ -2036,6 +2036,38 @@ packs only.
   theme-pack file **42 green** (41 before), `flutter analyze` clean on the
   workspace. No wire change, no migration, no server change. A new APK carries
   the app half.
+- S2 (AUD-14j-1, AUD-16-6) — S1 made the theme parse strict, which turned two
+  older gaps into live ones: the store decoded a pack **after** the rename, so
+  a document the gate allows but this build cannot read left a folder that no
+  page offered and no page could delete, and reported it as "downloaded"; and
+  the folder's read caught only `FormatException` around the parse and
+  `FileSystemException` around the files, so one stored pack could still take
+  every other pack's read down. `ThemePackActions.remove` also read the pack
+  first, so the undeletable pack was exactly the one whose read failed.
+  **What changed:** `PackFolder.install` decodes an in-memory `PackBytes` probe
+  after the gate and **before** anything is staged; a null decode is a
+  `PackRefused` ([OrbitPackFailure.badTheme](file:///J:/Projects/helix/helix_remote/packages/helix_remote_domain/lib/domain/theme_packs.dart)),
+  so no folder and no staging bytes are left behind and the page says "cannot
+  be used" instead of "downloaded". On the read side a manifest that is not
+  JSON/an object/a manifest is caught as `Object`, and `decode` is wrapped in
+  `_decode`, which reads anything a decoder raises as "this device holds no
+  such pack today": one bad stored theme cannot hide the others, and a later
+  decoder may raise more than `FormatException`. `remove` names the pack from
+  the theme library already in memory and never opens the folder before
+  deleting it. The store gained the same `PackFolder` contract for sounds for
+  free (the sound decoder only names the stored file; it reads nothing).
+  Tests: `app/test/settings/theme_packs_test.dart` — a signed theme missing
+  its tokens, and one with `lengthPx.r-md = "wide"`, are refused at install
+  with no `packs/<id>` and no `.staging` folder (the first replaces S1's
+  "installs but cannot be loaded" expectation); a hand-placed signed pack with
+  `transform.display-transform = "wobble"` leaves the good pack installed and
+  drawable, and `ThemePackActions.remove("oldtheme")` deletes it and says
+  "theme deleted"; a `PackFolder` whose decoder throws `StateError` reads as
+  no pack rather than a failed folder.
+  Gate: the app's theme-pack file **45 green** (42 before), the sounds file
+  **12 green** (shared store, unchanged), `flutter analyze` clean on the
+  workspace. No wire change, no migration, no server change. A new APK carries
+  the app half.
 
 ## B11 — Realtime sockets: one clock, one registration, one re-auth
 **S · ~2–3 days · no migration (an index if the gauge needs one) · depends on B1**
