@@ -2944,6 +2944,26 @@ the migration and dump that go with it).
   workspace, `dart format` clean on the changed files. No schema, wire or
   server change; the app and CLI get it from the packages, and the phone needs
   a new APK to see it.
+- S3 (AUD-10-2) — **did not reproduce; recorded as such, not fixed blind.**
+  The finding expected `HistoryStore.backupableCount` with an empty exclusion
+  list to render `kind NOT IN ()` and fail as a syntax error. It does render
+  that, but SQLite - unlike the SQL standard and most engines - accepts an
+  empty list on the right of `IN`/`NOT IN`, and `x NOT IN ()` is true. A probe
+  with both lists empty counted the one message it should; nothing fails.
+  **What changed:** no query change. The new
+  [`history_store_test.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/test/history_store_test.dart)
+  pins the count the audit's own test sketch asked for, so a rewrite of the
+  query (or a move to an engine without the extension) cannot break it unseen:
+  with both lists empty it counts every message but the view-once and the
+  already-expired ones (4 of 6), and it leaves out a named kind, a named status,
+  or both, with either list empty. S2's
+  [`chunks.dart`](file:///J:/Projects/helix/helix_remote/packages/helix_remote_db/lib/src/chunks.dart)
+  had repeated the same wrong claim ("`IN ()`, which SQLite rejects outright");
+  its doc now says only what is true, that an empty list runs no statement.
+  These tests pass on the code before this step too: they are a pin, not a
+  proof of a fix. Gate: db **150 green** (148 before), `dart analyze` clean,
+  `dart format` clean. No behaviour, schema, wire or server change, and nothing
+  for the phone.
 
 ## B14 — Identity: charge for texts that left, cap devices, name the owner
 **S · ~2–3 days · no migration · depends on Q7**

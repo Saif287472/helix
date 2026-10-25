@@ -17,8 +17,8 @@ const int statementIdLimit = 500;
 
 extension ChunkedIds<T> on List<T> {
   /// This list in runs of at most [statementIdLimit] elements, so each run can
-  /// be one statement. Empty in, empty out — a caller that loops over this
-  /// therefore never builds `IN ()`, which SQLite rejects outright.
+  /// be one statement. Empty in, empty out: a caller that loops over this runs
+  /// no statement at all for an empty list.
   Iterable<List<T>> chunks() sync* {
     for (var at = 0; at < length; at += statementIdLimit) {
       final end = at + statementIdLimit;

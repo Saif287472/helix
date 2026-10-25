@@ -84,7 +84,7 @@ final class HistoryStore {
 
   /// Receipts of the given messages, by message row id.
   ///
-  /// Read in runs of [statementIdLimit]: an export page is small today, and a
+  /// Read in runs of [statementIdLimit]: an export page is small today, and an
   /// `IN (…)` of every id in a big one would fail at SQLite's per-statement
   /// parameter limit (AUD-10-1).
   Future<Map<int, List<ReceiptRow>>> receiptsFor(Iterable<int> rowids) async {
