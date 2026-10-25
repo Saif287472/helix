@@ -180,7 +180,11 @@ final class ComposerNotifier extends Notifier<ComposerState> {
   Timer? _voiceTick;
   DateTime? _lastTypingSent;
   int _voiceElapsedMs = 0;
-  String _lastDraft = '';
+
+  // Bumped by every draft write and by a send: a save that has not reached
+  // the database yet when a newer one (or a send) starts is dropped, so the
+  // text just sent never comes back as the draft.
+  int _draftSeq = 0;
 
   // Voice-note state that is not drawn: whether the person still wants the
   // recording (their finger is down, or it is locked), whether the microphone
@@ -284,9 +288,9 @@ final class ComposerNotifier extends Notifier<ComposerState> {
   }
 
   Future<void> _saveDraft(String text) async {
-    if (text == _lastDraft) return;
-    _lastDraft = text;
+    final seq = ++_draftSeq;
     final gateway = await _gateway;
+    if (seq != _draftSeq) return;
     await gateway.setDraft(conversationId, text.trim().isEmpty ? null : text);
   }
 
@@ -415,9 +419,13 @@ final class ComposerNotifier extends Notifier<ComposerState> {
   Future<bool> send(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return false;
+    final editing = state.edit;
+    if (editing == null) {
+      _draftTimer?.cancel();
+      _draftSeq++;
+    }
     final gateway = await _gateway;
     try {
-      final editing = state.edit;
       if (editing != null) {
         await gateway.edit(editing.rowid, trimmed);
         state = state.copyWith(edit: () => null);
@@ -432,14 +440,13 @@ final class ComposerNotifier extends Notifier<ComposerState> {
           mentions: mentionsIn(text),
         );
         state = state.copyWith(reply: () => null);
+        await gateway.setDraft(conversationId, null);
       }
     } on Object {
       _notice('The message could not be sent.');
       return false;
     }
     _pendingMentions.clear();
-    _lastDraft = '';
-    _draftTimer?.cancel();
     await _stopTyping();
     return true;
   }

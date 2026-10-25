@@ -435,6 +435,57 @@ void main() {
     expect(row!.draft, 'half written');
   });
 
+  chatTest('a stored draft cleared to nothing stays cleared', (
+    tester,
+    gateway,
+  ) async {
+    final chat = (await tester.runAsync(() async {
+      final id = await gateway.chatWith('bob', name: 'Bob');
+      await gateway.db.conversationsDao.setDraft(id, 'old words');
+      return id;
+    }))!;
+    await open(tester, gateway, chat);
+    await settle(tester);
+    expect(find.text('old words'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    await settle(tester);
+    final row = await tester.runAsync(
+      () => gateway.db.conversationsDao.byId(chat),
+    );
+    expect(row!.draft, isNull);
+  });
+
+  chatTest('the text just sent does not come back as the draft', (
+    tester,
+    gateway,
+  ) async {
+    final chat = (await tester.runAsync(
+      () => gateway.chatWith('bob', name: 'Bob'),
+    ))!;
+    await open(tester, gateway, chat);
+    await tester.enterText(find.byType(TextField), 'see you at six');
+    // The draft is saved half a second after the last keystroke.
+    await tester.pump(const Duration(milliseconds: 600));
+    await settle(tester);
+    expect(
+      (await tester.runAsync(
+        () => gateway.db.conversationsDao.byId(chat),
+      ))!.draft,
+      'see you at six',
+    );
+    await tester.tap(find.byTooltip('Send'));
+    await settle(tester);
+    expect(gateway.log, contains('sendText:$chat:see you at six'));
+    await tester.pumpWidget(const SizedBox());
+    await settle(tester);
+    final row = await tester.runAsync(
+      () => gateway.db.conversationsDao.byId(chat),
+    );
+    expect(row!.draft, isNull);
+  });
+
   chatTest('typing is announced, and stops when the text is cleared', (
     tester,
     gateway,
