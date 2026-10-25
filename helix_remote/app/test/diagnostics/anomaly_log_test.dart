@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
@@ -64,6 +65,44 @@ void main() {
     expect(entry.stack, isNot(contains('dart:core')));
     expect(entry.stack, contains('home.dart:12:3'));
     expect(entry.stack, contains('orbit_ui/card.dart'));
+  });
+
+  testWidgets('a layout overflow says which widget and file it came from', (
+    tester,
+  ) async {
+    AnomalyLog.fullDetail = true;
+    final previous = FlutterError.onError;
+    FlutterError.onError = AnomalyLog.flutterError;
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Column(children: [SizedBox(height: 100)]),
+          ),
+        ),
+      ),
+    );
+    FlutterError.onError = previous;
+
+    final entry = AnomalyLog.queued.single;
+    expect(entry.kind, 'crash');
+    expect(entry.message, contains('overflowed by 60 pixels'));
+    expect(entry.fields['widget'], startsWith('Column anomaly_log_test.dart:'));
+    expect(entry.fields['during'], contains('layout'));
+  });
+
+  test('a report without a blamed widget names none', () {
+    expect(AnomalyLog.culpritOf('Exception: boom'), isNull);
+    expect(
+      AnomalyLog.culpritOf(
+        'The relevant error-causing widget was:\n'
+        '  Row Row:file:///J:/p/lib/features/chats/chat_tile.dart:42:7',
+      ),
+      'Row chat_tile.dart:42',
+    );
   });
 
   test('the same anomaly within a minute counts up instead', () {

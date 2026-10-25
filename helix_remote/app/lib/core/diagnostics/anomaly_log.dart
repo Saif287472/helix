@@ -68,6 +68,34 @@ abstract final class AnomalyLog {
     soon: true,
   );
 
+  /// An error the framework caught. A layout overflow has no stack, so the
+  /// widget it blames (a debug build names its file and line) and what the
+  /// framework was doing are what say where it happened.
+  static void flutterError(FlutterErrorDetails details) {
+    final during = details.context?.toDescription() ?? '';
+    final widget = culpritOf(details.toString());
+    record(
+      'crash',
+      details.exception.runtimeType.toString(),
+      message: '${details.exception}',
+      stack: details.stack,
+      fields: {if (during.isNotEmpty) 'during': during, 'widget': ?widget},
+      soon: true,
+    );
+  }
+
+  static final _culprit = RegExp(
+    r'The relevant error-causing widget was:?\s+(\S+)\s+\S*?([\w.-]+\.dart):(\d+)',
+  );
+
+  /// The widget a framework error report blames, as `Type file.dart:line`
+  /// (the file's name only: a whole path would be masked as a token).
+  @visibleForTesting
+  static String? culpritOf(String report) {
+    final m = _culprit.firstMatch(report);
+    return m == null ? null : '${m[1]} ${m[2]}:${m[3]}';
+  }
+
   /// An action that failed. Refused requests (reported by the API's
   /// observer), being offline, being signed out and a cancel are expected
   /// and skipped.

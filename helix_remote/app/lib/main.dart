@@ -47,7 +47,7 @@ Future<void> main(List<String> args) async {
     // keys, tokens and phone numbers before anything leaves the device.
     FlutterError.presentError(details);
     debugPrint('[helix] flutter error: ${details.exception.runtimeType}');
-    AnomalyLog.crash(details.exception, details.stack);
+    AnomalyLog.flutterError(details);
   };
   await runZonedGuarded(
     () async {
