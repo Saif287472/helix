@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/admin/domain/password_hash.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
+import 'package:helix_remote_server/src/platform/db/paging.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 
 /// Schema `admin`: operator accounts and the audit log.
@@ -287,7 +288,7 @@ final class AdminStore {
     }
     final rows = await db.query(
       'SELECT id, action, target, details, at FROM $s.audit '
-      'WHERE (@cursor:uuid IS NULL OR id < @cursor:uuid) '
+      'WHERE id < COALESCE(@cursor:uuid, $lastUuidSql) '
       'ORDER BY id DESC LIMIT @limit:int4',
       {'cursor': cursor, 'limit': page.limit + 1},
     );

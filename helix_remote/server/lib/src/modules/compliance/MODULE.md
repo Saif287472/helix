@@ -12,6 +12,12 @@ tables.
   implementing `ProvidesAccountExport` contributes a section under its
   name: identity, keys, messaging, people, media, backup and groups. The
   response is sent as an attachment.
+- **A section that can grow is capped and says so** (owner ruling Q3): people
+  lists the newest 500 reports and blocks (`reports_filed_total`/`_truncated`,
+  `blocked_total`/`_truncated`) and media the newest 5,000 objects
+  (`{objects, total, truncated}`), so one account cannot make the export as
+  big as its history. Identity's security events are capped the same way.
+  Sections still count what they omit; they do not stream.
 - **What sections hold:** sections hold metadata only, never secrets,
   tokens, ciphertext or other people's numbers. Encrypted things (profile,
   backups, media, undelivered envelopes) appear as versions, sizes, dates

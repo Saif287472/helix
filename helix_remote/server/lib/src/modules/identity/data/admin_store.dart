@@ -1,6 +1,7 @@
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/phone_seal.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
+import 'package:helix_remote_server/src/platform/db/paging.dart';
 
 /// SQL behind the operator console's account and invite views.
 final class AdminStore {
@@ -68,7 +69,7 @@ final class AdminStore {
     final q = query?.trim().toLowerCase();
     final byLast4 = q != null && RegExp(r'^\d{4}$').hasMatch(q);
     final rows = await db.query(
-      '$_select WHERE (@cursor:uuid IS NULL OR a.id < @cursor:uuid) '
+      '$_select WHERE a.id < COALESCE(@cursor:uuid, $lastUuidSql) '
       'AND (@status:text IS NULL OR a.status = @status:text) '
       'AND (@last4:text IS NULL OR a.phone_last4 = @last4:text) '
       "AND (@name:text IS NULL OR a.helix_name LIKE @name:text || '%') "
@@ -169,7 +170,7 @@ final class AdminStore {
   }) async {
     final rows = await db.query(
       'SELECT id, issuer, created_at, expires_at, redeemed_at, redeemed_by, cancelled_at '
-      'FROM $s.invites WHERE (@cursor:uuid IS NULL OR id < @cursor:uuid) '
+      'FROM $s.invites WHERE id < COALESCE(@cursor:uuid, $lastUuidSql) '
       'ORDER BY id DESC LIMIT @limit:int4',
       {'cursor': _cursorId(page), 'limit': page.limit + 1},
     );

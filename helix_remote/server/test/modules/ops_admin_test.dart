@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:http/http.dart' as http;
+import 'package:helix_remote_server/src/modules/media/module.dart';
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -939,6 +940,30 @@ void main() {
       );
       expect(response.body, isNot(contains('8801711000001')));
       expect(response.body, isNot(contains(alice.bearer)));
+    });
+
+    /// The smallest legal object is a byte, so the media section cannot be
+    /// bounded by quota: it lists the newest 5,000 and says how many there are
+    /// (owner ruling Q3, AUD-7-2).
+    test('the media section of the export is capped and says so', () async {
+      final alice = await h.registerGlobal(aliceNumber);
+      await h.env.platform.db.execute(
+        'INSERT INTO ${h.env.platform.schemas.of('media')}.objects '
+        '(id, owner_account, owner_device, kind, size) '
+        "SELECT gen_random_uuid(), @a:uuid, @d:uuid, 'attachment', 1 "
+        'FROM generate_series(1, 5001)',
+        {'a': alice.account.id, 'd': alice.id},
+      );
+      final response = await h.api.call(
+        Routes.exportData,
+        bearer: alice.bearer,
+      );
+      final media =
+          (AccountExport.fromJson(response.json).sections['media']! as Map)
+              .cast<String, Object?>();
+      expect(media['total'], 5001);
+      expect(media['truncated'], isTrue);
+      expect(media['objects']! as List, hasLength(MediaModule.exportLimit));
     });
 
     Future<TestResponse> delete(TestDevice who, DeleteAccountRequest body) => h

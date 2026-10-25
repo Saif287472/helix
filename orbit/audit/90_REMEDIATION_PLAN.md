@@ -3472,6 +3472,35 @@ any consumer ignoring them is unaffected.
   operator console does not show `close_reason` yet. A client that files a
   report twice gets the first report's id, which it ignores.
 
+- S2 (AUD-7-2, AUD-7-3) — the export's last unbounded section and the paging
+  predicate. **7-2 (owner ruling Q3):** the media section of the account
+  export lists the newest 5,000 objects (`MediaModule.exportLimit`) and
+  reports `total` and `truncated`; its shape is now
+  `{objects, total, truncated}` instead of a bare list (no client reads it: the
+  export is a file the person keeps). Every other section is bounded already
+  (people in S1, identity's events, counts elsewhere); groups still lists
+  every membership, which is bounded by the group limits. The document is
+  still one JSON string, not streamed: with every section capped its size is
+  bounded. **7-3:** the four admin pages (audit, accounts, invites, reports)
+  write "after the cursor" as `id < COALESCE(@cursor, <largest uuid>)`
+  (`platform/db/paging.dart`) instead of `(@cursor IS NULL OR id < @cursor)`:
+  one plain range on the primary key. **No failing test exists for 7-3 and I
+  did not measure it**: with a bound parameter the planner usually has the
+  value at plan time and folds the `IS NULL`, so the old form only hurts a
+  generic plan; the change is made because it is plainly correct and cannot
+  regress, not because a plan was seen to change. The existing paging tests
+  (ops_admin, admin_hardening, people) prove behaviour is unchanged. Test:
+  `ops_admin_test` "the media section of the export is capped and says so"
+  inserts 5,001 objects and expects 5,000 listed, total 5,001, truncated.
+  Gate: ops_admin, admin_hardening and people tests 54 green on Postgres.
+  **Batch report.** B15's seven findings are closed (S1 `056a019`, S2 below),
+  one in a form the audit did not ask for: 7-3 is unmeasured. **Open:** the
+  operator console does not show a report's `close_reason`, the export is not
+  streamed, and groups memberships are uncapped. **Owner-facing:** people
+  migration 5 (additive; runs at start, or earlier with `bin/migrate.dart`), no
+  `.env` line, no new APK.
+- Next: B16 (group data and federation), then the later batches.
+
 ## B16 — Group data and federation: one writer, one owner
 **S · ~2–3 days · groups module migration · depends on B3**
 

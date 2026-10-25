@@ -6,6 +6,7 @@ import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
 import 'package:helix_remote_server/src/modules/people/api.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
+import 'package:helix_remote_server/src/platform/db/paging.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
@@ -886,7 +887,7 @@ final class _PeopleFacade implements PeopleApi {
     }
     final rows = await db.query(
       'SELECT id, reporter, subject, category, note, status, created_at FROM ${_m.s}.reports '
-      'WHERE (@cursor:uuid IS NULL OR id < @cursor:uuid) '
+      'WHERE id < COALESCE(@cursor:uuid, $lastUuidSql) '
       'AND (@status:text IS NULL OR status = @status:text) '
       'ORDER BY id DESC LIMIT @limit:int4',
       {'cursor': cursor, 'status': status?.wire, 'limit': page.limit + 1},

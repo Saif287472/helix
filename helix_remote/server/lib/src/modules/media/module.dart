@@ -51,6 +51,9 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   /// kind, keeps a normal library far below it.
   static const maxObjectsPerKind = 100000;
 
+  /// Rows the account export lists of the media section.
+  static const exportLimit = 5000;
+
   /// How many rows one sweep batch reads. Small enough that a batch is a
   /// pause between deadline checks, not an unbounded run.
   static const sweepBatch = 500;
@@ -97,24 +100,35 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   /// Sizes and dates of stored objects (contents are client-encrypted).
   @override
   Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    // The smallest legal object is a byte, so an account's row count is not
+    // bounded by its quota: the section lists the newest [exportLimit] and
+    // says how many there are (owner ruling Q3, AUD-7-2).
     final rows = await s.query(
       'SELECT id, kind, size, completed_at, created_at, expires_at FROM $schema.objects '
-      'WHERE owner_account = @a:uuid ORDER BY id',
+      'WHERE owner_account = @a:uuid ORDER BY id DESC LIMIT @n:int4',
+      {'a': accountId, 'n': exportLimit},
+    );
+    final total = await s.queryOne(
+      'SELECT count(*)::int8 AS n FROM $schema.objects WHERE owner_account = @a:uuid',
       {'a': accountId},
     );
-    return [
-      for (final r in rows)
-        compact({
-          'media_id': r.string('id'),
-          'kind': r.string('kind'),
-          'size': r.integer('size'),
-          'completed': !r.isNull('completed_at'),
-          'created_at': toWireTime(r.time('created_at')),
-          'expires_at': r.isNull('expires_at')
-              ? null
-              : toWireTime(r.time('expires_at')),
-        }),
-    ];
+    return {
+      'objects': [
+        for (final r in rows)
+          compact({
+            'media_id': r.string('id'),
+            'kind': r.string('kind'),
+            'size': r.integer('size'),
+            'completed': !r.isNull('completed_at'),
+            'created_at': toWireTime(r.time('created_at')),
+            'expires_at': r.isNull('expires_at')
+                ? null
+                : toWireTime(r.time('expires_at')),
+          }),
+      ],
+      'total': total!.integer('n'),
+      'truncated': total.integer('n') > rows.length,
+    };
   }
 
   @override
