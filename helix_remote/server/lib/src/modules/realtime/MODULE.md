@@ -18,8 +18,11 @@ with 4029. The frame bucket and the idle timer run on a monotonic uptime
 no socket (AUD-3-9); `hello`'s `server_time` is still wall-clock time.
 
 1. **Supersede:** a previous connection for the device on this node is
-   closed with 4008. `realtime.connected` on the bus does the same on
-   other nodes.
+   closed with 4008. Accepts for one device run one at a time (a per-device
+   turn), so the map write, the route and that close happen in accept
+   order. `realtime.connected` on the bus closes the socket on other nodes
+   only when the route there no longer names it: delivery can lag, and a
+   hint for an older connection must not close a newer socket (AUD-3-12).
 2. **Route:** `rt:route:<device>` = `<node>|<connection>` is stored with a
    75 s TTL and refreshed every 25 s by compare-and-set
    (`EphemeralStore.replace`): a refresh that finds another connection's

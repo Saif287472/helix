@@ -482,6 +482,42 @@ void main() {
     });
   });
 
+  group('realtime upgrade race', skip: databaseTestSkipReason, () {
+    test('a stale supersede hint cannot close the newest socket', () async {
+      final bus = _HeldBus();
+      final h = await Harness.start(realtimeBus: bus);
+      try {
+        final b1 = await h.registerGlobal(bobNumber);
+        // Both upgrades are accepted in one turn; each publishes its
+        // realtime.connected hint, held here as a lagging bus would.
+        final sockets = await Future.wait([
+          TestSocket.connect(h.server.baseUri, b1.bearer),
+          TestSocket.connect(h.server.baseUri, b1.bearer),
+        ]);
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        final before = [await _talks(sockets[0]), await _talks(sockets[1])];
+        expect(
+          before.where((live) => live),
+          hasLength(1),
+          reason: 'the newer accept supersedes the older socket',
+        );
+        final survivor = before.indexOf(true);
+
+        await bus.release();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(
+          await _talks(sockets[survivor]),
+          isTrue,
+          reason: 'the hint for the older connection must not close it',
+        );
+        expect(await _talks(sockets[1 - survivor]), isFalse);
+        await sockets[survivor].close();
+      } finally {
+        await h.stop();
+      }
+    });
+  });
+
   group('realtime timing', skip: databaseTestSkipReason, () {
     test('a stepping clock cannot trip the frame or idle timer', () async {
       final uptime = ManualUptime();
@@ -537,6 +573,60 @@ final class _OffsetClock implements Clock {
 
   @override
   DateTime now() => DateTime.now().toUtc().add(offset);
+}
+
+/// A bus that holds `realtime.connected` publishes until [release], standing
+/// in for a bus whose delivery lags an upgrade by a moment.
+final class _HeldBus implements EventBus {
+  static const _supersededTopic = 'realtime.connected';
+
+  final InMemoryEventBus _bus = InMemoryEventBus();
+  final StreamController<Map<String, Object?>> _superseded =
+      StreamController.broadcast();
+  final List<Map<String, Object?>> _held = [];
+
+  @override
+  Future<void> publish(String topic, Map<String, Object?> message) async {
+    if (topic == _supersededTopic) {
+      _held.add(message);
+      return;
+    }
+    await _bus.publish(topic, message);
+  }
+
+  @override
+  Stream<Map<String, Object?>> subscribe(String topic) =>
+      topic == _supersededTopic ? _superseded.stream : _bus.subscribe(topic);
+
+  @override
+  Future<void> get ready => _bus.ready;
+
+  Future<void> release() async {
+    for (final message in _held) {
+      _superseded.add(message);
+    }
+    _held.clear();
+    await Future<void>.delayed(Duration.zero);
+  }
+
+  @override
+  Future<void> close() async {
+    await _superseded.close();
+    await _bus.close();
+  }
+}
+
+/// Whether [socket] answers a ping (a live socket with a buffered hello is
+/// probed until the pong or the close).
+Future<bool> _talks(TestSocket socket) async {
+  try {
+    socket.ping('probe');
+    while (true) {
+      if (await socket.next() is PongFrame) return true;
+    }
+  } on Object {
+    return false;
+  }
 }
 
 /// A bus whose publishes fail, as a database blip would; its subscriptions

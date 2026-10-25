@@ -2308,6 +2308,35 @@ table at implementation time.
   Gate: the realtime file **22 green** (21 before), `dart analyze` clean on
   the changed files. No wire change, no migration, no app change, no APK; a
   server restart (or the next deploy) picks it up.
+- S4 (AUD-3-12) — reproduced, confirmed, and fixed. Two upgrades of one
+  device accepted close together could leave no live socket: `realtime.connected`
+  was delivered with the *older* connection's id after the newer one was in
+  `_connections`, and the subscriber closed on "id differs", taking the newest
+  socket down. The same interleaving could also let the older accept write its
+  route after the newer one, so presence pointed at the wrong connection until
+  the next sweep. The audit's sketch (a connection generation) does not hold on
+  its own: UUIDv7 ids minted in the same millisecond are not strictly ordered,
+  so id comparison can still call the newer socket older.
+  **What changed:** accepts for one device are serialized by a per-device
+  [`_acceptTails`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L64)
+  turn, so the map write, route save, previous close and bus hint happen in
+  accept order ([`_register`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L337)/[`_registerNow`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L360);
+  a failed accept never fails the one queued behind it). The
+  [`realtime.connected`](file:///J:/Projects/helix/helix_remote/server/lib/src/modules/realtime/module.dart#L157)
+  subscriber now closes the local socket only when the route no longer names
+  it, so a lagging hint for an older accept cannot close a newer socket; its
+  own publish is skipped without a store read. `realtime/MODULE.md` states
+  both.
+  Tests: `server/test/modules/realtime_test.dart` gained an `upgrade race`
+  group with a `_HeldBus` that holds `realtime.connected` hints: after two
+  concurrent upgrades exactly one socket answers a ping, and when both hints
+  are released the same socket still answers while the other is closed. Before
+  the fix the test failed at exactly that point ("the hint for the older
+  connection must not close it", actual false).
+  Gate: the realtime file **23 green** (22 before), three repeats of the race
+  test green, `dart analyze` clean on the changed files. No wire change, no
+  migration, no app change, no APK; a server restart (or the next deploy)
+  picks it up.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**

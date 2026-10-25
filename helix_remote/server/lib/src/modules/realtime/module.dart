@@ -58,6 +58,10 @@ final class RealtimeModule extends ModuleBase {
   /// close a well-behaved socket (AUD-3-9).
   late final Uptime _uptime;
   final Map<String, _Connection> _connections = {};
+
+  /// The accept currently running or queued per device, so registrations of
+  /// one device happen in order (AUD-3-12).
+  final Map<String, Future<void>> _acceptTails = {};
   final List<StreamSubscription<Object?>> _subscriptions = [];
   final Set<Future<void>> _tasks = {};
   Timer? _routeTimer;
@@ -156,14 +160,28 @@ final class RealtimeModule extends ModuleBase {
       ..add(
         bus.subscribe(_supersededTopic).listen((m) {
           final existing = _connections[m['d']];
-          if (existing != null && existing.id != m['c']) {
-            track(
-              () => existing.close(
+          final incoming = m['c'];
+          if (existing == null ||
+              incoming is! String ||
+              incoming == existing.id) {
+            return;
+          }
+          // The route decides, not the hint. Delivery can lag, so the hint
+          // for an older accept can arrive after this node accepted a newer
+          // socket; closing on "id differs" took the newest socket down with
+          // it (AUD-3-12). A socket closes only when the route no longer
+          // names it.
+          track(() async {
+            final route = await context.ephemeral.get(
+              Presence.routeKey(existing.deviceId),
+            );
+            if (route != null && route != existing.routeValue) {
+              await existing.close(
                 RealtimeCloseCode.superseded,
                 'replaced by a newer connection',
-              ),
-            );
-          }
+              );
+            }
+          });
         }),
       );
     _routeTimer = Timer.periodic(
@@ -305,6 +323,47 @@ final class RealtimeModule extends ModuleBase {
       principal.deviceId,
       requested,
     );
+    await _register(ws, principal, token, after, head);
+  }
+
+  /// Registers the accepted socket, one accept at a time per device.
+  ///
+  /// Two upgrades in flight at once used to interleave: the older accept
+  /// could write its route after the newer one did, leaving the newer socket
+  /// pointed away from its own route, and a delayed bus hint for the older
+  /// connection could close the newer socket. The turn keeps the map write,
+  /// the route, the previous close and the bus hint in accept order
+  /// (AUD-3-12).
+  Future<void> _register(
+    WebSocketChannel ws,
+    DevicePrincipal principal,
+    String token,
+    int after,
+    int head,
+  ) {
+    final device = principal.deviceId;
+    final turn = (_acceptTails[device] ?? Future<void>.value()).then(
+      (_) => _registerNow(ws, principal, token, after, head),
+    );
+    // The tail never fails: one failed accept must not fail the accept
+    // queued behind it.
+    final tail = turn.catchError((Object _) {});
+    _acceptTails[device] = tail;
+    tail.whenComplete(() {
+      if (identical(_acceptTails[device], tail)) {
+        _acceptTails.remove(device);
+      }
+    });
+    return turn;
+  }
+
+  Future<void> _registerNow(
+    WebSocketChannel ws,
+    DevicePrincipal principal,
+    String token,
+    int after,
+    int head,
+  ) async {
     final connection = _Connection(
       this,
       ws,
