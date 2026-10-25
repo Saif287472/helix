@@ -2352,11 +2352,13 @@ table at implementation time.
   count, whereas an index on the column every send increments would turn each
   send's update into a non-HOT one (the migration the batch allowed is not
   needed). `messaging/MODULE.md` states the source.
-  Tests: [`query_plans_test.dart`](file:///J:/Projects/helix/helix_remote/server/test/platform/query_plans_test.dart#L294)
+  Tests: [`query_plans_test.dart`](file:///J:/Projects/helix/helix_remote/server/test/platform/query_plans_test.dart#L204)
   runs the store method through the recording session on the seeded 20,000
   device schema, checks the reply is the 50,000 seeded pending envelopes, and
   asserts the `EXPLAIN (FORMAT JSON)` plan's only sequential scan is
-  `device_seq` - no mailbox partition appears. The metrics-route test
+  `device_seq` - no mailbox partition appears. The case is declared before the
+  send and ack cases, which change pending counts (in the first full run it
+  ran after them and read 49,855). The metrics-route test
   (`hardening_db_test.dart`, D4) still reads `helix_mailbox_backlog 0.0` on an
   empty schema.
   Gate: the plan test green, the D4 metrics test green, `dart analyze` clean
@@ -2378,6 +2380,34 @@ table at implementation time.
   `realtime/MODULE.md` so the next reader does not re-litigate it. No test is
   owed: there is no cache to prove safe. No wire change, no migration, no app
   change, no APK.
+  **Batch report.** All six B11 findings are closed (five fixed, AUD-3-13
+  declined with the reason recorded). B11's steps: S1 `9c208ec`, S2 `a7178c4`,
+  S3 `75a2a1f`, S4 `900d0f1`, S5 `c97ed02`, S6 `0f62a29`. B11's gate: the full
+  server suite **523 tests** on Postgres at `--concurrency=3`, 519 green in the
+  run; three failures were load flakes already known here or listed in
+  `AGENTS.md` (`calls_test.dart` "non-offer signals are limited per sending
+  device" green alone in 3 s, `messaging_test.dart` "a send that only reaches
+  people who blocked you pays nothing" green alone in 4 s, and
+  `hardening_db_test.dart` "stored idempotent responses are sealed and still
+  replay" green alone in 18 s - the latter two are now in the known list).
+  The fourth was this batch's own new case: the backlog gauge case was declared
+  after the send and ack cases in its group, which change `device_seq.pending`,
+  so it read 49,855 instead of the 50,000 seed; it now runs first and the file
+  is **8 green** alone. `dart analyze server tool` clean on the whole
+  workspace. No migration, no wire change, no app change, no APK.
+  **Residual, deliberate:** supersede is decided by the route, not by the hint
+  (UUIDv7 ids in one millisecond are not ordered), so a hint is only a
+  wake-up and a stale one costs one ephemeral read; accepts are serialized per
+  device, so a slow accept delays only the next socket of the same device. The
+  backlog gauge sums `device_seq.pending` with no index on purpose: the table
+  is bounded by the device count, while an index on the column every send
+  updates would turn each send's increment into a non-HOT update. The 25 s
+  per-socket re-auth stays uncached; if socket count ever makes it matter, the
+  direction is one batched token check per sweep.
+  **Owner-facing, whole batch:** server-only, no migration and no `.env` line;
+  a restart (or the next deploy) picks it up.
+- Next: B12 (protocol refusals), then B13, B16 and the later batches; B8 still
+  waits on Q8/Q9 and B5 on Q6.
 
 ## B12 — The protocol must refuse what it cannot represent
 **W · ~2–3 days · no migration**

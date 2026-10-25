@@ -297,7 +297,11 @@ gone by the time the report is read - re-`dart analyze` the file before treating
 a load failure as a result. On the app side,
 `test/media/voice_composer_test.dart` ("holding and letting go sends the note
 and deletes the file") failed once in a full `flutter test` on 2026-10-25 and
-passed alone in 10 s; the rest of that app run (1024 tests) was green.
+passed alone in 10 s; the rest of that app run (1024 tests) was green. Seen
+2026-10-25 in the B11 gate, each green when rerun alone: `calls_test.dart`
+("non-offer signals are limited per sending device", 3 s) and
+`hardening_db_test.dart` ("stored idempotent responses are sealed and still
+replay", 18 s).
 
 Add any failure you confirm is pre-existing here, with the date.
 
