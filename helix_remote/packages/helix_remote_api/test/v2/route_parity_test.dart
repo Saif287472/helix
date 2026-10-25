@@ -184,8 +184,6 @@ void main() {
     ),
     Routes.setCallState: (c) => c.calls.setState(id, CallState.answered),
     Routes.pendingCalls: (c) => c.calls.pending(),
-    Routes.callMetrics: (c) =>
-        c.calls.sendMetrics(const CallMetricsRequest(callId: id)),
     // media
     Routes.createUpload: (c) =>
         c.media.createUpload(const CreateUploadRequest(size: 1)),

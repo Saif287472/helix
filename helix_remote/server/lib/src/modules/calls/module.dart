@@ -95,11 +95,6 @@ final class CallsModule extends ModuleBase {
     240,
     const Duration(minutes: 1),
   );
-  static final _metricsLimit = RateLimitPolicy.per(
-    'calls.metrics',
-    100,
-    const Duration(days: 1),
-  );
 
   @override
   String get name => 'calls';
@@ -108,7 +103,14 @@ final class CallsModule extends ModuleBase {
   List<Migration> get migrations => const [
     Migration(1, 'calls_baseline', _baseline),
     Migration(2, 'federated_callers', _federatedCallers),
+    Migration(3, 'drop_call_metrics', _dropCallMetrics),
   ];
+
+  /// Nothing ever sent a quality sample, so the table (and its unbounded
+  /// `outcome` column) goes rather than gets bounded (Q9, AUD-6-1, AUD-12l-3).
+  /// A new migration: migration 1 created it and has run.
+  static String _dropCallMetrics(String s) =>
+      'DROP TABLE IF EXISTS $s.call_metrics;';
 
   /// Callers on other servers are stored qualified (`uuid@domain`).
   static String _federatedCallers(String s) =>
@@ -151,9 +153,6 @@ CREATE TABLE $s.call_metrics (
       await context.db.execute(
         'DELETE FROM $schema.pending_calls WHERE expires_at < now()',
       );
-      await context.db.execute(
-        "DELETE FROM $schema.call_metrics WHERE created_at < now() - interval '90 days'",
-      );
     }),
   ];
 
@@ -163,8 +162,7 @@ CREATE TABLE $s.call_metrics (
       ..add(name, Routes.turnCredentials, _turn)
       ..add(name, Routes.sendCallSignal, _signal, maxBodyBytes: 1024 * 1024)
       ..add(name, Routes.setCallState, _state)
-      ..add(name, Routes.pendingCalls, _pending)
-      ..add(name, Routes.callMetrics, _metrics);
+      ..add(name, Routes.pendingCalls, _pending);
   }
 
   Future<void> _limit(RateLimitPolicy policy, String key) async {
@@ -564,30 +562,6 @@ CREATE TABLE $s.call_metrics (
         ],
       ).toJson(),
     );
-  }
-
-  Future<Response> _metrics(HelixRequest q) async {
-    final m = q.json(CallMetricsRequest.fromJson);
-    if (!_callId.hasMatch(m.callId)) {
-      throw const ApiError(ErrorCode.invalidField);
-    }
-    await _limit(_metricsLimit, q.device.accountId);
-    await context.db.execute(
-      'INSERT INTO $schema.call_metrics (id, call_id, setup_ms, duration_s, reconnects, packet_loss_pct, rtt_ms, relayed, outcome) '
-      'VALUES (@id:uuid, @c:text, @s:int4, @d:int4, @r:int4, @l:float8, @rtt:int4, @rel:boolean, @o:text)',
-      {
-        'id': Uuid.v7(),
-        'c': m.callId,
-        's': m.setupMs,
-        'd': m.durationS,
-        'r': m.reconnects,
-        'l': m.packetLossPercent,
-        'rtt': m.rttMs,
-        'rel': m.relayed,
-        'o': m.outcome,
-      },
-    );
-    return noContent();
   }
 
   Future<void> _push(Map<String, Object?> payload) async {

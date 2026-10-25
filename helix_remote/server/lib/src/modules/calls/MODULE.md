@@ -1,7 +1,7 @@
 # calls module
 
-1:1 call signalling (REST_V2.md "calls"). Schema `calls` (`pending_calls`,
-`call_metrics`). Group calls are deferred (plan §13).
+1:1 call signalling (REST_V2.md "calls"). Schema `calls` (`pending_calls`;
+`call_metrics` was dropped by migration 3). Group calls are deferred (plan §13).
 
 - **Signals** (`POST /v1/calls/{call_id}/signals`) carry sealed pairwise
   payloads: SDP, ICE, caller name and audio/video live inside them. The

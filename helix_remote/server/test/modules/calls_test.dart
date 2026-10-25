@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:http/http.dart' as http;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
@@ -198,35 +199,32 @@ void main() {
       },
     );
 
-    test('call ids are validated; metrics are accepted', () async {
+    test('call ids are validated', () async {
       expect(
         (await signal('x', CallSignalKind.offer, {
           bob1.accountId: [bob1.id, bob2.id],
         })).errorCode,
         'invalid_field',
       );
-      final m = await h.api.call(
-        Routes.callMetrics,
-        bearer: alice.bearer,
-        body: const CallMetricsRequest(
-          callId: 'call-metrics-1',
-          setupMs: 800,
-          relayed: true,
-        ).toJson(),
-      );
-      expect(m.status, 204);
     });
 
-    test('call metrics are limited per account', () async {
-      Future<TestResponse> report() => h.api.call(
-        Routes.callMetrics,
-        bearer: alice.bearer,
-        body: const CallMetricsRequest(callId: 'call-metrics-2').toJson(),
+    test('there is no call-quality pipeline: no table, no route', () async {
+      // Migration 3 dropped `call_metrics` (Q9); nothing ever sent a sample.
+      final schema = h.env.platform.schemas.of('calls');
+      final table = await h.env.platform.db.queryOne(
+        'SELECT to_regclass(@t:text) AS t',
+        {'t': '$schema.call_metrics'},
       );
-      for (var i = 0; i < 100; i++) {
-        expect((await report()).status, 204);
-      }
-      expect((await report()).errorCode, 'rate_limited');
+      expect(table!.isNull('t'), isTrue);
+      final gone = await http.post(
+        h.api.base.replace(path: '/v1/calls/metrics'),
+        headers: {
+          'authorization': 'Bearer ${alice.bearer}',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({'call_id': 'call-metrics-1'}),
+      );
+      expect(gone.statusCode, 404);
     });
 
     test('non-offer signals are limited per sending device', () async {

@@ -554,12 +554,6 @@ abstract final class Routes {
     module: 'calls',
     access: _dev,
   );
-  static const callMetrics = ApiRoute(
-    _post,
-    '/v1/calls/metrics',
-    module: 'calls',
-    access: _dev,
-  );
 
   // ------------------------------------------------------------------- media
   static const createUpload = ApiRoute(
@@ -982,8 +976,7 @@ abstract final class Routes {
     listInviteLinks,
     previewInviteLink, joinGroup, joinRequests, resolveJoinRequest,
     sendGroupMessage, //
-    turnCredentials, sendCallSignal, setCallState, pendingCalls,
-    callMetrics, //
+    turnCredentials, sendCallSignal, setCallState, pendingCalls, //
     createUpload, uploadContent, uploadStatus, downloadContent, deleteMedia,
     putHistoryBackup, getHistoryBackup, deleteHistoryBackup, putFullBackup,
     getFullBackup, deleteFullBackup, getFullBackupMeta, //

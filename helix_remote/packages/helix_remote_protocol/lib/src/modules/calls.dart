@@ -183,54 +183,6 @@ final class PendingCallList {
       PendingCallList(calls: json.objects('calls', PendingCall.fromJson));
 }
 
-/// `POST /v1/calls/metrics`: anonymous quality numbers, no participants.
-final class CallMetricsRequest {
-  const CallMetricsRequest({
-    required this.callId,
-    this.setupMs,
-    this.durationS,
-    this.reconnects,
-    this.packetLossPercent,
-    this.rttMs,
-    this.relayed,
-    this.outcome,
-  });
-
-  final String callId;
-  final int? setupMs;
-  final int? durationS;
-  final int? reconnects;
-  final double? packetLossPercent;
-  final int? rttMs;
-  final bool? relayed;
-  final String? outcome;
-
-  JsonMap toJson() => compact({
-    'call_id': callId,
-    'setup_ms': setupMs,
-    'duration_s': durationS,
-    'reconnects': reconnects,
-    'packet_loss_pct': packetLossPercent,
-    'rtt_ms': rttMs,
-    'relayed': relayed,
-    'outcome': outcome,
-  });
-
-  factory CallMetricsRequest.fromJson(JsonReader json) {
-    final loss = json.raw('packet_loss_pct');
-    return CallMetricsRequest(
-      callId: json.nonEmpty('call_id'),
-      setupMs: json.optInt('setup_ms'),
-      durationS: json.optInt('duration_s'),
-      reconnects: json.optInt('reconnects'),
-      packetLossPercent: loss is num ? loss.toDouble() : null,
-      rttMs: json.optInt('rtt_ms'),
-      relayed: json.has('relayed') ? json.boolean('relayed') : null,
-      outcome: json.optString('outcome'),
-    );
-  }
-}
-
 // ------------------------------------------------- the sealed signal itself
 
 /// What a sealed call signal says. The server's [CallSignalKind] only sees

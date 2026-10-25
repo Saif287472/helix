@@ -255,32 +255,6 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
   }
 
   @override
-  Future<void> restartIce(String callId) async {
-    final state = _calls[callId];
-    if (state == null || state.restartingIce || _endedCalls.contains(callId)) {
-      _diag(
-        callId,
-        'restart_ice ignored reason=${state == null
-            ? "missing"
-            : state.restartingIce
-            ? "in_progress"
-            : "ended"}',
-      );
-      return;
-    }
-    state.restartingIce = true;
-    try {
-      final offer = await state.pc.createOffer({'iceRestart': true});
-      await state.pc.setLocalDescription(offer);
-      _eventController.add(
-        RemoteRenegotiationOfferEvent(callId: callId, sdp: offer.sdp ?? ''),
-      );
-    } finally {
-      state.restartingIce = false;
-    }
-  }
-
-  @override
   Future<void> setMuted(String callId, {required bool muted}) async {
     final state = _calls[callId];
     if (state == null) return;
@@ -637,7 +611,6 @@ class _PeerConnectionState {
   webrtc.MediaStream? remoteStream;
   Timer? qualityTimer;
   bool remoteDescriptionSet = false;
-  bool restartingIce = false;
   bool isFrontCamera = true;
   final Map<String, _BitrateSample> previousOutboundBytes = {};
 }

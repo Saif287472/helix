@@ -64,14 +64,6 @@ class RemoteCameraFacingEvent extends RemoteCallEngineEvent {
   final bool isFrontCamera;
 }
 
-class RemoteRenegotiationOfferEvent extends RemoteCallEngineEvent {
-  const RemoteRenegotiationOfferEvent({
-    required super.callId,
-    required this.sdp,
-  });
-  final String sdp;
-}
-
 class RemoteCallMediaEvent extends RemoteCallEngineEvent {
   const RemoteCallMediaEvent({
     required super.callId,
@@ -113,7 +105,6 @@ abstract interface class RemoteCallEngine {
     int mlineIndex,
     String sdpMid,
   );
-  Future<void> restartIce(String callId);
   Future<void> setMuted(String callId, {required bool muted});
   Future<void> setSpeakerOn(String callId, {required bool enabled});
   Future<void> setVideoEnabled(String callId, {required bool enabled});

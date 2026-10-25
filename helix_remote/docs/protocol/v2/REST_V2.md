@@ -165,7 +165,6 @@ invite-link changes are limited per device (40 burst, 2/s).
 | `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. A pending offer is refreshed only by the same caller device; anyone else's offer under that call id is not stored. `end` clears only pending offers the sender is in (as caller or callee). An `offer` to a callee who blocked the caller: `blocked` (403, details `accounts`) and nothing rings; the call's other signals from a blocked caller are dropped silently. Offers: 30 per 10 minutes per account; every other kind: 240 per minute per sending device. |
 | `PUT /v1/calls/{call_id}/state` | `CallStateRequest` → 204 | Clears pending offers the account is in (as caller or callee); other devices of the same account stop ringing. |
 | `GET /v1/calls/pending` | — → `PendingCallList` | |
-| `POST /v1/calls/metrics` | `CallMetricsRequest` → 204 | 100 per day per account. |
 
 **The sealed signal** (`CallSignalPayload`, JSON, padded and sealed per device
 like a content message): `{"v":1,"type":"offer|answer|ice|ringing|end","call_id", "media":"audio|video" (offer), "sdp" (offer, answer), "candidates":[{"candidate","mid","index"}] (ice), "reason":"hangup|declined|busy|cancelled|answered_elsewhere|failed|glare" (end)}`.

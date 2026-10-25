@@ -1237,20 +1237,6 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
     (v) => v.toJson(),
     PendingCallList.fromJson,
   ),
-  'calls_call_metrics_request': _dto(
-    const CallMetricsRequest(
-      callId: '0192a4f0-0000-7000-8000-0000000000e9',
-      setupMs: 850,
-      durationS: 95,
-      reconnects: 1,
-      packetLossPercent: 1.5,
-      rttMs: 42,
-      relayed: false,
-      outcome: 'answered',
-    ),
-    (v) => v.toJson(),
-    CallMetricsRequest.fromJson,
-  ),
 
   // ---------------------------------------------------------------- media
   'media_create_upload_request': _dto(
@@ -1820,7 +1806,6 @@ JsonMap _encode(Object value) => switch (value) {
   final CallSignalResponse v => v.toJson(),
   final CallStateRequest v => v.toJson(),
   final PendingCallList v => v.toJson(),
-  final CallMetricsRequest v => v.toJson(),
   final CreateUploadRequest v => v.toJson(),
   final UploadTarget v => v.toJson(),
   final HistoryBackup v => v.toJson(),

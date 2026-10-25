@@ -144,9 +144,7 @@ final class WebRtcCallMediaSession implements CallMediaSession {
         hub.update((info) => info.copyWith(weak: event.metrics.isWeak));
       case RemoteCameraFacingEvent():
         hub.update((info) => info.copyWith(frontCamera: event.isFrontCamera));
-      case RemoteCallEngineDiagnosticEvent() ||
-          RemoteVideoStateEvent() ||
-          RemoteRenegotiationOfferEvent():
+      case RemoteCallEngineDiagnosticEvent() || RemoteVideoStateEvent():
         break;
     }
   }

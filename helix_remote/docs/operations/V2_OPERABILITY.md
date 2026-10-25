@@ -660,8 +660,9 @@ millions of users; this section is about two nodes on one host.
   tables are range-partitioned by month with retention jobs. That is not
   built. Growth is small (one row per operator action), but there is no
   retention.
-- **`calls.call_metrics`:** 90 days. **`messaging.sends`:** 7 days.
-  **`platform.idempotency`:** 24 hours.
+- **`messaging.sends`:** 7 days. **`platform.idempotency`:** 24 hours.
+  (`calls.call_metrics` is gone: migration 3 of the calls module dropped it,
+  and there is no quality-metrics route.)
 - **Dead jobs:** kept until purged.
 - **`identity.invites` and `identity.recovery_codes`:** `identity.purge_expired`
   (6 h) drops an invite 30 days past its expiry when nobody redeemed it, and a
