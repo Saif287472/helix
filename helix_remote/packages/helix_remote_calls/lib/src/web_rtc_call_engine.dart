@@ -32,7 +32,11 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
 
   Future<webrtc.MediaStream> _createLocalStream({bool video = false}) {
     return webrtc.navigator.mediaDevices.getUserMedia({
-      'audio': true,
+      'audio': {
+        'echoCancellation': true,
+        'noiseSuppression': true,
+        'autoGainControl': true,
+      },
       'video': video
           ? {
               'width': {'ideal': 1280, 'max': 1280},

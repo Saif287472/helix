@@ -44,6 +44,18 @@ class ChatSearchResults {
   bool get isEmpty => chats.isEmpty && messages.isEmpty;
 }
 
+/// Whether anyone but you among [accounts] is shown under a name containing
+/// [lowered] (already lower case).
+@visibleForTesting
+bool memberNamed(
+  Iterable<String> accounts,
+  PeopleDirectory people,
+  String lowered,
+) => accounts.any(
+  (a) =>
+      !people.isSelf(a) && people.displayOf(a).toLowerCase().contains(lowered),
+);
+
 /// The text in the search box.
 final class ChatSearchQuery extends Notifier<String> {
   @override
@@ -73,10 +85,22 @@ final chatSearchResultsProvider = FutureProvider.autoDispose<ChatSearchResults>(
     final now = ref.read(clockProvider)();
     final lowered = query.toLowerCase();
 
-    final chats = [
+    // A group is found by its own name or by the name of anyone in it, so
+    // "the group with Sam in it" works without remembering its title.
+    final chats = <HelixChatListItem>[];
+    for (final c in [
       ...await ref.read(chatListProvider.future),
       ...await ref.read(archivedChatListProvider.future),
-    ].where((c) => c.title.toLowerCase().contains(lowered)).toList();
+    ]) {
+      if (c.title.toLowerCase().contains(lowered)) {
+        chats.add(c);
+      } else if (peerOfConversation(c.id) == null) {
+        final members = await gateway.watchMembers(c.id).first;
+        if (memberNamed(members.map((m) => m.accountId), people, lowered)) {
+          chats.add(c);
+        }
+      }
+    }
 
     final rows = await gateway.search(query);
     final titles = <String, ConversationRow?>{};

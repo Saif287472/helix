@@ -1630,6 +1630,11 @@ class _RenderTextFlow extends RenderProxyBox {
   }
 }
 
+/// [_rich] for a test, which reads the spans a message text becomes.
+@visibleForTesting
+TextSpan richMessageText(OrbitTokens t, HelixTextContent c, TextStyle base) =>
+    _rich(t, c, base);
+
 /// `UI.richText`: links underlined in `--accent-ink` (`--cyan-ink` in yours)
 /// and @mentions in `--accent-ink` at weight 600.
 TextSpan _rich(OrbitTokens t, HelixTextContent c, TextStyle base) {
@@ -1662,12 +1667,60 @@ TextSpan _rich(OrbitTokens t, HelixTextContent c, TextStyle base) {
   var at = 0;
   for (final (s, e, style) in marks) {
     if (s < at) continue;
-    if (s > at) spans.add(TextSpan(text: text.substring(at, s)));
+    if (s > at) spans.addAll(_formatted(text.substring(at, s), base, t));
     spans.add(TextSpan(text: text.substring(s, e), style: style));
     at = e;
   }
-  if (at < text.length) spans.add(TextSpan(text: text.substring(at)));
+  if (at < text.length) spans.addAll(_formatted(text.substring(at), base, t));
   return TextSpan(style: base, children: spans);
+}
+
+/// `*bold*`, `_italic_`, `~strike~` and `` `mono` ``, as WhatsApp reads them:
+/// the markers sit against the words they wrap (never against a space) and
+/// start and end at a word edge, so `snake_case_name`, `2*3*4` and a `* ` bullet
+/// stay as typed. The markers are hidden, and the text on the wire stays the
+/// plain text the sender typed. Mono is literal; the others nest.
+final _format = RegExp(
+  r'(?<![A-Za-z0-9])([*_~`])(?=\S)(.+?)(?<=\S)\1(?![A-Za-z0-9])',
+);
+
+List<TextSpan> _formatted(
+  String text,
+  TextStyle base,
+  OrbitTokens t, [
+  int depth = 0,
+]) {
+  final out = <TextSpan>[];
+  var at = 0;
+  for (final m in _format.allMatches(text)) {
+    if (m.start > at) out.add(TextSpan(text: text.substring(at, m.start)));
+    final mark = m[1]!;
+    final inner = m[2]!;
+    final style = switch (mark) {
+      '*' => base.copyWith(
+        fontWeight: FontWeight.w700,
+        fontVariations: const [ui.FontVariation('wght', 700)],
+      ),
+      '_' => base.copyWith(fontStyle: FontStyle.italic),
+      '~' => base.copyWith(decoration: TextDecoration.lineThrough),
+      _ => t.mono.style(
+        size: base.fontSize ?? 15,
+        color: base.color,
+        height: base.height ?? 1.4,
+      ),
+    };
+    out.add(
+      mark == '`' || depth >= 2
+          ? TextSpan(text: inner, style: style)
+          : TextSpan(
+              style: style,
+              children: _formatted(inner, style, t, depth + 1),
+            ),
+    );
+    at = m.end;
+  }
+  if (at < text.length) out.add(TextSpan(text: text.substring(at)));
+  return out;
 }
 
 /// `.fwd`: "Forwarded" over the content, mono 10.5px tracked 0.06em, upper
