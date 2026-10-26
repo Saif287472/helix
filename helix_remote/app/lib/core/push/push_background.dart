@@ -104,6 +104,8 @@ Future<void> wakeSignedInAccounts({
         'push.wake',
         'account failed',
         fields: {'error': error.runtimeType.toString()},
+        // Its own server's, not whichever account is opened next.
+        server: AnomalyLog.serverKey(uri),
       );
     }
   }
@@ -195,6 +197,7 @@ Future<void> _wakeAccount(
         'alerted': '${audible.length}',
         'calls': '${summary.pendingCalls.length}',
       },
+      server: AnomalyLog.serverKey(runtime.serverUrl),
     );
     if (audible.isNotEmpty && alerts) {
       await LocalNotifications.init();

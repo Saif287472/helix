@@ -95,7 +95,8 @@ void main() {
       return avatar;
     }
 
-    test('wiping removes the avatar and the attachments, keeps the database',
+    test(
+      'wiping removes the avatar and the attachments, keeps the database',
       () async {
         final avatar = await seed();
         await AppPaths.wipeLocalFiles(AppPaths.firstAccount);

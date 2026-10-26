@@ -258,6 +258,24 @@ void main() {
     );
   });
 
+  group('a server that keeps refusing', () {
+    testWidgets('is asked less and less often', (tester) async {
+      var attempts = 0;
+      AnomalyLog.install((report) async {
+        attempts++;
+        throw const NetworkException();
+      });
+      AnomalyLog.state('slow', 'odd');
+      // 20 s + 40 s + 80 s...: three tries in the first three minutes. Every
+      // 20 s would be nine.
+      await tester.pump(const Duration(minutes: 3));
+      expect(attempts, lessThanOrEqualTo(3));
+      expect(attempts, greaterThanOrEqualTo(2));
+      expect(AnomalyLog.queued, hasLength(1), reason: 'kept, not dropped');
+      AnomalyLog.install(null);
+    });
+  });
+
   group('whose server hears what (Q10)', () {
     test(
       'an entry goes to the server it was seen under, and only there',
@@ -310,6 +328,23 @@ void main() {
       open = 'https://b.example:443';
       AnomalyLog.state('same', 'odd');
       expect(AnomalyLog.queued, hasLength(2));
+    });
+
+    test('what a runtime for another server saw goes to that server', () async {
+      final sentTo = <String, List<String>>{};
+      AnomalyLog.install(
+        (report) async => sentTo
+            .putIfAbsent(AnomalyLog.flushingServer!, () => [])
+            .addAll([for (final e in report.entries) e.where]),
+        server: () => 'https://a.example:443',
+      );
+      // A background pass opened an account of server B while A is on screen.
+      AnomalyLog.state('push.wake', 'woken', server: 'https://b.example:443');
+      AnomalyLog.state('push.wake', 'mine');
+
+      await AnomalyLog.flush();
+      expect(sentTo.keys, ['https://a.example:443']);
+      expect(AnomalyLog.queued.map((e) => e.message), ['woken']);
     });
 
     test('two spellings of one address are one server', () {

@@ -190,6 +190,7 @@ abstract final class AppPaths {
     final targets = <FileSystemEntity>[
       File(p.join(dir.path, 'profile_avatar.png')),
       File(p.join(dir.path, 'unread.json')),
+      File(p.join(dir.path, 'alert_count.json')),
       Directory(p.join(dir.path, 'attachments')),
       if (includeDatabase)
         for (final suffix in const ['', '-wal', '-shm', '-journal'])
