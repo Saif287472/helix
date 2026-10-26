@@ -65,7 +65,7 @@ void main() {
       );
       expect(
         PersonNaming.displayName(person()),
-        startsWith('Helix user 0192a4f0'),
+        startsWith('Orbit user 0192a4f0'),
       );
       // Blank names are skipped, not shown.
       expect(

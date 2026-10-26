@@ -71,7 +71,7 @@ final class SettingsService {
   Future<void> setHelixName(String name) async {
     final normalised = name.trim().toLowerCase().replaceFirst('~', '');
     if (!SetHelixNameRequest.pattern.hasMatch(normalised)) {
-      throw ArgumentError.value(name, 'name', 'is not a valid Helix name');
+      throw ArgumentError.value(name, 'name', 'is not a valid Orbit name');
     }
     await _ctx.api.identity.setHelixName(normalised);
     await _saveHelixName(normalised);

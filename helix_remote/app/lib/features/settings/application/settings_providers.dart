@@ -226,7 +226,7 @@ final class AppLockActions {
         return 'This phone has no screen lock. Set a PIN, pattern or '
             'fingerprint in the phone\'s own settings first.';
       }
-      if (!await auth.confirm('Turn on the Helix app lock')) {
+      if (!await auth.confirm('Turn on the Orbit app lock')) {
         return 'The app lock was not turned on, because the phone\'s unlock '
             'was not completed.';
       }

@@ -82,7 +82,7 @@ class ThemeGalleryModel {
   /// Whether the server's list came in.
   final ListStatus status;
 
-  /// Whose server it is ("Helix Global", or a personal server's name); the
+  /// Whose server it is ("Orbit Global", or a personal server's name); the
   /// group title reads "On …" with this in place of the ellipsis.
   final String host;
 

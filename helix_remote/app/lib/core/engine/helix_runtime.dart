@@ -153,11 +153,15 @@ final class HelixRuntime {
       sessions: DbSessionTokenStore(db),
       clientName: appClientName(config.platform),
       sockets: pinned ? pinning.socketFactory : defaultSocketFactory,
-      onRequestFailed: AnomalyLog.request,
+      // Under this runtime's own server, which is not the on-screen
+      // account's when a background pass opened it.
+      onRequestFailed: (failure) =>
+          AnomalyLog.request(failure, server: AnomalyLog.serverKey(serverUrl)),
       onSessionPersistFailed: (error, _) => AnomalyLog.state(
         'session',
         'the refreshed session could not be saved',
         fields: {'error': error.runtimeType.toString()},
+        server: AnomalyLog.serverKey(serverUrl),
       ),
     );
     // The REST client makes its `HttpClient` when it is constructed, so a

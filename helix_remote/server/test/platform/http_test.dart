@@ -426,6 +426,40 @@ void main() {
       },
     );
 
+    test('a route that takes a big body gets time to receive it', () async {
+      // The deadline is 100 ms and this upload takes ~300 ms, but its route
+      // takes 64 MiB: at the slowest steady rate it allows, that is minutes.
+      // A flat deadline refused every large backup on a slow link.
+      final budget = BodyBudget(
+        128 * 1024 * 1024,
+        idleGap: const Duration(seconds: 5),
+        deadline: const Duration(milliseconds: 100),
+      );
+      final handler = build(
+        (r) => r.add(
+          'keys',
+          Routes.addOneTimePrekeys,
+          (req) => noContent(),
+          maxBodyBytes: 64 * 1024 * 1024,
+        ),
+        bodyBudget: budget,
+      );
+
+      final response = await call(
+        handler,
+        'POST',
+        '/v1/keys/one-time-prekeys',
+        headers: {'authorization': 'Bearer good'},
+        body: Stream.periodic(
+          const Duration(milliseconds: 10),
+          (i) => const <int>[0],
+        ).take(30),
+      );
+
+      expect(response.statusCode, 204);
+      expect(budget.inFlight, 0);
+    });
+
     test('route rate limits apply per principal and set retry-after', () async {
       const tight = RateLimitPolicy('test.tight', capacity: 1, perSecond: 0.01);
       final handler = build(

@@ -58,6 +58,20 @@ abstract final class AnomalyLog {
 
   /// How long a crash may wait before it is sent.
   static const soonAfter = Duration(seconds: 2);
+
+  /// Sends that failed in a row. The wait before the next one doubles with
+  /// each, up to [maxBackoff], so a server that rejects the route (an older
+  /// personal server, a rate limit) is not asked again every 20 seconds for
+  /// ever. Reset by a send that works and by [install].
+  static int _failures = 0;
+  static const maxBackoff = Duration(hours: 1);
+
+  static Duration _wait(Duration normal) {
+    if (_failures == 0) return normal;
+    final scaled = normal * (1 << (_failures > 8 ? 8 : _failures));
+    return scaled > maxBackoff ? maxBackoff : scaled;
+  }
+
   static bool _sending = false;
   static String? Function()? _serverOf;
 
@@ -122,10 +136,13 @@ abstract final class AnomalyLog {
         error is RequestCancelledException) {
       return;
     }
+    // A short message even in a debug build: a database error can carry the
+    // statement's parameters, which are message content.
+    final text = '$error';
     record(
       'failure',
       error.runtimeType.toString(),
-      message: '$error',
+      message: text.length > 300 ? '${text.substring(0, 300)}…' : text,
       stack: stack ?? StackTrace.current,
     );
   }
@@ -133,13 +150,17 @@ abstract final class AnomalyLog {
   /// A request the server refused (the API transport's observer). The
   /// anomaly route itself is never reported, so a failing send cannot
   /// report itself.
-  static void request(RequestFailure f) {
+  ///
+  /// [server] is the server the request went to. A runtime for an account that
+  /// is not on screen reports its own, never the on-screen account's.
+  static void request(RequestFailure f, {String? server}) {
     if (f.route == Routes.anomalies) return;
     record(
       'request',
       '${f.route.method.name.toUpperCase()} ${f.route.path}',
       message: f.code,
       fields: {'status': '${f.status}', 'request_id': f.requestId},
+      server: server,
     );
   }
 
@@ -148,7 +169,9 @@ abstract final class AnomalyLog {
     String where,
     String message, {
     Map<String, String> fields = const {},
-  }) => record('state', where, message: message, fields: fields);
+    String? server,
+  }) =>
+      record('state', where, message: message, fields: fields, server: server);
 
   /// Adds one entry. Never throws and never waits.
   static void record(
@@ -158,11 +181,14 @@ abstract final class AnomalyLog {
     StackTrace? stack,
     Map<String, String> fields = const {},
     bool soon = false,
+    String? server,
   }) {
     try {
       final at = now();
       final text = _message(message);
-      final server = _serverOf?.call();
+      // The server the caller names, else the one open now: what a runtime for
+      // another account sees belongs to that account's server.
+      server ??= _serverOf?.call();
       for (final e in _queue.reversed) {
         if (at.difference(e.lastAt) > repeatWindow) break;
         if (e.kind == kind &&
@@ -231,9 +257,11 @@ abstract final class AnomalyLog {
         );
         _queue.removeWhere(batch.contains);
         _noteDropped();
+        _failures = 0;
       }
     } on Object {
-      // Offline or signed out: kept for the next try.
+      // Offline or signed out: kept for the next try, a little later each time.
+      _failures++;
     } finally {
       flushingServer = null;
       _sending = false;
@@ -270,12 +298,12 @@ abstract final class AnomalyLog {
       if (_timer != null && _timerSoon) return;
       _timer?.cancel();
       _timerSoon = true;
-      _timer = Timer(soonAfter, _tick);
+      _timer = Timer(_wait(soonAfter), _tick);
       return;
     }
     if (_timer != null) return;
     _timerSoon = false;
-    _timer = Timer(flushEvery, _tick);
+    _timer = Timer(_wait(flushEvery), _tick);
   }
 
   static void _tick() {
@@ -354,6 +382,7 @@ abstract final class AnomalyLog {
     _timer?.cancel();
     _timer = null;
     _timerSoon = false;
+    _failures = 0;
     if (send != null && _queue.isNotEmpty) _schedule();
   }
 
@@ -369,6 +398,7 @@ abstract final class AnomalyLog {
     _timer?.cancel();
     _timer = null;
     _timerSoon = false;
+    _failures = 0;
     _sending = false;
     _serverOf = null;
     flushingServer = null;

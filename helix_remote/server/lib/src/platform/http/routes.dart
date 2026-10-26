@@ -87,8 +87,18 @@ final class BodyBudget {
   /// How long a buffered body may go without another chunk.
   final Duration idleGap;
 
-  /// How long a buffered body may take in total, however steadily it arrives.
+  /// How long a buffered body may take in total, however steadily it arrives,
+  /// before the time its size needs is added ([deadlineFor]).
   final Duration deadline;
+
+  /// The slowest steady upload a route's body is allowed: a body at its route's
+  /// cap gets this much time on top of [deadline]. A flat 30 s refused every
+  /// 40 MiB full backup from a phone on a 1-2 MB/s link, on every retry.
+  static const minBytesPerSecond = 128 * 1024;
+
+  /// The end-to-end time a body of at most [max] bytes may take.
+  Duration deadlineFor(int max) =>
+      deadline + Duration(milliseconds: max * 1000 ~/ minBytesPerSecond);
 
   int _inFlight = 0;
 
@@ -446,8 +456,9 @@ Future<(Uint8List, int)> _readBody(
   try {
     final builder = BytesBuilder(copy: false);
     final started = Stopwatch()..start();
+    final allowance = budget.deadlineFor(max);
     await for (final chunk in request.read().timeout(budget.idleGap)) {
-      if (started.elapsed > budget.deadline) throw stalled;
+      if (started.elapsed > allowance) throw stalled;
       builder.add(chunk);
       if (builder.length > max) {
         throw const ApiError(ErrorCode.payloadTooLarge);

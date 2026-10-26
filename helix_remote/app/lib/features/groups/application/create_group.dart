@@ -66,7 +66,7 @@ final class CandidateLookup {
       if (found == null) {
         return (
           found: null,
-          error: 'Nobody on Helix matches that. Check the number or name.',
+          error: 'Nobody on Orbit matches that. Check the number or name.',
         );
       }
       if (found.blocked) {

@@ -115,7 +115,7 @@ void main() {
       tester,
     ) async {
       await open(tester, account: 'ghost');
-      expect(find.text('Helix user ghost'), findsWidgets);
+      expect(find.text('Orbit user ghost'), findsWidgets);
       expect(find.text('Available after your first message'), findsOneWidget);
     });
 

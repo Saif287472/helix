@@ -195,7 +195,7 @@ void main() {
     await opened(tester);
     expect(players.opened, isEmpty);
     expect(
-      find.textContaining('cannot be played inside Helix'),
+      find.textContaining('cannot be played inside Orbit'),
       findsOneWidget,
     );
     await tester.tap(find.text('Open video'));

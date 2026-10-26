@@ -35,8 +35,8 @@ final class PlatformLinkSharer implements LinkSharer {
   Future<void> share(String link, {required String groupName}) async {
     await SharePlus.instance.share(
       ShareParams(
-        text: 'Join the group "$groupName" on Helix: $link',
-        subject: 'Join $groupName on Helix',
+        text: 'Join the group "$groupName" on Orbit: $link',
+        subject: 'Join $groupName on Orbit',
       ),
     );
   }

@@ -28,7 +28,7 @@ void main() {
           book ??
           nick ??
           number ??
-          (helix == null ? 'Helix user 0192a4f0' : '~$helix');
+          (helix == null ? 'Orbit user 0192a4f0' : '~$helix');
       final label = [
         if (book != null) 'phone book',
         if (nick != null) 'nickname',
@@ -96,22 +96,22 @@ void main() {
       expect(name.profileName, 'Maya R.');
     });
 
-    test('a stranger is "Helix user" and a short id, never blank', () {
-      expect(PersonName.unknown(id).display, 'Helix user 0192a4f0');
-      expect(PersonName.unknown('abc').display, 'Helix user abc');
+    test('a stranger is "Orbit user" and a short id, never blank', () {
+      expect(PersonName.unknown(id).display, 'Orbit user 0192a4f0');
+      expect(PersonName.unknown('abc').display, 'Orbit user abc');
     });
 
     test('a person on another server carries their server', () {
       const federated = '0192a4f0-1111-7000-8000-000000000001@other.example';
       expect(
         PersonName.unknown(federated).display,
-        'Helix user 0192a4f0 (other.example)',
+        'Orbit user 0192a4f0 (other.example)',
       );
       // A row with no names at all gets the same, so two strangers on
       // different servers are not confused.
       expect(
         PersonName.fromRow(personRow(federated)).display,
-        'Helix user 0192a4f0 (other.example)',
+        'Orbit user 0192a4f0 (other.example)',
       );
       // Once there is a name, the name wins and the id stays out of sight.
       expect(
@@ -168,7 +168,7 @@ void main() {
         personRow('a', phonebook: 'Sam'),
       ]);
       expect(directory.collides('nobody'), isFalse);
-      expect(directory.nameOf('nobody').display, 'Helix user nobody');
+      expect(directory.nameOf('nobody').display, 'Orbit user nobody');
     });
   });
 
@@ -180,7 +180,7 @@ void main() {
       expect(directory.nameOfConversation('direct:acc')!.display, 'Mum');
       expect(
         directory.nameOfConversation('direct:unknown')!.display,
-        'Helix user unknown',
+        'Orbit user unknown',
       );
       expect(directory.nameOfConversation('group:abc'), isNull);
     });
@@ -262,7 +262,7 @@ void main() {
           (_, next) => seen.add(next.display),
           fireImmediately: true,
         );
-        expect(seen, ['Helix user a'], reason: 'a stranger until a row exists');
+        expect(seen, ['Orbit user a'], reason: 'a stranger until a row exists');
 
         rows.add([personRow('a', phone: '+8801711000001')]);
         await pumpEventQueue();
@@ -277,7 +277,7 @@ void main() {
           ),
         ]);
         await pumpEventQueue();
-        expect(seen, ['Helix user a', '+8801711000001', 'Mum', 'Mother']);
+        expect(seen, ['Orbit user a', '+8801711000001', 'Mum', 'Mother']);
       },
     );
 

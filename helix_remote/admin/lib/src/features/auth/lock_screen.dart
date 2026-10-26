@@ -60,7 +60,7 @@ class _LockScreenState extends State<LockScreen> {
                     Semantics(
                       header: true,
                       child: const Text(
-                        'Helix Admin is locked',
+                        'Orbit Admin is locked',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 20,

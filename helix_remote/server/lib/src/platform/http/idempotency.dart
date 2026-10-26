@@ -231,7 +231,12 @@ final class PostgresIdempotencyStore implements IdempotencyStore {
               OR (inc.state = 'done'
                   AND inc.created_at < now() - interval '24 hours')
          RETURNING 1 AS taken''',
-      {'p': principal, 'k': key, 'h': requestHash, 'lease': lease.inMilliseconds},
+      {
+        'p': principal,
+        'k': key,
+        'h': requestHash,
+        'lease': lease.inMilliseconds,
+      },
     );
     if (taken != null) return const ClaimTaken();
     final row = await _db.queryOne(

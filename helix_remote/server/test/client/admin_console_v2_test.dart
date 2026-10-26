@@ -479,9 +479,9 @@ void main() {
       );
       final api = await signedIn();
 
-      final report = (
-        await api.admin.reports(status: ReportStatus.open)
-      ).items.single;
+      final report = (await api.admin.reports(
+        status: ReportStatus.open,
+      )).items.single;
       expect(report.reporter, bob.accountId);
       expect(report.reporterName, 'Bob Rahman');
       expect(report.reporterPhone, bobNumber);

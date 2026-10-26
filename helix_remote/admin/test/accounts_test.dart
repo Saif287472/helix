@@ -55,7 +55,7 @@ void main() {
       expect(find.text('SUSPENDED'), findsOneWidget);
       expect(find.textContaining('2 devices · Joined'), findsOneWidget);
       // No name and no number: placeholders, never invented values.
-      expect(find.text('No Helix name'), findsOneWidget);
+      expect(find.text('No Orbit name'), findsOneWidget);
       expect(find.textContaining('No phone number'), findsOneWidget);
     });
 
@@ -132,10 +132,10 @@ void main() {
       h.server.pageSize = 2;
       await openAccounts(tester);
       expect(find.text('bob'), findsOneWidget);
-      expect(find.text('No Helix name'), findsNothing);
+      expect(find.text('No Orbit name'), findsNothing);
 
       await tapText(tester, 'Load more');
-      expect(find.text('No Helix name'), findsOneWidget);
+      expect(find.text('No Orbit name'), findsOneWidget);
       expect(find.text('Load more'), findsNothing);
     });
 
@@ -165,7 +165,7 @@ void main() {
       expect(find.text('alice'), findsOneWidget);
       expect(find.textContaining('server had a problem'), findsOneWidget);
       await tapText(tester, 'Try again');
-      expect(find.text('No Helix name'), findsOneWidget);
+      expect(find.text('No Orbit name'), findsOneWidget);
     });
   });
 

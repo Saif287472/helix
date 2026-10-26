@@ -74,7 +74,7 @@ void main() {
       expect(find.text('Sam Jones'), findsOneWidget);
       expect(find.text('Sam Blocked'), findsNothing);
       expect(find.text('Me'), findsNothing);
-      expect(find.textContaining('Helix user'), findsNothing);
+      expect(find.textContaining('Orbit user'), findsNothing);
       // The line under a name is the number, or the ~Helix name.
       expect(find.text('+8801711000001'), findsOneWidget);
       expect(find.text('~sam_s'), findsOneWidget);

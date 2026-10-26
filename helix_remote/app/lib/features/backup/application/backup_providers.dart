@@ -577,7 +577,7 @@ final class RecoveryBackupController extends Notifier<RecoveryBackupState> {
     if (secret.isEmpty) return;
     final shared = await ref
         .read(secretHandoffProvider)
-        .share(secret, subject: 'Helix recovery secret');
+        .share(secret, subject: 'Orbit recovery secret');
     if (_disposed) return;
     state = state.copyWith(
       handoffNote: shared

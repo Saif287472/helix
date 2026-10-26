@@ -41,7 +41,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
     final avatarBytes = ref.watch(profileAvatarProvider).asData?.value;
     final me = HelixAvatarModel(
       name: (self == null || self.displayName.isEmpty)
-          ? 'Helix'
+          ? 'Orbit'
           : self.displayName,
       image: avatarBytes == null ? null : MemoryImage(avatarBytes),
       colorIndex: HelixAvatarModel.colorIndexFor(

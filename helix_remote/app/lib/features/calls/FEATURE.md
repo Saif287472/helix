@@ -118,5 +118,5 @@ offer was known (`PendingCallDecision`, valid for the ring time).
   connecting or active, never while it rings or is being placed.
 - The incoming and missed-call notifications name the caller, and are `public`,
   only when message previews are on (on by default since 2026-10-25;
-  `CallNotifications.incomingPresentation`); otherwise the title is "Helix"
+  `CallNotifications.incomingPresentation`); otherwise the title is "Orbit"
   and the notification is `private`.

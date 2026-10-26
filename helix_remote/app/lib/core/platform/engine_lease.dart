@@ -25,7 +25,7 @@ final class EngineAlreadyRunning implements Exception {
   final LeaseRole byRole;
 
   @override
-  String toString() => 'another Helix engine owns this database';
+  String toString() => 'another Orbit engine owns this database';
 }
 
 /// A cross-isolate, cross-process claim on the database, kept in a small file

@@ -17,12 +17,12 @@ String _two(int n) => n.toString().padLeft(2, '0');
 String shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
 
 /// What the console calls [account]: the name the person gave themselves
-/// (their app reports it, ADR-030), else their Helix name.
+/// (their app reports it, ADR-030), else their Orbit name.
 String accountTitle(AdminAccount account) {
   final name = account.displayName?.trim() ?? '';
   if (name.isNotEmpty) return name;
   final helix = account.helixName ?? '';
-  return helix.isEmpty ? 'No Helix name' : helix;
+  return helix.isEmpty ? 'No Orbit name' : helix;
 }
 
 /// The full number once the account's app has reported it and the server

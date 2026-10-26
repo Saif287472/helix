@@ -47,7 +47,7 @@ void main() {
     expect(seams.opened, isEmpty);
     expect(
       message,
-      'No Helix account is called ~ghost on your server, '
+      'No Orbit account is called ~ghost on your server, '
       'or it is not findable by name.',
       reason:
           'one sentence for both reasons, because the server does not say '

@@ -14,7 +14,7 @@ import 'package:orbit_ui/models.dart';
 /// widgets never see a row, a column or a clock.
 ///
 /// It waits for the people table once, so the first frame shows names rather
-/// than "Helix user ..." placeholders that then change.
+/// than "Orbit user ..." placeholders that then change.
 final chatListProvider = StreamProvider<List<HelixChatListItem>>((ref) async* {
   final gateway = await ref.watch(chatGatewayProvider.future);
   final people = await ref.watch(peopleDirectoryProvider.future);

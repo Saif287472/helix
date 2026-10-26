@@ -26,7 +26,7 @@ final legalProvider = FutureProvider.autoDispose<LegalText>(
   (ref) => ref.watch(settingsGatewayProvider).legal(),
 );
 
-/// The server's name for the About page: "Helix Global" for the default
+/// The server's name for the About page: "Orbit Global" for the default
 /// server, the operator's own name for a personal one.
 final serverTitleProvider = Provider.autoDispose<String?>(
   (ref) => ref.watch(serverDetailsProvider).value?.name,

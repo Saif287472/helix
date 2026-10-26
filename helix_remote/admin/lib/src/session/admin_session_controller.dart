@@ -139,7 +139,7 @@ final class AdminSessionController extends ChangeNotifier {
     _authenticating = true;
     final bool ok;
     try {
-      ok = await services.deviceLock.authenticate('Unlock Helix Admin');
+      ok = await services.deviceLock.authenticate('Unlock Orbit Admin');
     } finally {
       _authenticating = false;
     }

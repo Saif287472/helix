@@ -154,7 +154,7 @@ void main() {
       ..failWith = const GroupException(GroupFailure.badLink);
     await pump(tester, port: port);
 
-    expect(find.textContaining('not a Helix group link'), findsOneWidget);
+    expect(find.textContaining('not an Orbit group link'), findsOneWidget);
     expect(find.textContaining('HLX-GRP'), findsNothing);
   });
 

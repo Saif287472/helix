@@ -67,12 +67,12 @@ abstract final class ProfileRules {
 
 /// What the server said when it refused a `~name`.
 ///
-/// "Taken" and "could be mistaken for Helix staff" come back as the same
+/// "Taken" and "could be mistaken for Orbit staff" come back as the same
 /// answer on purpose (so nobody can probe which staff names exist), so the
 /// sentence covers both.
 const helixNameUnavailable =
     'That name is not available. It may already be taken, or it may be one '
-    'that could be mistaken for Helix staff, such as a name with admin, '
+    'that could be mistaken for Orbit staff, such as a name with admin, '
     'support, official or helix in it. Try another.';
 
 class ProfileEditState {

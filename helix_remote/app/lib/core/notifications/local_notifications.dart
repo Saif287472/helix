@@ -226,7 +226,7 @@ abstract final class LocalNotifications {
         (1, _) => 'New message',
         _ => '$count new messages',
       },
-      body: preview ?? 'Open Helix to read them.',
+      body: preview ?? 'Open Orbit to read them.',
       revealed: revealed,
     );
   }

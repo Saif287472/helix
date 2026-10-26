@@ -91,12 +91,12 @@ List<SavedAccountLine> savedAccountLinesForGlobalPage(
       (
         id: e.e164,
         title: e.name.isEmpty ? _masked(e.e164) : e.name,
-        detail: e.name.isEmpty ? 'Helix Global' : _masked(e.e164),
+        detail: e.name.isEmpty ? 'Orbit Global' : _masked(e.e164),
       ),
 ];
 
 String _serverLabel(String server) => server == kGlobalServerUrl.toString()
-    ? 'Helix Global'
+    ? 'Orbit Global'
     : (Uri.tryParse(server)?.host ?? server);
 
 String _masked(String e164) =>

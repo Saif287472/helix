@@ -222,7 +222,7 @@ class OrbitYouConnector extends ConsumerWidget {
             : () => unawaited(
                 ref
                     .read(shareAdapterProvider)
-                    .shareText(text: link, subject: 'Message me on Helix'),
+                    .shareText(text: link, subject: 'Message me on Orbit'),
               ),
         scanCode: () => context.push(RoutePaths.scanChat),
       ),

@@ -36,7 +36,7 @@ String groupErrorText(
         GroupFailure.versionConflict =>
           'The group was changed at the same time. Try again.',
         GroupFailure.badLink =>
-          'That is not a Helix group link. Check that you copied all of it.',
+          'That is not an Orbit group link. Check that you copied all of it.',
         GroupFailure.badMention => 'That person is not in the group.',
       };
     case ApiException(:final code):

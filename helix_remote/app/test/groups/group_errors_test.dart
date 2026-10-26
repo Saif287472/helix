@@ -39,7 +39,7 @@ void main() {
     );
     expect(
       groupErrorText(const GroupException(GroupFailure.badLink)),
-      contains('not a Helix group link'),
+      contains('not an Orbit group link'),
     );
   });
 

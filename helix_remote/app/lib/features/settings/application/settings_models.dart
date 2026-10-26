@@ -250,7 +250,7 @@ enum StorageFreeKind { photosVideos, documents }
 final class SettingsHeader {
   const SettingsHeader({
     this.accountId = '',
-    this.name = 'Helix',
+    this.name = 'Orbit',
     this.about = '',
     this.serverHost = '',
   });

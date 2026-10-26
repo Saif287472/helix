@@ -356,7 +356,7 @@ class ConfigView extends StatelessWidget {
           icon: Icons.public,
           accent: HelixConsoleColors.accent,
           title: 'Network & Sync',
-          subtitle: 'Other Helix servers',
+          subtitle: 'Other Orbit servers',
           body: _networkTile(context),
         ),
         _tile(

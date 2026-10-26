@@ -44,7 +44,7 @@ class HelixProfileSummary {
     if (profileName.isNotEmpty) return profileName;
     final helix = helixName;
     if (helix != null && helix.isNotEmpty) return '~$helix';
-    return 'Helix';
+    return 'Orbit';
   }
 }
 
