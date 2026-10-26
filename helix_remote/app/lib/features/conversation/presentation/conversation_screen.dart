@@ -506,6 +506,20 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
           final rowid = _rowid(id);
           if (rowid != null) unawaited(_actions.react(rowid, emoji));
         },
+        onVote: (id, ids) {
+          final rowid = _rowid(id);
+          if (rowid != null) unawaited(_actions.vote(rowid, ids));
+        },
+        onRsvp: (id, answer) {
+          final rowid = _rowid(id);
+          if (rowid != null) unawaited(_actions.rsvp(rowid, answer));
+        },
+        onCreatePoll: model.composerDisabledReason == null
+            ? _actions.sendPoll
+            : null,
+        onCreateEvent: model.composerDisabledReason == null
+            ? _actions.sendEvent
+            : null,
         reactionsOf: _reactions,
         onRemoveMyReaction: (id) async {
           final rowid = _rowid(id);

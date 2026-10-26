@@ -640,17 +640,119 @@ enum HelixPlaceholderKind {
   expired,
 }
 
-/// A bubble with no content: deleted, undecryptable, unsupported.
-/// A poll, which this version shows as its question and options in text
-/// (`case 'poll'` in the prototype's `js/ui.js`). Orbit addition.
-class HelixPollContent extends HelixMessageContent {
-  const HelixPollContent({required this.question, this.options = const []});
-  final String question;
-  final List<String> options;
+/// One answer of a poll, with how many chose it and whether you did.
+class HelixPollOption extends HelixValue {
+  const HelixPollOption({
+    required this.id,
+    required this.text,
+    this.votes = 0,
+    this.mine = false,
+  });
+
+  /// What a vote names (the option's id on the wire).
+  final String id;
+  final String text;
+  final int votes;
+  final bool mine;
+
   @override
-  List<Object?> get props => [question, options.length, ...options];
+  List<Object?> get props => [id, text, votes, mine];
 }
 
+/// A poll: the question and its answers, each tapped to vote. [voters] is
+/// the number of people who have answered (one person choosing two answers of
+/// a multiple-choice poll counts once); [closed] stops voting.
+class HelixPollContent extends HelixMessageContent {
+  const HelixPollContent({
+    required this.question,
+    this.options = const [],
+    this.multiple = false,
+    this.voters = 0,
+    this.closed = false,
+  });
+  final String question;
+  final List<HelixPollOption> options;
+  final bool multiple;
+  final int voters;
+  final bool closed;
+  @override
+  List<Object?> get props => [
+    question,
+    multiple,
+    voters,
+    closed,
+    options.length,
+    ...options,
+  ];
+}
+
+/// An answer to an event invitation.
+enum HelixRsvp { going, maybe, declined }
+
+/// An event: a title, when and where, and who is coming. [mine] is your
+/// answer, null until you give one.
+class HelixEventContent extends HelixMessageContent {
+  const HelixEventContent({
+    required this.title,
+    required this.whenLabel,
+    this.place = '',
+    this.going = 0,
+    this.maybe = 0,
+    this.declined = 0,
+    this.mine,
+  });
+  final String title;
+
+  /// "Fri 30 Oct, 18:30", in the viewer's time.
+  final String whenLabel;
+  final String place;
+  final int going;
+  final int maybe;
+  final int declined;
+  final HelixRsvp? mine;
+  @override
+  List<Object?> get props => [
+    title,
+    whenLabel,
+    place,
+    going,
+    maybe,
+    declined,
+    mine,
+  ];
+}
+
+/// What the new-poll page hands the app to send.
+class HelixPollDraft extends HelixValue {
+  const HelixPollDraft({
+    required this.question,
+    required this.options,
+    this.multiple = false,
+  });
+  final String question;
+
+  /// The answers, trimmed and in order (2 to 12).
+  final List<String> options;
+  final bool multiple;
+  @override
+  List<Object?> get props => [question, multiple, ...options];
+}
+
+/// What the new-event page hands the app to send.
+class HelixEventDraft extends HelixValue {
+  const HelixEventDraft({
+    required this.title,
+    required this.startsAt,
+    this.place = '',
+  });
+  final String title;
+  final DateTime startsAt;
+  final String place;
+  @override
+  List<Object?> get props => [title, startsAt, place];
+}
+
+/// A bubble with no content: deleted, undecryptable, unsupported.
 class HelixPlaceholderContent extends HelixMessageContent {
   const HelixPlaceholderContent(this.kind);
   final HelixPlaceholderKind kind;

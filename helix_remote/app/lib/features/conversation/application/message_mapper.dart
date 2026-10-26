@@ -47,7 +47,7 @@ HelixMessage mapMessage(
   return HelixMessage(
     id: row.localRowid.toString(),
     outgoing: outgoing,
-    content: contentOf(row),
+    content: contentOf(row, selfId: ctx.selfId, now: ctx.now),
     timeLabel: formatClock(row.sentAt),
     authorId: row.sender,
     authorName: showAuthor ? ctx.people.displayOf(row.sender) : null,
@@ -71,7 +71,7 @@ HelixMessage mapMessage(
 }
 
 /// What goes in the bubble.
-HelixMessageContent contentOf(MessageRow row) {
+HelixMessageContent contentOf(MessageRow row, {String? selfId, DateTime? now}) {
   if (row.deletedAt != null) {
     return const HelixPlaceholderContent(HelixPlaceholderKind.deleted);
   }
@@ -118,18 +118,9 @@ HelixMessageContent contentOf(MessageRow row) {
         onHelix: payload['account'] is String,
       );
     case 'poll':
-      final options = [
-        for (final o in (payload['options'] as List? ?? const []))
-          if (o is Map && o['text'] is String) '- ${o['text']}',
-      ];
-      return HelixTextContent(
-        [
-          'Poll: ${(payload['question'] as String?) ?? ''}',
-          ...options,
-        ].join('\n'),
-      );
+      return _poll(payload, selfId, now);
     case 'event':
-      return HelixTextContent('Event: ${(payload['title'] as String?) ?? ''}');
+      return _event(payload, selfId, now);
     case 'undecryptable':
       return const HelixPlaceholderContent(HelixPlaceholderKind.undecryptable);
     default:
@@ -137,6 +128,81 @@ HelixMessageContent contentOf(MessageRow row) {
       return const HelixPlaceholderContent(HelixPlaceholderKind.unsupported);
   }
 }
+
+/// A poll with the votes the engine has recorded in its payload
+/// (`votes`: account to the answers they chose).
+HelixPollContent _poll(
+  Map<String, Object?> payload,
+  String? me,
+  DateTime? now,
+) {
+  final rawVotes = payload['votes'];
+  final rawOptions = payload['options'];
+  final votes = <String, Set<String>>{
+    for (final e in (rawVotes is Map ? rawVotes : const {}).entries)
+      if (e.key is String && e.value is List)
+        e.key as String: {
+          for (final id in e.value as List)
+            if (id is String) id,
+        },
+  };
+  final options = [
+    for (final o in (rawOptions is List ? rawOptions : const []))
+      if (o is Map && o['id'] is String && o['text'] is String)
+        HelixPollOption(
+          id: o['id'] as String,
+          text: o['text'] as String,
+          votes: votes.values.where((v) => v.contains(o['id'])).length,
+          mine: me != null && (votes[me]?.contains(o['id']) ?? false),
+        ),
+  ];
+  final closes = _time(payload['closes_at']);
+  return HelixPollContent(
+    question: (payload['question'] as String?) ?? '',
+    options: options,
+    multiple: payload['multiple'] == true,
+    voters: votes.values.where((v) => v.isNotEmpty).length,
+    closed: closes != null && now != null && !closes.isAfter(now),
+  );
+}
+
+/// An event with the answers recorded in its payload (`rsvps`: account to
+/// `{state, plus_one}`).
+HelixEventContent _event(
+  Map<String, Object?> payload,
+  String? me,
+  DateTime? now,
+) {
+  final counts = {for (final s in HelixRsvp.values) s: 0};
+  HelixRsvp? mine;
+  final rawRsvps = payload['rsvps'];
+  for (final e in (rawRsvps is Map ? rawRsvps : const {}).entries) {
+    final answer = e.value is Map ? (e.value as Map)['state'] : null;
+    final state = switch (answer) {
+      'going' => HelixRsvp.going,
+      'maybe' => HelixRsvp.maybe,
+      'declined' => HelixRsvp.declined,
+      _ => null,
+    };
+    if (state == null) continue;
+    counts[state] = counts[state]! + 1;
+    if (e.key == me) mine = state;
+  }
+  final starts = _time(payload['starts_at']);
+  return HelixEventContent(
+    title: (payload['title'] as String?) ?? '',
+    whenLabel: starts == null ? '' : formatWhen(starts, now ?? starts),
+    place: ((payload['location_text'] as String?) ?? '').trim(),
+    going: counts[HelixRsvp.going]!,
+    maybe: counts[HelixRsvp.maybe]!,
+    declined: counts[HelixRsvp.declined]!,
+    mine: mine,
+  );
+}
+
+/// A wire time (epoch milliseconds) from a payload, or null.
+DateTime? _time(Object? raw) =>
+    raw is num ? DateTime.fromMillisecondsSinceEpoch(raw.toInt()) : null;
 
 List<HelixTextRange> _mentionRanges(Object? raw, String text) {
   if (raw is! List) return const [];

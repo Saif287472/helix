@@ -86,8 +86,18 @@ conversation_routes.dart    /chat/:id and its sub-routes
   roster added without an announcement; the timeline shows the engine's `member_unconfirmed` notice
   (`core/chat/message_semantics.dart`). The groups feature owns the logic.
 
+## Polls and events
+
+A poll or an event is made from the attach sheet (Poll, Event): `orbit_ui`'s
+`OrbitNewPollPage` and `OrbitNewEventPage` hand a draft to `ConversationActions.sendPoll`
+/ `sendEvent`, which send through the gateway (`ChatsService.sendBody`). The bubble
+(`message_mapper.dart`, `_poll` and `_event`) is drawn from the votes and RSVPs the engine keeps in
+the message payload; a tap calls `vote` / `rsvp` and the bubble redraws from the database.
+Polls are single or multiple choice; closing a poll (`closes_at`) is honoured, not offered. Events
+have a title, a start, and a place; plus-ones and an end time are not offered.
+
 ## Not here
 
-Polls, events, stickers and live-location bubbles (polls and events draw as
-text, the others as "needs a newer version"), proximity/earpiece playback,
+Stickers and live-location bubbles (drawn as "needs a newer version"),
+proximity/earpiece playback,
 video notes recorded in app, starred messages (the engine keeps none), report.

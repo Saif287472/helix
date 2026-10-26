@@ -6,7 +6,8 @@ import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show ContentLimits;
+    show ContentLimits, RsvpState;
+import 'package:orbit_ui/models.dart';
 
 /// Well-known ids for the message menu, so the rules here and the screen that
 /// draws them switch on the same constants.
@@ -58,6 +59,59 @@ final class ConversationActions {
     MessageStatus.read,
     MessageStatus.viewed,
   };
+
+  /// Votes in a poll. A poll that is gone, or an answer it does not have, is
+  /// not an error worth showing: the bubble redraws from what is stored.
+  Future<void> vote(int rowid, List<String> optionIds) async {
+    try {
+      await (await _gateway).vote(rowid, optionIds);
+    } on Object {
+      // Nothing to vote on any more.
+    }
+  }
+
+  /// Answers an event invitation, the same way.
+  Future<void> rsvp(int rowid, HelixRsvp answer) async {
+    try {
+      await (await _gateway).rsvp(rowid, switch (answer) {
+        HelixRsvp.going => RsvpState.going,
+        HelixRsvp.maybe => RsvpState.maybe,
+        HelixRsvp.declined => RsvpState.declined,
+      });
+    } on Object {
+      // Nothing to answer any more.
+    }
+  }
+
+  /// Sends a poll: null when it went, else the sentence to show.
+  Future<String?> sendPoll(HelixPollDraft draft) async {
+    try {
+      await (await _gateway).sendPoll(
+        conversationId,
+        question: draft.question,
+        options: draft.options,
+        multiple: draft.multiple,
+      );
+      return null;
+    } on Object {
+      return 'The poll could not be sent.';
+    }
+  }
+
+  /// Sends an event: null when it went, else the sentence to show.
+  Future<String?> sendEvent(HelixEventDraft draft) async {
+    try {
+      await (await _gateway).sendEvent(
+        conversationId,
+        title: draft.title,
+        startsAt: draft.startsAt,
+        place: draft.place,
+      );
+      return null;
+    } on Object {
+      return 'The event could not be sent.';
+    }
+  }
 
   /// The menu for [rowid], or null when the message is gone.
   Future<MessageMenu?> menuFor(int rowid) async {

@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 23 | see "Already built" |
+| Already built | 25 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 13 | A2, A4, A6, A9, A10, B1, B4, B8, C1, C5, C7, E3, E4 |
+| M (about 10 files) | 11 | A4, A6, A9, A10, B1, B4, B8, C1, C5, C7, E4 |
 | L (more than that) | 10 | A3, A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -71,7 +71,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | ID | Feature | Status | Size | Probable files (and why) |
 |---|---|---|---|---|
 | A1 | Text formatting (bold, italic, strike, mono) | **Built 2026-10-26** | done | `orbit_ui` `timeline.dart` (`_formatted`, WhatsApp word-edge rules, markers hidden, wire text stays plain), test `orbit_ui/test/message_formatting_test.dart`. Not done: composer toolbar buttons, formatting in chat-list previews and notifications (they show the markers). |
-| A2 | Polls: draw, create and vote | Partial (type, `poll_vote`, engine and server exist; app draws polls as text) | **M** | `ui/components/` poll bubble; `ui/screens/chat/chat_pages.dart` create-poll sheet; `app/features/conversation/application/` poll provider (create, vote, tally); `core/chat/message_semantics.dart`; engine already has `poll_vote`; tests for app and ui. About 8 files. |
+| A2 | Polls: draw, create and vote | **Built 2026-10-26** | done | `orbit_ui` `timeline.dart` (`_Poll`), `compose_pages.dart` (`OrbitNewPollPage`), `chat_screen.dart` (attach sheet, `onVote`, `onCreatePoll`); app `message_mapper.dart`, `chat_gateway.dart`, `message_actions.dart`, `conversation_screen.dart`. Tests: `orbit_ui/test/polls_events_test.dart`, `app/test/poll_event_flow_test.dart`. Not done: closing a poll (honoured when received, not offered), who voted. |
 | A3 | Pin message in a chat | Not built | **L** | A pin is shared state, so it needs a new content action `pin` (proto `bodies/actions.dart`, CONTENT_V2.md, fixtures, `HELIX_UPDATE_FIXTURES=1`), engine apply (`messaging/apply.dart`), a `messages` column (`pinnedAt`: **DB schema 6**, codegen), app banner and menu. Local-only pin would be M (DB column plus UI) but would not show to the other side. |
 | A4 | Starred (saved) messages | Not built (engine keeps none) | **M** | Local only: `messages.starred` column means DB schema 6 (if bundled with A3, one bump), DAO query, engine service method, app Starred page and menu entry, `ui/` screen. Counts L if it is the only thing bumping the schema. |
 | A5 | Stickers and animated emoji | Partial (`sticker` type exists, UI "needs newer version") | **L** | Draw sticker bubble; sticker picker and packs (storage, download, a pack format like `THEME_PACK_FORMAT.md`); sticker maker (image to webp via `FlutterMediaProcessor`); send path in engine. New pack format means a doc and tests. |
@@ -128,7 +128,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 |---|---|---|---|---|
 | E1 | Communities (umbrella of groups) | Not built | **L+** | New server module, protocol, engine and app feature; new package registrations in `architecture_rules`. Plan and ADR first. |
 | E2 | Channels (one-way broadcast) | Not built | **L+** | Unencrypted or fan-out model conflicts with the E2EE design; needs an ADR. |
-| E3 | Group events and RSVPs | Partial (`event`, `rsvp` in engine; UI draws text) | **M** | Event bubble and create sheet in `ui/`, provider in `app/features/conversation/`. Pairs with A2. |
+| E3 | Group events and RSVPs | **Built 2026-10-26** | done | Same slices as A2 (`_Event`, `OrbitNewEventPage`). Not done: end time, plus-ones, calendar export. The zone is sent as `UTC±HH:MM` (documented in CONTENT_V2.md). |
 | E4 | Live location | Partial (engine; no updates sent) | **M** | Location plugin, send updates, map-less bubble. Permissions and battery need a decision. |
 
 ## F. AI

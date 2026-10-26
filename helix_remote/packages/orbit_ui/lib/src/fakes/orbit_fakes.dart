@@ -850,7 +850,17 @@ abstract final class OrbitFakes {
           outgoing: false,
           content: HelixPollContent(
             question: 'Friday lunch?',
-            options: ['Star Kabab', 'Sultan’s Dine', 'Order in'],
+            options: [
+              HelixPollOption(id: 'a', text: 'Star Kabab', votes: 3),
+              HelixPollOption(
+                id: 'b',
+                text: 'Sultan’s Dine',
+                votes: 1,
+                mine: true,
+              ),
+              HelixPollOption(id: 'c', text: 'Order in'),
+            ],
+            voters: 4,
           ),
           timeLabel: '08:27',
           authorId: 'arif',

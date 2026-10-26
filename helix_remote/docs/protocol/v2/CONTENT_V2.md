@@ -65,8 +65,8 @@ could read (2026-10-01 survey).
 | `location` | `lat_e7`, `lng_e7`, `accuracy_m`, `label?`, `address?` | static |
 | `live_location` | `session_id`, `state: start\|update\|stop`, `lat_e7`, `lng_e7`, `accuracy_m`, `expires_at` | one session: one `start`, many `update`, one `stop`; v1 never sent updates or stop |
 | `contact` | `name`, `numbers?: [string]`, `account?` | shared contact card |
-| `poll` | `question`, `options: [{id, text}]` (2–12), `multiple: bool`, `closes_at?` | |
-| `event` | `title`, `starts_at`, `ends_at?`, `time_zone`, `location_text?`, `plus_one_allowed: bool` | |
+| `poll` | `question`, `options: [{id, text}]` (2–12), `multiple: bool`, `closes_at?` | the app names its options `o1`, `o2`, …; it does not yet set `closes_at` but honours one it receives |
+| `event` | `title`, `starts_at`, `ends_at?`, `time_zone`, `location_text?`, `plus_one_allowed: bool` | `starts_at` is the instant; receivers show it in their own time. `time_zone` is an IANA name, or `UTC±HH:MM` when the sender cannot name its zone (the Flutter app sends the offset form). The app does not yet send `ends_at` or `plus_one_allowed`. |
 | `system` | `kind: timer_changed\|group_created\|member_added\|member_removed\|member_left\|group_renamed\|…`, plus fields per kind | local rendering of group or chat changes the sender announces |
 | `call_log` | `call_id`, `media: audio\|video`, `outcome: answered\|missed\|declined\|failed`, `duration_s?` | posted by the caller's device after a call, so both sides' devices agree |
 

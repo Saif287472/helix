@@ -4,7 +4,14 @@ import 'package:helix_remote/core/platform/picker_cleanup.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show Mention, MessageRef, PresenceResponse;
+    show
+        EventBody,
+        Mention,
+        MessageRef,
+        PollBody,
+        PollOption,
+        PresenceResponse,
+        RsvpState;
 
 /// Everything the chat list and the conversation need from the engine, in one
 /// place.
@@ -135,6 +142,50 @@ class ChatGateway {
   Future<void> setDisappearing(String id, int? seconds) =>
       _chats.setDisappearing(id, seconds);
 
+  /// Votes in a poll: [optionIds] are all your answers now (none takes your
+  /// vote back).
+  Future<void> vote(int rowid, List<String> optionIds) =>
+      _chats.vote(rowid, optionIds);
+
+  /// Answers an event invitation.
+  Future<void> rsvp(int rowid, RsvpState state) => _chats.rsvp(rowid, state);
+
+  /// Sends a poll of [options] (two to twelve, already trimmed and different).
+  Future<void> sendPoll(
+    String conversationId, {
+    required String question,
+    required List<String> options,
+    bool multiple = false,
+  }) => _chats.sendBody(
+    conversationId,
+    PollBody(
+      question: question,
+      options: [
+        for (final (i, text) in options.indexed)
+          PollOption(id: 'o${i + 1}', text: text),
+      ],
+      multiple: multiple,
+    ),
+  );
+
+  /// Sends an event. The zone is named by its offset from UTC ("UTC+06:00"):
+  /// the phone gives no IANA name, and receivers show [startsAt] in their own
+  /// time (CONTENT_V2.md).
+  Future<void> sendEvent(
+    String conversationId, {
+    required String title,
+    required DateTime startsAt,
+    String place = '',
+  }) => _chats.sendBody(
+    conversationId,
+    EventBody(
+      title: title,
+      startsAt: startsAt,
+      timeZone: utcOffsetName(startsAt.timeZoneOffset),
+      locationText: place.isEmpty ? null : place,
+    ),
+  );
+
   Future<void> markDisplayed(int rowid) => _chats.markDisplayed(rowid);
 
   // -------------------------------------------------------------- sending
@@ -259,3 +310,11 @@ final chatGatewayProvider = FutureProvider<ChatGateway>((ref) async {
   final runtime = await ref.watch(runtimeProvider.future);
   return ChatGateway(runtime.engine);
 });
+
+/// "UTC+06:00", "UTC-03:30", "UTC+00:00": a zone named by its offset.
+String utcOffsetName(Duration offset) {
+  final minutes = offset.inMinutes.abs();
+  String two(int n) => n.toString().padLeft(2, '0');
+  final sign = offset.isNegative ? '-' : '+';
+  return 'UTC$sign${two(minutes ~/ 60)}:${two(minutes % 60)}';
+}

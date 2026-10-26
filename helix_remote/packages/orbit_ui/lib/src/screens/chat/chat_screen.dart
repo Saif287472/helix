@@ -19,6 +19,7 @@ import 'package:orbit_ui/src/components/timeline.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
 import 'package:orbit_ui/src/models/view_models.dart';
+import 'package:orbit_ui/src/screens/chat/compose_pages.dart';
 import 'package:orbit_ui/src/screens/home/home_models.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
 import 'package:orbit_ui/src/theme/orbit_text.dart';
@@ -249,6 +250,10 @@ class ChatActions {
     this.onPickMention,
     this.onCancelBanner,
     this.onPickFiles,
+    this.onVote,
+    this.onRsvp,
+    this.onCreatePoll,
+    this.onCreateEvent,
     this.onVoiceStart,
     this.onVoiceSlide,
     this.onVoiceLock,
@@ -349,6 +354,20 @@ class ChatActions {
   onPickMention;
   final VoidCallback? onCancelBanner;
   final ValueChanged<ChatAttachSource>? onPickFiles;
+
+  /// An answer of a poll was tapped: the poll, and every answer of yours now
+  /// (an empty list takes your vote back).
+  final void Function(String id, List<String> optionIds)? onVote;
+
+  /// An event's Going, Maybe or Can't go was tapped.
+  final void Function(String id, HelixRsvp answer)? onRsvp;
+
+  /// Sends a poll; the sentence to show when it could not be sent, null when
+  /// it was. With it set, the attach sheet offers Poll.
+  final FutureOr<String?> Function(HelixPollDraft draft)? onCreatePoll;
+
+  /// Sends an event, the same way; sets Event in the attach sheet.
+  final FutureOr<String?> Function(HelixEventDraft draft)? onCreateEvent;
 
   /// Hold to record (see [OrbitComposerActions]).
   final VoidCallback? onVoiceStart;
@@ -541,6 +560,12 @@ class _ChatScreenState extends State<ChatScreen> {
       onViewOnce: a.onOpenViewOnce == null
           ? null
           : (id) => widget.actions.onOpenViewOnce?.call(id),
+      onVote: a.onVote == null
+          ? null
+          : (id, ids) => widget.actions.onVote?.call(id, ids),
+      onRsvp: a.onRsvp == null
+          ? null
+          : (id, answer) => widget.actions.onRsvp?.call(id, answer),
       onAudioToggle: a.onToggleAudio == null
           ? null
           : (id) => widget.actions.onToggleAudio?.call(id),
@@ -1261,6 +1286,23 @@ class _ChatScreenState extends State<ChatScreen> {
         () => _pick(ChatAttachSource.audio),
       ),
     ];
+    // A second row for what is made here rather than picked: a poll, an
+    // event. Each shows only where the app can send it.
+    final made = [
+      if (widget.actions.onCreatePoll != null)
+        tile(OrbitIcons.chartBarHorizontal, 2, 'Poll', _newPoll),
+      if (widget.actions.onCreateEvent != null)
+        tile(OrbitIcons.calendarBlank, 1, 'Event', _newEvent),
+    ];
+    Widget row(List<Widget> tiles) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < 4; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(child: i < tiles.length ? tiles[i] : const SizedBox()),
+        ],
+      ],
+    );
     // `.attach-grid`: four columns (the Pass 1 rule wins over the three
     // it first sets), 10px apart, 8px 18px 4px in.
     showOrbitSheet(
@@ -1268,15 +1310,31 @@ class _ChatScreenState extends State<ChatScreen> {
       anchor: _attachKey.currentContext,
       body: Padding(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            for (final (i, w) in tiles.indexed) ...[
-              if (i > 0) const SizedBox(width: 10),
-              Expanded(child: w),
-            ],
+            row(tiles),
+            if (made.isNotEmpty) ...[const SizedBox(height: 10), row(made)],
           ],
         ),
+      ),
+    );
+  }
+
+  void _newPoll() {
+    final create = widget.actions.onCreatePoll;
+    if (create == null) return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => OrbitNewPollPage(onSend: create)),
+    );
+  }
+
+  void _newEvent() {
+    final create = widget.actions.onCreateEvent;
+    if (create == null) return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => OrbitNewEventPage(now: DateTime.now(), onSend: create),
       ),
     );
   }

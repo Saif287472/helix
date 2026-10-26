@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -12,7 +14,7 @@ import 'package:helix_remote_crypto/v2.dart' show SecureCryptoRandom;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show Mention, MessageRef, PresenceResponse;
+    show Mention, MessageRef, PresenceResponse, RsvpState;
 import 'a3b_fakes.dart' show FakeLocalSettings;
 import 'orbit_theme.dart';
 
@@ -154,6 +156,87 @@ class TestChatGateway extends ChatGateway {
       at: testNow,
       status: MessageStatus.pending,
     );
+  }
+
+  /// Your own vote or RSVP goes into the message's payload, as the engine
+  /// does, which is what the bubble then draws.
+  Future<void> _answer(int rowid, String key, Object? answer) async {
+    final row = (await db.messagesDao.byRowid(rowid))!;
+    final payload = row.payload == null
+        ? <String, Object?>{}
+        : (jsonDecode(row.payload!) as Map).cast<String, Object?>();
+    final answers = {...(payload[key] as Map? ?? const {})};
+    answer == null ? answers.remove('me') : answers['me'] = answer;
+    await db.messagesDao.updatePayload(
+      rowid,
+      jsonEncode({...payload, key: answers}),
+    );
+  }
+
+  @override
+  Future<void> vote(int rowid, List<String> optionIds) async {
+    log.add('vote:$rowid:${optionIds.join(',')}');
+    await _answer(rowid, 'votes', optionIds.isEmpty ? null : optionIds);
+  }
+
+  @override
+  Future<void> rsvp(int rowid, RsvpState state) async {
+    log.add('rsvp:$rowid:${state.wire}');
+    await _answer(rowid, 'rsvps', {'state': state.wire, 'plus_one': false});
+  }
+
+  Future<void> _sendCard(
+    String conversationId,
+    String kind,
+    Map<String, Object?> payload,
+  ) => db.messagesDao.insertMessage(
+    MessagesCompanion.insert(
+      messageId: 'card${_n++}',
+      conversationId: conversationId,
+      sender: 'me',
+      outgoing: true,
+      sortKey: SortKey.of(testNow.toUtc(), 'card$_n'),
+      sentAt: testNow.toUtc(),
+      receivedAt: testNow.toUtc(),
+      kind: kind,
+      payload: Value(jsonEncode(payload)),
+      status: MessageStatus.pending,
+    ),
+  );
+
+  @override
+  Future<void> sendPoll(
+    String conversationId, {
+    required String question,
+    required List<String> options,
+    bool multiple = false,
+  }) async {
+    log.add(
+      'sendPoll:$conversationId:$question:${options.join('|')}:$multiple',
+    );
+    await _sendCard(conversationId, 'poll', {
+      'question': question,
+      'options': [
+        for (final (i, t) in options.indexed) {'id': 'o${i + 1}', 'text': t},
+      ],
+      'multiple': multiple,
+    });
+  }
+
+  @override
+  Future<void> sendEvent(
+    String conversationId, {
+    required String title,
+    required DateTime startsAt,
+    String place = '',
+  }) async {
+    log.add('sendEvent:$conversationId:$title:${startsAt.toIso8601String()}');
+    await _sendCard(conversationId, 'event', {
+      'title': title,
+      'starts_at': startsAt.toUtc().millisecondsSinceEpoch,
+      'time_zone': 'UTC+00:00',
+      'location_text': ?(place.isEmpty ? null : place),
+    });
   }
 
   /// Makes every media send fail (the engine refused or the disk is full).

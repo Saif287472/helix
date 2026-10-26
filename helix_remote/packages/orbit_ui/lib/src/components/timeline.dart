@@ -34,6 +34,8 @@ class OrbitBubbleActions {
     this.onAudioToggle,
     this.onAudioSpeed,
     this.onAudioSeek,
+    this.onVote,
+    this.onRsvp,
     this.onAuthor,
   });
 
@@ -61,6 +63,13 @@ class OrbitBubbleActions {
 
   /// The waveform was tapped or dragged, at a fraction 0..1 of the note.
   final void Function(String id, double fraction)? onAudioSeek;
+
+  /// A poll answer was tapped: the poll, and every answer of yours now (an
+  /// empty list takes your vote back).
+  final void Function(String id, List<String> optionIds)? onVote;
+
+  /// An event's Going, Maybe or Can't go was tapped.
+  final void Function(String id, HelixRsvp answer)? onRsvp;
 
   /// The author's picture beside a group bubble was tapped.
   final ValueChanged<String>? onAuthor;
@@ -890,6 +899,8 @@ class OrbitMessageBubble extends StatelessWidget {
         b.write('Contact ${c.name}');
       case HelixPollContent():
         b.write('Poll ${c.question}');
+      case HelixEventContent():
+        b.write('Event ${c.title}, ${c.whenLabel}');
       case HelixPlaceholderContent():
         b.write(_placeholderWords(c.kind, m.outgoing).$2);
       case HelixViewOnceContent():
@@ -1184,15 +1195,14 @@ class _BlockBody extends StatelessWidget {
             onLink: onLink,
           ),
         );
-      case HelixPollContent(:final question, :final options):
-        final s = ['Poll: $question', ...options.map((o) => '- $o')].join('\n');
-        parts.add(
-          _TextFlow(
-            span: TextSpan(text: s, style: text),
-            style: text,
-            meta: meta,
-          ),
-        );
+      case HelixPollContent():
+        parts
+          ..add(_Poll(content: c, look: look))
+          ..add(_FloatLine(meta: meta));
+      case HelixEventContent():
+        parts
+          ..add(_Event(content: c, look: look))
+          ..add(_FloatLine(meta: meta));
       case HelixAudioContent():
         parts
           ..add(_Voice(message: m, content: c, look: look))
@@ -2746,6 +2756,313 @@ class _Contact extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A poll: the question, then each answer with a bar of its share of the
+/// voters. Tapping an answer votes; tapping yours again takes it back. A
+/// closed poll, or a bubble with no vote action, takes no taps.
+class _Poll extends StatelessWidget {
+  const _Poll({required this.content, required this.look});
+
+  final HelixPollContent content;
+  final _BubbleLook look;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = look.t;
+    final c = content;
+    final taps = _BubbleTaps.of(context);
+    final onVote = c.closed ? null : taps?.actions.onVote;
+    void vote(HelixPollOption o) {
+      if (onVote == null) return;
+      final mine = [
+        for (final x in c.options)
+          if (x.mine) x.id,
+      ];
+      final next = c.multiple
+          ? (o.mine ? mine.where((id) => id != o.id).toList() : [...mine, o.id])
+          : (o.mine ? <String>[] : [o.id]);
+      onVote(taps!.id, next);
+    }
+
+    final hint = c.closed
+        ? 'Poll closed'
+        : c.multiple
+        ? 'Select one or more'
+        : 'Select one';
+    final votes = c.voters == 0
+        ? 'No votes yet'
+        : c.voters == 1
+        ? '1 vote'
+        : '${c.voters} votes';
+    final fill = look.out ? t.outInk : t.accent;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 236),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OrbitText(
+              c.question,
+              style: t.font.style(
+                size: OrbitType.body,
+                weight: 600,
+                color: look.ink,
+              ),
+            ),
+            const SizedBox(height: 2),
+            OrbitText(hint, style: t.mono.style(size: 11, color: look.meta)),
+            for (final o in c.options)
+              _tappable(
+                onVote == null ? null : () => vote(o),
+                Semantics(
+                  container: true,
+                  button: onVote != null,
+                  selected: o.mine,
+                  label:
+                      '${o.text}, ${o.votes == 1 ? '1 vote' : '${o.votes} votes'}',
+                  child: ExcludeSemantics(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          OrbitIcon(
+                            o.mine ? OrbitIcons.checkCircle : OrbitIcons.circle,
+                            weight: o.mine
+                                ? OrbitIconWeight.fill
+                                : OrbitIconWeight.regular,
+                            size: 20,
+                            color: o.mine ? fill : look.meta,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OrbitText(
+                                        o.text,
+                                        style: t.font.style(
+                                          size: OrbitType.body,
+                                          weight: o.mine ? 560 : 450,
+                                          color: look.ink,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    OrbitText(
+                                      '${o.votes}',
+                                      style: t.mono.style(
+                                        size: 11,
+                                        color: look.meta,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                _ShareBar(
+                                  share: c.voters == 0 ? 0 : o.votes / c.voters,
+                                  track: look.edge,
+                                  fill: fill,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                target: true,
+              ),
+            const SizedBox(height: 8),
+            OrbitText(votes, style: t.mono.style(size: 11, color: look.meta)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A poll answer's bar: [share] (0 to 1) of the width in [fill] over [track].
+/// Painted rather than built of boxes, so a bubble that sizes itself to its
+/// content (an intrinsic width) can still hold it.
+class _ShareBar extends StatelessWidget {
+  const _ShareBar({
+    required this.share,
+    required this.track,
+    required this.fill,
+  });
+
+  final double share;
+  final Color track;
+  final Color fill;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: const Size(double.infinity, 4),
+    painter: _ShareBarPainter(share.clamp(0.0, 1.0), track, fill),
+  );
+}
+
+class _ShareBarPainter extends CustomPainter {
+  const _ShareBarPainter(this.share, this.track, this.fill);
+
+  final double share;
+  final Color track;
+  final Color fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    RRect bar(double width) => RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, width, size.height),
+      const Radius.circular(2),
+    );
+    canvas.drawRRect(bar(size.width), Paint()..color = track);
+    if (share > 0) {
+      canvas.drawRRect(bar(size.width * share), Paint()..color = fill);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShareBarPainter old) =>
+      old.share != share || old.track != track || old.fill != fill;
+}
+
+/// An event: the title, when and where, three buttons to answer and a count
+/// of the answers. Your answer is the filled button.
+class _Event extends StatelessWidget {
+  const _Event({required this.content, required this.look});
+
+  final HelixEventContent content;
+  final _BubbleLook look;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = look.t;
+    final c = content;
+    final taps = _BubbleTaps.of(context);
+    final onRsvp = taps?.actions.onRsvp;
+    final counts = [
+      if (c.going > 0) '${c.going} going',
+      if (c.maybe > 0) '${c.maybe} maybe',
+      if (c.declined > 0) '${c.declined} can’t go',
+    ];
+    Widget answer(HelixRsvp state, String label) {
+      final chosen = c.mine == state;
+      return Expanded(
+        child: _tappable(
+          onRsvp == null ? null : () => onRsvp(taps!.id, state),
+          Semantics(
+            container: true,
+            button: onRsvp != null,
+            selected: chosen,
+            label: label,
+            child: ExcludeSemantics(
+              child: Container(
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: chosen
+                      ? (look.out ? t.outInk : t.accent)
+                      : Colors.transparent,
+                  border: Border.all(color: look.edge),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: OrbitText(
+                  label,
+                  style: t.font.style(
+                    size: OrbitType.small,
+                    weight: 560,
+                    color: chosen ? (look.out ? t.out : t.onAccent) : look.ink,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          target: true,
+        ),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 236),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: OrbitIcon(
+                    OrbitIcons.calendarBlank,
+                    size: 18,
+                    color: look.ink,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OrbitText(
+                    c.title,
+                    style: t.font.style(
+                      size: OrbitType.body,
+                      weight: 600,
+                      color: look.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            OrbitText(
+              c.whenLabel,
+              style: t.mono.style(size: 11, color: look.meta),
+            ),
+            if (c.place.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    OrbitIcon(OrbitIcons.mapPin, size: 12, color: look.meta),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: OrbitText(
+                        c.place,
+                        style: t.mono.style(size: 11, color: look.meta),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                answer(HelixRsvp.going, 'Going'),
+                const SizedBox(width: 6),
+                answer(HelixRsvp.maybe, 'Maybe'),
+                const SizedBox(width: 6),
+                answer(HelixRsvp.declined, 'Can’t go'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            OrbitText(
+              counts.isEmpty ? 'No answers yet' : counts.join(' · '),
+              style: t.mono.style(size: 11, color: look.meta),
             ),
           ],
         ),
