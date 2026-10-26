@@ -222,7 +222,7 @@ the name; the only lookup is this one.
 
 The sentences are deliberately blunt: a name that does not exist, one whose
 owner is not findable and one that has blocked you are all
-"No Helix account is called ~x on your server, or it is not findable by name."
+"No Orbit account is called ~x on your server, or it is not findable by name."
 An answer that could tell them apart would let anyone walk the server's names.
 `test/person_link_test.dart` pins that the exception behind a failure never
 reaches the screen.

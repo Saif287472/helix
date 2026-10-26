@@ -62,7 +62,7 @@ class _CameraQrScannerState extends State<CameraQrScanner> {
       child: Padding(
         padding: EdgeInsets.all(24),
         child: Text(
-          'The camera is not available. Allow camera access for Helix in your '
+          'The camera is not available. Allow camera access for Orbit in your '
           'phone settings to scan a code.',
           textAlign: TextAlign.center,
         ),

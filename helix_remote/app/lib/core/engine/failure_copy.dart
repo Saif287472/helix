@@ -55,7 +55,7 @@ Failure describeFailure(Object error, {DateTime? now}) {
     case NetworkException():
       return const Failure(
         FailureKind.offline,
-        'You are offline, or Helix cannot be reached. Check your connection '
+        'You are offline, or Orbit cannot be reached. Check your connection '
         'and try again.',
       );
     case SignedOutException():

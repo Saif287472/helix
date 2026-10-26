@@ -68,10 +68,10 @@ abstract final class CallCopy {
 
   /// A refusal of the microphone or camera, with what to do about it.
   static const microphoneDenied =
-      'Helix needs the microphone to make calls. Allow it in your phone\'s '
+      'Orbit needs the microphone to make calls. Allow it in your phone\'s '
       'settings, then try again.';
   static const cameraDenied =
-      'Helix needs the camera for video calls. Allow it in your phone\'s '
+      'Orbit needs the camera for video calls. Allow it in your phone\'s '
       'settings, or make a voice call instead.';
 
   /// The server has no relay, so no call can connect (never a reason to blame

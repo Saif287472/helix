@@ -42,7 +42,7 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
   final PhoneBook _phoneBook;
 
   /// The device name and platform the engine registers with. Required: a
-  /// fallback here would name the device `Helix device` and lose the model in
+  /// fallback here would name the device `Orbit device` and lose the model in
   /// a way nothing would notice.
   final Future<EngineConfig> Function() _config;
 
@@ -435,7 +435,7 @@ Future<String> _deviceName(DevicePlatform platform) async {
     _ => null,
   };
   final label = model?.trim();
-  if (label == null || label.isEmpty) return 'Helix device';
+  if (label == null || label.isEmpty) return 'Orbit device';
   return label.length <= 60 ? label : label.substring(0, 60);
 }
 

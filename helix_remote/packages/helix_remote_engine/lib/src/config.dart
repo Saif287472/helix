@@ -9,7 +9,7 @@ import 'package:meta/meta.dart';
 @immutable
 final class EngineConfig {
   const EngineConfig({
-    this.deviceName = 'Helix device',
+    this.deviceName = 'Orbit device',
     this.platform = DevicePlatform.other,
     this.outboxBackoff = const Backoff(),
     this.outboxMaxAge = const Duration(days: 30),

@@ -269,7 +269,7 @@ class ApproveLinkState {
 
 String linkProblemText(LinkProblem problem) => switch (problem) {
   LinkProblem.notACode =>
-    'That is not a Helix link code. Scan the code shown on the new device, '
+    'That is not an Orbit link code. Scan the code shown on the new device, '
         'or paste it exactly.',
   LinkProblem.otherServer =>
     'That code is for a different server than the one this phone is signed '
@@ -291,7 +291,7 @@ String linkProblemText(LinkProblem problem) => switch (problem) {
     'Approval needs your phone\'s own unlock (fingerprint, face or PIN) so '
         'nobody else holding it can add a device.',
   LinkProblem.offline =>
-    'You are offline, or Helix cannot be reached. Check your connection and '
+    'You are offline, or Orbit cannot be reached. Check your connection and '
         'try again.',
   LinkProblem.notAllowed => 'The server did not accept that. Try again.',
   LinkProblem.unknown => 'That did not work. Try again.',
@@ -348,7 +348,7 @@ final class ApproveLinkController extends Notifier<ApproveLinkState> {
     try {
       final auth = ref.read(deviceAuthenticatorProvider);
       if (await auth.isAvailable() &&
-          !await auth.confirm('Approve a new device for your Helix account')) {
+          !await auth.confirm('Approve a new device for your Orbit account')) {
         throw const LinkProblemException(LinkProblem.notConfirmed);
       }
       final gateway = ref.read(devicesGatewayProvider);

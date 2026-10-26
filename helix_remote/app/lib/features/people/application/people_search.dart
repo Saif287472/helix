@@ -335,7 +335,7 @@ final class PeopleActions {
         // One sentence for "nobody has this name", "they are not findable by
         // name" and "they blocked you": the server does not say which, so a
         // link cannot be used to probe for an account.
-        return 'No Helix account is called ~$helixName on your server, '
+        return 'No Orbit account is called ~$helixName on your server, '
             'or it is not findable by name.';
       }
       // Your own link, tapped or scanned, opens the one chat it can mean: the

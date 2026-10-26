@@ -108,7 +108,7 @@ final class VideoSession extends Notifier<VideoViewState> {
     if (!players.isSupported) {
       return const VideoViewState(
         phase: VideoPhase.failed,
-        message: 'Videos cannot be played inside Helix on this device.',
+        message: 'Videos cannot be played inside Orbit on this device.',
       );
     }
     // Not in `build`: state may not change while a provider is being built.

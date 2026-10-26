@@ -98,7 +98,7 @@ final class PrivacyController extends Notifier<PrivacyState> {
         prefs: previous,
         loading: false,
         error: turningOnPhone && _refused(failure)
-            ? 'Helix did not turn this on. It checks the number against the '
+            ? 'Orbit did not turn this on. It checks the number against the '
                   'one your account was verified with, so it has to be that '
                   'number. Check it and try again.'
             : 'That was not saved. ${failure.message}',

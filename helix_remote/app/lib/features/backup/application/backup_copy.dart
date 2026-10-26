@@ -20,7 +20,7 @@ String backupProblemTitle(BackupProblem problem) => switch (problem) {
   BackupProblem.rolledBack => 'An older backup was refused',
   BackupProblem.offline => 'You are offline',
   BackupProblem.conflict => 'Another device is backing up',
-  BackupProblem.notAllowed => 'Helix refused it',
+  BackupProblem.notAllowed => 'Orbit refused it',
   BackupProblem.waitingForWifi => 'Waiting for Wi-Fi',
   _ => 'The restore did not finish',
 };
@@ -37,7 +37,7 @@ String backupProblemText(BackupProblem problem) => switch (problem) {
     'The backup is damaged and cannot be read. Make a new one on a device '
         'that still has your chats.',
   BackupProblem.newerFormat =>
-    'This backup was made by a newer version of Helix. Update the app and '
+    'This backup was made by a newer version of Orbit. Update the app and '
         'try again.',
   BackupProblem.rolledBack =>
     'The server returned an older backup than this phone already knows, so '
@@ -48,13 +48,13 @@ String backupProblemText(BackupProblem problem) => switch (problem) {
         'oldest messages.',
   BackupProblem.cancelled => 'Stopped.',
   BackupProblem.offline =>
-    'You are offline, or Helix cannot be reached. Check your connection and '
+    'You are offline, or Orbit cannot be reached. Check your connection and '
         'try again.',
   BackupProblem.conflict =>
     'Another device was backing up at the same time. Try again in a moment.',
   BackupProblem.weakSecret =>
     'That recovery secret is too weak to protect your backup. Use the one '
-        'Helix makes for you.',
+        'Orbit makes for you.',
   BackupProblem.noOtherDevices =>
     'This is your only device. Sign in on another device first.',
   BackupProblem.incomplete =>
@@ -64,7 +64,7 @@ String backupProblemText(BackupProblem problem) => switch (problem) {
     'The transfer is no longer available. Ask the other device to send it '
         'again.',
   BackupProblem.notAllowed =>
-    'Helix would not take the backup. Check that you are still signed in on '
+    'Orbit would not take the backup. Check that you are still signed in on '
         'this phone, then try again.',
   BackupProblem.waitingForWifi =>
     'You were on mobile data and backups wait for Wi-Fi. Turn on backup over '

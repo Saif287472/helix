@@ -42,7 +42,7 @@ void RegisterHelixUriScheme() {
           nullptr) != ERROR_SUCCESS) {
     return;
   }
-  SetRegistryString(protocol_key, L"", L"URL:Helix Remote Protocol");
+  SetRegistryString(protocol_key, L"", L"URL:Orbit Protocol");
   SetRegistryString(protocol_key, L"URL Protocol", L"");
   RegCloseKey(protocol_key);
 

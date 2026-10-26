@@ -129,7 +129,7 @@ Future<void> _wakeAccount(
     phoneBook: const DevicePhoneBook(),
     blobs: AppBlobStore(await AppPaths.attachmentCache(account)),
     config: engineConfigFor(
-      deviceName: 'Helix device',
+      deviceName: 'Orbit device',
       platform: pushDevicePlatform,
     ),
     // No socket and no timers: this isolate lives for one pass.

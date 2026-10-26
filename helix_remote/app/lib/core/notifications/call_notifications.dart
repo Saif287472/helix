@@ -38,7 +38,7 @@ abstract final class CallNotifications {
   static final _incoming = AndroidNotificationChannel(
     'helix_incoming_calls_ringtone',
     'Incoming calls',
-    description: 'Rings for incoming Helix calls',
+    description: 'Rings for incoming Orbit calls',
     importance: Importance.max,
     playSound: true,
     sound: const UriAndroidNotificationSound(
@@ -57,7 +57,7 @@ abstract final class CallNotifications {
         ringtone.channelId,
         'Incoming calls: ${ringtone.name}',
         description:
-            'Rings for incoming Helix calls with the '
+            'Rings for incoming Orbit calls with the '
             '${ringtone.name} ringtone.',
         importance: Importance.max,
         playSound: true,
@@ -83,14 +83,14 @@ abstract final class CallNotifications {
 
   /// What an incoming-call notification says and who may see it, for the
   /// notification-previews setting: the caller's name and `public` only when
-  /// previews are on, else "Helix" and `private`.
+  /// previews are on, else "Orbit" and `private`.
   static ({String title, NotificationVisibility visibility})
   incomingPresentation({
     required String callerName,
     required bool showCaller,
   }) => showCaller
       ? (title: callerName, visibility: NotificationVisibility.public)
-      : (title: 'Helix', visibility: NotificationVisibility.private);
+      : (title: 'Orbit', visibility: NotificationVisibility.private);
 
   /// A stable notification id for a call, so a re-post replaces the first.
   static int idFor(String callId) => callId.hashCode & 0x7fffffff;
@@ -154,7 +154,7 @@ abstract final class CallNotifications {
     await plugin.show(
       id: idFor('missed-$callId'),
       title: 'Missed call',
-      body: showCaller ? callerName : 'Open Helix to see who called.',
+      body: showCaller ? callerName : 'Open Orbit to see who called.',
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _missed.id,
@@ -176,7 +176,7 @@ abstract final class CallNotifications {
   /// is null for a call whose offer has not been opened yet (a push woke the
   /// app): the notification then just says a call is coming.
   ///
-  /// [showCaller] is the notification-previews setting: false puts "Helix" in
+  /// [showCaller] is the notification-previews setting: false puts "Orbit" in
   /// place of the caller's name and makes the notification `private`.
   ///
   /// [ringtone] is the sound a ringtone pack was chosen for, from
@@ -236,9 +236,9 @@ abstract final class CallNotifications {
           sound: channel?.sound,
           audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
           subText: switch (video) {
-            true => 'Helix video call',
-            false => 'Helix voice call',
-            null => 'Helix call',
+            true => 'Orbit video call',
+            false => 'Orbit voice call',
+            null => 'Orbit call',
           },
           ticker: 'Incoming call',
           // Both buttons open the app: answering needs the microphone and

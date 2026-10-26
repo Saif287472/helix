@@ -38,7 +38,7 @@ abstract final class SignInCopy {
   /// A server that is refused outright: not https, or an address that could
   /// pass for another. Never names the address.
   static const insecureServer =
-      'This code points to a server that is not reachable securely, so Helix '
+      'This code points to a server that is not reachable securely, so Orbit '
       'will not use it. Ask your server admin for a new code.';
 
   /// The question asked before any request goes to a server that came from a

@@ -121,7 +121,7 @@ void main() {
     await tester.tap(find.text('Turn on'));
     await settle(tester);
 
-    expect(find.textContaining('Helix did not turn this on'), findsOneWidget);
+    expect(find.textContaining('Orbit did not turn this on'), findsOneWidget);
     expect(find.textContaining('verified with'), findsOneWidget);
     // The switch shows what the server has: off.
     expect(isOn(tester), isFalse);

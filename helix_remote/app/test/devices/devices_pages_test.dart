@@ -218,7 +218,7 @@ void main() {
       final (devices, _) = await open(tester);
       devices.inspectFails = LinkProblem.notACode;
       await paste(tester, 'hello');
-      expect(find.textContaining('not a Helix link code'), findsOneWidget);
+      expect(find.textContaining('not an Orbit link code'), findsOneWidget);
       expect(devices.approved, isNull);
     });
 

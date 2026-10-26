@@ -167,7 +167,7 @@ void main() {
       await tester.tap(find.textContaining('on Orbit'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Nobody on Helix matches'), findsOneWidget);
+      expect(find.textContaining('Nobody on Orbit matches'), findsOneWidget);
       expect(find.byTooltip('Remove from selection'), findsNothing);
     });
 
