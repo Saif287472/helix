@@ -19,6 +19,7 @@ from building; re-check a row before starting it.
 **Status**: Built (exists end to end), Partial (engine or protocol exists, UI or a piece is missing),
 Not built.
 
+This backlog is a menu, not a plan: any row may be dropped because it does not fit the product direction.
 Rules that apply to every row: English only; theme colours only; `IconButton` tooltips and 48 px targets;
 screenshots stay allowed (so "cannot be screenshotted" is not a feature here); never `helix_local/`;
 no APK builds (say whether one is needed); say which migration or `.env` line is new.
@@ -154,7 +155,9 @@ Not in this batch: C3 chat lock, C4 passkeys, D1/D2 calls, A5 stickers, A8 trans
 
 ## Open questions for the user
 
-1. Is "Orbit" the new name of the whole product (rename packages, docs, links), or the UI layer only?
+1. ~~Is "Orbit" the new name of the whole product?~~ Answered by `main` (2026-10-26): the rename so far is
+   user-facing copy only ("Orbit", "Orbit Global", "an Orbit user" in the app and the admin console).
+   Package, folder, route and doc names stay `helix_*`. New copy in this backlog's features says Orbit.
 2. A6, A9: may the app contact a third party (GIF search, link previews)? Today it contacts none.
 3. A3: should a pin be shared with the other side (needs a wire change) or only for you?
 4. F1: is an on-device model acceptable, or are AI features out?
