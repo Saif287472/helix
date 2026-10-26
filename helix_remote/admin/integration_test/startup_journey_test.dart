@@ -14,7 +14,7 @@ void main() {
     final h = AdminHarness()..configured();
     await h.pumpApp(tester);
 
-    expect(find.bySemanticsLabel('Helix Admin'), findsOneWidget);
+    expect(find.bySemanticsLabel('Orbit Admin'), findsOneWidget);
     await enter(tester, 'Server address', 'helix.test');
     await tapText(tester, 'Continue');
     await enter(tester, 'Admin password', adminPassword);
