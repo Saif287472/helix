@@ -12,7 +12,7 @@ final class AccountsController extends PagedController<AdminAccount> {
   /// The status filter; null shows every account.
   AccountStatus? get status => _status;
 
-  /// A Helix name prefix or the last four digits; empty for no filter.
+  /// An Orbit name prefix or the last four digits; empty for no filter.
   String get query => _query;
 
   @override

@@ -301,7 +301,7 @@ class _Health extends StatelessWidget {
         ConsoleHealthRow(
           title: 'Sign-up',
           subtitle: switch (config.registration) {
-            RegistrationMode.phone => 'Phone number (Helix Global)',
+            RegistrationMode.phone => 'Phone number (Orbit Global)',
             RegistrationMode.invite => 'Invite code',
             RegistrationMode.closed => 'Closed',
             RegistrationMode.unknown => 'Unknown',

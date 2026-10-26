@@ -10,7 +10,7 @@ import 'package:helix_admin/src/widgets/paged_list.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
-/// Users & Devices: search by Helix name or the last four digits, filter by
+/// Users & Devices: search by Orbit name or the last four digits, filter by
 /// status, open one for its devices and actions. An account opens over the
 /// list in a sheet, on a phone and on a wide window alike.
 class AccountsScreen extends StatefulWidget {
@@ -96,7 +96,7 @@ class _Header extends StatelessWidget {
         textInputAction: TextInputAction.search,
         onSubmitted: accounts.search,
         decoration: InputDecoration(
-          hintText: 'Search by Helix name or last 4 digits',
+          hintText: 'Search by Orbit name or last 4 digits',
           prefixIcon: const Icon(
             Icons.search,
             size: 20,
