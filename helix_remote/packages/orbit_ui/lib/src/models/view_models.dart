@@ -183,7 +183,7 @@ class HelixPersonNames extends HelixValue {
     if (_has(nickname)) return nickname!;
     if (_has(number)) return number!;
     if (_has(helixName)) return '~$helixName';
-    return 'Helix user';
+    return 'Orbit user';
   }
 
   /// Which rung of the naming order [display] came from.

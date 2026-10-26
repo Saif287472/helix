@@ -380,7 +380,7 @@ is the final wiring; `test/journeys/` walks it.
   book, nickname, number, `~Helix name`. The chat list, conversation, call log
   and call screen, groups, settings (blocked list), contact info and the FCM
   isolate (`core/push/push_background.dart`) all read it. `ChatPeople` and
-  `name_lookup.dart` are gone. A stranger is `Helix user <short id>` everywhere.
+  `name_lookup.dart` are gone. A stranger is `Orbit user <short id>` everywhere.
 - **People search.** The router builds `ChatsTab(peopleResults:)` with
   `PeopleSearchPanel(mode: chats, embedded: true)` and
   `CallsTabScreen(peopleSearch:)` with `PeopleSearchPanel(mode: calls)`. A chat

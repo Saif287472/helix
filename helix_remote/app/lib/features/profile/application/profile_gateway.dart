@@ -67,7 +67,7 @@ abstract interface class ProfileGateway {
   });
 
   /// Claims `~name` (already normalised). Throws `ApiException(name_taken)`
-  /// when it is taken or could pass for Helix staff: the server answers both
+  /// when it is taken or could pass for Orbit staff: the server answers both
   /// the same way on purpose.
   Future<void> setHelixName(String name);
 

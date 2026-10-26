@@ -648,7 +648,7 @@ void main() {
       expect(lines.length, 1);
       expect(lines.single.id, number);
       expect(lines.single.title, '+880 ••••• 0001');
-      expect(lines.single.detail, 'Helix Global');
+      expect(lines.single.detail, 'Orbit Global');
     });
 
     /// [number] is signed in on this device as account `abc`, and also on

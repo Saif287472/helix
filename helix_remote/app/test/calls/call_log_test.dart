@@ -228,14 +228,17 @@ void main() {
       expect(entries.single.item.title, '~Dan');
     });
 
-    test('a person nothing is known about is a Helix user with a short id', () {
-      final entries = buildCallLog(
-        [logRow('a', peer: 'stranger', at: DateTime(2026, 10, 3, 14))],
-        names(),
-        now,
-      );
-      expect(entries.single.item.title, 'Helix user stranger');
-    });
+    test(
+      'a person nothing is known about is an Orbit user with a short id',
+      () {
+        final entries = buildCallLog(
+          [logRow('a', peer: 'stranger', at: DateTime(2026, 10, 3, 14))],
+          names(),
+          now,
+        );
+        expect(entries.single.item.title, 'Orbit user stranger');
+      },
+    );
   });
 
   group('time labels', () {

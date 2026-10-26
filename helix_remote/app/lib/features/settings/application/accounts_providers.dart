@@ -44,7 +44,7 @@ AccountLine accountLineOf(
   int unread = 0,
 }) {
   final server = s.server == kGlobalServerUrl.toString()
-      ? 'Helix Global'
+      ? 'Orbit Global'
       : (Uri.tryParse(s.server)?.host ?? s.server);
   final number = s.e164.isEmpty ? '' : maskPhone(s.e164);
   return (

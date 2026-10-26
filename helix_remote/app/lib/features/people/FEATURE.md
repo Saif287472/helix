@@ -18,7 +18,7 @@ Three seams, by import path. A feature never imports another feature
 
 How a person is shown, everywhere. Order (AGENTS.md): **phone-book name, then
 nickname, then number, then `~Helix name`**; below those the engine's own
-fallbacks (the name the person chose for themselves, then `Helix user <short
+fallbacks (the name the person chose for themselves, then `Orbit user <short
 id>`, with `(domain)` for a person on another server). `PersonName.display` is
 exactly what the engine's `PersonNaming.displayName` answers, so a chat row, a
 notification and a call screen can never disagree.

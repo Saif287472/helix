@@ -24,7 +24,7 @@ abstract final class PersonNaming {
         nonEmpty(person.phoneNumber) ??
         (nonEmpty(person.helixName) == null ? null : '~${person.helixName}') ??
         nonEmpty(person.profileName) ??
-        'Helix user ${person.accountId.substring(0, person.accountId.length < 8 ? person.accountId.length : 8)}';
+        'Orbit user ${person.accountId.substring(0, person.accountId.length < 8 ? person.accountId.length : 8)}';
   }
 }
 
@@ -564,8 +564,8 @@ final class PeopleService {
     // What is stored is what a sync message may carry: a longer name would be
     // refused by the receiving device (ContentLimits.maxNameLength), so it is
     // cut here, where every device sees the same thing.
-    final capped = trimmed != null &&
-            trimmed.length > ContentLimits.maxNameLength
+    final capped =
+        trimmed != null && trimmed.length > ContentLimits.maxNameLength
         ? trimmed.substring(0, ContentLimits.maxNameLength)
         : trimmed;
     final value = capped == null || capped.isEmpty ? null : capped;

@@ -74,8 +74,8 @@ final class PersonName {
       accountId: accountId,
       names: const HelixPersonNames(),
       display: domain == null
-          ? 'Helix user $short'
-          : 'Helix user $short ($domain)',
+          ? 'Orbit user $short'
+          : 'Orbit user $short ($domain)',
     );
   }
 
@@ -175,7 +175,7 @@ final class PersonName {
 
   /// [names] for a tile that draws `names.display` itself. Someone who has
   /// only a profile name is shown by it (as [display] does) instead of as
-  /// "Helix user", so a tile and a chat row never disagree.
+  /// "Orbit user", so a tile and a chat row never disagree.
   HelixPersonNames get tileNames =>
       source == HelixNameSource.unknown && profileName != null
       ? HelixPersonNames(nickname: profileName)
@@ -356,7 +356,7 @@ final peopleDirectoryProvider = StreamProvider<PeopleDirectory>((ref) {
   var rows = const <PersonRow>[];
   PersonName? self;
   // Nothing is published until the people table has answered once, so the
-  // first frame shows names rather than "Helix user ..." placeholders.
+  // first frame shows names rather than "Orbit user ..." placeholders.
   var haveRows = false;
   PeopleDirectory? current;
   void publish() {

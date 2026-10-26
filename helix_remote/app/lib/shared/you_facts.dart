@@ -22,7 +22,7 @@ final youPhoneMaskedProvider = Provider.autoDispose<String?>(
       ref.watch(accountOverviewProvider).value?.phoneMasked,
 );
 
-/// The server's name ("Helix Global"), else its host.
+/// The server's name ("Orbit Global"), else its host.
 final youServerNameProvider = Provider.autoDispose<String>(
   (ref) =>
       ref.watch(serverTitleProvider) ??
@@ -30,7 +30,7 @@ final youServerNameProvider = Provider.autoDispose<String>(
       '',
 );
 
-/// "+880 ... 1234 · Helix Global": the mono line under your name.
+/// "+880 ... 1234 · Orbit Global": the mono line under your name.
 final youMetaLineProvider = Provider.autoDispose<String>(
   (ref) => [
     ?ref.watch(youPhoneMaskedProvider),

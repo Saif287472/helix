@@ -14,7 +14,7 @@ operator sees the name and the number).
   characters (`ProfileRules`).
 - **~Helix name**: normalised (`~Anna.K` -> `anna.k`) and checked against the
   server's pattern before sending. The server answers a taken name and a name
-  that could pass for Helix staff (admin, support, official, helix ...) the same
+  that could pass for Orbit staff (admin, support, official, helix ...) the same
   way on purpose; the page explains both in one sentence.
 - **Picture**: chosen with `ProfileImageSource` (gallery; centre-square crop,
   256 px PNG, done off the screen's code) and kept on this phone
