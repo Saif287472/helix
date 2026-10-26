@@ -337,8 +337,12 @@ final class IdentityStore {
 
   Future<void> touchLastSeen(SqlSession db, String deviceId) async {
     await db.execute(
-      'UPDATE $s.devices SET last_seen_on = current_date WHERE id = @d:uuid '
-      'AND (last_seen_on IS NULL OR last_seen_on < current_date)',
+      // The UTC day, whatever the database's session time zone is: the cache in
+      // `SessionService._touch` counts UTC days, and a different day here would
+      // let it skip a write that moves the date.
+      "UPDATE $s.devices SET last_seen_on = (now() AT TIME ZONE 'utc')::date "
+      'WHERE id = @d:uuid AND (last_seen_on IS NULL '
+      "OR last_seen_on < (now() AT TIME ZONE 'utc')::date)",
       {'d': deviceId},
     );
   }

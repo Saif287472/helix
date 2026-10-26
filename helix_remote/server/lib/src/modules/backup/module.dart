@@ -225,6 +225,13 @@ CREATE TABLE $s.full_backups (
     // The expiry is the backstop (AUD-5-2) - a blob delete that fails leaves
     // a row the sweep still collects.
     final dropped = await context.db.tx<List<String>>((tx) async {
+      // When the backup being replaced was stored: only media that existed
+      // then can have been dropped by this one (see `expireBackupMediaExcept`).
+      final previous = await tx.queryOne(
+        'SELECT updated_at FROM $schema.full_backups '
+        'WHERE account_id = @a:uuid FOR UPDATE',
+        {'a': q.device.accountId},
+      );
       final n = await tx.execute(
         'INSERT INTO $schema.full_backups (account_id, backup_id, version, envelope, media_ids) '
         'VALUES (@a:uuid, @b:uuid, @v:int4, @e:jsonb, @m:_uuid) '
@@ -246,10 +253,13 @@ CREATE TABLE $s.full_backups (
         );
       }
       await media.extendBackupMedia(tx, q.device.accountId, req.mediaIds);
+      // A first backup replaces nothing.
+      if (previous == null) return const <String>[];
       return media.expireBackupMediaExcept(
         tx,
         q.device.accountId,
         req.mediaIds,
+        createdBy: previous.time('updated_at'),
       );
     });
     await media.deleteBackupMedia(context.db, q.device.accountId, dropped);

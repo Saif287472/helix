@@ -118,13 +118,20 @@ final class SignUp {
       );
     } on SmsFailed catch (e) {
       c.log.warn('sms_failed', {'reason': e.reason});
-      // The text did not leave, so nothing is spent (AUD-2-1): the number
-      // may ask again at once and the server's day is not used up by an
-      // outage. Charged first so concurrent callers cannot all pass the
-      // budget, refunded here.
-      await c.credentials.deleteChallenge(c.db, id);
-      await c.rateLimiter.refund(_perPhone, encodeBytes(phoneHash));
-      await c.rateLimiter.refund(_dailyBudget, 'all');
+      // A text the gateway refused did not leave, so nothing is spent
+      // (AUD-2-1): the number may ask again at once and the server's day is
+      // not used up by an outage. Charged first so concurrent callers cannot
+      // all pass the budget, refunded here.
+      //
+      // Not when the gateway merely stopped answering (a timeout, a broken
+      // connection): it may have queued the text, and refunding would let
+      // that be repeated without the per-number limit or the resend gap
+      // noticing. The challenge stays too, since the code may have arrived.
+      if (e.reason != 'unreachable') {
+        await c.credentials.deleteChallenge(c.db, id);
+        await c.rateLimiter.refund(_perPhone, encodeBytes(phoneHash));
+        await c.rateLimiter.refund(_dailyBudget, 'all');
+      }
       throw const ApiError(
         ErrorCode.smsUnavailable,
         message: 'The text could not be sent.',

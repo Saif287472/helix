@@ -483,6 +483,24 @@ void main() {
       },
     );
 
+    test(
+      'a replacement leaves alone an upload that began after the replaced backup',
+      () async {
+        final first = await upload([1]);
+        await putFull(1, [first]);
+        // Another device (or a quicker re-backup) is uploading media for the
+        // next backup; this replacement does not name it, but it is not this
+        // replacement's to delete.
+        final inFlight = await upload([7, 7]);
+
+        await putFull(2, [first]);
+
+        expect(await objectExists(inFlight), isTrue);
+        expect((await download(inFlight)).status, 200);
+        expect(await objectExists(first), isTrue);
+      },
+    );
+
     test('a backup delete never touches media of another kind', () async {
       final attachment = await upload([9, 9], kind: MediaKind.attachment);
       await putFull(1, [attachment]);

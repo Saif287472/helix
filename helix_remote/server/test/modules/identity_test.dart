@@ -963,6 +963,21 @@ void main() {
       expect(h.sms.sent, hasLength(1));
     });
 
+    /// A gateway that stops answering may have sent the text: that is not a
+    /// text that "did not leave", so the limits keep counting it.
+    test('a gateway that stops answering is still charged', () async {
+      h.sms.failWith = const SmsFailed('unreachable');
+      for (var i = 0; i < 5; i++) {
+        expect((await askForCode(alice)).status, 503, reason: 'try $i');
+      }
+      h.sms.failWith = null;
+      expect(
+        (await askForCode(alice)).errorCode,
+        'rate_limited',
+        reason: 'five texts that may have left use up the hour for that number',
+      );
+    });
+
     /// Q7: ten devices; the eleventh is refused and nothing is revoked for it
     /// (AUD-2-2).
     test('an account holds at most ten devices', () async {

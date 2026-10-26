@@ -20,13 +20,20 @@ abstract interface class MediaApi {
   );
 
   /// In [tx], marks the account's backup objects whose id is not in [keep]
-  /// to expire now - the media a replacement full backup dropped. Returns
-  /// the ids, so the caller can delete them at once.
+  /// and which were created no later than [createdBy] to expire now - the
+  /// media a replacement full backup dropped. Returns the ids, so the caller
+  /// can delete them at once.
+  ///
+  /// [createdBy] is when the backup being replaced was stored: what it
+  /// referenced already existed, while an upload another device or a quicker
+  /// re-backup has under way is newer and is not this replacement's to
+  /// delete. Those age out like any unreferenced object.
   Future<List<String>> expireBackupMediaExcept(
     Tx tx,
     String accountId,
-    List<String> keep,
-  );
+    List<String> keep, {
+    required DateTime createdBy,
+  });
 
   /// Deletes backup-kind objects of [accountId] among [ids] now: blob, then
   /// row, releasing quota. Stops at a short budget; the caller has already

@@ -465,9 +465,14 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
     }
     await _blobs.delete(_key(_kind(object), id));
     await context.db.tx((tx) async {
-      await tx.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
-        'id': id,
-      });
+      // Only the delete that removed the row gives the bytes back: a second
+      // deleter racing it (a retried request, the sweep) would otherwise
+      // release them twice and let the account exceed its quota.
+      final removed = await tx.execute(
+        'DELETE FROM $s.objects WHERE id = @id:uuid',
+        {'id': id},
+      );
+      if (removed != 1) return;
       await _release(
         tx,
         object.string('owner_account'),
@@ -684,9 +689,12 @@ WHERE u.bytes <> coalesce(o.bytes, 0) OR u.objects <> coalesce(o.objects, 0)
       return false;
     }
     await context.db.tx((tx) async {
-      await tx.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
-        'id': id,
-      });
+      // Released only by the delete that removed the row (see `_delete`).
+      final removed = await tx.execute(
+        'DELETE FROM $s.objects WHERE id = @id:uuid',
+        {'id': id},
+      );
+      if (removed != 1) return;
       await _release(
         tx,
         r.string('owner_account'),
@@ -783,14 +791,15 @@ final class _MediaFacade implements MediaApi {
   Future<List<String>> expireBackupMediaExcept(
     Tx tx,
     String accountId,
-    List<String> keep,
-  ) async => _expiredIds(
+    List<String> keep, {
+    required DateTime createdBy,
+  }) async => _expiredIds(
     await tx.query(
       'UPDATE ${_m.s}.objects SET expires_at = now() '
       "WHERE owner_account = @a:uuid AND kind = 'backup' "
-      'AND NOT (id = ANY(@keep:_uuid)) '
+      'AND NOT (id = ANY(@keep:_uuid)) AND created_at <= @by:timestamptz '
       'AND (expires_at IS NULL OR expires_at > now()) RETURNING id',
-      {'a': accountId, 'keep': keep.isEmpty ? _noIds : keep},
+      {'a': accountId, 'keep': keep.isEmpty ? _noIds : keep, 'by': createdBy},
     ),
   );
 
