@@ -14,6 +14,7 @@ import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/page_parts.dart';
 import 'package:orbit_ui/src/components/pages.dart';
 import 'package:orbit_ui/src/components/state_kit.dart';
+import 'package:orbit_ui/src/components/wallpaper.dart';
 import 'package:orbit_ui/src/components/you_parts.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -1754,14 +1755,25 @@ class ThemeChoice {
 }
 
 class AppearanceModel {
-  const AppearanceModel({required this.current, required this.themes});
+  const AppearanceModel({
+    required this.current,
+    required this.themes,
+    this.wallpaper = HelixWallpaper.theme,
+  });
 
   final OrbitTokens current;
   final List<ThemeChoice> themes;
+
+  /// What chats are drawn on, unless a chat has its own.
+  final HelixWallpaper wallpaper;
 }
 
 class AppearanceActions {
-  const AppearanceActions({this.onPick, this.onGetMore});
+  const AppearanceActions({this.onPick, this.onGetMore, this.onPickWallpaper});
+
+  /// Draws every chat on this wallpaper from now on. With it set, the page
+  /// offers Chat wallpaper.
+  final Future<void> Function(HelixWallpaper wallpaper)? onPickWallpaper;
 
   /// Draws the app in this theme from now on; the page then says
   /// "Orbit Night theme on".
@@ -1867,6 +1879,32 @@ class AppearanceScreen extends StatelessWidget {
         grid(false),
         const OrbitGroupTitle('Dark'),
         grid(true),
+        if (actions.onPickWallpaper != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: OrbitCard(
+              dividerIndent: 14,
+              children: [
+                OrbitListRow(
+                  icon: OrbitIcons.image,
+                  iconColor: 3,
+                  title: 'Chat wallpaper',
+                  value: model.wallpaper.label,
+                  end: OrbitRowEnd.chevron,
+                  onTap: () => showOrbitWallpaperSheet(
+                    context,
+                    current: model.wallpaper,
+                    onPick: (w) async {
+                      await actions.onPickWallpaper!(w!);
+                      if (context.mounted) {
+                        showOrbitToast(context, '${w.label} wallpaper on');
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (actions.onGetMore != null)
           Padding(
             padding: const EdgeInsets.only(top: 14),

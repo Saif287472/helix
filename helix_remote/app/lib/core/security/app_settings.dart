@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:orbit_ui/models.dart' show HelixWallpaper;
 
 /// Settings the app owns rather than the engine.
 ///
@@ -36,6 +37,19 @@ abstract final class AppSettings {
   /// the root (`AppTextScale`), so it composes with the phone's own setting
   /// rather than replacing it.
   static const fontScalePercent = Setting<int>('app.font_scale_percent', 100);
+
+  /// What chats are drawn on, unless a chat has its own (see
+  /// [chatWallpaper]). The theme's own background by default.
+  static const wallpaper = Setting<HelixWallpaper>.enumeration(
+    'app.wallpaper',
+    HelixWallpaper.values,
+    HelixWallpaper.theme,
+  );
+
+  /// One chat's own wallpaper: the name of a [HelixWallpaper], or empty to
+  /// follow [wallpaper]. Kept per chat, so it stays with the account.
+  static Setting<String> chatWallpaper(String conversationId) =>
+      Setting<String>('app.wallpaper.chat.$conversationId', '');
 
   /// The Enter key sends a message (hardware keyboards, Windows). Read by the
   /// composer.

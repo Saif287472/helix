@@ -423,6 +423,22 @@ class HelixLinkPreview extends HelixValue {
   List<Object?> get props => [url, title, description, image];
 }
 
+/// What a chat is drawn on. [theme] is the theme's own background and
+/// pattern; the others are plain backgrounds in the theme's own tints, so each
+/// one follows the theme in use.
+enum HelixWallpaper {
+  theme('Theme'),
+  plain('Plain'),
+  calm('Calm'),
+  warm('Warm'),
+  fresh('Fresh'),
+  rose('Rose');
+
+  const HelixWallpaper(this.label);
+
+  final String label;
+}
+
 /// What a bubble contains.
 sealed class HelixMessageContent extends HelixValue {
   const HelixMessageContent();

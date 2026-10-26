@@ -15,6 +15,7 @@ import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/page_parts.dart';
 import 'package:orbit_ui/src/components/spinner.dart';
 import 'package:orbit_ui/src/components/state_kit.dart';
+import 'package:orbit_ui/src/components/wallpaper.dart';
 import 'package:orbit_ui/src/components/timeline.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -143,12 +144,16 @@ class ChatModel {
     this.enterSends = false,
     this.searchHits,
     this.searchStatus = ListStatus.ready,
+    this.wallpaper = HelixWallpaper.theme,
   });
 
   final String conversationId;
   final String title;
   final HelixAvatarModel avatar;
   final ChatLoadState loadState;
+
+  /// What the timeline is drawn on.
+  final HelixWallpaper wallpaper;
 
   /// "online", "last seen today at 08:31", "5 members", "typing...".
   final String? subtitle;
@@ -1724,8 +1729,8 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         Positioned.fill(
           child: OrbitPatternBackground(
-            pattern: t.chatPattern,
-            color: t.chatBg,
+            pattern: wallpaperLook(t, m.wallpaper).$1,
+            color: wallpaperLook(t, m.wallpaper).$2,
             child: LayoutBuilder(
               builder: (context, box) => ListView.builder(
                 reverse: true,

@@ -19,6 +19,7 @@ import 'package:helix_remote/features/conversation/application/timeline_provider
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
 import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote/shared/pending_members.dart';
+import 'package:helix_remote/shared/wallpaper.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -436,6 +437,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     final hits = results?.value;
     final model = ChatModel(
       conversationId: _id,
+      wallpaper: ref.watch(chatWallpaperProvider(_id)),
       title: header?.title ?? '',
       avatar: header?.avatar ?? const HelixAvatarModel(name: ''),
       loadState: load,

@@ -15,6 +15,7 @@ import 'package:orbit_ui/src/components/page_parts.dart';
 import 'package:orbit_ui/src/components/pages.dart';
 import 'package:orbit_ui/src/components/spinner.dart';
 import 'package:orbit_ui/src/components/state_kit.dart';
+import 'package:orbit_ui/src/components/wallpaper.dart';
 import 'package:orbit_ui/src/components/timeline.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -1730,9 +1731,13 @@ class ChatSettingsModel {
       (seconds: 7776000, label: '90 days'),
     ],
     this.blocked = false,
+    this.wallpaper,
   });
 
   final bool loading;
+
+  /// This chat's own wallpaper; null follows the one for all chats.
+  final HelixWallpaper? wallpaper;
   final String title;
   final String? subtitle;
   final HelixAvatarModel avatar;
@@ -1755,8 +1760,12 @@ class ChatSettingsActions {
     this.onClear,
     this.onBlock,
     this.onUnblock,
+    this.onSetWallpaper,
   });
 
+  /// Gives the chat its own wallpaper; null goes back to the one for all
+  /// chats. With it set, the page offers Wallpaper.
+  final ValueChanged<HelixWallpaper?>? onSetWallpaper;
   final VoidCallback? onOpenInfo;
   final VoidCallback? onOpenSharedMedia;
 
@@ -1870,6 +1879,20 @@ class ChatSettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (a.onSetWallpaper != null)
+              OrbitListRow(
+                icon: OrbitIcons.palette,
+                iconColor: 3,
+                title: 'Wallpaper',
+                value: m.wallpaper?.label ?? 'Same as all chats',
+                end: OrbitRowEnd.chevron,
+                onTap: () => showOrbitWallpaperSheet(
+                  context,
+                  current: m.wallpaper,
+                  allowDefault: true,
+                  onPick: a.onSetWallpaper!,
+                ),
+              ),
           ],
         ),
         OrbitSection(

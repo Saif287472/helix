@@ -93,6 +93,17 @@ refusal are each a sentence; success shows "Your account was deleted" while the
 engine's hard wipe and `signOutProvider` clean up and the router moves to
 sign-in. `DeleteAccountController` holds the code's challenge in memory only.
 
+## Wallpaper
+
+Appearance has a "Chat wallpaper" row that opens `orbit_ui`'s wallpaper sheet
+(`showOrbitWallpaperSheet`); the choice (`AppSettings.wallpaper`) is for every chat of the
+account. A chat's settings can give that chat its own (`AppSettings.chatWallpaper(id)`, empty =
+follow the default); `shared/wallpaper.dart` resolves which one a chat is drawn on. The six
+wallpapers (Theme, Plain, Calm, Warm, Fresh, Rose) are colours of the theme in use, so they follow a
+theme change; there are no photo wallpapers. They are account settings, not device settings like the
+theme: another account on the same phone has its own. A chat's key stays after the chat is deleted
+(a few bytes; the setting is wiped with the account).
+
 ## Storage: what counts
 
 The hero's total is the device probe (database, media, thumbnails and work in

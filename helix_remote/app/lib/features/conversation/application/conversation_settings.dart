@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
+import 'package:helix_remote/core/engine/local_settings.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
+import 'package:helix_remote/shared/wallpaper.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
 import 'package:orbit_ui/models.dart';
 
@@ -43,8 +46,11 @@ class ConversationSettingsView {
     this.peerAccount,
     this.blocked = false,
     this.disappearingSeconds,
+    this.wallpaper,
   });
 
+  /// The chat's own wallpaper; null follows the default.
+  final HelixWallpaper? wallpaper;
   final String title;
   final String? subtitle;
   final HelixAvatarModel avatar;
@@ -71,6 +77,7 @@ final conversationSettingsViewProvider = Provider.autoDispose
         isGroup: header.isGroup,
         peerAccount: header.peerAccount,
         blocked: header.blocked,
+        wallpaper: ref.watch(chatWallpaperChoiceProvider(id)).value,
       );
     });
 
@@ -97,6 +104,11 @@ final class ConversationSettingsActions {
 
   /// Removes every message from this device; the chat stays.
   Future<void> clear() async => (await _gateway).clearChat(conversationId);
+
+  /// Gives this chat its own wallpaper; null follows the default again.
+  Future<void> setWallpaper(HelixWallpaper? wallpaper) => _ref
+      .read(localSettingsProvider)
+      .set(AppSettings.chatWallpaper(conversationId), wallpaper?.name ?? '');
 
   Future<void> block(String account) async => (await _gateway).block(account);
 

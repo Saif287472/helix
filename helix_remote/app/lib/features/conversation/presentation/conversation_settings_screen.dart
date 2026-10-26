@@ -53,6 +53,7 @@ class ConversationSettingsScreen extends ConsumerWidget {
             (seconds: c.seconds, label: c.label),
         ],
         blocked: view.blocked,
+        wallpaper: view.wallpaper,
       ),
       actions: orbit.ChatSettingsActions(
         onOpenInfo: info == null ? null : () => context.push(info),
@@ -63,6 +64,7 @@ class ConversationSettingsScreen extends ConsumerWidget {
         ),
         onSetDisappearing: (seconds) =>
             unawaited(actions.setDisappearing(seconds)),
+        onSetWallpaper: (w) => unawaited(actions.setWallpaper(w)),
         onClear: () async {
           await actions.clear();
           if (context.mounted) orbit.showOrbitToast(context, 'Chat cleared');

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/settings/application/appearance.dart';
 import 'package:helix_remote/shared/route_paths.dart';
+import 'package:helix_remote/shared/wallpaper.dart';
 import 'package:orbit_ui/orbit_ui.dart' as orbit;
 
 /// Connector: Appearance, the themes on this device each drawn in itself,
@@ -19,9 +20,13 @@ class AppearancePage extends ConsumerWidget {
       model: orbit.AppearanceModel(
         current: view.current,
         themes: [for (final t in view.themes) orbit.ThemeChoice(tokens: t)],
+        wallpaper:
+            ref.watch(defaultWallpaperProvider).value ??
+            orbit.HelixWallpaper.theme,
       ),
       actions: orbit.AppearanceActions(
         onPick: ref.read(chooseThemeProvider),
+        onPickWallpaper: ref.read(setDefaultWallpaperProvider),
         onGetMore: () => context.push(RoutePaths.themePacks),
       ),
     );

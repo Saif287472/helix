@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 25 | see "Already built" |
+| Already built | 26 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 11 | A4, A6, A9, A10, B1, B4, B8, C1, C5, C7, E4 |
+| M (about 10 files) | 10 | A4, A6, A9, A10, B4, B8, C1, C5, C7, E4 |
 | L (more than that) | 10 | A3, A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -88,7 +88,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | ID | Feature | Status | Size | Probable files |
 |---|---|---|---|---|
-| B1 | Chat wallpapers (local, per chat or default) | Not built | **M** | Setting keys in `engine/settings_keys.dart`; appearance page and conversation settings in `app/`; chat background in `ui/screens/chat/chat_screen.dart`; theme-pack hook (`THEME_PACK_FORMAT.md`) if wallpapers should ship as packs. About 8 files. |
+| B1 | Chat wallpapers (local, per chat or default) | **Built 2026-10-26** | done | `orbit_ui` `components/wallpaper.dart` (`wallpaperLook`, `showOrbitWallpaperSheet`), `chat_screen.dart`, `chat_pages.dart` (chat settings row), `you_screens.dart` (Appearance row); app `shared/wallpaper.dart`, `app_settings.dart`, `conversation_settings.dart`, `conversation_screen.dart`, `appearance_page.dart`. Tests: `orbit_ui/test/wallpaper_test.dart`, `app/test/wallpaper_test.dart`. Six theme-coloured wallpapers; no photo wallpapers (they need a picker, a sanitised local copy and storage). Account settings, not device settings. |
 | B2 | Custom chat bubble colours | Partial (Orbit theme tokens) | **S** | Theme tokens only; a per-chat colour is M. Must come from `OrbitTokens`. |
 | B3 | Custom lists and filters (folders) | Not built | **L** | `conversation_lists` plus members tables: **DB schema 6**, DAO, engine `chats_service.dart`, chats-tab chips, manage-lists screen in `ui/`, backup (lists should survive restore: `backup` crypto payload change, a note in the crypto review). Local-only without backup is M. |
 | B4 | Favourites | Not built | **M** | Like pin chat but a flag: a `favourite` column (schema 6), filter chip in chats tab. Can be the first built-in list of B3. |
