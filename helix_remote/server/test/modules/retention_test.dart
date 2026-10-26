@@ -344,20 +344,23 @@ void main() {
     test('closed reports go 180 days after they were closed; open ones '
         'stay', () async {
       final bob = await h.registerGlobal(bobNumber);
-      Future<String> report() async => ReportResponse.fromJson(
-        (await h.api.call(
-          Routes.report,
-          bearer: alice.bearer,
-          body: ReportRequest(
-            account: bob.accountId,
-            category: ReportCategory.spam,
-            note: 'sends links',
-          ).toJson(),
-        )).json,
-      ).reportId;
-      final open = await report();
-      final closedLongAgo = await report();
-      final closedRecently = await report();
+      // One open report per reporter, subject and category, so each of the
+      // three needs its own category.
+      Future<String> report(ReportCategory category) async =>
+          ReportResponse.fromJson(
+            (await h.api.call(
+              Routes.report,
+              bearer: alice.bearer,
+              body: ReportRequest(
+                account: bob.accountId,
+                category: category,
+                note: 'sends links',
+              ).toJson(),
+            )).json,
+          ).reportId;
+      final open = await report(ReportCategory.spam);
+      final closedLongAgo = await report(ReportCategory.abuse);
+      final closedRecently = await report(ReportCategory.other);
       final people = h.server.modules.whereType<PeopleModule>().single;
       final db = h.env.platform.db;
       for (final id in [closedLongAgo, closedRecently]) {
