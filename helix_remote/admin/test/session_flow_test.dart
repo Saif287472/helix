@@ -376,7 +376,7 @@ void main() {
       h.lock.allow = false;
       await h.pumpApp(tester);
 
-      expect(find.text('Helix Admin is locked'), findsOneWidget);
+      expect(find.text('Orbit Admin is locked'), findsOneWidget);
       expect(find.text('The device was not unlocked.'), findsOneWidget);
       expect(h.server.requests, isEmpty);
 
@@ -412,7 +412,7 @@ void main() {
 
       h.lock.allow = false;
       await away(tester, const Duration(minutes: 1));
-      expect(find.text('Helix Admin is locked'), findsOneWidget);
+      expect(find.text('Orbit Admin is locked'), findsOneWidget);
       expect(find.text('Overview'), findsNothing);
       expect(h.lock.prompts, 2);
 

@@ -85,7 +85,7 @@ class _AdminShellState extends State<AdminShell> {
     final name = _server.config?.serverName;
     if (name != null && name.isNotEmpty) return name;
     final host = widget.adminContext.api.transport.baseUrl.host;
-    return host.isEmpty ? 'Helix server' : host;
+    return host.isEmpty ? 'Orbit server' : host;
   }
 
   /// Green when the server says it is ready, amber when it says it is not

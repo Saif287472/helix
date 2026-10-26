@@ -321,7 +321,7 @@ class _Health extends StatelessWidget {
               ? 'On${config.federationDomain == null ? '' : ' • ${config.federationDomain}'}'
               : 'Off',
           note: config.federationEnabled
-              ? 'This server talks to other Helix servers.'
+              ? 'This server talks to other Orbit servers.'
               : 'This server only serves its own accounts.',
           dot: config.federationEnabled
               ? HelixConsoleColors.ok

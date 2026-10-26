@@ -96,7 +96,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     Semantics(
                       header: true,
                       child: Text(
-                        setup == true ? 'Create admin password' : 'Helix Admin',
+                        setup == true ? 'Create admin password' : 'Orbit Admin',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 22,
