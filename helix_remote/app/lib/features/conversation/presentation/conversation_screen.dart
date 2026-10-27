@@ -454,6 +454,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     final model = ChatModel(
       conversationId: _id,
       wallpaper: ref.watch(chatWallpaperProvider(_id)),
+      bubbleTint:
+          ref.watch(chatBubbleTintProvider(_id)).value ?? HelixBubbleTint.theme,
       pinned: ref.watch(pinnedMessagesProvider(_id)).value ?? const [],
       title: header?.title ?? '',
       avatar: header?.avatar ?? const HelixAvatarModel(name: ''),

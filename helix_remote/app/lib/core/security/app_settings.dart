@@ -51,6 +51,11 @@ abstract final class AppSettings {
   static Setting<String> chatWallpaper(String conversationId) =>
       Setting<String>('app.wallpaper.chat.$conversationId', '');
 
+  /// The colour of your own bubbles in one chat: the name of a
+  /// [HelixBubbleTint], or empty for the theme's own. Kept per chat.
+  static Setting<String> chatBubbleTint(String conversationId) =>
+      Setting<String>('app.bubble_tint.chat.$conversationId', '');
+
   /// Fetch a link's title and description from the website when a message with
   /// a link is sent, and send them as a card. Off by default: the site sees
   /// the sender's address. The reader never fetches anything.

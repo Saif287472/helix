@@ -1767,12 +1767,16 @@ class ChatSettingsModel {
     ],
     this.blocked = false,
     this.wallpaper,
+    this.bubbleTint = HelixBubbleTint.theme,
   });
 
   final bool loading;
 
   /// This chat's own wallpaper; null follows the one for all chats.
   final HelixWallpaper? wallpaper;
+
+  /// The colour of your own bubbles in this chat.
+  final HelixBubbleTint bubbleTint;
   final String title;
   final String? subtitle;
   final HelixAvatarModel avatar;
@@ -1796,11 +1800,16 @@ class ChatSettingsActions {
     this.onBlock,
     this.onUnblock,
     this.onSetWallpaper,
+    this.onSetBubbleTint,
   });
 
   /// Gives the chat its own wallpaper; null goes back to the one for all
   /// chats. With it set, the page offers Wallpaper.
   final ValueChanged<HelixWallpaper?>? onSetWallpaper;
+
+  /// Gives your bubbles in this chat a colour. With it set, the page offers
+  /// Bubble colour.
+  final ValueChanged<HelixBubbleTint>? onSetBubbleTint;
   final VoidCallback? onOpenInfo;
   final VoidCallback? onOpenSharedMedia;
 
@@ -1926,6 +1935,28 @@ class ChatSettingsScreen extends StatelessWidget {
                   current: m.wallpaper,
                   allowDefault: true,
                   onPick: a.onSetWallpaper!,
+                ),
+              ),
+            if (a.onSetBubbleTint != null)
+              OrbitListRow(
+                icon: OrbitIcons.palette,
+                iconColor: 1,
+                title: 'Bubble colour',
+                value: m.bubbleTint.label,
+                end: OrbitRowEnd.chevron,
+                onTap: () => showOrbitSheet(
+                  context,
+                  title: 'Bubble colour',
+                  text: 'The colour of your own messages in this chat.',
+                  items: [
+                    for (final tint in HelixBubbleTint.values)
+                      OrbitMenuItem(
+                        icon: OrbitIcons.palette,
+                        label: tint.label,
+                        on: tint == m.bubbleTint,
+                        onTap: () => a.onSetBubbleTint!(tint),
+                      ),
+                  ],
                 ),
               ),
           ],

@@ -47,10 +47,14 @@ class ConversationSettingsView {
     this.blocked = false,
     this.disappearingSeconds,
     this.wallpaper,
+    this.bubbleTint = HelixBubbleTint.theme,
   });
 
   /// The chat's own wallpaper; null follows the default.
   final HelixWallpaper? wallpaper;
+
+  /// The colour of your own bubbles in the chat.
+  final HelixBubbleTint bubbleTint;
   final String title;
   final String? subtitle;
   final HelixAvatarModel avatar;
@@ -78,6 +82,9 @@ final conversationSettingsViewProvider = Provider.autoDispose
         peerAccount: header.peerAccount,
         blocked: header.blocked,
         wallpaper: ref.watch(chatWallpaperChoiceProvider(id)).value,
+        bubbleTint:
+            ref.watch(chatBubbleTintProvider(id)).value ??
+            HelixBubbleTint.theme,
       );
     });
 
@@ -109,6 +116,14 @@ final class ConversationSettingsActions {
   Future<void> setWallpaper(HelixWallpaper? wallpaper) => _ref
       .read(localSettingsProvider)
       .set(AppSettings.chatWallpaper(conversationId), wallpaper?.name ?? '');
+
+  /// Gives your bubbles in this chat a colour.
+  Future<void> setBubbleTint(HelixBubbleTint tint) => _ref
+      .read(localSettingsProvider)
+      .set(
+        AppSettings.chatBubbleTint(conversationId),
+        tint == HelixBubbleTint.theme ? '' : tint.name,
+      );
 
   Future<void> block(String account) async => (await _gateway).block(account);
 

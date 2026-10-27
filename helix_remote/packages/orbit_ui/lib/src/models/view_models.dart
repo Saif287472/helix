@@ -482,6 +482,21 @@ enum HelixWallpaper {
   final String label;
 }
 
+/// The colour of your own bubbles in a chat. Each is one of the theme's own
+/// (never a colour of its own), so a tint follows the theme and keeps its text
+/// readable.
+enum HelixBubbleTint {
+  theme('Theme'),
+  calm('Calm'),
+  fresh('Fresh'),
+  warm('Warm'),
+  rose('Rose');
+
+  const HelixBubbleTint(this.label);
+
+  final String label;
+}
+
 /// What a bubble contains.
 sealed class HelixMessageContent extends HelixValue {
   const HelixMessageContent();

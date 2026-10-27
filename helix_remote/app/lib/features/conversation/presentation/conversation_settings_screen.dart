@@ -54,6 +54,7 @@ class ConversationSettingsScreen extends ConsumerWidget {
         ],
         blocked: view.blocked,
         wallpaper: view.wallpaper,
+        bubbleTint: view.bubbleTint,
       ),
       actions: orbit.ChatSettingsActions(
         onOpenInfo: info == null ? null : () => context.push(info),
@@ -65,6 +66,7 @@ class ConversationSettingsScreen extends ConsumerWidget {
         onSetDisappearing: (seconds) =>
             unawaited(actions.setDisappearing(seconds)),
         onSetWallpaper: (w) => unawaited(actions.setWallpaper(w)),
+        onSetBubbleTint: (t) => unawaited(actions.setBubbleTint(t)),
         onClear: () async {
           await actions.clear();
           if (context.mounted) orbit.showOrbitToast(context, 'Chat cleared');

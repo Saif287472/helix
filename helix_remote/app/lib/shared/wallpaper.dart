@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
-import 'package:orbit_ui/models.dart' show HelixWallpaper;
+import 'package:orbit_ui/models.dart' show HelixBubbleTint, HelixWallpaper;
 
 /// The wallpaper for every chat that has not chosen its own.
 final defaultWallpaperProvider = settingProvider(AppSettings.wallpaper);
@@ -40,4 +40,21 @@ HelixWallpaper? wallpaperNamed(String name) {
     if (w.name == name) return w;
   }
   return null;
+}
+
+/// The colour of your own bubbles in a chat: its own choice, else the theme's.
+final chatBubbleTintProvider = StreamProvider.family<HelixBubbleTint, String>(
+  (ref, conversationId) => ref
+      .watch(localSettingsProvider)
+      .watch(AppSettings.chatBubbleTint(conversationId))
+      .map(bubbleTintNamed),
+);
+
+/// The tint a stored name stands for; none, or a name this version does not
+/// know, is the theme's own.
+HelixBubbleTint bubbleTintNamed(String name) {
+  for (final t in HelixBubbleTint.values) {
+    if (t.name == name) return t;
+  }
+  return HelixBubbleTint.theme;
 }

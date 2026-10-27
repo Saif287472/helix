@@ -39,6 +39,7 @@ class OrbitBubbleActions {
     this.onLocation,
     this.onStopLive,
     this.onAuthor,
+    this.tint = HelixBubbleTint.theme,
   });
 
   /// Swiped 56px towards the middle (theirs right, yours left).
@@ -81,6 +82,9 @@ class OrbitBubbleActions {
 
   /// The author's picture beside a group bubble was tapped.
   final ValueChanged<String>? onAuthor;
+
+  /// The colour of your own bubbles in this chat.
+  final HelixBubbleTint tint;
 
   static const none = OrbitBubbleActions();
 }
@@ -702,7 +706,34 @@ class OrbitMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = OrbitTokens.of(context);
+    final base = OrbitTokens.of(context);
+    if (!message.outgoing || actions.tint == HelixBubbleTint.theme) {
+      return _build(context, base);
+    }
+    // Your bubble in this chat's tint: the same theme with the outgoing
+    // colours swapped for its soft ones, for the bubble and everything in it.
+    final (fill, line) = switch (actions.tint) {
+      HelixBubbleTint.calm => (base.accentSoft, base.accentLine),
+      HelixBubbleTint.fresh => (base.successSoft, base.successLine),
+      HelixBubbleTint.warm => (base.warningSoft, base.warningLine),
+      HelixBubbleTint.rose => (base.dangerSoft, base.dangerLine),
+      HelixBubbleTint.theme => (base.out, base.outLine),
+    };
+    final tinted = base.withOutgoingBubble(
+      fill: fill,
+      ink: base.inInk,
+      line: line,
+      meta: base.inMeta,
+      tint: base.tint,
+      waveIdle: base.waveIdle,
+    );
+    return Theme(
+      data: Theme.of(context).copyWith(extensions: [tinted]),
+      child: Builder(builder: (context) => _build(context, tinted)),
+    );
+  }
+
+  Widget _build(BuildContext context, OrbitTokens t) {
     final m = message;
     final out = m.outgoing;
     final look = _BubbleLook(t, out);

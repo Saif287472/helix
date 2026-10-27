@@ -155,6 +155,7 @@ class ChatModel {
     this.searchHits,
     this.searchStatus = ListStatus.ready,
     this.wallpaper = HelixWallpaper.theme,
+    this.bubbleTint = HelixBubbleTint.theme,
     this.pinned = const [],
   });
 
@@ -165,6 +166,9 @@ class ChatModel {
 
   /// What the timeline is drawn on.
   final HelixWallpaper wallpaper;
+
+  /// The colour of your own bubbles.
+  final HelixBubbleTint bubbleTint;
 
   /// The messages pinned in this chat, the newest pin first; the banner
   /// under the header shows them one at a time.
@@ -619,6 +623,7 @@ class _ChatScreenState extends State<ChatScreen> {
       onRsvp: a.onRsvp == null
           ? null
           : (id, answer) => widget.actions.onRsvp?.call(id, answer),
+      tint: w.model.bubbleTint,
       onLocation: a.onOpenLocation == null
           ? null
           : (id) => widget.actions.onOpenLocation?.call(id),

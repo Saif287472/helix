@@ -291,6 +291,31 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
   Map<String, Object?> get values => _values;
 
   /// The tokens of the context's theme.
+  /// These tokens with the outgoing bubble drawn in other colours of the same
+  /// theme: every part of a bubble reads `out`, `out-ink`, `out-line`,
+  /// `out-meta`, `tint-out` and `wave-out-idle`, so replacing them recolours
+  /// the whole bubble, its poll bars, voice waveform and links included.
+  OrbitTokens withOutgoingBubble({
+    required Color fill,
+    required Color ink,
+    required Color line,
+    required Color meta,
+    required Color tint,
+    required Color waveIdle,
+  }) => OrbitTokens._(
+    {
+      ..._values,
+      'out': fill,
+      'out-ink': ink,
+      'out-line': line,
+      'out-meta': meta,
+      'tint-out': tint,
+      'wave-out-idle': waveIdle,
+    },
+    this.meta,
+    motion,
+  );
+
   static OrbitTokens of(BuildContext context) =>
       Theme.of(context).extension<OrbitTokens>()!;
 
