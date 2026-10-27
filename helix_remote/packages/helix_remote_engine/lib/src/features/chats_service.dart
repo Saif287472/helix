@@ -786,6 +786,81 @@ final class ChatsService {
   Future<void> setFavourite(String id, {required bool favourite}) =>
       _db.conversationsDao.setFavourite(id, favourite ? _ctx.now() : null);
 
+  // ------------------------------------------------------------- lists
+
+  /// The most lists a person keeps, and the longest a list's name is.
+  static const maxChatLists = 10;
+  static const maxChatListName = 24;
+
+  /// The person's lists, in the order of their chips, live. Private to this
+  /// device: a list is never sent.
+  Stream<List<ChatListRow>> watchChatLists() =>
+      _db.conversationsDao.watchLists();
+
+  /// Which chats are on which list, live.
+  Stream<List<ChatListMemberRow>> watchChatListMembers() =>
+      _db.conversationsDao.watchListMembers();
+
+  /// Makes a list called [name] (trimmed). Throws [ArgumentError] for an empty
+  /// or too long name and [EngineStateException] for a name already used
+  /// (case aside) or when [maxChatLists] exist. Returns the new list's id.
+  Future<String> createChatList(String name) => _db.transaction(() async {
+    final clean = _listName(name);
+    final lists = await _db.conversationsDao.lists();
+    if (lists.length >= maxChatLists) {
+      throw const EngineStateException('there are already too many lists');
+    }
+    _requireFreeName(lists, clean, except: null);
+    final id = _ctx.ids.next();
+    await _db.conversationsDao.createList(id, clean, _ctx.now());
+    return id;
+  });
+
+  /// Renames a list, under the same rules as [createChatList].
+  Future<void> renameChatList(String id, String name) =>
+      _db.transaction(() async {
+        final clean = _listName(name);
+        _requireFreeName(await _db.conversationsDao.lists(), clean, except: id);
+        await _db.conversationsDao.renameList(id, clean);
+      });
+
+  /// Deletes a list. Its chats stay; they just leave it.
+  Future<void> deleteChatList(String id) => _db.conversationsDao.deleteList(id);
+
+  /// Puts the chats on a list, or takes them off it.
+  Future<void> setChatsOnList(
+    String listId,
+    Iterable<String> conversationIds, {
+    required bool member,
+  }) => _db.transaction(() async {
+    for (final id in conversationIds) {
+      if (member) {
+        await _db.conversationsDao.addToList(listId, id);
+      } else {
+        await _db.conversationsDao.removeFromList(listId, id);
+      }
+    }
+  });
+
+  String _listName(String name) {
+    final clean = name.trim();
+    if (clean.isEmpty || clean.length > maxChatListName) {
+      throw ArgumentError.value(name, 'name', 'must be 1-$maxChatListName');
+    }
+    return clean;
+  }
+
+  void _requireFreeName(
+    List<ChatListRow> lists,
+    String name, {
+    required String? except,
+  }) {
+    final lowered = name.toLowerCase();
+    if (lists.any((l) => l.id != except && l.name.toLowerCase() == lowered)) {
+      throw const EngineStateException('a list with that name exists');
+    }
+  }
+
   Future<void> setMutedUntil(String id, DateTime? until) =>
       _db.conversationsDao.setMutedUntil(id, until);
 
