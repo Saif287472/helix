@@ -59,8 +59,10 @@ void main() {
         home(
           [item('a', 'Anika')],
           actions: HomeActions(
-            onSetLocked: (ids, {required locked}) async =>
-                calls.add((ids, locked)),
+            onSetLocked: (ids, {required locked}) async {
+              calls.add((ids, locked));
+              return null;
+            },
           ),
           start: const HomeStart(selected: {'a'}),
         ),
@@ -202,7 +204,12 @@ void main() {
         tester,
         ChatSettingsScreen(
           model: model(),
-          actions: ChatSettingsActions(onSetLocked: set.add),
+          actions: ChatSettingsActions(
+            onSetLocked: (v) {
+              set.add(v);
+              return null;
+            },
+          ),
         ),
       );
       await tester.ensureVisible(find.text('Lock chat'));

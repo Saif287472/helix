@@ -363,9 +363,10 @@ class HomeActions {
   })?
   onSetOnList;
 
-  /// Locks the chats, or unlocks them. With it set, the selection menu offers
-  /// Lock chat.
-  final Future<void> Function(Set<String> ids, {required bool locked})?
+  /// Locks the chats, or unlocks them; the sentence to show when it could not
+  /// be done (the phone has no screen lock), null when it was. With it set, the
+  /// selection menu offers Lock chat.
+  final Future<String?> Function(Set<String> ids, {required bool locked})?
   onSetLocked;
 
   /// Opens the Locked chats screen (the app asks for the phone's unlock

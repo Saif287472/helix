@@ -12,6 +12,9 @@ abstract final class ChatRoutes {
   /// The archived chats list.
   static const archived = '/archived-chats';
 
+  /// The locked chats list (behind the phone's unlock).
+  static const locked = '/locked-chats';
+
   /// The media viewer over one message: `/chat/:id/media/:rowid`.
   static const media = '/chat/:conversationId/media/:rowid';
 

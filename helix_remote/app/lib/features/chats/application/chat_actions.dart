@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
+import 'package:helix_remote/core/security/device_auth.dart';
+import 'package:helix_remote/core/security/locked_chats.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show ChatsService, EngineStateException;
@@ -77,6 +79,23 @@ final class ChatActions {
     String listId, {
     required bool member,
   }) async => (await _gateway).setChatsOnList(listId, ids, member: member);
+
+  /// Locks the chats, or unlocks them. Locking needs a screen lock on the
+  /// phone; null when it was done, else the sentence to show.
+  Future<String?> setLocked(
+    Iterable<String> ids, {
+    required bool locked,
+  }) async {
+    if (locked) {
+      final why = await whyNotLock(_ref.read(deviceAuthenticatorProvider));
+      if (why != null) return why;
+    }
+    final gateway = await _gateway;
+    for (final id in ids) {
+      await gateway.setLocked(id, locked: locked);
+    }
+    return null;
+  }
 
   Future<void> archive(Iterable<String> ids, {required bool archived}) async {
     final gateway = await _gateway;

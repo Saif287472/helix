@@ -46,6 +46,24 @@ final archivedChatListProvider = StreamProvider<List<HelixChatListItem>>((
       );
 });
 
+/// The locked chats, in the same shape. Read only by the Locked chats screen
+/// (behind the unlock) and for the count that decides whether the menu offers
+/// it.
+final lockedChatListProvider = StreamProvider<List<HelixChatListItem>>((
+  ref,
+) async* {
+  final gateway = await ref.watch(chatGatewayProvider.future);
+  final people = await ref.watch(peopleDirectoryProvider.future);
+  final now = ref.watch(clockProvider);
+  final self = gateway.selfAccountId;
+  yield* gateway.watchLockedChats().map(
+    (rows) => [
+      for (final row in rows)
+        chatListItemOf(row, people: people, selfId: self, now: now()),
+    ],
+  );
+});
+
 /// Who is typing where, as the finished label a row shows. Kept apart from
 /// [chatListProvider] so a typing indicator never rebuilds 5,000 rows; each
 /// visible row selects its own entry.

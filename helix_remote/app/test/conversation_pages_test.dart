@@ -188,6 +188,7 @@ void main() {
 
     chatTest('clearing asks first, then says so', (tester, gateway) async {
       await open(tester, gateway);
+      await tester.ensureVisible(find.text('Clear chat'));
       await tester.tap(find.text('Clear chat'));
       await tester.pumpAndSettle();
       expect(find.text('Clear this chat?'), findsOneWidget);

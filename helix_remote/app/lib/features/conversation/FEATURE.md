@@ -143,3 +143,11 @@ next. Both survive a backup restore. Favourite *chats* are the chats feature's.
 Stickers and live-location bubbles (drawn as "needs a newer version"),
 proximity/earpiece playback,
 video notes recorded in app, report.
+
+## Bubble colour
+
+Your own bubbles can have a colour per chat (chat settings > Bubble colour): the theme's own, or Calm,
+Fresh, Warm or Rose, which are the theme's soft colours (`AppSettings.chatBubbleTint(id)`,
+`chatBubbleTintProvider`). orbit_ui applies it by replacing the outgoing-bubble tokens of the same
+theme for the bubble and everything in it, so text, poll bars, voice waveforms and links stay readable
+in every theme. Incoming bubbles never change.

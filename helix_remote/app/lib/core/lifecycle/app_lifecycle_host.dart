@@ -7,6 +7,7 @@ import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/location/live_location_service.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
+import 'package:helix_remote/core/security/locked_chats.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 
 /// Keeps the engine in step with the app's foreground.
@@ -48,8 +49,10 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
         unawaitedResume();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
-      case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
+        // Locked chats ask for the phone's unlock again on return.
+        ref.read(lockedChatAccessProvider.notifier).lock();
+      case AppLifecycleState.inactive:
         break;
     }
   }

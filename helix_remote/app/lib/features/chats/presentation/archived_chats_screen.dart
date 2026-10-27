@@ -16,25 +16,7 @@ class ArchivedChatsScreen extends ConsumerWidget {
     final archivedAsync = ref.watch(archivedChatListProvider);
     final typing = ref.watch(chatTypingProvider).value ?? const {};
     final raw = archivedAsync.value ?? const <HelixChatListItem>[];
-    final chats = [
-      for (final c in raw)
-        HelixChatListItem(
-          id: c.id,
-          title: c.title,
-          avatar: c.avatar,
-          preview: c.preview,
-          timeLabel: c.timeLabel,
-          unreadCount: c.unreadCount,
-          hasMention: c.hasMention,
-          markedUnread: c.markedUnread,
-          pinned: c.pinned,
-          muted: c.muted,
-          archived: true,
-          typingLabel: typing[c.id] ?? c.typingLabel,
-          online: c.online,
-          verified: c.verified,
-        ),
-    ];
+    final chats = [for (final c in raw) c.copyWith(typingLabel: typing[c.id])];
     final status = archivedAsync.isLoading
         ? orbit.ListStatus.loading
         : archivedAsync.hasError

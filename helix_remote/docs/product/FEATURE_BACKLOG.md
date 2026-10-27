@@ -31,10 +31,10 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 37 | see "Already built" |
-| S (one file) | 1 | B2 |
+| Already built | 39 | see "Already built" |
+| S (one file) | 0 | none left |
 | M (about 10 files) | 0 | none left |
-| L (more than that) | 2 | C3, D1 |
+| L (more than that) | 1 | D1 |
 | L+ (a project of its own) | 1 | D3 |
 | Not planned | 16 | see "Not planned" (ten of them to be looked at again about 2027-10) |
 
@@ -62,6 +62,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | Storage page (free space by kind), report user, block | `settings/storage_page.dart`, reports in server |
 | Text formatting `*bold*` `_italic_` `~strike~` `` `mono` `` (built 2026-10-26, A1) | `orbit_ui` `components/timeline.dart` `_formatted` |
 | Find a group by the name of someone in it (built 2026-10-26, B7) | `app/features/chats/application/chat_search.dart` |
+| Chat lock (built 2026-10-27, C3) and a bubble colour per chat (B2) | `core/security/locked_chats.dart`, `shared/widgets/locked_chat_gate.dart`; orbit_ui `locked_chats_screen.dart`, `HelixBubbleTint` |
 | Chat lists (built 2026-10-27, B3; local to the device) | `features/chats/application/chat_list_provider.dart`, `chat_actions.dart`; engine `chats_service.dart` |
 | Live location (built 2026-10-27, E4) | `core/location/`, `core/platform/location_source.dart`; engine `chats_service.dart` |
 | Echo cancellation, noise suppression, auto gain on calls (built 2026-10-26, D5) | `helix_remote_calls` `web_rtc_call_engine.dart` |
@@ -91,7 +92,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | ID | Feature | Status | Size | Probable files |
 |---|---|---|---|---|
 | B1 | Chat wallpapers (local, per chat or default) | **Built 2026-10-26** | done | `orbit_ui` `components/wallpaper.dart` (`wallpaperLook`, `showOrbitWallpaperSheet`), `chat_screen.dart`, `chat_pages.dart` (chat settings row), `you_screens.dart` (Appearance row); app `shared/wallpaper.dart`, `app_settings.dart`, `conversation_settings.dart`, `conversation_screen.dart`, `appearance_page.dart`. Tests: `orbit_ui/test/wallpaper_test.dart`, `app/test/wallpaper_test.dart`. Six theme-coloured wallpapers; no photo wallpapers (they need a picker, a sanitised local copy and storage). Account settings, not device settings. |
-| B2 | Custom chat bubble colours | Partial (Orbit theme tokens) | **S** | Theme tokens only; a per-chat colour is M. Must come from `OrbitTokens`. |
+| B2 | Custom chat bubble colours | **Built 2026-10-27 (per chat)** | done | orbit_ui `HelixBubbleTint` (Calm, Fresh, Warm, Rose, or the theme's own), applied by swapping the outgoing-bubble tokens of the same theme (`OrbitTokens.withOutgoingBubble`), so every part of the bubble follows; a Bubble colour row on the chat's settings; app `AppSettings.chatBubbleTint(id)`. Only your own bubbles change. Not done: one colour for all chats, colours of your own choosing (they would have to come from the theme). |
 | B3 | Custom lists and filters (folders) | **Built 2026-10-27 (this device only)** | done | DB schema 7 (`chat_lists`, `chat_list_members`), `ConversationsDao` list methods, engine `ChatsService.createChatList / renameChatList / deleteChatList / setChatsOnList`, orbit_ui list chips, New list, Add to list and long-press Rename/Delete on the Chats tab, app `chat_actions.dart` and `chatListsProvider`. Up to ten lists, names of 1 to 24 characters, unique. Not done: lists in a backup or restore (a backup payload change and a note in the crypto review), reordering chips, per-list unread badges beyond the chip count. |
 | B4 | Favourites | **Built 2026-10-27** | done | DB schema 6 `conversations.favourite_at` (private, in the backup), engine `setFavourite`, `orbit_ui` Favourites filter, star flag on the row and the selection-menu item; app `ChatActions.favourite`. |
 | B5 | Clear chat history and purge media | **Already built** | n/a | `ConversationSettings.clear()` and `ChatGateway.clearChat`; the storage page frees media. |
@@ -105,7 +106,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 |---|---|---|---|---|
 | C1 | Silence unknown callers | **Built 2026-10-27** | done | Engine `EngineSettings.silenceUnknownCallers`, `calls_service.dart` (`_isSilenced`, `_logSilenced`, `peekPending`), `MessagesDao.hasOutgoing`; `orbit_ui` Privacy > Calls switch; app `privacy_page.dart`. Unknown = not in the contacts, no nickname, never written to. Logged as missed, no ring and no notice. |
 | C2 | Show your own "online" separately | **Already built** | n/a | `PrivacySettings.online` and the privacy page row. |
-| C3 | Chat lock (per-chat biometric lock, hidden list) | Not built | **L** | `conversations.locked` (schema 6); a Locked folder in the chats tab; biometric prompt (`app_lock.dart` generalised); redacted notification previews (`core/notifications/`); excluded from search and from `watchSharedAttachments`; a note that backup contains locked chats. |
+| C3 | Chat lock (per-chat biometric lock, hidden list) | **Built 2026-10-27** | done | DB schema 8 (`conversations.locked_at`), engine `ChatsService.setLocked / watchLockedChats` and `IncomingNotice.locked`, backup keeps the flag; orbit_ui Lock chat (selection menu and chat settings), Locked chats screen and cover; app `LockedChatAccess`, `LockedChatGate` on every chat route, redacted notifications. See PRIVACY_CLAIM_MATRIX.md for what it does and does not protect. |
 | C4 | Passkeys (WebAuthn) in place of SMS | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** New identity endpoints (server `identity` module, `proto/modules/identity.dart`, fixtures), a platform plugin, recovery-flow changes. A new auth mechanism: needs an ADR and crypto review note. Do not weaken the password-derived key rule. |
 | C5 | Biometric-protected backup key | **Skipped by decision 2026-10-27** | n/a | The recovery secret exists for the day the phone is lost; keeping it behind biometrics on that phone adds no protection against that. |
 | C6 | Usernames in place of numbers | Built (`~name`, share link, "find me by ~name") | n/a | Nothing to do. |

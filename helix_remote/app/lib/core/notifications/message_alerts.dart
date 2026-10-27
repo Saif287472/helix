@@ -74,7 +74,11 @@ abstract final class MessageAlerts {
     AlertCountStore counts = const AlertCountStore(),
     ShowMessagesPost post = LocalNotifications.showMessages,
   }) async {
-    final previews = await read(AppSettings.notificationsPreview);
+    // A locked chat's notification says only that a message arrived: no name,
+    // no text, no account label, whatever the previews setting is.
+    final previews =
+        await read(AppSettings.notificationsPreview) &&
+        !(latest?.locked ?? false);
     await post(
       account: account,
       count: await counts.add(account, count),

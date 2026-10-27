@@ -6,7 +6,10 @@ import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
+import 'package:helix_remote/core/security/device_auth.dart';
+import 'package:helix_remote/core/security/locked_chats.dart';
 import 'package:helix_remote/shared/wallpaper.dart';
+import 'package:helix_remote/shared/widgets/locked_chat_gate.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
 import 'package:orbit_ui/models.dart';
 
@@ -48,6 +51,7 @@ class ConversationSettingsView {
     this.disappearingSeconds,
     this.wallpaper,
     this.bubbleTint = HelixBubbleTint.theme,
+    this.locked = false,
   });
 
   /// The chat's own wallpaper; null follows the default.
@@ -55,6 +59,9 @@ class ConversationSettingsView {
 
   /// The colour of your own bubbles in the chat.
   final HelixBubbleTint bubbleTint;
+
+  /// The chat is locked.
+  final bool locked;
   final String title;
   final String? subtitle;
   final HelixAvatarModel avatar;
@@ -82,6 +89,7 @@ final conversationSettingsViewProvider = Provider.autoDispose
         peerAccount: header.peerAccount,
         blocked: header.blocked,
         wallpaper: ref.watch(chatWallpaperChoiceProvider(id)).value,
+        locked: ref.watch(chatLockedProvider(id)).value ?? false,
         bubbleTint:
             ref.watch(chatBubbleTintProvider(id)).value ??
             HelixBubbleTint.theme,
@@ -124,6 +132,17 @@ final class ConversationSettingsActions {
         AppSettings.chatBubbleTint(conversationId),
         tint == HelixBubbleTint.theme ? '' : tint.name,
       );
+
+  /// Locks the chat, or unlocks it. Locking needs a screen lock on the phone;
+  /// null when it was done, else the sentence to show.
+  Future<String?> setLocked({required bool locked}) async {
+    if (locked) {
+      final why = await whyNotLock(_ref.read(deviceAuthenticatorProvider));
+      if (why != null) return why;
+    }
+    await (await _gateway).setLocked(conversationId, locked: locked);
+    return null;
+  }
 
   Future<void> block(String account) async => (await _gateway).block(account);
 

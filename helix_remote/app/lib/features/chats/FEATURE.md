@@ -60,3 +60,17 @@ characters, no duplicates, at most ten lists) into the sentence the sheet shows.
 choosing Add to list puts them on a list; touching and holding a chip renames or deletes it (the
 chats stay). `HelixChatListItem.copyWith` is how the live bits (typing, lists) are put on a row, so
 no field is dropped on the way to the screen. Lists are not in a backup yet.
+
+## Locked chats
+
+A chat can be locked from the selection menu (Lock chat) or its settings. It then leaves the chat
+list, the global search, starred messages, the GIF tray and the unread badge (all in the database
+queries, not in the screens), and is listed on the Locked chats screen (`/locked-chats`, offered in the
+⋮ menu only while some are locked). `core/security/locked_chats.dart` holds the access: it is opened by
+the phone's own unlock (`DeviceAuthenticator`), shut again when the app leaves the screen and when the
+last screen showing locked content closes. `shared/widgets/locked_chat_gate.dart` wraps every chat
+route (the chat, its media, settings, forward, info, shared media), so a notification, a link or a
+restored back stack asks for the unlock too. Locking needs a screen lock on the phone; unlocking does
+not. The engine marks notices from a locked chat (`IncomingNotice.locked`) and the notification code
+then shows no name, text or account label. The flag is kept in a backup. It is an access gate, not
+extra encryption (see `PRIVACY_CLAIM_MATRIX.md`).

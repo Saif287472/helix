@@ -228,8 +228,13 @@ class _HomeScreenState extends State<HomeScreen> {
         OrbitMenuItem(
           icon: OrbitIcons.lock,
           label: 'Lock chat',
-          onTap: () {
-            _a.onSetLocked?.call(ids, locked: true);
+          onTap: () async {
+            final error = await _a.onSetLocked?.call(ids, locked: true);
+            if (!mounted) return;
+            if (error != null) {
+              showOrbitToast(context, error, error: true);
+              return;
+            }
             _clear();
             showOrbitToast(
               context,

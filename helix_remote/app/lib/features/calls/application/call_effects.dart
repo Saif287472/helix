@@ -286,7 +286,8 @@ final class CallNotificationHandler {
     await CallNotifications.showMissed(
       callId: event.notice.messageId,
       callerName: people.displayOf(event.notice.sender),
-      showCaller: showCaller,
+      // A locked chat's missed call never names the caller.
+      showCaller: showCaller && !event.notice.locked,
       account: account,
     );
   }

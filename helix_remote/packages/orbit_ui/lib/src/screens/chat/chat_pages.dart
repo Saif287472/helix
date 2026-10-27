@@ -1816,8 +1816,9 @@ class ChatSettingsActions {
   /// Bubble colour.
   final ValueChanged<HelixBubbleTint>? onSetBubbleTint;
 
-  /// Locks the chat, or unlocks it. With it set, the page offers Lock chat.
-  final ValueChanged<bool>? onSetLocked;
+  /// Locks the chat, or unlocks it; the sentence to show when it could not be
+  /// done, null when it was. With it set, the page offers Lock chat.
+  final FutureOr<String?> Function(bool locked)? onSetLocked;
   final VoidCallback? onOpenInfo;
   final VoidCallback? onOpenSharedMedia;
 
@@ -1941,7 +1942,12 @@ class ChatSettingsScreen extends StatelessWidget {
                     'Notifications show no name or text.',
                 end: OrbitRowEnd.toggle,
                 on: m.locked,
-                onChanged: a.onSetLocked,
+                onChanged: (v) async {
+                  final error = await a.onSetLocked!(v);
+                  if (error != null && context.mounted) {
+                    showOrbitToast(context, error, error: true);
+                  }
+                },
               ),
             if (a.onSetWallpaper != null)
               OrbitListRow(

@@ -55,6 +55,8 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
     final typing = ref.watch(chatTypingProvider).asData?.value ?? const {};
     final rawChats = chatListAsync.value ?? const <HelixChatListItem>[];
     final lists = ref.watch(chatListsProvider).asData?.value ?? const [];
+    final lockedCount =
+        ref.watch(lockedChatListProvider).asData?.value.length ?? 0;
     final onLists =
         ref.watch(chatListMembershipProvider).asData?.value ?? const {};
     final chats = [
@@ -155,6 +157,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
       archivedCount: archivedCount,
       search: chatSearch,
       lists: lists,
+      lockedCount: lockedCount,
     );
 
     final model = HomeModel(
@@ -194,6 +197,9 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
           chatActions.pin(ids, pinned: pinned),
       onSetFavourite: (ids, {required favourite}) =>
           chatActions.favourite(ids, favourite: favourite),
+      onSetLocked: (ids, {required locked}) =>
+          chatActions.setLocked(ids, locked: locked),
+      onOpenLocked: () => context.push(ChatRoutes.locked),
       onCreateList: chatActions.createList,
       onRenameList: chatActions.renameList,
       onDeleteList: chatActions.deleteList,

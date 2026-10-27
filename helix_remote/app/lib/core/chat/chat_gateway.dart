@@ -283,6 +283,14 @@ class ChatGateway {
     required bool member,
   }) => _chats.setChatsOnList(listId, conversationIds, member: member);
 
+  /// Locks a chat, or unlocks it (never sent).
+  Future<void> setLocked(String id, {required bool locked}) =>
+      _chats.setLocked(id, locked: locked);
+
+  /// The locked chats, newest activity first, live.
+  Stream<List<ConversationListItem>> watchLockedChats() =>
+      _chats.watchLockedChats();
+
   /// Makes a chat a favourite, or not one.
   Future<void> setFavourite(String id, {required bool favourite}) =>
       _chats.setFavourite(id, favourite: favourite);

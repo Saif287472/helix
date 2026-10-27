@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_settings_screen.dart';
@@ -9,6 +10,15 @@ import 'package:helix_remote/features/conversation/presentation/shared_media_scr
 import 'package:helix_remote/features/conversation/presentation/starred_screen.dart';
 import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
+import 'package:helix_remote/shared/widgets/locked_chat_gate.dart';
+
+/// [screen] of the chat in the route, behind the unlock when the chat is
+/// locked: a deep link, a notification or a back stack restored after the app
+/// left the screen all land here.
+Widget _gated(GoRouterState state, Widget screen) => LockedChatGate(
+  conversationId: state.pathParameters['conversationId']!,
+  child: screen,
+);
 
 /// The routes the conversation feature owns. They sit above the home shell,
 /// so back returns to whichever tab opened the conversation. The router adds
@@ -20,53 +30,74 @@ final List<RouteBase> conversationRoutes = [
   ),
   GoRoute(
     path: ChatRoutes.conversation,
-    builder: (context, state) => ConversationScreen(
-      // go_router has already decoded the path parameter.
-      conversationId: state.pathParameters['conversationId']!,
-      messageId: state.uri.queryParameters['m'],
+    builder: (context, state) => _gated(
+      state,
+      ConversationScreen(
+        // go_router has already decoded the path parameter.
+        conversationId: state.pathParameters['conversationId']!,
+        messageId: state.uri.queryParameters['m'],
+      ),
     ),
     routes: [
       GoRoute(
         path: 'media/:rowid',
-        builder: (context, state) => MediaViewerScreen(
-          rowid: int.parse(state.pathParameters['rowid']!),
-          initialIndex: int.tryParse(state.uri.queryParameters['i'] ?? '') ?? 0,
+        builder: (context, state) => _gated(
+          state,
+          MediaViewerScreen(
+            rowid: int.parse(state.pathParameters['rowid']!),
+            initialIndex:
+                int.tryParse(state.uri.queryParameters['i'] ?? '') ?? 0,
+          ),
         ),
       ),
       GoRoute(
         path: 'shared',
-        builder: (context, state) => SharedMediaScreen(
-          conversationId: state.pathParameters['conversationId']!,
-          initialTab: state.uri.queryParameters['tab'],
+        builder: (context, state) => _gated(
+          state,
+          SharedMediaScreen(
+            conversationId: state.pathParameters['conversationId']!,
+            initialTab: state.uri.queryParameters['tab'],
+          ),
         ),
       ),
       GoRoute(
         path: 'forward',
-        builder: (context, state) => ForwardScreen(
-          conversationId: state.pathParameters['conversationId']!,
-          rowids: [
-            for (final id in (state.uri.queryParameters['ids'] ?? '').split(
-              ',',
-            ))
-              ?int.tryParse(id),
-          ],
+        builder: (context, state) => _gated(
+          state,
+          ForwardScreen(
+            conversationId: state.pathParameters['conversationId']!,
+            rowids: [
+              for (final id in (state.uri.queryParameters['ids'] ?? '').split(
+                ',',
+              ))
+                ?int.tryParse(id),
+            ],
+          ),
         ),
       ),
       GoRoute(
         path: 'info/:rowid',
-        builder: (context, state) =>
-            MessageInfoScreen(rowid: int.parse(state.pathParameters['rowid']!)),
+        builder: (context, state) => _gated(
+          state,
+          MessageInfoScreen(rowid: int.parse(state.pathParameters['rowid']!)),
+        ),
       ),
       GoRoute(
         path: 'settings',
-        builder: (context, state) => ConversationSettingsScreen(
-          conversationId: state.pathParameters['conversationId']!,
+        builder: (context, state) => _gated(
+          state,
+          ConversationSettingsScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
         ),
       ),
       GoRoute(
         path: 'send-files',
-        builder: (context, state) => SendFilesScreen(
-          conversationId: state.pathParameters['conversationId']!,
+        builder: (context, state) => _gated(
+          state,
+          SendFilesScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
         ),
       ),
     ],
