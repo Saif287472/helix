@@ -11,6 +11,7 @@ import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
+import 'generated/schema_v5.dart' as v5;
 
 /// Migration tests against the checked-in schema dumps (plan §6.2: every
 /// migration has a drift_dev test from the first release onward).
@@ -212,6 +213,67 @@ void main() {
     );
     // One message of one author is one fact, not two.
     expect(() => tomb('message', 'm1', 'bob'), throwsA(anything));
+  });
+
+  test('5 to 6 keeps every message and chat, and none starts starred, pinned or '
+      'a favourite', () async {
+    final schema = await verifier.schemaAt(5);
+    final old = v5.DatabaseAtV5(schema.newConnection());
+    await old.customStatement(
+      "INSERT INTO conversations (id, kind, created_at) "
+      "VALUES ('direct:bob', 'direct', 1000)",
+    );
+    await old.customStatement(
+      'INSERT INTO messages (message_id, conversation_id, sender, outgoing, '
+      "sort_key, sent_at, received_at, kind, body, status) VALUES ('m1', "
+      "'direct:bob', 'bob', 0, 'k1', 1000, 1000, 'text', 'hello', 'received')",
+    );
+    await old.close();
+
+    final db = HelixDb.withExecutor(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 6);
+
+    final chat = await db.conversationsDao.byId('direct:bob');
+    expect(chat, isNotNull);
+    expect(chat!.favouriteAt, isNull);
+    final message = (await db
+        .customSelect(
+          'SELECT local_rowid FROM messages WHERE message_id = ?',
+          variables: [Variable.withString('m1')],
+        )
+        .getSingle());
+    final row = await db.messagesDao.byRowid(message.read<int>('local_rowid'));
+    expect(row!.body, 'hello');
+    expect(row.starredAt, isNull);
+    expect(row.pinnedAt, isNull);
+
+    // The columns take writes, and the indexes that find them exist.
+    await db.customStatement(
+      'UPDATE messages SET starred_at = 2000, pinned_at = 3000',
+    );
+    await db.customStatement('UPDATE conversations SET favourite_at = 4000');
+    final starred = await db.messagesDao.byRowid(row.localRowid);
+    expect(
+      starred!.starredAt,
+      DateTime.fromMillisecondsSinceEpoch(2000, isUtc: true),
+    );
+    expect(
+      starred.pinnedAt,
+      DateTime.fromMillisecondsSinceEpoch(3000, isUtc: true),
+    );
+    expect(
+      (await db.conversationsDao.byId('direct:bob'))!.favouriteAt,
+      DateTime.fromMillisecondsSinceEpoch(4000, isUtc: true),
+    );
+    final indexes =
+        (await db
+                .customSelect(
+                  "SELECT name FROM sqlite_master WHERE type = 'index'",
+                )
+                .get())
+            .map((r) => r.read<String>('name'));
+    expect(indexes, containsAll(['messages_starred', 'messages_pinned']));
   });
 
   test(

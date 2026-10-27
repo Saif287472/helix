@@ -155,6 +155,9 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
         body: const Value(null),
         payload: const Value(null),
         deletedAt: Value(deletedAt),
+        // A message that is gone is no longer one to find again.
+        starredAt: const Value(null),
+        pinnedAt: const Value(null),
       ),
     );
     await refreshSummary(row.conversationId);
@@ -633,6 +636,55 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     }
     return found;
   });
+
+  // ------------------------------------------------- stars and pins
+
+  /// Stars the message at [at], or takes the star off with null. A deleted
+  /// message cannot be starred.
+  Future<void> setStarred(int rowid, DateTime? at) =>
+      (update(messages)
+            ..where((m) => m.localRowid.equals(rowid) & m.deletedAt.isNull()))
+          .write(MessagesCompanion(starredAt: Value(at)));
+
+  /// The starred messages of every chat, the most recently starred first;
+  /// emits on every change.
+  Stream<List<MessageRow>> watchStarred({int limit = 500}) =>
+      (select(messages)
+            ..where((m) => m.starredAt.isNotNull() & m.deletedAt.isNull())
+            ..orderBy([(m) => OrderingTerm.desc(m.starredAt)])
+            ..limit(limit))
+          .watch();
+
+  /// Pins the message in its chat at [at], or unpins it with null. A deleted
+  /// message cannot be pinned.
+  Future<void> setPinned(int rowid, DateTime? at) =>
+      (update(messages)
+            ..where((m) => m.localRowid.equals(rowid) & m.deletedAt.isNull()))
+          .write(MessagesCompanion(pinnedAt: Value(at)));
+
+  /// The messages pinned in [conversationId], the most recently pinned first.
+  Future<List<MessageRow>> pinnedIn(String conversationId) =>
+      (select(messages)
+            ..where(
+              (m) =>
+                  m.conversationId.equals(conversationId) &
+                  m.pinnedAt.isNotNull() &
+                  m.deletedAt.isNull(),
+            )
+            ..orderBy([(m) => OrderingTerm.desc(m.pinnedAt)]))
+          .get();
+
+  /// [pinnedIn], live.
+  Stream<List<MessageRow>> watchPinned(String conversationId) =>
+      (select(messages)
+            ..where(
+              (m) =>
+                  m.conversationId.equals(conversationId) &
+                  m.pinnedAt.isNotNull() &
+                  m.deletedAt.isNull(),
+            )
+            ..orderBy([(m) => OrderingTerm.desc(m.pinnedAt)]))
+          .watch();
 
   // ------------------------------------------------------------- reads
 

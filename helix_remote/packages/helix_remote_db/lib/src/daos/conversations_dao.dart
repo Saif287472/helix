@@ -169,6 +169,10 @@ class ConversationsDao extends DatabaseAccessor<HelixDb>
   Future<void> setPinned(String id, DateTime? pinnedAt) =>
       _write(id, ConversationsCompanion(pinnedAt: Value(pinnedAt)));
 
+  /// Makes the chat a favourite at [at], or not one with null.
+  Future<void> setFavourite(String id, DateTime? at) =>
+      _write(id, ConversationsCompanion(favouriteAt: Value(at)));
+
   Future<void> setMutedUntil(String id, DateTime? until) =>
       _write(id, ConversationsCompanion(mutedUntil: Value(until)));
 

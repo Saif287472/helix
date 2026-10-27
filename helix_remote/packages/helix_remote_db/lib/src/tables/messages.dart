@@ -9,6 +9,8 @@ import 'package:helix_remote_db/src/values.dart';
 @TableIndex(name: 'messages_unread', columns: {#conversationId, #status})
 @TableIndex(name: 'messages_message_id', columns: {#messageId})
 @TableIndex(name: 'messages_expires_at', columns: {#expiresAt})
+@TableIndex(name: 'messages_starred', columns: {#starredAt})
+@TableIndex(name: 'messages_pinned', columns: {#conversationId, #pinnedAt})
 class Messages extends Table {
   /// Local row id; also the FTS rowid.
   IntColumn get localRowid => integer().autoIncrement()();
@@ -52,6 +54,15 @@ class Messages extends Table {
   IntColumn get expireSeconds => integer().nullable()();
   IntColumn get expiresAt => integer().nullable().map(const EpochMs())();
   TextColumn get viewOnceState => textEnum<ViewOnceState>().nullable()();
+
+  /// When this device's owner starred the message (a private bookmark: it
+  /// goes to no one, and to this account's other devices only by a backup).
+  /// Null when not starred. Schema 6.
+  IntColumn get starredAt => integer().nullable().map(const EpochMs())();
+
+  /// When the message was pinned in its chat, by anyone in it (the `pin`
+  /// content action, CONTENT_V2.md §3). Null when not pinned. Schema 6.
+  IntColumn get pinnedAt => integer().nullable().map(const EpochMs())();
 
   @override
   List<Set<Column>> get uniqueKeys => [

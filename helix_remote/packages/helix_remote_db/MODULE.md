@@ -21,7 +21,7 @@ all open it. May depend only on `helix_remote_domain` and
 - `DatabaseKey.toString()` is redacted; the key lives in the platform
   keystore and is never logged.
 
-## Schema (version 5)
+## Schema (version 6)
 
 Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 
@@ -29,8 +29,8 @@ Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 |---|---|
 | Account | `self_account` (one row), `self_devices` (linked-device list) |
 | People | `people` (names, phone, profile, pinned AIK, verified, blocked), `person_devices` (DIK, DSK, certificate, trust; also this account's other devices) |
-| Chats | `conversations` (with the summary columns `last_message_rowid/sort_key/at/preview`, `unread_count`, `mention_count`, `last_read_sort_key`), `conversation_members` |
-| Messages | `messages` (decrypted once: `kind`, `body` text/caption, `payload` JSON for the rest of the content body, reply, status, edit/delete, disappearing, view-once), `message_reactions`, `message_receipts`, `attachments`, `messages_fts` (FTS5, external content, triggers in `fts.drift`) |
+| Chats | `conversations` (with the summary columns `last_message_rowid/sort_key/at/preview`, `unread_count`, `mention_count`, `last_read_sort_key`; `pinned_at` pins the chat, `favourite_at` makes it a favourite), `conversation_members` |
+| Messages | `messages` (decrypted once: `kind`, `body` text/caption, `payload` JSON for the rest of the content body, reply, status, edit/delete, disappearing, view-once; `starred_at` the owner's own bookmark, `pinned_at` a pin in the chat), `message_reactions`, `message_receipts`, `attachments`, `messages_fts` (FTS5, external content, triggers in `fts.drift`) |
 | Crypto | `identity` (one row), `sessions` (per device pair, slot 0 active + 5 previous), `prekeys`, `sender_keys` |
 | Sync | `inbox_cursor` (one row), `processed_envelopes`, `outbox_ops`, `deferred_actions` (actions waiting up to 7 days for their target) |
 | Groups (v2) | `groups` (title, role, roster `epoch`, encrypted state blob, the chat-list summary columns), `group_members` (the server's roster; `devices_json` is the member's device ids as JSON), `group_bans` |
@@ -65,6 +65,18 @@ NULL DEFAULT 0`, the unique index on `transfer_jobs.purpose`, and the new
 `delete_tombstones` table with its own index entities created from the frozen
 version-5 schema. `test/drift/helix/migration_test.dart` has the data-integrity
 test; see "Added for schema 5" below for what each is for.
+
+Schema 6 (starred messages, favourite chats, pinned messages) is three nullable
+columns and two indexes (`from5To6`): `messages.starred_at` (a private bookmark;
+`MessagesDao.setStarred`, `watchStarred`), `messages.pinned_at` (a pin in the chat, set
+by the `pin` content action; `setPinned`, `pinnedIn`, `watchPinned`) and
+`conversations.favourite_at` (`ConversationsDao.setFavourite`), with `messages_starred`
+and `messages_pinned` (`conversation_id, pinned_at`). The `ALTER TABLE` statements say
+`INTEGER NULL`: the schema verifier compares that text, and a new column must be the
+last one of its table class, since `ADD COLUMN` appends. Every existing row starts
+unstarred, unpinned and not a favourite. A message deleted for everyone loses both its
+star and its pin (`deleteForEveryone`), and neither can be set on it again.
+`test/stars_and_pins_test.dart` and the 5 to 6 test in `migration_test.dart` cover it.
 
 ## Two engines, one database file
 

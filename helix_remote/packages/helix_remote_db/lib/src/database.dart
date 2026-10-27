@@ -95,7 +95,7 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -156,6 +156,26 @@ class HelixDb extends _$HelixDb {
         );
         await m.create(schema.transferJobsPurpose);
         await m.create(schema.deleteTombstones);
+      },
+      // Schema 6 (starred messages, favourite chats, pinned messages) is three
+      // nullable columns and the two indexes that find them: `messages.starred_at`
+      // (the owner's own bookmark), `messages.pinned_at` (a pin in its chat) and
+      // `conversations.favourite_at`. Nullable and without a default, so every
+      // existing row starts as not starred, not pinned and not a favourite, and
+      // no row is rewritten. The indexes are created from the frozen version-6
+      // schema once the columns exist.
+      from5To6: (m, schema) async {
+        await m.database.customStatement(
+          'ALTER TABLE messages ADD COLUMN starred_at INTEGER NULL',
+        );
+        await m.database.customStatement(
+          'ALTER TABLE messages ADD COLUMN pinned_at INTEGER NULL',
+        );
+        await m.database.customStatement(
+          'ALTER TABLE conversations ADD COLUMN favourite_at INTEGER NULL',
+        );
+        await m.create(schema.messagesStarred);
+        await m.create(schema.messagesPinned);
       },
     ),
   );

@@ -13,6 +13,7 @@ class Conversations extends Table {
   TextColumn get title => text().nullable()();
   BlobColumn get avatar => blob().nullable()();
   IntColumn get pinnedAt => integer().nullable().map(const EpochMs())();
+
   IntColumn get mutedUntil => integer().nullable().map(const EpochMs())();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
 
@@ -29,6 +30,10 @@ class Conversations extends Table {
   TextColumn get draft => text().nullable()();
   IntColumn get disappearingSeconds => integer().nullable()();
   IntColumn get createdAt => integer().map(const EpochMs())();
+
+  /// When the chat was made a favourite (a private filter on the chat list,
+  /// never sent). Null when it is not one. Schema 6.
+  IntColumn get favouriteAt => integer().nullable().map(const EpochMs())();
 
   @override
   Set<Column> get primaryKey => {id};
