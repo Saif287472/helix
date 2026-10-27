@@ -21,7 +21,7 @@ all open it. May depend only on `helix_remote_domain` and
 - `DatabaseKey.toString()` is redacted; the key lives in the platform
   keystore and is never logged.
 
-## Schema (version 6)
+## Schema (version 7)
 
 Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 
@@ -77,6 +77,14 @@ last one of its table class, since `ADD COLUMN` appends. Every existing row star
 unstarred, unpinned and not a favourite. A message deleted for everyone loses both its
 star and its pin (`deleteForEveryone`), and neither can be set on it again.
 `test/stars_and_pins_test.dart` and the 5 to 6 test in `migration_test.dart` cover it.
+
+Schema 7 (the person's chat lists) is two new tables and one index (`from6To7`):
+`chat_lists` (`id`, `name`, `position`, `created_at`) and `chat_list_members`
+(`list_id`, `conversation_id`, both cascading, so deleting a list or a chat leaves no
+row behind), with `chat_list_members_chat`. A chat may be on several lists. They are
+private to the device and never sent; `ConversationsDao` has `createList`, `renameList`,
+`deleteList`, `addToList`, `removeFromList` and the `watch`/read pairs. `wipeAll` empties
+both.
 
 ## Two engines, one database file
 

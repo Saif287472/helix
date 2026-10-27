@@ -50,7 +50,15 @@ final class UnreadTotals {
 
 /// Conversations, their members and the chat list. The summary columns are
 /// written by `MessagesDao`, never here.
-@DriftAccessor(tables: [Conversations, ConversationMembers, Messages])
+@DriftAccessor(
+  tables: [
+    Conversations,
+    ConversationMembers,
+    Messages,
+    ChatLists,
+    ChatListMembers,
+  ],
+)
 class ConversationsDao extends DatabaseAccessor<HelixDb>
     with _$ConversationsDaoMixin {
   ConversationsDao(super.attachedDatabase);
@@ -172,6 +180,82 @@ class ConversationsDao extends DatabaseAccessor<HelixDb>
   /// Makes the chat a favourite at [at], or not one with null.
   Future<void> setFavourite(String id, DateTime? at) =>
       _write(id, ConversationsCompanion(favouriteAt: Value(at)));
+
+  // ------------------------------------------------------------- lists
+
+  /// The person's lists, in the order of their chips.
+  Stream<List<ChatListRow>> watchLists() =>
+      (select(chatLists)..orderBy([
+            (l) => OrderingTerm.asc(l.position),
+            (l) => OrderingTerm.asc(l.createdAt),
+          ]))
+          .watch();
+
+  Future<List<ChatListRow>> lists() =>
+      (select(chatLists)..orderBy([
+            (l) => OrderingTerm.asc(l.position),
+            (l) => OrderingTerm.asc(l.createdAt),
+          ]))
+          .get();
+
+  /// Which chats are on which list, all of them.
+  Stream<List<ChatListMemberRow>> watchListMembers() =>
+      select(chatListMembers).watch();
+
+  Future<List<ChatListMemberRow>> listMembers() =>
+      select(chatListMembers).get();
+
+  /// Makes a list at the end of the others.
+  Future<void> createList(String id, String name, DateTime now) =>
+      transaction(() async {
+        final last =
+            await (select(chatLists)
+                  ..orderBy([(l) => OrderingTerm.desc(l.position)])
+                  ..limit(1))
+                .getSingleOrNull();
+        await into(chatLists).insert(
+          ChatListsCompanion.insert(
+            id: id,
+            name: name,
+            position: (last?.position ?? 0) + 1,
+            createdAt: now,
+          ),
+        );
+      });
+
+  Future<void> renameList(String id, String name) =>
+      (update(chatLists)..where((l) => l.id.equals(id))).write(
+        ChatListsCompanion(name: Value(name)),
+      );
+
+  /// Deletes the list; its chats stay, they just leave it.
+  Future<void> deleteList(String id) =>
+      (delete(chatLists)..where((l) => l.id.equals(id))).go();
+
+  /// Puts the chat on the list; nothing changes when it is already there or
+  /// either does not exist.
+  Future<void> addToList(String listId, String conversationId) async {
+    final list = await (select(
+      chatLists,
+    )..where((l) => l.id.equals(listId))).getSingleOrNull();
+    final chat = await byId(conversationId);
+    if (list == null || chat == null) return;
+    await into(chatListMembers).insert(
+      ChatListMembersCompanion.insert(
+        listId: listId,
+        conversationId: conversationId,
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  Future<void> removeFromList(String listId, String conversationId) =>
+      (delete(chatListMembers)..where(
+            (m) =>
+                m.listId.equals(listId) &
+                m.conversationId.equals(conversationId),
+          ))
+          .go();
 
   Future<void> setMutedUntil(String id, DateTime? until) =>
       _write(id, ConversationsCompanion(mutedUntil: Value(until)));

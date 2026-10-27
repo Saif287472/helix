@@ -51,3 +51,32 @@ class ConversationMembers extends Table {
   @override
   Set<Column> get primaryKey => {conversationId, accountId};
 }
+
+/// A list the person made on the Chats tab ("Work", "Family"): a private way
+/// to group chats, never sent anywhere. Schema 7.
+@DataClassName('ChatListRow')
+class ChatLists extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+
+  /// Where the list's chip sits among the others, first to last.
+  IntColumn get position => integer()();
+  IntColumn get createdAt => integer().map(const EpochMs())();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// A chat on a list. A chat may be on several, and leaves them all when it is
+/// deleted. Schema 7.
+@DataClassName('ChatListMemberRow')
+@TableIndex(name: 'chat_list_members_chat', columns: {#conversationId})
+class ChatListMembers extends Table {
+  TextColumn get listId =>
+      text().references(ChatLists, #id, onDelete: KeyAction.cascade)();
+  TextColumn get conversationId =>
+      text().references(Conversations, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  Set<Column> get primaryKey => {listId, conversationId};
+}

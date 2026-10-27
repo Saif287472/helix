@@ -12,6 +12,7 @@ import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
+import 'generated/schema_v6.dart' as v6;
 
 /// Migration tests against the checked-in schema dumps (plan §6.2: every
 /// migration has a drift_dev test from the first release onward).
@@ -274,6 +275,34 @@ void main() {
                 .get())
             .map((r) => r.read<String>('name'));
     expect(indexes, containsAll(['messages_starred', 'messages_pinned']));
+  });
+
+  test('6 to 7 keeps every chat and adds empty, working chat lists', () async {
+    final schema = await verifier.schemaAt(6);
+    final old = v6.DatabaseAtV6(schema.newConnection());
+    await old.customStatement(
+      "INSERT INTO conversations (id, kind, created_at) "
+      "VALUES ('direct:bob', 'direct', 1000)",
+    );
+    await old.close();
+
+    final db = HelixDb.withExecutor(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 7);
+
+    expect(await db.conversationsDao.byId('direct:bob'), isNotNull);
+    expect(await db.conversationsDao.lists(), isEmpty);
+    await db.conversationsDao.createList('l1', 'Work', DateTime.utc(2026));
+    await db.conversationsDao.addToList('l1', 'direct:bob');
+    expect(await db.conversationsDao.listMembers(), hasLength(1));
+    final indexes =
+        (await db
+                .customSelect(
+                  "SELECT name FROM sqlite_master WHERE type = 'index'",
+                )
+                .get())
+            .map((r) => r.read<String>('name'));
+    expect(indexes, contains('chat_list_members_chat'));
   });
 
   test(

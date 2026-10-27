@@ -49,6 +49,8 @@ part 'database.g.dart';
     PersonDevices,
     Conversations,
     ConversationMembers,
+    ChatLists,
+    ChatListMembers,
     Messages,
     MessageReactions,
     MessageReceipts,
@@ -95,7 +97,7 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -177,6 +179,13 @@ class HelixDb extends _$HelixDb {
         await m.create(schema.messagesStarred);
         await m.create(schema.messagesPinned);
       },
+      // Schema 7 adds the person's own chat lists. Additive: two new tables,
+      // and the list's chat index from the frozen version-7 schema.
+      from6To7: (m, schema) async {
+        await m.create(schema.chatLists);
+        await m.create(schema.chatListMembers);
+        await m.create(schema.chatListMembersChat);
+      },
     ),
   );
 
@@ -211,6 +220,8 @@ class HelixDb extends _$HelixDb {
       messageReceipts,
       attachments,
       messages,
+      chatListMembers,
+      chatLists,
       conversationMembers,
       conversations,
       personDevices,

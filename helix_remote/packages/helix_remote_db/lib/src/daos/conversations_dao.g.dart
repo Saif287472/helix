@@ -8,6 +8,8 @@ mixin _$ConversationsDaoMixin on DatabaseAccessor<HelixDb> {
   $ConversationMembersTable get conversationMembers =>
       attachedDatabase.conversationMembers;
   $MessagesTable get messages => attachedDatabase.messages;
+  $ChatListsTable get chatLists => attachedDatabase.chatLists;
+  $ChatListMembersTable get chatListMembers => attachedDatabase.chatListMembers;
   ConversationsDaoManager get managers => ConversationsDaoManager(this);
 }
 
@@ -23,4 +25,11 @@ class ConversationsDaoManager {
       );
   $$MessagesTableTableManager get messages =>
       $$MessagesTableTableManager(_db.attachedDatabase, _db.messages);
+  $$ChatListsTableTableManager get chatLists =>
+      $$ChatListsTableTableManager(_db.attachedDatabase, _db.chatLists);
+  $$ChatListMembersTableTableManager get chatListMembers =>
+      $$ChatListMembersTableTableManager(
+        _db.attachedDatabase,
+        _db.chatListMembers,
+      );
 }

@@ -4709,6 +4709,544 @@ class ConversationMembersCompanion
   }
 }
 
+class $ChatListsTable extends ChatLists
+    with TableInfo<$ChatListsTable, ChatListRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChatListsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> createdAt =
+      GeneratedColumn<int>(
+        'created_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($ChatListsTable.$convertercreatedAt);
+  @override
+  List<GeneratedColumn> get $columns => [id, name, position, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'chat_lists';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ChatListRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ChatListRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChatListRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      createdAt: $ChatListsTable.$convertercreatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}created_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $ChatListsTable createAlias(String alias) {
+    return $ChatListsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $convertercreatedAt = const EpochMs();
+}
+
+class ChatListRow extends DataClass implements Insertable<ChatListRow> {
+  final String id;
+  final String name;
+
+  /// Where the list's chip sits among the others, first to last.
+  final int position;
+  final DateTime createdAt;
+  const ChatListRow({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['position'] = Variable<int>(position);
+    {
+      map['created_at'] = Variable<int>(
+        $ChatListsTable.$convertercreatedAt.toSql(createdAt),
+      );
+    }
+    return map;
+  }
+
+  ChatListsCompanion toCompanion(bool nullToAbsent) {
+    return ChatListsCompanion(
+      id: Value(id),
+      name: Value(name),
+      position: Value(position),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ChatListRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChatListRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      position: serializer.fromJson<int>(json['position']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'position': serializer.toJson<int>(position),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ChatListRow copyWith({
+    String? id,
+    String? name,
+    int? position,
+    DateTime? createdAt,
+  }) => ChatListRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    position: position ?? this.position,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ChatListRow copyWithCompanion(ChatListsCompanion data) {
+    return ChatListRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      position: data.position.present ? data.position.value : this.position,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChatListRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('position: $position, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, position, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChatListRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.position == this.position &&
+          other.createdAt == this.createdAt);
+}
+
+class ChatListsCompanion extends UpdateCompanion<ChatListRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<int> position;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ChatListsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.position = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ChatListsCompanion.insert({
+    required String id,
+    required String name,
+    required int position,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       position = Value(position),
+       createdAt = Value(createdAt);
+  static Insertable<ChatListRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<int>? position,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (position != null) 'position': position,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ChatListsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<int>? position,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return ChatListsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      position: position ?? this.position,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(
+        $ChatListsTable.$convertercreatedAt.toSql(createdAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChatListsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('position: $position, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ChatListMembersTable extends ChatListMembers
+    with TableInfo<$ChatListMembersTable, ChatListMemberRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChatListMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _listIdMeta = const VerificationMeta('listId');
+  @override
+  late final GeneratedColumn<String> listId = GeneratedColumn<String>(
+    'list_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES chat_lists (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _conversationIdMeta = const VerificationMeta(
+    'conversationId',
+  );
+  @override
+  late final GeneratedColumn<String> conversationId = GeneratedColumn<String>(
+    'conversation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES conversations (id) ON DELETE CASCADE',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [listId, conversationId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'chat_list_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ChatListMemberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('list_id')) {
+      context.handle(
+        _listIdMeta,
+        listId.isAcceptableOrUnknown(data['list_id']!, _listIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_listIdMeta);
+    }
+    if (data.containsKey('conversation_id')) {
+      context.handle(
+        _conversationIdMeta,
+        conversationId.isAcceptableOrUnknown(
+          data['conversation_id']!,
+          _conversationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conversationIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {listId, conversationId};
+  @override
+  ChatListMemberRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChatListMemberRow(
+      listId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}list_id'],
+      )!,
+      conversationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conversation_id'],
+      )!,
+    );
+  }
+
+  @override
+  $ChatListMembersTable createAlias(String alias) {
+    return $ChatListMembersTable(attachedDatabase, alias);
+  }
+}
+
+class ChatListMemberRow extends DataClass
+    implements Insertable<ChatListMemberRow> {
+  final String listId;
+  final String conversationId;
+  const ChatListMemberRow({required this.listId, required this.conversationId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['list_id'] = Variable<String>(listId);
+    map['conversation_id'] = Variable<String>(conversationId);
+    return map;
+  }
+
+  ChatListMembersCompanion toCompanion(bool nullToAbsent) {
+    return ChatListMembersCompanion(
+      listId: Value(listId),
+      conversationId: Value(conversationId),
+    );
+  }
+
+  factory ChatListMemberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChatListMemberRow(
+      listId: serializer.fromJson<String>(json['listId']),
+      conversationId: serializer.fromJson<String>(json['conversationId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'listId': serializer.toJson<String>(listId),
+      'conversationId': serializer.toJson<String>(conversationId),
+    };
+  }
+
+  ChatListMemberRow copyWith({String? listId, String? conversationId}) =>
+      ChatListMemberRow(
+        listId: listId ?? this.listId,
+        conversationId: conversationId ?? this.conversationId,
+      );
+  ChatListMemberRow copyWithCompanion(ChatListMembersCompanion data) {
+    return ChatListMemberRow(
+      listId: data.listId.present ? data.listId.value : this.listId,
+      conversationId: data.conversationId.present
+          ? data.conversationId.value
+          : this.conversationId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChatListMemberRow(')
+          ..write('listId: $listId, ')
+          ..write('conversationId: $conversationId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(listId, conversationId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChatListMemberRow &&
+          other.listId == this.listId &&
+          other.conversationId == this.conversationId);
+}
+
+class ChatListMembersCompanion extends UpdateCompanion<ChatListMemberRow> {
+  final Value<String> listId;
+  final Value<String> conversationId;
+  final Value<int> rowid;
+  const ChatListMembersCompanion({
+    this.listId = const Value.absent(),
+    this.conversationId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ChatListMembersCompanion.insert({
+    required String listId,
+    required String conversationId,
+    this.rowid = const Value.absent(),
+  }) : listId = Value(listId),
+       conversationId = Value(conversationId);
+  static Insertable<ChatListMemberRow> custom({
+    Expression<String>? listId,
+    Expression<String>? conversationId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (listId != null) 'list_id': listId,
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ChatListMembersCompanion copyWith({
+    Value<String>? listId,
+    Value<String>? conversationId,
+    Value<int>? rowid,
+  }) {
+    return ChatListMembersCompanion(
+      listId: listId ?? this.listId,
+      conversationId: conversationId ?? this.conversationId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (listId.present) {
+      map['list_id'] = Variable<String>(listId.value);
+    }
+    if (conversationId.present) {
+      map['conversation_id'] = Variable<String>(conversationId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChatListMembersCompanion(')
+          ..write('listId: $listId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SelfAccountTable extends SelfAccount
     with TableInfo<$SelfAccountTable, SelfAccountRow> {
   @override
@@ -15731,6 +16269,10 @@ abstract class _$HelixDb extends GeneratedDatabase {
   );
   late final $ConversationMembersTable conversationMembers =
       $ConversationMembersTable(this);
+  late final $ChatListsTable chatLists = $ChatListsTable(this);
+  late final $ChatListMembersTable chatListMembers = $ChatListMembersTable(
+    this,
+  );
   late final Index conversationsList = Index(
     'conversations_list',
     'CREATE INDEX conversations_list ON conversations (archived, last_message_at)',
@@ -15738,6 +16280,10 @@ abstract class _$HelixDb extends GeneratedDatabase {
   late final Index conversationMembersAccount = Index(
     'conversation_members_account',
     'CREATE INDEX conversation_members_account ON conversation_members (account_id)',
+  );
+  late final Index chatListMembersChat = Index(
+    'chat_list_members_chat',
+    'CREATE INDEX chat_list_members_chat ON chat_list_members (conversation_id)',
   );
   late final $SelfAccountTable selfAccount = $SelfAccountTable(this);
   late final $SelfDevicesTable selfDevices = $SelfDevicesTable(this);
@@ -15842,8 +16388,11 @@ abstract class _$HelixDb extends GeneratedDatabase {
     messagesStarred,
     messagesPinned,
     conversationMembers,
+    chatLists,
+    chatListMembers,
     conversationsList,
     conversationMembersAccount,
+    chatListMembersChat,
     selfAccount,
     selfDevices,
     people,
@@ -15933,6 +16482,20 @@ abstract class _$HelixDb extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('conversation_members', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'chat_lists',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('chat_list_members', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'conversations',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('chat_list_members', kind: UpdateKind.delete)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -16169,6 +16732,26 @@ final class $$ConversationsTableReferences
     );
   }
 
+  static MultiTypedResultKey<$ChatListMembersTable, List<ChatListMemberRow>>
+  _chatListMembersRefsTable(_$HelixDb db) => MultiTypedResultKey.fromTable(
+    db.chatListMembers,
+    aliasName: 'conversations__id__chat_list_members__conversation_id',
+  );
+
+  $$ChatListMembersTableProcessedTableManager get chatListMembersRefs {
+    final manager = $$ChatListMembersTableTableManager(
+      $_db,
+      $_db.chatListMembers,
+    ).filter((f) => f.conversationId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _chatListMembersRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$OutboxOpsTable, List<OutboxOpRow>>
   _outboxOpsRefsTable(_$HelixDb db) => MultiTypedResultKey.fromTable(
     db.outboxOps,
@@ -16334,6 +16917,31 @@ class $$ConversationsTableFilterComposer
           }) => $$ConversationMembersTableFilterComposer(
             $db: $db,
             $table: $db.conversationMembers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> chatListMembersRefs(
+    Expression<bool> Function($$ChatListMembersTableFilterComposer f) f,
+  ) {
+    final $$ChatListMembersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.chatListMembers,
+      getReferencedColumn: (t) => t.conversationId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListMembersTableFilterComposer(
+            $db: $db,
+            $table: $db.chatListMembers,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -16606,6 +17214,31 @@ class $$ConversationsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> chatListMembersRefs<T extends Object>(
+    Expression<T> Function($$ChatListMembersTableAnnotationComposer a) f,
+  ) {
+    final $$ChatListMembersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.chatListMembers,
+      getReferencedColumn: (t) => t.conversationId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListMembersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.chatListMembers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> outboxOpsRefs<T extends Object>(
     Expression<T> Function($$OutboxOpsTableAnnotationComposer a) f,
   ) {
@@ -16648,6 +17281,7 @@ class $$ConversationsTableTableManager
           PrefetchHooks Function({
             bool messagesRefs,
             bool conversationMembersRefs,
+            bool chatListMembersRefs,
             bool outboxOpsRefs,
           })
         > {
@@ -16758,6 +17392,7 @@ class $$ConversationsTableTableManager
               ({
                 messagesRefs = false,
                 conversationMembersRefs = false,
+                chatListMembersRefs = false,
                 outboxOpsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -16765,6 +17400,7 @@ class $$ConversationsTableTableManager
                   explicitlyWatchedTables: [
                     if (messagesRefs) db.messages,
                     if (conversationMembersRefs) db.conversationMembers,
+                    if (chatListMembersRefs) db.chatListMembers,
                     if (outboxOpsRefs) db.outboxOps,
                   ],
                   addJoins: null,
@@ -16806,6 +17442,27 @@ class $$ConversationsTableTableManager
                                 table,
                                 p0,
                               ).conversationMembersRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.conversationId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (chatListMembersRefs)
+                        await $_getPrefetchedData<
+                          ConversationRow,
+                          $ConversationsTable,
+                          ChatListMemberRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ConversationsTableReferences
+                              ._chatListMembersRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ConversationsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).chatListMembersRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.conversationId == item.id,
@@ -16856,6 +17513,7 @@ typedef $$ConversationsTableProcessedTableManager =
       PrefetchHooks Function({
         bool messagesRefs,
         bool conversationMembersRefs,
+        bool chatListMembersRefs,
         bool outboxOpsRefs,
       })
     >;
@@ -19580,6 +20238,649 @@ typedef $$ConversationMembersTableProcessedTableManager =
       (ConversationMemberRow, $$ConversationMembersTableReferences),
       ConversationMemberRow,
       PrefetchHooks Function({bool conversationId})
+    >;
+typedef $$ChatListsTableCreateCompanionBuilder =
+    ChatListsCompanion Function({
+      required String id,
+      required String name,
+      required int position,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$ChatListsTableUpdateCompanionBuilder =
+    ChatListsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<int> position,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$ChatListsTableReferences
+    extends BaseReferences<_$HelixDb, $ChatListsTable, ChatListRow> {
+  $$ChatListsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$ChatListMembersTable, List<ChatListMemberRow>>
+  _chatListMembersRefsTable(_$HelixDb db) => MultiTypedResultKey.fromTable(
+    db.chatListMembers,
+    aliasName: 'chat_lists__id__chat_list_members__list_id',
+  );
+
+  $$ChatListMembersTableProcessedTableManager get chatListMembersRefs {
+    final manager = $$ChatListMembersTableTableManager(
+      $_db,
+      $_db.chatListMembers,
+    ).filter((f) => f.listId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _chatListMembersRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$ChatListsTableFilterComposer
+    extends Composer<_$HelixDb, $ChatListsTable> {
+  $$ChatListsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get createdAt =>
+      $composableBuilder(
+        column: $table.createdAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  Expression<bool> chatListMembersRefs(
+    Expression<bool> Function($$ChatListMembersTableFilterComposer f) f,
+  ) {
+    final $$ChatListMembersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.chatListMembers,
+      getReferencedColumn: (t) => t.listId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListMembersTableFilterComposer(
+            $db: $db,
+            $table: $db.chatListMembers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ChatListsTableOrderingComposer
+    extends Composer<_$HelixDb, $ChatListsTable> {
+  $$ChatListsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ChatListsTableAnnotationComposer
+    extends Composer<_$HelixDb, $ChatListsTable> {
+  $$ChatListsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  Expression<T> chatListMembersRefs<T extends Object>(
+    Expression<T> Function($$ChatListMembersTableAnnotationComposer a) f,
+  ) {
+    final $$ChatListMembersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.chatListMembers,
+      getReferencedColumn: (t) => t.listId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListMembersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.chatListMembers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ChatListsTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $ChatListsTable,
+          ChatListRow,
+          $$ChatListsTableFilterComposer,
+          $$ChatListsTableOrderingComposer,
+          $$ChatListsTableAnnotationComposer,
+          $$ChatListsTableCreateCompanionBuilder,
+          $$ChatListsTableUpdateCompanionBuilder,
+          (ChatListRow, $$ChatListsTableReferences),
+          ChatListRow,
+          PrefetchHooks Function({bool chatListMembersRefs})
+        > {
+  $$ChatListsTableTableManager(_$HelixDb db, $ChatListsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ChatListsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ChatListsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ChatListsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ChatListsCompanion(
+                id: id,
+                name: name,
+                position: position,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required int position,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ChatListsCompanion.insert(
+                id: id,
+                name: name,
+                position: position,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ChatListsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({chatListMembersRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (chatListMembersRefs) db.chatListMembers,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (chatListMembersRefs)
+                    await $_getPrefetchedData<
+                      ChatListRow,
+                      $ChatListsTable,
+                      ChatListMemberRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$ChatListsTableReferences
+                          ._chatListMembersRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$ChatListsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).chatListMembersRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.listId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ChatListsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $ChatListsTable,
+      ChatListRow,
+      $$ChatListsTableFilterComposer,
+      $$ChatListsTableOrderingComposer,
+      $$ChatListsTableAnnotationComposer,
+      $$ChatListsTableCreateCompanionBuilder,
+      $$ChatListsTableUpdateCompanionBuilder,
+      (ChatListRow, $$ChatListsTableReferences),
+      ChatListRow,
+      PrefetchHooks Function({bool chatListMembersRefs})
+    >;
+typedef $$ChatListMembersTableCreateCompanionBuilder =
+    ChatListMembersCompanion Function({
+      required String listId,
+      required String conversationId,
+      Value<int> rowid,
+    });
+typedef $$ChatListMembersTableUpdateCompanionBuilder =
+    ChatListMembersCompanion Function({
+      Value<String> listId,
+      Value<String> conversationId,
+      Value<int> rowid,
+    });
+
+final class $$ChatListMembersTableReferences
+    extends
+        BaseReferences<_$HelixDb, $ChatListMembersTable, ChatListMemberRow> {
+  $$ChatListMembersTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ChatListsTable _listIdTable(_$HelixDb db) =>
+      db.chatLists.createAlias('chat_list_members__list_id__chat_lists__id');
+
+  $$ChatListsTableProcessedTableManager get listId {
+    final $_column = $_itemColumn<String>('list_id')!;
+
+    final manager = $$ChatListsTableTableManager(
+      $_db,
+      $_db.chatLists,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_listIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ConversationsTable _conversationIdTable(_$HelixDb db) => db
+      .conversations
+      .createAlias('chat_list_members__conversation_id__conversations__id');
+
+  $$ConversationsTableProcessedTableManager get conversationId {
+    final $_column = $_itemColumn<String>('conversation_id')!;
+
+    final manager = $$ConversationsTableTableManager(
+      $_db,
+      $_db.conversations,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_conversationIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ChatListMembersTableFilterComposer
+    extends Composer<_$HelixDb, $ChatListMembersTable> {
+  $$ChatListMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$ChatListsTableFilterComposer get listId {
+    final $$ChatListsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.listId,
+      referencedTable: $db.chatLists,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListsTableFilterComposer(
+            $db: $db,
+            $table: $db.chatLists,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ConversationsTableFilterComposer get conversationId {
+    final $$ConversationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.conversationId,
+      referencedTable: $db.conversations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConversationsTableFilterComposer(
+            $db: $db,
+            $table: $db.conversations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ChatListMembersTableOrderingComposer
+    extends Composer<_$HelixDb, $ChatListMembersTable> {
+  $$ChatListMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$ChatListsTableOrderingComposer get listId {
+    final $$ChatListsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.listId,
+      referencedTable: $db.chatLists,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListsTableOrderingComposer(
+            $db: $db,
+            $table: $db.chatLists,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ConversationsTableOrderingComposer get conversationId {
+    final $$ConversationsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.conversationId,
+      referencedTable: $db.conversations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConversationsTableOrderingComposer(
+            $db: $db,
+            $table: $db.conversations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ChatListMembersTableAnnotationComposer
+    extends Composer<_$HelixDb, $ChatListMembersTable> {
+  $$ChatListMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$ChatListsTableAnnotationComposer get listId {
+    final $$ChatListsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.listId,
+      referencedTable: $db.chatLists,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatListsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.chatLists,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ConversationsTableAnnotationComposer get conversationId {
+    final $$ConversationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.conversationId,
+      referencedTable: $db.conversations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConversationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.conversations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ChatListMembersTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $ChatListMembersTable,
+          ChatListMemberRow,
+          $$ChatListMembersTableFilterComposer,
+          $$ChatListMembersTableOrderingComposer,
+          $$ChatListMembersTableAnnotationComposer,
+          $$ChatListMembersTableCreateCompanionBuilder,
+          $$ChatListMembersTableUpdateCompanionBuilder,
+          (ChatListMemberRow, $$ChatListMembersTableReferences),
+          ChatListMemberRow,
+          PrefetchHooks Function({bool listId, bool conversationId})
+        > {
+  $$ChatListMembersTableTableManager(_$HelixDb db, $ChatListMembersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ChatListMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ChatListMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ChatListMembersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> listId = const Value.absent(),
+                Value<String> conversationId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ChatListMembersCompanion(
+                listId: listId,
+                conversationId: conversationId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String listId,
+                required String conversationId,
+                Value<int> rowid = const Value.absent(),
+              }) => ChatListMembersCompanion.insert(
+                listId: listId,
+                conversationId: conversationId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ChatListMembersTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({listId = false, conversationId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (listId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.listId,
+                                referencedTable:
+                                    $$ChatListMembersTableReferences
+                                        ._listIdTable(db),
+                                referencedColumn:
+                                    $$ChatListMembersTableReferences
+                                        ._listIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (conversationId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.conversationId,
+                                referencedTable:
+                                    $$ChatListMembersTableReferences
+                                        ._conversationIdTable(db),
+                                referencedColumn:
+                                    $$ChatListMembersTableReferences
+                                        ._conversationIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ChatListMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $ChatListMembersTable,
+      ChatListMemberRow,
+      $$ChatListMembersTableFilterComposer,
+      $$ChatListMembersTableOrderingComposer,
+      $$ChatListMembersTableAnnotationComposer,
+      $$ChatListMembersTableCreateCompanionBuilder,
+      $$ChatListMembersTableUpdateCompanionBuilder,
+      (ChatListMemberRow, $$ChatListMembersTableReferences),
+      ChatListMemberRow,
+      PrefetchHooks Function({bool listId, bool conversationId})
     >;
 typedef $$SelfAccountTableCreateCompanionBuilder =
     SelfAccountCompanion Function({
@@ -25749,6 +27050,10 @@ class $HelixDbManager {
       $$AttachmentsTableTableManager(_db, _db.attachments);
   $$ConversationMembersTableTableManager get conversationMembers =>
       $$ConversationMembersTableTableManager(_db, _db.conversationMembers);
+  $$ChatListsTableTableManager get chatLists =>
+      $$ChatListsTableTableManager(_db, _db.chatLists);
+  $$ChatListMembersTableTableManager get chatListMembers =>
+      $$ChatListMembersTableTableManager(_db, _db.chatListMembers);
   $$SelfAccountTableTableManager get selfAccount =>
       $$SelfAccountTableTableManager(_db, _db.selfAccount);
   $$SelfDevicesTableTableManager get selfDevices =>
