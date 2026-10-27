@@ -75,7 +75,7 @@ void main() {
         );
       }
       final now = await reload(row);
-      expect(jsonDecode(now.payload!)['mentions'], isEmpty);
+      expect((jsonDecode(now.payload!) as Map)['mentions'], isEmpty);
       final revisions = revisionsOf(now);
       expect(revisions, hasLength(MessagesDao.maxRevisions));
       expect(revisions.first.body, 'v11');

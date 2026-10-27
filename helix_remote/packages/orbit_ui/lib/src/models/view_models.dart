@@ -917,6 +917,20 @@ class HelixMessage extends HelixValue {
   ];
 }
 
+/// A GIF the person already has on the phone, as the GIF tray shows it.
+class ChatGifItem extends HelixValue {
+  const ChatGifItem({required this.id, required this.image});
+
+  /// What choosing it names (the app's id for the file).
+  final String id;
+
+  /// The animated picture.
+  final ImageProvider image;
+
+  @override
+  List<Object?> get props => [id, image];
+}
+
 /// A message pinned in the chat, as the banner under the header shows it.
 class ChatPinnedMessage extends HelixValue {
   const ChatPinnedMessage({required this.id, required this.text, this.author});

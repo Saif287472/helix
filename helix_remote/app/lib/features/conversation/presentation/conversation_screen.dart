@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -513,6 +514,16 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         onReact: (id, emoji) {
           final rowid = _rowid(id);
           if (rowid != null) unawaited(_actions.react(rowid, emoji));
+        },
+        onLoadGifs: () async => [
+          for (final gif in await _actions.savedGifs())
+            ChatGifItem(id: '${gif.id}', image: FileImage(File(gif.path))),
+        ],
+        onSendGif: (id) async {
+          final file = await _actions.gifFile(int.tryParse(id) ?? -1);
+          if (file != null && mounted) {
+            unawaited(_composer.sendFiles([AttachmentDraft(file)]));
+          }
         },
         onStar: (id, {required starred}) {
           final rowid = _rowid(id);

@@ -196,6 +196,9 @@ class ChatGateway {
     ),
   );
 
+  /// The GIFs on this phone, the newest first, one per file (the GIF tray).
+  Future<List<AttachmentRow>> recentGifs() => _chats.recentGifs();
+
   /// Stars a message, or takes the star off: a private bookmark.
   Future<void> setStarred(int rowid, {required bool starred}) =>
       _chats.setStarred(rowid, starred: starred);

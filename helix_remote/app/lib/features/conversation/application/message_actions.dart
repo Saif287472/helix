@@ -1,7 +1,11 @@
+import 'dart:io' show File;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
+import 'package:helix_remote/core/platform/attachment_picker.dart'
+    show PickedFile, PickedKind;
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -67,6 +71,31 @@ final class ConversationActions {
     MessageStatus.read,
     MessageStatus.viewed,
   };
+
+  /// The GIFs on this phone for the tray: those whose file is still there.
+  Future<List<({int id, String path})>> savedGifs() async {
+    final rows = await (await _gateway).recentGifs();
+    return [
+      for (final row in rows)
+        if (row.localPath != null && File(row.localPath!).existsSync())
+          (id: row.id, path: row.localPath!),
+    ];
+  }
+
+  /// A GIF from the tray as a file to send, or null when it is gone.
+  Future<PickedFile?> gifFile(int attachmentId) async {
+    final path = await (await _gateway).localPathOf(attachmentId);
+    if (path == null) return null;
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    return PickedFile(
+      path: path,
+      name: 'GIF.gif',
+      mime: 'image/gif',
+      size: file.lengthSync(),
+      kind: PickedKind.image,
+    );
+  }
 
   /// Stars or unstars a message (a private bookmark).
   Future<void> star(int rowid, {required bool starred}) async {

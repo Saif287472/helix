@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 34 | see "Already built" |
+| Already built | 35 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 3 | A6, C5, E4 |
+| M (about 10 files) | 2 | C5, E4 |
 | L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -75,7 +75,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | A3 | Pin message in a chat | **Built 2026-10-27** | done | New `pin` content action (protocol `bodies/actions.dart`, `content_pin.json`, CONTENT_V2.md), DB schema 6 `messages.pinned_at`, engine `ChatsService.pinMessage` and `apply.dart` `_pin`, backup record; `orbit_ui` pinned banner and menu items; app `pinned_messages.dart`. A chat keeps 3; any member may pin. Not done: a "Pinned messages" list page; pinning a message for a limited time. |
 | A4 | Starred (saved) messages | **Built 2026-10-27** | done | DB schema 6 `messages.starred_at` (private, in the backup), engine `setStarred`/`watchStarred`, `orbit_ui` menu item, bubble star and `StarredMessagesScreen`; app `starred_messages.dart`, route `/settings/starred`, a row on You. |
 | A5 | Stickers and animated emoji | Partial (`sticker` type exists, UI "needs newer version") | **L** | Draw sticker bubble; sticker picker and packs (storage, download, a pack format like `THEME_PACK_FORMAT.md`); sticker maker (image to webp via `FlutterMediaProcessor`); send path in engine. New pack format means a doc and tests. |
-| A6 | GIF picker | Partial (GIF attachments exist) | **M** | A provider (Tenor or Giphy) leaks the query to a third party and breaks the privacy claims; only an in-app saved-GIFs list is safe. Needs a privacy decision first. |
+| A6 | GIF picker | **Built 2026-10-27** (saved GIFs only, as chosen) | done | `MessagesDao.recentGifs`, `orbit_ui` `gif_tray.dart` and a GIF tile in the attach sheet, app `savedGifs`/`gifFile`. No search and no third party; the tray is the GIFs already on the phone. |
 | A7 | Live and motion photos | Not built | **L** | Picker plugin support on Android, `MediaSanitizer` handling of the embedded video, a new `MediaItem` kind (proto change plus fixtures), viewer. Sizeable and low value. |
 | A8 | Voice message transcripts (on-device) | Not built | **L** | Needs an on-device speech model (new plugin and platform code, large download), an adapter file in `app/core/platform/`, a transcript store (cache or DB column), UI on the voice bubble. Privacy gain is that nothing leaves the phone. |
 | A9 | Rich link previews | **Built 2026-10-27** (opt-in) | done | Engine `sendText(linkPreview:)`; app `link_preview_source.dart` (HTTPS/443, public hosts, 256 KiB, 6 s, no picture, no cookies), a composer hook, Settings > Chats > Links switch, **off by default**. The reader fetches nothing. Not done: a preview picture; a preview while typing. |

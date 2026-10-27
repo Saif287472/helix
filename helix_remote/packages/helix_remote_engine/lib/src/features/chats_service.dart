@@ -121,6 +121,10 @@ final class ChatsService {
     int limit = 200,
   }) => _db.messagesDao.watchMessagesWithLinks(conversationId, limit: limit);
 
+  /// The GIFs on this device, newest first, one per file: the GIF tray.
+  Future<List<AttachmentRow>> recentGifs({int limit = 60}) =>
+      _db.messagesDao.recentGifs(limit: limit);
+
   /// A message of [conversationId] by its content id, whoever wrote it (a
   /// reply quote or a read receipt names it that way).
   Future<MessageRow?> findMessage(String conversationId, String messageId) =>

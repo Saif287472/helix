@@ -9,6 +9,7 @@ import 'package:orbit_ui/src/components/bars.dart';
 import 'package:orbit_ui/src/components/button.dart';
 import 'package:orbit_ui/src/components/chip_tag.dart';
 import 'package:orbit_ui/src/components/composer.dart';
+import 'package:orbit_ui/src/components/gif_tray.dart';
 import 'package:orbit_ui/src/components/icon_button.dart';
 import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
@@ -270,6 +271,8 @@ class ChatActions {
     this.onPickFiles,
     this.onStar,
     this.onPin,
+    this.onLoadGifs,
+    this.onSendGif,
     this.onVote,
     this.onRsvp,
     this.onCreatePoll,
@@ -382,6 +385,11 @@ class ChatActions {
   /// Pins or unpins a message for everyone in the chat; the sentence to show
   /// when it could not (a chat keeps three). With it set, the menu offers Pin.
   final FutureOr<String?> Function(String id, {required bool pinned})? onPin;
+
+  /// The GIFs on the phone for the GIF tray, and sending one of them; both set
+  /// puts GIF in the attach sheet.
+  final FutureOr<List<ChatGifItem>> Function()? onLoadGifs;
+  final ValueChanged<String>? onSendGif;
 
   /// An answer of a poll was tapped: the poll, and every answer of yours now
   /// (an empty list takes your vote back).
@@ -1341,6 +1349,8 @@ class _ChatScreenState extends State<ChatScreen> {
     // A second row for what is made here rather than picked: a poll, an
     // event. Each shows only where the app can send it.
     final made = [
+      if (widget.actions.onLoadGifs != null && widget.actions.onSendGif != null)
+        tile(OrbitIcons.gif, 5, 'GIF', _gifTray),
       if (widget.actions.onCreatePoll != null)
         tile(OrbitIcons.chartBarHorizontal, 2, 'Poll', _newPoll),
       if (widget.actions.onCreateEvent != null)
@@ -1371,6 +1381,13 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  void _gifTray() {
+    final load = widget.actions.onLoadGifs;
+    final send = widget.actions.onSendGif;
+    if (load == null || send == null) return;
+    showOrbitGifSheet(context, load: load, onPick: send);
   }
 
   void _newPoll() {

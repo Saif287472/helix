@@ -99,6 +99,13 @@ the message payload; a tap calls `vote` / `rsvp` and the bubble redraws from the
 Polls are single or multiple choice; closing a poll (`closes_at`) is honoured, not offered. Events
 have a title, a start, and a place; plus-ones and an end time are not offered.
 
+## GIF tray
+
+The attach sheet's **GIF** opens a tray of the GIFs already on this phone, sent or received, newest first, one per file
+(`MessagesDao.recentGifs`, `ConversationActions.savedGifs`); touching one sends it again through the ordinary file
+path (`composer.sendFiles`, so it is sanitised like any picked file). Nothing contacts a website: there is no GIF
+search. A GIF whose file has gone is not offered.
+
 ## Edit history
 
 An edited message keeps what it said before (the last 10 versions, on this device; `revisionsOf`). Message info lists

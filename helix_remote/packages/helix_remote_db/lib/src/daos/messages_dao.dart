@@ -497,6 +497,37 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     );
   }
 
+  /// The GIFs on this device, the most recently sent or received first, one per
+  /// distinct file (the same GIF in many chats is listed once): what the GIF
+  /// tray offers. Only ones with a copy on the device, and not of a message
+  /// deleted for everyone.
+  Future<List<AttachmentRow>> recentGifs({int limit = 60}) async {
+    final rows =
+        await (select(attachments).join([
+                innerJoin(
+                  messages,
+                  messages.localRowid.equalsExp(attachments.messageRowid),
+                ),
+              ])
+              ..where(
+                attachments.kind.equals('gif') &
+                    attachments.localPath.isNotNull() &
+                    messages.deletedAt.isNull(),
+              )
+              ..orderBy([OrderingTerm.desc(messages.sentAt)])
+              ..limit(limit * 4))
+            .get();
+    final seen = <String>{};
+    final out = <AttachmentRow>[];
+    for (final row in rows) {
+      final gif = row.readTable(attachments);
+      if (!seen.add(base64Encode(gif.digest))) continue;
+      out.add(gif);
+      if (out.length == limit) break;
+    }
+    return out;
+  }
+
   /// The messages of one conversation whose text holds a web link, newest
   /// first, up to [limit]; deleted messages are left out.
   Stream<List<MessageRow>> watchMessagesWithLinks(
