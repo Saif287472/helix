@@ -80,6 +80,10 @@ user asks.
     turning it off sends it.
   - `local_auth` 3: App lock on, swipe the app away, reopen and unlock (app and
     admin console).
+  - `geolocator` 14: Attach > Location > Share live for 15 minutes; the system
+    prompt appears, a notification says a live location is shared, switch the
+    screen off and move: the other phone's bubble follows. Stop sharing (or
+    the time running out) removes the notification and the place.
 
 ## Remote Server
 

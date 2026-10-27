@@ -14,6 +14,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Sharing a live location: the place is read only while a share the
+         person started is running, under a notification that says so. The
+         foreground service lets it keep running with the screen off. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
     <!-- Camera and microphone are used when the person taps Camera or holds the
          microphone, not required to install: a tablet without a camera still
          runs the app, and the Camera option is simply not offered. -->

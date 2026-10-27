@@ -91,6 +91,7 @@ stays **pending** until one is written here with its date and phone. The checks 
 | `connectivity_plus` | `7.3.1` | app | Offline detection for the outbox banner; a regression looks online while queueing. | pending |
 | `firebase_core` | `4.15.0` | app | FCM initialisation (the 2026-10-09 review found it was never initialised in the UI isolate, E-01). | pending (with the push checks) |
 | `firebase_messaging` | `16.7.0` | app | Wake-up pushes; no test reaches FCM. | pending (with the push checks) |
+| `geolocator` | `14.1.2` | app | Live location sharing (E4): fine and coarse location permission and, on Android, a foreground service with a visible notification while a share runs. Read only while a share is running, behind `LocationSource` in `core/platform/location_source.dart`; no test reaches the GPS. | pending |
 | `local_auth` | `3.0.1` | app, admin | App lock; on Android it needs a `FragmentActivity` (B-01), which only a phone shows. | pending |
 | `shared_preferences` | `2.5.5` | admin | Console settings (server address, App lock switch). Low risk. | not needed |
 

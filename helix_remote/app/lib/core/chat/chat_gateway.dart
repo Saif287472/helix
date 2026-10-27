@@ -7,6 +7,7 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show
         EventBody,
         LinkPreview,
+        LocationBody,
         Mention,
         MessageRef,
         PollBody,
@@ -195,6 +196,52 @@ class ChatGateway {
       locationText: place.isEmpty ? null : place,
     ),
   );
+
+  /// Sends where this phone is, once.
+  Future<MessageRow> sendLocation(
+    String conversationId, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+  }) => _chats.sendBody(
+    conversationId,
+    LocationBody(latE7: latE7, lngE7: lngE7, accuracyM: accuracyM),
+  );
+
+  /// Starts a live location in [conversationId] for [duration]; the message
+  /// it returns is the share.
+  Future<MessageRow> startLiveLocation(
+    String conversationId, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+    required Duration duration,
+  }) => _chats.startLiveLocation(
+    conversationId,
+    latE7: latE7,
+    lngE7: lngE7,
+    accuracyM: accuracyM,
+    duration: duration,
+  );
+
+  /// Sends the next position of the share in [rowid]; false when it has ended.
+  Future<bool> updateLiveLocation(
+    int rowid, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+  }) => _chats.updateLiveLocation(
+    rowid,
+    latE7: latE7,
+    lngE7: lngE7,
+    accuracyM: accuracyM,
+  );
+
+  /// Ends the share in [rowid] and tells the chat.
+  Future<void> stopLiveLocation(int rowid) => _chats.stopLiveLocation(rowid);
+
+  /// The shares still running, to carry on after a restart.
+  Future<List<MessageRow>> activeLiveShares() => _chats.activeLiveShares();
 
   /// The GIFs on this phone, the newest first, one per file (the GIF tray).
   Future<List<AttachmentRow>> recentGifs() => _chats.recentGifs();

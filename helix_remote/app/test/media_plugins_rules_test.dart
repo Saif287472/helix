@@ -67,7 +67,23 @@ void main() {
     // person chooses.
     expect(manifest, isNot(contains('READ_MEDIA_IMAGES')));
     expect(manifest, isNot(contains('READ_EXTERNAL_STORAGE')));
-    expect(manifest, isNot(contains('ACCESS_FINE_LOCATION')));
+    // Location is asked for by live location sharing (E4) and nothing else:
+    // it is declared with a foreground service of the location type, and a
+    // phone without it still installs the app. No media code reads it.
+    expect(manifest, contains('FOREGROUND_SERVICE_LOCATION'));
+    expect(
+      RegExp(
+        'uses-feature android:name="android.hardware.location" '
+        'android:required="false"',
+      ).hasMatch(manifest),
+      isTrue,
+    );
+    final users = [
+      for (final f in sources)
+        if (f.readAsStringSync().contains('package:geolocator/')) norm(f.path),
+    ];
+    expect(users, hasLength(1));
+    expect(users.single, endsWith('core/platform/location_source.dart'));
   });
 
   test('no media code logs, and no plugin error text reaches a screen', () {

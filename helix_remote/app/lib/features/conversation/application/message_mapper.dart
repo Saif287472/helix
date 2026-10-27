@@ -99,12 +99,34 @@ HelixMessageContent contentOf(MessageRow row, {String? selfId, DateTime? now}) {
       return mediaPlaceholderContent(row.body ?? '');
     case 'location':
       final label = (payload['label'] as String?)?.trim() ?? '';
+      final address = (payload['address'] as String?)?.trim() ?? '';
+      final place = _placeOf(payload);
       return HelixLocationContent(
         label: label.isEmpty ? 'Location' : label,
-        address: (payload['address'] as String?) ?? '',
+        address: address.isEmpty ? (place ?? '') : address,
+        openable: place != null,
       );
     case 'live_location':
-      return const HelixLocationContent(label: 'Live location');
+      final ends = payload['expires_at'];
+      final endsAt = ends is int
+          ? DateTime.fromMillisecondsSinceEpoch(ends, isUtc: true)
+          : null;
+      final active =
+          payload['ended'] != true &&
+          payload['state'] != 'stop' &&
+          endsAt != null &&
+          endsAt.isAfter(now ?? DateTime.now());
+      return HelixLocationContent(
+        label: 'Live location',
+        live: HelixLiveShare(
+          active: active,
+          statusLabel: active
+              ? 'Live until ${formatClock(endsAt)}'
+              : 'Live location ended',
+          mine: row.outgoing,
+        ),
+        openable: active && _placeOf(payload) != null,
+      );
     case 'contact':
       final numbers = [
         for (final n in (payload['numbers'] as List? ?? const []))
@@ -283,4 +305,13 @@ HelixReplyQuote quoteOf(
     text: previewTextOf(quoted),
     kind: previewKindOf(quoted),
   );
+}
+
+/// "23.6810, 90.3560" for a message that carries a place, else null (a share
+/// that has ended has none).
+String? _placeOf(Map<String, Object?> payload) {
+  final lat = payload['lat_e7'];
+  final lng = payload['lng_e7'];
+  if (lat is! int || lng is! int || (lat == 0 && lng == 0)) return null;
+  return '${(lat / 1e7).toStringAsFixed(4)}, ${(lng / 1e7).toStringAsFixed(4)}';
 }

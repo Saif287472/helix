@@ -31,12 +31,12 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 35 | see "Already built" |
+| Already built | 36 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 2 | C5, E4 |
+| M (about 10 files) | 0 | none left |
 | L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
-| Not planned | 5 | see "Not planned" |
+| Not planned | 6 | see "Not planned" |
 
 ## Already built (no work; listed so they are not requested twice)
 
@@ -62,6 +62,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | Storage page (free space by kind), report user, block | `settings/storage_page.dart`, reports in server |
 | Text formatting `*bold*` `_italic_` `~strike~` `` `mono` `` (built 2026-10-26, A1) | `orbit_ui` `components/timeline.dart` `_formatted` |
 | Find a group by the name of someone in it (built 2026-10-26, B7) | `app/features/chats/application/chat_search.dart` |
+| Live location (built 2026-10-27, E4) | `core/location/`, `core/platform/location_source.dart`; engine `chats_service.dart` |
 | Echo cancellation, noise suppression, auto gain on calls (built 2026-10-26, D5) | `helix_remote_calls` `web_rtc_call_engine.dart` |
 | Clear chat history (B5) and the "online" audience (C2) | `conversation_settings.dart`; `PrivacySettings.online` |
 | Personal server, server switching, anomaly log | sign-in advanced mode; `core/diagnostics/anomaly_log.dart` |
@@ -105,7 +106,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | C2 | Show your own "online" separately | **Already built** | n/a | `PrivacySettings.online` and the privacy page row. |
 | C3 | Chat lock (per-chat biometric lock, hidden list) | Not built | **L** | `conversations.locked` (schema 6); a Locked folder in the chats tab; biometric prompt (`app_lock.dart` generalised); redacted notification previews (`core/notifications/`); excluded from search and from `watchSharedAttachments`; a note that backup contains locked chats. |
 | C4 | Passkeys (WebAuthn) in place of SMS | Not built | **L** | New identity endpoints (server `identity` module, `proto/modules/identity.dart`, fixtures), a platform plugin, recovery-flow changes. A new auth mechanism: needs an ADR and crypto review note. Do not weaken the password-derived key rule. |
-| C5 | Biometric-protected backup key | Not built | **M** | Keystore wrapper in `app/core/security/`, backup page toggle; engine untouched. |
+| C5 | Biometric-protected backup key | **Skipped by decision 2026-10-27** | n/a | The recovery secret exists for the day the phone is lost; keeping it behind biometrics on that phone adds no protection against that. |
 | C6 | Usernames in place of numbers | Built (`~name`, share link, "find me by ~name") | n/a | Nothing to do. |
 | C7 | Data export (account report) | **Already built** | n/a | Server `GET /v1/account/export` (compliance module) and Settings > Account > Export; the backlog row was wrong. |
 | C8 | Contact share links with expiry and pre-approval | Contradicts a product rule | n/a | The app has no contact requests by design. The `/u/<name>` link exists; expiry only is M. |
@@ -129,7 +130,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | E1 | Communities (umbrella of groups) | Not built | **L+** | New server module, protocol, engine and app feature; new package registrations in `architecture_rules`. Plan and ADR first. |
 | E2 | Channels (one-way broadcast) | Not built | **L+** | Unencrypted or fan-out model conflicts with the E2EE design; needs an ADR. |
 | E3 | Group events and RSVPs | **Built 2026-10-26** | done | Same slices as A2 (`_Event`, `OrbitNewEventPage`). Not done: end time, plus-ones, calendar export. The zone is sent as `UTC±HH:MM` (documented in CONTENT_V2.md). |
-| E4 | Live location | Partial (engine; no updates sent) | **M** | Location plugin, send updates, map-less bubble. Permissions and battery need a decision. |
+| E4 | Live location | **Built 2026-10-27** | done | Engine `ChatsService.startLiveLocation / updateLiveLocation / stopLiveLocation` and the receive side in `apply.dart`; `MessagesDao.endLiveLocations` scrubs a finished share's place; app `LocationSource` (geolocator), `LiveLocationService`, the Location tile and sheet, and a map-less bubble (coordinates, "Live until 14:30", Stop sharing, tap opens a maps app). 15 min, 1 h or 8 h, or send the place once. Android foreground service with a notification while a share runs. Not done: a real map, sharing to several chats at once from one screen, a battery-saver mode. Needs a phone check (location permission, the foreground notification, screen off). |
 
 ## F. AI
 
@@ -142,6 +143,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 - View-once that "cannot be screenshotted": screenshots are allowed everywhere by product rule.
 - Contact request workflows: there are no contact requests by design.
 - AI features that send content to a server (F1).
+- Biometric-protected backup key (C5): no protection against the loss it exists for.
 - Third-party GIF or sticker search that leaks queries (A6) until a privacy design exists.
 - Channels and Communities as designed by WhatsApp (E1, E2) without an ADR.
 

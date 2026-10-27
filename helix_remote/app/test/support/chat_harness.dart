@@ -210,7 +210,7 @@ class TestChatGateway extends ChatGateway {
     await _answer(rowid, 'rsvps', {'state': state.wire, 'plus_one': false});
   }
 
-  Future<void> _sendCard(
+  Future<MessageRow> _sendCard(
     String conversationId,
     String kind,
     Map<String, Object?> payload,
@@ -263,6 +263,74 @@ class TestChatGateway extends ChatGateway {
       'location_text': ?(place.isEmpty ? null : place),
     });
   }
+
+  /// Live shares started here that were then stopped.
+  final Set<int> stoppedLive = {};
+
+  @override
+  Future<MessageRow> sendLocation(
+    String conversationId, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+  }) {
+    log.add('sendLocation:$conversationId:$latE7,$lngE7');
+    return _sendCard(conversationId, 'location', {
+      'lat_e7': latE7,
+      'lng_e7': lngE7,
+      'accuracy_m': accuracyM,
+    });
+  }
+
+  @override
+  Future<MessageRow> startLiveLocation(
+    String conversationId, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+    required Duration duration,
+  }) {
+    log.add('startLive:$conversationId:${duration.inMinutes}m');
+    return _sendCard(conversationId, 'live_location', {
+      'session_id': 'live${_n++}',
+      'state': 'start',
+      'lat_e7': latE7,
+      'lng_e7': lngE7,
+      'accuracy_m': accuracyM,
+      'expires_at': testNow.toUtc().add(duration).millisecondsSinceEpoch,
+    });
+  }
+
+  @override
+  Future<bool> updateLiveLocation(
+    int rowid, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+  }) async {
+    if (stoppedLive.contains(rowid)) return false;
+    log.add('updateLive:$rowid:$latE7,$lngE7');
+    return true;
+  }
+
+  @override
+  Future<void> stopLiveLocation(int rowid) async {
+    log.add('stopLive:$rowid');
+    stoppedLive.add(rowid);
+    final row = await db.messagesDao.byRowid(rowid);
+    if (row == null) return;
+    final payload = jsonDecode(row.payload ?? '{}') as Map<String, Object?>;
+    await db.messagesDao.updatePayload(
+      rowid,
+      liveLocationEnd(jsonEncode({...payload, 'state': 'stop'}), testNow),
+    );
+  }
+
+  @override
+  Future<List<MessageRow>> activeLiveShares() async => [
+    for (final row in await db.messagesDao.activeLiveShares(testNow))
+      if (!stoppedLive.contains(row.localRowid)) row,
+  ];
 
   /// Makes every media send fail (the engine refused or the disk is full).
   bool failMedia = false;

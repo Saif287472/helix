@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/diagnostics/anomaly_log.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/location/live_location_service.dart';
 import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 
@@ -78,6 +79,8 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     }
     if (runtime.engine.status != EngineStatus.running) return;
     runtime.engine.reconnect();
+    // A live location shared before the app was closed carries on.
+    unawaited(ref.read(liveLocationServiceProvider).resume());
     try {
       await runtime.engine.syncOnce();
     } on Object {

@@ -89,6 +89,19 @@ conversation_routes.dart    /chat/:id and its sub-routes
   roster added without an announcement; the timeline shows the engine's `member_unconfirmed` notice
   (`core/chat/message_semantics.dart`). The groups feature owns the logic.
 
+## Location
+
+The attach sheet's Location tile offers the place once, or a live share for 15 minutes, an hour
+or 8 hours. `ConversationActions.shareLocation` hands it to `core/location/LiveLocationService`,
+which asks `LocationSource` (the one file that knows the `geolocator` plugin) and sends through the
+gateway (`ChatsService.sendBody`, `startLiveLocation`, `updateLiveLocation`, `stopLiveLocation`).
+The service outlives the screen: one position stream serves every running share, updates go out at
+most every 10 s, and a share ends at its time or at Stop sharing. On Android the stream is a
+foreground service with a notification; the service resumes shares after a restart without asking
+for permission again. The bubble has no map: a ruled tile, the coordinates, "Live until 14:30" or
+"Live location ended", and a tap opens a maps app (`geo:` on Android, OpenStreetMap elsewhere).
+Once a share has ended its coordinates are gone from the row.
+
 ## Polls and events
 
 A poll or an event is made from the attach sheet (Poll, Event): `orbit_ui`'s

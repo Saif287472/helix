@@ -58,6 +58,7 @@ dependencies:
   mobile_scanner: ^7.2.0
   flutter_contacts: ^2.5.0
   device_info_plus: ^13.2.0
+  geolocator: ^14.0.2
   url_launcher: ^6.3.2
   local_auth: ^3.0.1
   # Media (see docs/dependencies/DEPENDENCY_RISK_REGISTER.md, "Media plugins").

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
+import 'package:helix_remote/core/chat/message_semantics.dart' show payloadOf;
+import 'package:helix_remote/core/location/live_location_service.dart';
 import 'package:helix_remote/core/platform/attachment_picker.dart'
     show PickedFile, PickedKind;
 import 'package:helix_remote/core/platform/chat_platform.dart';
@@ -180,6 +182,39 @@ final class ConversationActions {
     } on Object {
       return 'The event could not be sent.';
     }
+  }
+
+  /// Shares where the phone is: once ([live] null) or live for [live]. Null
+  /// when it went, else the sentence to show.
+  Future<String?> shareLocation(Duration? live) {
+    final service = _ref.read(liveLocationServiceProvider);
+    return live == null
+        ? service.sendOnce(conversationId)
+        : service.startLive(conversationId, live);
+  }
+
+  /// Stops the live location in [rowid].
+  Future<void> stopLive(int rowid) =>
+      _ref.read(liveLocationServiceProvider).stop(rowid);
+
+  /// Where a maps app should open for the location in [rowid]: a `geo:` link
+  /// on Android (which maps app is the phone's choice), a map page elsewhere.
+  /// Null when the message holds no place (a live share that has ended).
+  Future<Uri?> mapLinkOf(int rowid, {required bool android}) async {
+    final row = await (await _gateway).message(rowid);
+    if (row == null) return null;
+    final payload = payloadOf(row);
+    final lat = payload['lat_e7'];
+    final lng = payload['lng_e7'];
+    if (lat is! int || lng is! int || (lat == 0 && lng == 0)) return null;
+    final at =
+        '${(lat / 1e7).toStringAsFixed(6)},${(lng / 1e7).toStringAsFixed(6)}';
+    return android
+        ? Uri.parse('geo:$at?q=$at')
+        : Uri.parse(
+            'https://www.openstreetmap.org/?mlat=${at.split(',')[0]}'
+            '&mlon=${at.split(',')[1]}#map=16/${at.replaceFirst(',', '/')}',
+          );
   }
 
   /// The menu for [rowid], or null when the message is gone.

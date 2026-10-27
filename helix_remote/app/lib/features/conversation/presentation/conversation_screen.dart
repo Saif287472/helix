@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -205,6 +205,16 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
           mine: l.mine,
         ),
     ];
+  }
+
+  Future<void> _openLocation(int rowid) async {
+    final uri = await _actions.mapLinkOf(rowid, android: Platform.isAndroid);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on Object {
+      // No maps app: the card still shows the place.
+    }
   }
 
   Future<void> _openLink(String url) async {
@@ -540,6 +550,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         onRsvp: (id, answer) {
           final rowid = _rowid(id);
           if (rowid != null) unawaited(_actions.rsvp(rowid, answer));
+        },
+        onShareLocation: model.composerDisabledReason == null
+            ? _actions.shareLocation
+            : null,
+        onOpenLocation: (id) {
+          final rowid = _rowid(id);
+          if (rowid != null) unawaited(_openLocation(rowid));
+        },
+        onStopLive: (id) {
+          final rowid = _rowid(id);
+          if (rowid != null) unawaited(_actions.stopLive(rowid));
         },
         onCreatePoll: model.composerDisabledReason == null
             ? _actions.sendPoll
