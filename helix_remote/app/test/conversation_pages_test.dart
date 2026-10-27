@@ -209,6 +209,8 @@ void main() {
       gateway,
     ) async {
       await open(tester, gateway);
+      // The page is a little longer since it offers a wallpaper.
+      await tester.ensureVisible(find.text('Block Bob'));
       await tester.tap(find.text('Block Bob'));
       await tester.pumpAndSettle();
       expect(find.text('Block Bob?'), findsOneWidget);
