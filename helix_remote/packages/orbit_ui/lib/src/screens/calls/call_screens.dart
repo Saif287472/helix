@@ -22,6 +22,8 @@ import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 import 'package:orbit_ui/src/theme/pattern_painter.dart';
 import 'package:orbit_ui/src/window/window_scaffold.dart';
 
+part 'group_call_screen.dart';
+
 /// Where a call is (`contracts/calls.md`). The prototype's `outgoing` and
 /// `ringing` are both [dialing], told apart by [CallModel.statusText].
 enum CallStage { dialing, incoming, connecting, active, ended }

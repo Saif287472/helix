@@ -246,11 +246,11 @@ void main() {
       }
 
       final sorted = sortWorstFirst(results);
-      expect(
-        sorted.map((r) => r.spec.key),
-        <String>['chats', 'settings', 'group'],
-        reason: '40 changed pixels is the worst, then 4, then 0',
-      );
+      expect(sorted.map((r) => r.spec.key), <String>[
+        'chats',
+        'settings',
+        'group',
+      ], reason: '40 changed pixels is the worst, then 4, then 0');
 
       writeOrbitResultsJson(
         results,

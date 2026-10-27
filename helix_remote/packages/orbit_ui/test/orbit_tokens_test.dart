@@ -147,11 +147,11 @@ void main() {
     final orbit = await load('orbit');
     expect(orbit.wordmarkGradient.colors, hasLength(3));
     expect(orbit.wordmarkGradient.stops, [0.0, 0.48, 1.0]);
-    expect(
-      orbit.brandGradient.colors,
-      [orbit.callTop, orbit.callMid, orbit.callBottom],
-      reason: 'the brand gradient is built from the call colours',
-    );
+    expect(orbit.brandGradient.colors, [
+      orbit.callTop,
+      orbit.callMid,
+      orbit.callBottom,
+    ], reason: 'the brand gradient is built from the call colours');
   });
 
   test('a pattern is a name and its settings, never a picture', () async {
