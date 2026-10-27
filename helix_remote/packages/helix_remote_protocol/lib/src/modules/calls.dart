@@ -245,12 +245,53 @@ enum CallEndReason implements WireEnum {
   /// Both sides called each other at once and this call lost (the smaller
   /// call id wins on both ends).
   glare('glare'),
+
+  /// A group call that already has [CallRoom.maxParticipants] people.
+  full('full'),
   unknown('unknown');
 
   const CallEndReason(this.wire);
 
   @override
   final String wire;
+}
+
+/// The room a pairwise call belongs to, when it is one link of a group call
+/// (ADR-034). Sealed inside the call signal like everything else: the server
+/// never sees a room.
+final class CallRoom {
+  const CallRoom({
+    required this.id,
+    required this.group,
+    this.participants = const [],
+  });
+
+  /// The most people in one room.
+  static const maxParticipants = 4;
+
+  /// Chosen by whoever started the room; the same on every link.
+  final String id;
+
+  /// The group conversation the call was started in (`group:<id>`).
+  final String group;
+
+  /// The accounts in the room when this offer was made, the sender included.
+  /// A person who accepts offers to every other one of them.
+  final List<String> participants;
+
+  JsonMap toJson() => {'id': id, 'group': group, 'participants': participants};
+
+  factory CallRoom.fromJson(JsonReader json) {
+    final people = json.strings('participants');
+    if (people.length > maxParticipants) {
+      throw ProtocolFormatException('too many', path: 'participants');
+    }
+    return CallRoom(
+      id: json.nonEmpty('id'),
+      group: json.nonEmpty('group'),
+      participants: people,
+    );
+  }
 }
 
 /// One ICE candidate, as the platform's WebRTC reports it.
@@ -298,6 +339,7 @@ final class CallSignalPayload {
     this.candidates = const [],
     this.reason,
     this.screen,
+    this.room,
     this.version = currentVersion,
   });
 
@@ -330,6 +372,10 @@ final class CallSignalPayload {
   /// cropping it.
   final bool? screen;
 
+  /// `offer`: this call is one link of a group call (ADR-034). Peers that do
+  /// not know it ring a plain call.
+  final CallRoom? room;
+
   JsonMap toJson() => compact({
     'v': version,
     'type': type.wire,
@@ -341,6 +387,7 @@ final class CallSignalPayload {
         : [for (final c in candidates) c.toJson()],
     'reason': reason?.wire,
     'screen': screen,
+    'room': room?.toJson(),
   });
 
   Uint8List encode() => Uint8List.fromList(utf8.encode(jsonEncode(toJson())));
@@ -377,6 +424,7 @@ final class CallSignalPayload {
         orElse: CallEndReason.unknown,
       ),
       screen: json.has('screen') ? json.boolean('screen') : null,
+      room: json.has('room') ? CallRoom.fromJson(json.object('room')) : null,
     );
   }
 

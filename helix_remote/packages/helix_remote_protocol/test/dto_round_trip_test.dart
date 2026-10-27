@@ -590,6 +590,41 @@ void main() {
         isNull,
       );
 
+      // One link of a group call carries its room; a plain offer carries none.
+      final linked = expectRoundTrip(
+        const CallSignalPayload(
+          type: CallSignalType.offer,
+          callId: 'call-0192a4f0',
+          media: CallMedia.video,
+          sdp: 'v=0',
+          room: CallRoom(
+            id: 'room-1',
+            group: 'group:g1',
+            participants: ['alice', 'bob'],
+          ),
+        ),
+        (v) => v.toJson(),
+        CallSignalPayload.fromJson,
+      );
+      expect(linked.room!.participants, ['alice', 'bob']);
+      expect(offer.room, isNull);
+      expect(
+        () => CallRoom.fromJson(
+          JsonReader.of({
+            'id': 'r',
+            'group': 'group:g',
+            'participants': ['a', 'b', 'c', 'd', 'e'],
+          }),
+        ),
+        throwsFormatException,
+      );
+      expect(
+        CallSignalPayload.fromJson(
+          JsonReader.decode('{"type":"end","call_id":"c","reason":"full"}'),
+        ).reason,
+        CallEndReason.full,
+      );
+
       // Newer peers: unknown types and reasons decode, never throw.
       final future = CallSignalPayload.fromJson(
         JsonReader.decode(
