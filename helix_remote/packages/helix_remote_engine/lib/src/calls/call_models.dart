@@ -79,6 +79,8 @@ final class CallSnapshot {
     this.end,
     this.muted = false,
     this.cameraOn = false,
+    this.screenSharing = false,
+    this.peerScreenSharing = false,
   });
 
   final String callId;
@@ -101,6 +103,12 @@ final class CallSnapshot {
   final bool muted;
   final bool cameraOn;
 
+  /// This device is sharing its screen in the call.
+  final bool screenSharing;
+
+  /// The other side is sharing theirs (their video is a screen, not a face).
+  final bool peerScreenSharing;
+
   bool get isIncoming => direction == CallDirection.incoming;
 
   /// Still going (not [CallPhase.ended]).
@@ -113,6 +121,8 @@ final class CallSnapshot {
     CallEnd? end,
     bool? muted,
     bool? cameraOn,
+    bool? screenSharing,
+    bool? peerScreenSharing,
   }) => CallSnapshot(
     callId: callId,
     peer: peer,
@@ -125,6 +135,8 @@ final class CallSnapshot {
     end: end ?? this.end,
     muted: muted ?? this.muted,
     cameraOn: cameraOn ?? this.cameraOn,
+    screenSharing: screenSharing ?? this.screenSharing,
+    peerScreenSharing: peerScreenSharing ?? this.peerScreenSharing,
   );
 
   @override

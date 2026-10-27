@@ -202,6 +202,11 @@ enum CallSignalType implements WireEnum {
 
   /// Hang-up, decline, busy, cancel: [CallSignalPayload.reason] says which.
   end('end'),
+
+  /// What this side's video now is, mid-call (live only): [CallSignalPayload.screen]
+  /// says whether it is a shared screen rather than the camera. Peers that do
+  /// not know it decode it as [unknown] and ignore it.
+  media('media'),
   unknown('unknown');
 
   const CallSignalType(this.wire);
@@ -292,6 +297,7 @@ final class CallSignalPayload {
     this.sdp,
     this.candidates = const [],
     this.reason,
+    this.screen,
     this.version = currentVersion,
   });
 
@@ -319,6 +325,11 @@ final class CallSignalPayload {
   /// `end`.
   final CallEndReason? reason;
 
+  /// `media`: the sender's video is a shared screen (true), or the camera
+  /// again (false). A viewer fits a screen inside its window instead of
+  /// cropping it.
+  final bool? screen;
+
   JsonMap toJson() => compact({
     'v': version,
     'type': type.wire,
@@ -329,6 +340,7 @@ final class CallSignalPayload {
         ? null
         : [for (final c in candidates) c.toJson()],
     'reason': reason?.wire,
+    'screen': screen,
   });
 
   Uint8List encode() => Uint8List.fromList(utf8.encode(jsonEncode(toJson())));
@@ -364,6 +376,7 @@ final class CallSignalPayload {
         CallEndReason.values,
         orElse: CallEndReason.unknown,
       ),
+      screen: json.has('screen') ? json.boolean('screen') : null,
     );
   }
 

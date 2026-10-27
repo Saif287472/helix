@@ -159,11 +159,74 @@ final class CallsService implements CallSignalSink {
   /// Turns the camera of the live call on or off.
   Future<void> setCameraEnabled({required bool enabled}) => _run(() async {
     final call = _call;
-    if (call == null || call.media == null || !call.video) return;
+    // The camera is not what the call sends while the screen is.
+    if (call == null ||
+        call.media == null ||
+        !call.video ||
+        call.screenSharing) {
+      return;
+    }
     await call.media!.setVideoEnabled(enabled: enabled);
     call.cameraOn = enabled;
     _publish(call);
   });
+
+  /// Starts or stops sharing this device's screen in the live video call, in
+  /// place of the camera. The other side is told (a `media` signal) so it can
+  /// fit the screen in its window. False, and nothing changes, when there is
+  /// no live video call or the phone or the person refused the capture. A
+  /// share the system ends by itself (its own Stop control) is stopped and
+  /// announced the same way.
+  Future<bool> setScreenSharing({required bool enabled}) => _run(() async {
+    final call = _call;
+    if (call == null ||
+        call.finished ||
+        call.media == null ||
+        !call.video ||
+        call.phase != CallPhase.active) {
+      return false;
+    }
+    if (call.screenSharing == enabled) return true;
+    final bool done;
+    try {
+      done = await call.media!.setScreenSharing(enabled: enabled);
+    } on Object {
+      return false;
+    }
+    if (!done) return false;
+    if (enabled) {
+      call.screenEnded = call.media!.screenSharingEnded.listen(
+        (_) => unawaited(_screenEndedBySystem(call)),
+      );
+    } else {
+      await call.screenEnded?.cancel();
+      call.screenEnded = null;
+    }
+    await _announceScreen(call, enabled);
+    return true;
+  });
+
+  Future<void> _screenEndedBySystem(_Call call) => _run(() async {
+    if (call.finished || !call.screenSharing) return;
+    await call.screenEnded?.cancel();
+    call.screenEnded = null;
+    await _announceScreen(call, false);
+  });
+
+  Future<void> _announceScreen(_Call call, bool sharing) async {
+    call.screenSharing = sharing;
+    _publish(call);
+    await _send(
+      call.callId,
+      CallSignalPayload(
+        type: CallSignalType.media,
+        callId: call.callId,
+        screen: sharing,
+      ),
+      account: call.peer,
+      devices: call.peerDevice == null ? null : {call.peerDevice!},
+    );
+  }
 
   // --------------------------------------------------- pending (woken) calls
 
@@ -603,6 +666,15 @@ final class CallsService implements CallSignalSink {
         await _onCandidates(call, device, p.candidates);
       case CallSignalType.end:
         await _onEnd(call, device, p.reason ?? CallEndReason.unknown);
+      case CallSignalType.media:
+        // Only the device this call talks to, and only while it is live.
+        if (call.peerDevice == device && call.phase == CallPhase.active) {
+          final sharing = p.screen ?? false;
+          if (call.peerScreenSharing != sharing) {
+            call.peerScreenSharing = sharing;
+            _publish(call);
+          }
+        }
       case CallSignalType.offer || CallSignalType.unknown:
     }
   }
@@ -795,6 +867,7 @@ final class CallsService implements CallSignalSink {
     call.iceTimer?.cancel();
     await call.candidates?.cancel();
     await call.mediaStates?.cancel();
+    await call.screenEnded?.cancel();
     try {
       await call.media?.close();
     } on Object {
@@ -1044,6 +1117,11 @@ final class _Call {
   bool muted = false;
   bool cameraOn = false;
 
+  /// This device shares its screen, and the other side does.
+  bool screenSharing = false;
+  bool peerScreenSharing = false;
+  StreamSubscription<void>? screenEnded;
+
   /// The peer device this call talks to: the caller's device (incoming), or
   /// the callee device that answered (outgoing).
   String? peerDevice;
@@ -1090,6 +1168,8 @@ final class _Call {
     end: end,
     muted: muted,
     cameraOn: cameraOn,
+    screenSharing: screenSharing,
+    peerScreenSharing: peerScreenSharing,
   );
 
   /// The `call_log` direction and state for how this call ended.

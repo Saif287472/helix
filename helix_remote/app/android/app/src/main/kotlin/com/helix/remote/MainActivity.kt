@@ -110,6 +110,16 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     result.success(null)
                 }
+                "setScreenCapture" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    var ok = true
+                    try {
+                        startService(CallForegroundService.screenIntent(this, enabled))
+                    } catch (_: RuntimeException) {
+                        ok = false
+                    }
+                    result.success(ok)
+                }
                 "setProximityScreenOff" -> {
                     setProximityScreenOff(call.argument<Boolean>("enabled") ?: false)
                     result.success(null)

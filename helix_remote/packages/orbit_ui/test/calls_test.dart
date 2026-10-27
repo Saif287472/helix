@@ -308,7 +308,7 @@ void main() {
             videoLayout: true,
             hasLocalVideo: true,
           ),
-          remoteVideo: (context, placeholder) => placeholder,
+          remoteVideo: (context, placeholder, {required screen}) => placeholder,
           localVideo: (context, placeholder) => const Text('mine'),
         ),
       );

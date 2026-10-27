@@ -273,6 +273,15 @@ final class FakeCallPlatform implements CallPlatform {
   @override
   Future<void> stopForegroundService() async => log.add('service:stop');
 
+  /// Whether the service accepts a screen capture.
+  bool allowScreenCapture = true;
+
+  @override
+  Future<bool> setScreenCaptureService({required bool enabled}) async {
+    log.add('screen:$enabled');
+    return allowScreenCapture;
+  }
+
   @override
   Future<void> setProximityScreenOff(bool enabled) async =>
       log.add('proximity:$enabled');
@@ -337,9 +346,16 @@ final class FakeSurface implements CallVideoSurface {
     _notifier.notifyListeners();
   }
 
+  /// Whether the last draw asked for the whole picture (a shared screen).
+  bool lastFit = false;
+
   @override
-  Widget build({bool mirror = false}) =>
-      SizedBox.expand(child: Text('video:$label${mirror ? ':mirror' : ''}'));
+  Widget build({bool mirror = false, bool fit = false}) {
+    lastFit = fit;
+    return SizedBox.expand(
+      child: Text('video:$label${mirror ? ':mirror' : ''}'),
+    );
+  }
 }
 
 /// The overrides that take a call off the platform and the runtime.
@@ -483,6 +499,16 @@ class FakeCallsPort implements CallsPort {
     _maybeFail();
   }
 
+  /// What the next screen share does: true goes through, false is refused.
+  bool screenShareWorks = true;
+
+  @override
+  Future<bool> setScreenSharing({required bool enabled}) async {
+    calls.add('screen:$enabled');
+    _maybeFail();
+    return enabled ? screenShareWorks : true;
+  }
+
   @override
   Future<int> fetchPending() async => 0;
 
@@ -544,6 +570,8 @@ CallSnapshot snapshot({
   DateTime? endedAt,
   bool muted = false,
   bool cameraOn = false,
+  bool screenSharing = false,
+  bool peerScreenSharing = false,
 }) => CallSnapshot(
   callId: id,
   peer: peer,
@@ -556,4 +584,6 @@ CallSnapshot snapshot({
   end: end,
   muted: muted,
   cameraOn: cameraOn,
+  screenSharing: screenSharing,
+  peerScreenSharing: peerScreenSharing,
 );

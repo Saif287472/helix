@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
@@ -105,6 +107,13 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       },
       muted: s.muted,
       cameraOn: s.cameraOn,
+      screenSharing: s.screenSharing,
+      peerScreenSharing: s.peerScreenSharing,
+      // Android and Windows can capture their screen; the control shows on a
+      // live video call.
+      canShareScreen:
+          defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.windows,
       audioRoute: _routeOf(s.audio.route),
       audioRoutes: [for (final r in s.audio.available) _routeOf(r)],
       notice: s.notice,
@@ -142,15 +151,17 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           setMuted: (muted) => unawaited(actions.setMuted(muted: muted)),
           setCamera: (on) => unawaited(actions.setCameraEnabled(enabled: on)),
           flipCamera: () => unawaited(actions.switchCamera()),
+          setScreenSharing: (on) =>
+              unawaited(actions.setScreenSharing(enabled: on)),
           selectAudioRoute: (route) =>
               unawaited(actions.selectRoute(_appRouteOf(route))),
           dismissNotice: actions.dismissNotice,
         ),
         // Their video once frames arrive; their picture until then (the
         // camera is off, or the first frame has not landed).
-        remoteVideo: (context, placeholder) => remote == null
+        remoteVideo: (context, placeholder, {required screen}) => remote == null
             ? placeholder
-            : _Frames(surface: remote, placeholder: placeholder),
+            : _Frames(surface: remote, placeholder: placeholder, fit: screen),
         localVideo: (context, placeholder) => local == null
             ? placeholder
             : local.build(mirror: state.frontCamera),
@@ -161,14 +172,22 @@ class _CallScreenState extends ConsumerState<CallScreen> {
 
 /// [surface] while it has frames, else [placeholder].
 class _Frames extends StatelessWidget {
-  const _Frames({required this.surface, required this.placeholder});
+  const _Frames({
+    required this.surface,
+    required this.placeholder,
+    this.fit = false,
+  });
 
   final CallVideoSurface surface;
   final Widget placeholder;
 
+  /// A shared screen: the whole picture, not cropped.
+  final bool fit;
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: surface.changes,
-    builder: (context, _) => surface.hasFrames ? surface.build() : placeholder,
+    builder: (context, _) =>
+        surface.hasFrames ? surface.build(fit: fit) : placeholder,
   );
 }

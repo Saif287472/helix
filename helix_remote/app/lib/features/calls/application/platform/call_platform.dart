@@ -47,6 +47,12 @@ abstract interface class CallPlatform {
 
   Future<void> stopForegroundService();
 
+  /// Lets the call's foreground service hold a screen capture (Android needs
+  /// the media-projection type running for as long as the screen is shared,
+  /// started after the person gave consent) or takes it off again. True when
+  /// the service accepted; best effort like the rest.
+  Future<bool> setScreenCaptureService({required bool enabled});
+
   /// Turns the screen off while the phone is against the face (a voice call
   /// on the earpiece).
   Future<void> setProximityScreenOff(bool enabled);
@@ -74,6 +80,10 @@ final class NoCallPlatform implements CallPlatform {
 
   @override
   Future<void> stopForegroundService() async {}
+
+  // A desktop needs no service to capture its screen.
+  @override
+  Future<bool> setScreenCaptureService({required bool enabled}) async => true;
 
   @override
   Future<void> setProximityScreenOff(bool enabled) async {}
@@ -123,6 +133,10 @@ final class AndroidCallPlatform implements CallPlatform {
 
   @override
   Future<void> stopForegroundService() => _call<void>('stopForegroundCall');
+
+  @override
+  Future<bool> setScreenCaptureService({required bool enabled}) async =>
+      await _call<bool>('setScreenCapture', {'enabled': enabled}) ?? false;
 
   @override
   Future<void> setProximityScreenOff(bool enabled) =>

@@ -17,7 +17,7 @@ abstract interface class CallVideoSurface {
   bool get hasFrames;
 
   /// The video widget; [mirror] flips it for a front camera preview.
-  Widget build({bool mirror = false});
+  Widget build({bool mirror = false, bool fit = false});
 }
 
 /// What the media of the live call looks like right now.

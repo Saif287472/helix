@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -317,6 +319,100 @@ void main() {
         ),
       );
     }
+
+    group('sharing the screen', () {
+      // The Share button is for the phones and Windows. The override must be
+      // gone before the test ends, or the framework refuses the test.
+      void onAndroid(
+        String name,
+        Future<void> Function(WidgetTester tester) body,
+      ) => testWidgets(name, (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        try {
+          await body(tester);
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      });
+
+      onAndroid('Share asks the engine, and Stop ends it', (tester) async {
+        await live(tester);
+        await tester.tap(find.byTooltip('Share your screen'));
+        await tester.pumpAndSettle();
+        expect(port.calls, contains('screen:true'));
+
+        await emit(
+          tester,
+          snapshot(
+            phase: CallPhase.active,
+            answeredAt: answered,
+            video: true,
+            cameraOn: true,
+            screenSharing: true,
+          ),
+        );
+        expect(find.text('You are sharing your screen'), findsOneWidget);
+        await tester.tap(find.text('Stop'));
+        await tester.pumpAndSettle();
+        expect(port.calls, contains('screen:false'));
+      });
+
+      onAndroid('a refused capture says so in a sentence', (tester) async {
+        await live(tester);
+        port.screenShareWorks = false;
+        await tester.tap(find.byTooltip('Share your screen'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('could not be shared'), findsOneWidget);
+      });
+
+      onAndroid('their shared screen is drawn whole, not cropped', (
+        tester,
+      ) async {
+        final remote = FakeSurface('remote');
+        await open(tester);
+        hub.publish(
+          CallMediaInfo(
+            local: FakeSurface('local'),
+            remote: remote,
+            state: CallMediaState.connected,
+          ),
+        );
+        await emit(
+          tester,
+          snapshot(
+            phase: CallPhase.active,
+            answeredAt: answered,
+            video: true,
+            cameraOn: true,
+          ),
+        );
+        expect(remote.lastFit, isFalse);
+        await emit(
+          tester,
+          snapshot(
+            phase: CallPhase.active,
+            answeredAt: answered,
+            video: true,
+            cameraOn: true,
+            peerScreenSharing: true,
+          ),
+        );
+        expect(remote.lastFit, isTrue);
+        expect(
+          find.text('Ada Lovelace is sharing their screen'),
+          findsOneWidget,
+        );
+      });
+
+      onAndroid('a voice call has no Share', (tester) async {
+        await open(tester);
+        await emit(
+          tester,
+          snapshot(phase: CallPhase.active, answeredAt: answered),
+        );
+        expect(find.byTooltip('Share your screen'), findsNothing);
+      });
+    });
 
     testWidgets('shows the other person full screen and you in a corner', (
       tester,

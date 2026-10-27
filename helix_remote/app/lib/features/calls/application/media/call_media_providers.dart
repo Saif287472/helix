@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
 import 'package:helix_remote/features/calls/application/media/webrtc_call_media.dart';
+import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     show CallMediaFactory;
 
@@ -15,7 +16,12 @@ final callMediaHubProvider = Provider<CallMediaHub>((ref) {
 /// What the engine makes call media with. Tests override this with the
 /// engine's `FakeCallMediaFactory`.
 final callMediaFactoryProvider = Provider<CallMediaFactory>(
-  (ref) => WebRtcCallMediaFactory(hub: ref.watch(callMediaHubProvider)),
+  (ref) => WebRtcCallMediaFactory(
+    hub: ref.watch(callMediaHubProvider),
+    screenCapture: PlatformScreenCaptureHost(
+      ref.watch(callPlatformProvider).setScreenCaptureService,
+    ),
+  ),
 );
 
 /// The video surfaces, camera facing and connection quality of the live call;

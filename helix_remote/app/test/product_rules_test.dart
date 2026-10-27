@@ -229,6 +229,7 @@ void main() {
       'android.permission.FOREGROUND_SERVICE_CAMERA',
       'android.permission.FOREGROUND_SERVICE_MICROPHONE',
       'android.permission.FOREGROUND_SERVICE_LOCATION',
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
     ]) {
       expect(
         declarations.contains('<uses-permission android:name="$permission"'),

@@ -70,6 +70,8 @@ abstract final class CallCopy {
   static const microphoneDenied =
       'Orbit needs the microphone to make calls. Allow it in your phone\'s '
       'settings, then try again.';
+  static const screenShareRefused =
+      'Your screen could not be shared. Allow it when your phone asks.';
   static const cameraDenied =
       'Orbit needs the camera for video calls. Allow it in your phone\'s '
       'settings, or make a voice call instead.';

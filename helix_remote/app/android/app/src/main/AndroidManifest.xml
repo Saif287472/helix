@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Sharing the screen in a video call: the capture runs under the call's
+         own foreground service, with this type added while it lasts. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Sharing a live location: the place is read only while a share the
          person started is running, under a notification that says so. The
          foreground service lets it keep running with the screen off. -->
@@ -105,7 +108,7 @@
         <service
             android:name=".CallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="camera|microphone" />
+            android:foregroundServiceType="camera|microphone|mediaProjection" />
         <!-- A ringtone chosen from a downloaded sound pack is copied into the
              app's external files folder (`core/sounds/orbit_ringtones.dart`),
              because Android's notification service reads a channel's sound

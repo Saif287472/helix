@@ -85,6 +85,15 @@ user asks.
     screen off and move: the other phone's bubble follows. Stop sharing (or
     the time running out) removes the notification and the place.
 
+- Screen sharing (D1, not yet seen on a device):
+  - Android 14+: in a video call tap Share, accept the system prompt; the other
+    phone shows your screen whole with "is sharing their screen", and the
+    call notification stays. Stop (banner, button, and the system's own Stop
+    control) puts your camera back for them. Decline the prompt once: the call
+    carries on and says the screen could not be shared. Repeat on Android 10-13.
+  - Windows: Share shares the primary screen; Stop returns the camera.
+  - A voice call shows no Share.
+
 ## Remote Server
 
 - `server/` tests pass against PostgreSQL 17

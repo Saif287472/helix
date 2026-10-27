@@ -73,6 +73,22 @@ final class FakeCallMediaSession implements CallMediaSession {
   final List<IceCandidatePayload> remoteCandidates = [];
 
   bool muted = false;
+
+  /// This session is sharing the screen.
+  bool sharingScreen = false;
+
+  /// Make the next [setScreenSharing] refuse (the person said no).
+  bool refuseScreenShare = false;
+
+  final StreamController<void> _screenEnded =
+      StreamController<void>.broadcast();
+
+  /// Ends the share the way the system's own Stop button does.
+  void endScreenShareBySystem() {
+    sharingScreen = false;
+    _screenEnded.add(null);
+  }
+
   late bool videoEnabled = config.video;
   bool closed = false;
   CallMediaState state = CallMediaState.connecting;
@@ -120,6 +136,17 @@ final class FakeCallMediaSession implements CallMediaSession {
   }
 
   @override
+  Stream<void> get screenSharingEnded => _screenEnded.stream;
+
+  @override
+  Future<bool> setScreenSharing({required bool enabled}) async {
+    _check();
+    if (enabled && refuseScreenShare) return false;
+    sharingScreen = enabled;
+    return true;
+  }
+
+  @override
   Future<void> setMuted({required bool muted}) async {
     _check();
     this.muted = muted;
@@ -139,6 +166,7 @@ final class FakeCallMediaSession implements CallMediaSession {
     // Not awaited: a stream nobody listened to never reports done.
     unawaited(_states.close());
     unawaited(_candidates.close());
+    unawaited(_screenEnded.close());
   }
 
   /// Connects now (for [FakeCallMediaFactory.autoConnect] false).

@@ -33,6 +33,10 @@ abstract interface class CallsPort {
   Future<void> setMuted({required bool muted});
   Future<void> setCameraEnabled({required bool enabled});
 
+  /// Starts or stops sharing this device's screen in the live video call;
+  /// false when it could not (declined, or no live video call).
+  Future<bool> setScreenSharing({required bool enabled});
+
   /// Opens the offers that waited for this device on the server and rings the
   /// newest. Run after a call push woke the app.
   Future<int> fetchPending();
@@ -83,6 +87,10 @@ final class EngineCallsPort implements CallsPort {
   @override
   Future<void> setCameraEnabled({required bool enabled}) =>
       _calls.setCameraEnabled(enabled: enabled);
+
+  @override
+  Future<bool> setScreenSharing({required bool enabled}) =>
+      _calls.setScreenSharing(enabled: enabled);
 
   @override
   Future<int> fetchPending() => _calls.fetchPending();

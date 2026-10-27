@@ -103,11 +103,9 @@ void main() {
       );
       expect(old.valid, isTrue);
       expect(old.accountId, isNull);
-      expect(
-        const RecoveryLookupResponse(valid: false).toJson(),
-        {'valid': false},
-        reason: 'an invalid code answers the bare form',
-      );
+      expect(const RecoveryLookupResponse(valid: false).toJson(), {
+        'valid': false,
+      }, reason: 'an invalid code answers the bare form');
       expect(
         const RecoveryLookupResponse(
           valid: false,
@@ -571,6 +569,26 @@ void main() {
       );
       expect(end.reason, CallEndReason.answeredElsewhere);
       expect(end.type.routedAs, CallSignalKind.end);
+
+      // A shared screen is a quiet `media` signal; the server routes it as an
+      // update, and a peer that does not know it reads `unknown`.
+      final sharing = expectRoundTrip(
+        const CallSignalPayload(
+          type: CallSignalType.media,
+          callId: 'call-0192a4f0',
+          screen: true,
+        ),
+        (v) => v.toJson(),
+        CallSignalPayload.fromJson,
+      );
+      expect(sharing.screen, isTrue);
+      expect(sharing.type.routedAs, CallSignalKind.update);
+      expect(
+        CallSignalPayload.fromJson(
+          JsonReader.decode('{"type":"media","call_id":"c"}'),
+        ).screen,
+        isNull,
+      );
 
       // Newer peers: unknown types and reasons decode, never throw.
       final future = CallSignalPayload.fromJson(

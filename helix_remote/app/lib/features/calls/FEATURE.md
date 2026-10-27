@@ -82,6 +82,20 @@ Closed app: the FCM isolate shows the full-screen ringing notification
 which rings the call (`fetchPending`) and applies a button pressed before the
 offer was known (`PendingCallDecision`, valid for the ring time).
 
+## Sharing the screen
+
+A live **video** call has a Share button (Android and Windows). `CallActions.setScreenSharing` ->
+`CallsService.setScreenSharing` -> `CallMediaSession.setScreenSharing` -> `RemoteWebRtcCallEngine`, which
+captures the screen with `getDisplayMedia` and swaps it in as the outgoing video track
+(`RTCRtpSender.replaceTrack`); nothing is renegotiated, so it needs the call to carry video already (a
+voice call cannot). Stopping puts the camera track back. On Android the engine first asks for the capture
+consent, then calls `RemoteScreenCaptureHost.prepare`, which tells `CallForegroundService` to add the
+media-projection type (`setScreenCapture` on the channel); Android 14 wants it in that order. A `media`
+signal (`screen: true/false`) tells the other side, which draws the picture whole (`fit`) instead of
+cropped and says "Sam is sharing their screen". A share the system ends (its own Stop control) comes back
+as `screenSharingEnded` and is announced the same way. The camera switch does nothing while the screen
+is shared. A refusal is one sentence on the call screen (`CallCopy.screenShareRefused`).
+
 ## Platform pieces (all behind interfaces; Windows compiles with stubs)
 
 - Foreground service, window flags, full-screen-intent check: the existing

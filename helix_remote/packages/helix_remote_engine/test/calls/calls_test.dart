@@ -34,6 +34,101 @@ void main() {
     return call.callId;
   }
 
+  group('sharing the screen', () {
+    Future<(CallDevice, CallDevice)> liveVideo() async {
+      final alice = await net.add('alice');
+      final bob = await net.add('bob');
+      alice.startWatching();
+      bob.startWatching();
+      final call = await alice.service.startCall(bob.account, video: true);
+      await bob.until(() => bob.current?.phase == CallPhase.ringing);
+      await bob.service.accept();
+      await alice.untilPhase(CallPhase.active);
+      await bob.untilPhase(CallPhase.active);
+      expect(call.video, isTrue);
+      return (alice, bob);
+    }
+
+    test('goes to the media, shows on both sides, and stops again', () async {
+      final (alice, bob) = await liveVideo();
+      expect(await alice.service.setScreenSharing(enabled: true), isTrue);
+      expect(alice.media!.last.sharingScreen, isTrue);
+      expect(alice.current!.screenSharing, isTrue);
+      expect(alice.current!.peerScreenSharing, isFalse);
+      await bob.until(() => bob.current?.peerScreenSharing == true);
+      expect(bob.current!.screenSharing, isFalse);
+      expect(net.received(bob, CallSignalType.media), hasLength(1));
+
+      expect(await alice.service.setScreenSharing(enabled: false), isTrue);
+      expect(alice.media!.last.sharingScreen, isFalse);
+      expect(alice.current!.screenSharing, isFalse);
+      await bob.until(() => bob.current?.peerScreenSharing == false);
+    });
+
+    test('is refused when the person declines the capture prompt', () async {
+      final (alice, bob) = await liveVideo();
+      alice.media!.last.refuseScreenShare = true;
+      expect(await alice.service.setScreenSharing(enabled: true), isFalse);
+      expect(alice.current!.screenSharing, isFalse);
+      expect(net.received(bob, CallSignalType.media), isEmpty);
+    });
+
+    test('needs a live video call', () async {
+      final alice = await net.add('alice');
+      final bob = await net.add('bob');
+      alice.startWatching();
+      bob.startWatching();
+      expect(await alice.service.setScreenSharing(enabled: true), isFalse);
+
+      final voice = await alice.service.startCall(bob.account);
+      expect(voice.video, isFalse);
+      await bob.until(() => bob.current?.phase == CallPhase.ringing);
+      await bob.service.accept();
+      await alice.untilPhase(CallPhase.active);
+      expect(await alice.service.setScreenSharing(enabled: true), isFalse);
+    });
+
+    test('a share the system ends is stopped and announced', () async {
+      final (alice, bob) = await liveVideo();
+      await alice.service.setScreenSharing(enabled: true);
+      await bob.until(() => bob.current?.peerScreenSharing == true);
+      alice.media!.last.endScreenShareBySystem();
+      await alice.until(() => alice.current?.screenSharing == false);
+      await bob.until(() => bob.current?.peerScreenSharing == false);
+    });
+
+    test('the camera switch does nothing while the screen is shared', () async {
+      final (alice, _) = await liveVideo();
+      await alice.service.setScreenSharing(enabled: true);
+      await alice.service.setCameraEnabled(enabled: false);
+      expect(alice.media!.last.videoEnabled, isTrue);
+      expect(alice.current!.cameraOn, isTrue);
+    });
+
+    test(
+      'a share is not shown before the call is live',
+      () async {
+        final alice = await net.add('alice');
+        final bob = await net.add('bob');
+        alice.startWatching();
+        bob.startWatching();
+        await alice.service.startCall(bob.account, video: true);
+        await bob.until(() => bob.current?.phase == CallPhase.ringing);
+        // Ringing, not live: a peer claiming to share changes nothing.
+        expect(bob.current!.peerScreenSharing, isFalse);
+      },
+    );
+
+    test('a call that ends takes the share with it', () async {
+      final (alice, bob) = await liveVideo();
+      await alice.service.setScreenSharing(enabled: true);
+      await bob.until(() => bob.current?.peerScreenSharing == true);
+      await alice.service.hangUp();
+      await bob.until(() => bob.current == null);
+      expect(alice.media!.last.closed, isTrue);
+    });
+  });
+
   group('a call between two devices', () {
     test('rings, is answered, carries candidates and hangs up', () async {
       final alice = await net.add('alice');

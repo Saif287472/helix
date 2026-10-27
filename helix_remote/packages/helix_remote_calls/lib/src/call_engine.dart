@@ -79,6 +79,25 @@ class RemoteCallMediaEvent extends RemoteCallEngineEvent {
   final webrtc.RTCVideoRenderer? remoteRenderer;
 }
 
+/// The shared screen stopped on its own (the system's Stop control, or the
+/// phone took the capture away): the camera is the video again.
+class RemoteScreenShareEndedEvent extends RemoteCallEngineEvent {
+  const RemoteScreenShareEndedEvent({required super.callId});
+}
+
+/// What the host does around a screen capture. On Android the capture needs
+/// the person's consent first and then a foreground service of the
+/// media-projection type, in that order; the engine asks for the consent and
+/// calls [prepare] once it is given, and [release] when sharing ends.
+abstract interface class RemoteScreenCaptureHost {
+  /// Consent is given: start whatever must run for the capture to be allowed
+  /// (the foreground service). False refuses the share.
+  Future<bool> prepare();
+
+  /// The share ended: stop what [prepare] started.
+  Future<void> release();
+}
+
 /// Periodic quality sample emitted during an active call.
 class RemoteCallQualityEvent extends RemoteCallEngineEvent {
   const RemoteCallQualityEvent({required super.callId, required this.metrics});
@@ -109,6 +128,13 @@ abstract interface class RemoteCallEngine {
   Future<void> setSpeakerOn(String callId, {required bool enabled});
   Future<void> setVideoEnabled(String callId, {required bool enabled});
   Future<void> switchCamera(String callId);
+
+  /// Shares the screen as the outgoing video of the call, in place of the
+  /// camera, or puts the camera back. True when the call now does what was
+  /// asked; false when it could not (no video in the call, or the person
+  /// declined the system's prompt). A share that ends by itself is reported
+  /// as a [RemoteScreenShareEndedEvent].
+  Future<bool> setScreenSharing(String callId, {required bool enabled});
   Future<void> endCall(String callId);
   Future<void> dispose();
 }

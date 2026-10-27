@@ -64,6 +64,9 @@ class CallModel {
     this.hasLocalVideo = false,
     this.hasRemoteVideo = false,
     this.remoteCameraOff = false,
+    this.screenSharing = false,
+    this.peerScreenSharing = false,
+    this.canShareScreen = false,
   });
 
   final String callId;
@@ -101,6 +104,15 @@ class CallModel {
   /// Their camera is off on a live video call.
   final bool remoteCameraOff;
 
+  /// You are sharing your screen in place of your camera.
+  final bool screenSharing;
+
+  /// They are: their picture is a screen, drawn whole instead of cropped.
+  final bool peerScreenSharing;
+
+  /// The phone can share its screen (the Share button shows).
+  final bool canShareScreen;
+
   bool get _live =>
       stage == CallStage.dialing ||
       stage == CallStage.connecting ||
@@ -116,6 +128,7 @@ class CallActions {
     this.setMuted,
     this.setCamera,
     this.flipCamera,
+    this.setScreenSharing,
     this.selectAudioRoute,
     this.dismissNotice,
   });
@@ -126,6 +139,10 @@ class CallActions {
   final ValueChanged<bool>? setMuted;
   final ValueChanged<bool>? setCamera;
   final VoidCallback? flipCamera;
+
+  /// Starts or stops sharing the screen. With it set (and the model's
+  /// `canShareScreen`), a live video call shows Share.
+  final ValueChanged<bool>? setScreenSharing;
   final ValueChanged<CallAudioRoute>? selectAudioRoute;
   final VoidCallback? dismissNotice;
 }
@@ -137,6 +154,15 @@ class CallActions {
 /// prototype's stand-in gradients.
 typedef CallVideoSlot =
     Widget Function(BuildContext context, Widget placeholder);
+
+/// The other person's picture. [screen] says it is a shared screen, which the
+/// app draws whole (letterboxed) instead of cropping it to fill.
+typedef CallRemoteVideoSlot =
+    Widget Function(
+      BuildContext context,
+      Widget placeholder, {
+      required bool screen,
+    });
 
 /// `call` (`js/screens/calls.js`): the full-screen call, a night page on the
 /// brand gradient. The header says what kind of call and that it is
@@ -155,7 +181,7 @@ class CallScreen extends StatefulWidget {
 
   final CallModel model;
   final CallActions actions;
-  final CallVideoSlot? remoteVideo;
+  final CallRemoteVideoSlot? remoteVideo;
   final CallVideoSlot? localVideo;
 
   @override
@@ -673,6 +699,17 @@ class _CallScreenState extends State<CallScreen>
                   m.stage == CallStage.connecting,
               onPressed: () => a.setCamera?.call(!m.cameraOn),
             ),
+            if (m.canShareScreen && a.setScreenSharing != null)
+              b(
+                OrbitIcons.monitor,
+                'Share',
+                m.screenSharing
+                    ? 'Stop sharing your screen'
+                    : 'Share your screen',
+                on: m.screenSharing,
+                enabled: m.stage == CallStage.active,
+                onPressed: () => a.setScreenSharing?.call(!m.screenSharing),
+              ),
             mute,
             ?speaker,
           ]
@@ -759,7 +796,11 @@ class _CallScreenState extends State<CallScreen>
       ),
     );
     Widget remote({required bool small}) =>
-        widget.remoteVideo?.call(context, waiting(small: small)) ??
+        widget.remoteVideo?.call(
+          context,
+          waiting(small: small),
+          screen: m.peerScreenSharing,
+        ) ??
         stand('ph-e');
     Widget local({bool small = false}) =>
         widget.localVideo?.call(context, waiting(small: small)) ??
@@ -947,6 +988,32 @@ class _CallScreenState extends State<CallScreen>
                       ],
                     ),
                   ),
+                  if (!dialing && (m.screenSharing || m.peerScreenSharing))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: ConstrainedBox(
+                          // Clear of your camera's tile, which sits at the end.
+                          constraints: BoxConstraints(
+                            maxWidth: (size.width - 24 - 24 - 116).clamp(
+                              160.0,
+                              600.0,
+                            ),
+                          ),
+                          child: _ShareBanner(
+                            text: m.screenSharing
+                                ? 'You are sharing your screen'
+                                : '${m.title} is sharing their screen',
+                            onStop:
+                                m.screenSharing &&
+                                    widget.actions.setScreenSharing != null
+                                ? () => widget.actions.setScreenSharing!(false)
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1021,6 +1088,73 @@ class _CallScreenState extends State<CallScreen>
 }
 
 /// `.c-mid`'s column: 18px between parts, centred.
+/// "You are sharing your screen" with Stop, or "Sam is sharing their screen".
+class _ShareBanner extends StatelessWidget {
+  const _ShareBanner({required this.text, this.onStop});
+
+  final String text;
+  final VoidCallback? onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    return Container(
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: t.callGlass,
+        border: Border.all(color: t.callLine),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OrbitIcon(OrbitIcons.monitor, size: 14, color: t.callText),
+          const SizedBox(width: 8),
+          Flexible(
+            child: OrbitText(
+              text,
+              style: t.font.style(size: OrbitType.small, color: t.callText),
+            ),
+          ),
+          if (onStop != null) ...[
+            const SizedBox(width: 6),
+            OrbitTapArea(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onStop,
+                child: Semantics(
+                  container: true,
+                  button: true,
+                  label: 'Stop sharing your screen',
+                  excludeSemantics: true,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: OrbitNight.callEnd,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: OrbitText(
+                      'Stop',
+                      style: t.font.style(
+                        size: OrbitType.small,
+                        weight: 600,
+                        color: const Color(0xFFFFFFFF),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _Stack18 extends StatelessWidget {
   const _Stack18({required this.children});
 

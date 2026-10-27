@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 
@@ -7,6 +9,7 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     RemoteIceConfig? iceConfig,
     Future<RemoteIceConfig> Function()? iceConfigProvider,
     Duration qualitySampleInterval = const Duration(seconds: 5),
+    this.screenCapture,
   }) : _iceConfig =
            iceConfig ??
            const RemoteIceConfig(
@@ -18,6 +21,8 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
 
   static const int _maxCandidateLength = 4096;
 
+  /// What the host does around a screen capture (Android's service).
+  final RemoteScreenCaptureHost? screenCapture;
   final RemoteIceConfig _iceConfig;
   final Future<RemoteIceConfig> Function()? _runtimeIceConfigProvider;
   final Duration _qualityPollingInterval;
@@ -285,6 +290,99 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
   }
 
   @override
+  Future<bool> setScreenSharing(String callId, {required bool enabled}) async {
+    final state = _calls[callId];
+    if (state == null) return false;
+    if (enabled == (state.screenStream != null)) return true;
+    final cameraTrack = state.localStream.getVideoTracks().firstOrNull;
+    if (cameraTrack == null) return false; // an audio-only call
+    final senders = await state.pc.getSenders();
+    final sender = senders.where((s) => s.track?.kind == 'video').firstOrNull;
+    if (sender == null) return false;
+    if (!enabled) {
+      await _stopScreenShare(callId, state, sender, cameraTrack);
+      return true;
+    }
+    try {
+      if (Platform.isAndroid) {
+        // Consent first, then the service that makes the capture allowed.
+        if (!await webrtc.Helper.requestCapturePermission()) return false;
+        final host = screenCapture;
+        if (host != null && !await host.prepare()) return false;
+      }
+      final stream = await webrtc.navigator.mediaDevices.getDisplayMedia(
+        await _screenConstraints(),
+      );
+      final track = stream.getVideoTracks().firstOrNull;
+      if (track == null) {
+        await stream.dispose();
+        await screenCapture?.release();
+        return false;
+      }
+      track.onEnded = () {
+        if (state.screenStream == null) return;
+        // The system ended it: the camera is the video again.
+        unawaited(() async {
+          await _stopScreenShare(callId, state, sender, cameraTrack);
+          _eventController.add(RemoteScreenShareEndedEvent(callId: callId));
+        }());
+      };
+      state.screenStream = stream;
+      await sender.replaceTrack(track);
+      _diag(callId, 'screen_share started');
+      return true;
+    } on Object catch (error) {
+      _diag(callId, 'screen_share refused ${error.runtimeType}');
+      await screenCapture?.release();
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> _screenConstraints() async {
+    const video = {
+      'frameRate': {'ideal': 15, 'max': 24},
+    };
+    if (!webrtc.WebRTC.platformIsDesktop) {
+      return {'video': video, 'audio': false};
+    }
+    // A desktop has no system prompt: the first (primary) screen is shared.
+    final sources = await webrtc.desktopCapturer.getSources(
+      types: [webrtc.SourceType.Screen],
+    );
+    return {
+      'video': {
+        ...video,
+        if (sources.isNotEmpty) 'deviceId': {'exact': sources.first.id},
+      },
+      'audio': false,
+    };
+  }
+
+  Future<void> _stopScreenShare(
+    String callId,
+    _PeerConnectionState state,
+    webrtc.RTCRtpSender sender,
+    webrtc.MediaStreamTrack cameraTrack,
+  ) async {
+    final stream = state.screenStream;
+    state.screenStream = null;
+    try {
+      await sender.replaceTrack(cameraTrack);
+    } on Object {
+      // The call may be closing.
+    }
+    if (stream != null) {
+      for (final track in stream.getTracks()) {
+        track.onEnded = null;
+        await _ignoreCleanup(track.stop);
+      }
+      await _ignoreCleanup(stream.dispose);
+    }
+    await _ignoreCleanup(() async => screenCapture?.release());
+    _diag(callId, 'screen_share stopped');
+  }
+
+  @override
   Future<void> switchCamera(String callId) async {
     final state = _calls[callId];
     if (state == null) return;
@@ -317,6 +415,16 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
 
   Future<void> _releaseState(_PeerConnectionState state) async {
     state.qualityTimer?.cancel();
+    final screen = state.screenStream;
+    state.screenStream = null;
+    if (screen != null) {
+      for (final track in screen.getTracks()) {
+        track.onEnded = null;
+        await _ignoreCleanup(track.stop);
+      }
+      await _ignoreCleanup(screen.dispose);
+      await _ignoreCleanup(() async => screenCapture?.release());
+    }
     await _ignoreCleanup(state.pc.close);
     await _ignoreCleanup(state.pc.dispose);
     for (final track in state.localStream.getTracks()) {
@@ -613,6 +721,9 @@ class _PeerConnectionState {
   final webrtc.RTCVideoRenderer remoteRenderer;
   final Set<String> seenRemoteCandidates = <String>{};
   webrtc.MediaStream? remoteStream;
+
+  /// The captured screen while it is shared.
+  webrtc.MediaStream? screenStream;
   Timer? qualityTimer;
   bool remoteDescriptionSet = false;
   bool isFrontCamera = true;

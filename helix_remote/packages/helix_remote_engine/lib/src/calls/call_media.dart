@@ -95,6 +95,18 @@ abstract interface class CallMediaSession {
   /// Turns the camera on or off (a no-op for an audio-only call).
   Future<void> setVideoEnabled({required bool enabled});
 
+  /// Starts or stops sharing the screen as the outgoing video, in place of the
+  /// camera (a video call only; nothing is renegotiated). True when the
+  /// session now does what was asked; false when it could not (the person
+  /// declined the system's capture prompt, or the phone cannot). Stopping puts
+  /// the camera back as it was.
+  Future<bool> setScreenSharing({required bool enabled});
+
+  /// Fires when sharing ended by itself: the person stopped it from the
+  /// system's own control, or the phone took the capture away. A broadcast
+  /// stream; nothing is replayed.
+  Stream<void> get screenSharingEnded;
+
   /// Releases the connection, the camera and the microphone. Idempotent.
   Future<void> close();
 }

@@ -169,6 +169,27 @@ final class CallActions {
     );
   }
 
+  /// Starts or stops sharing the screen. A refusal (the person said no to the
+  /// phone's prompt) is one plain sentence on the call screen.
+  Future<void> setScreenSharing({required bool enabled}) async {
+    final call = _state;
+    if (call == null ||
+        !call.video ||
+        call.stage != CallStage.active ||
+        call.screenSharing == enabled) {
+      return;
+    }
+    var done = true;
+    await _guard(call, (port) async {
+      done = await port.setScreenSharing(enabled: enabled);
+    }, busy: false);
+    if (!done && enabled) {
+      _ref
+          .read(callNoticeProvider.notifier)
+          .show(call.callId, CallCopy.screenShareRefused);
+    }
+  }
+
   Future<void> switchCamera() async {
     final call = _state;
     if (call == null || !call.video || !call.cameraOn) return;

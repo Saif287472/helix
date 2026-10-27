@@ -13,6 +13,12 @@ import android.os.Build
 import android.os.IBinder
 
 class CallForegroundService : Service() {
+    // What the running call is, kept so the notification and the service types
+    // can be rebuilt when a screen share starts or stops.
+    private var caller = "Unknown caller"
+    private var isVideo = false
+    private var sharingScreen = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -23,14 +29,23 @@ class CallForegroundService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_START -> {
-                val caller = intent.getStringExtra(EXTRA_CALLER) ?: "Unknown caller"
-                val isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false)
+                caller = intent.getStringExtra(EXTRA_CALLER) ?: "Unknown caller"
+                isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false)
+                sharingScreen = false
                 if (!startAsForeground(buildNotification(caller, isVideo), isVideo)) {
                     // Nothing the call is allowed to hold in the background:
                     // the call still works while Helix is on screen.
                     stopSelf()
                     return START_NOT_STICKY
                 }
+                return START_NOT_STICKY
+            }
+            ACTION_SCREEN -> {
+                // Adds or drops the media-projection type of the running
+                // service. Android 14 wants it running before a capture is
+                // made, and only after the person consented to it.
+                sharingScreen = intent.getBooleanExtra(EXTRA_SCREEN, false)
+                startAsForeground(buildNotification(caller, isVideo), isVideo)
                 return START_NOT_STICKY
             }
         }
@@ -54,6 +69,9 @@ class CallForegroundService : Service() {
         }
         if (isVideo && granted(android.Manifest.permission.CAMERA)) {
             types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        }
+        if (sharingScreen) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
         }
         if (types == 0) return false
         return try {
@@ -131,6 +149,8 @@ class CallForegroundService : Service() {
         const val NOTIFICATION_ID = 121716
         private const val ACTION_START = "com.helix.remote.calls.START_FOREGROUND"
         private const val ACTION_STOP = "com.helix.remote.calls.STOP_FOREGROUND"
+        private const val ACTION_SCREEN = "com.helix.remote.calls.SCREEN_CAPTURE"
+        private const val EXTRA_SCREEN = "screen"
         private const val EXTRA_CALLER = "caller"
         private const val EXTRA_IS_VIDEO = "is_video"
 
@@ -139,6 +159,12 @@ class CallForegroundService : Service() {
                 action = ACTION_START
                 putExtra(EXTRA_CALLER, caller)
                 putExtra(EXTRA_IS_VIDEO, isVideo)
+            }
+
+        fun screenIntent(context: Context, enabled: Boolean): Intent =
+            Intent(context, CallForegroundService::class.java).apply {
+                action = ACTION_SCREEN
+                putExtra(EXTRA_SCREEN, enabled)
             }
 
         fun stopIntent(context: Context): Intent =

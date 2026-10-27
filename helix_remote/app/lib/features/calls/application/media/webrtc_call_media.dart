@@ -24,12 +24,16 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 final class WebRtcCallMediaFactory implements CallMediaFactory {
   WebRtcCallMediaFactory({
     required this.hub,
+    this.screenCapture,
     String Function()? newId,
     Duration qualityInterval = const Duration(seconds: 5),
   }) : _newId = newId ?? _timeId,
        _qualityInterval = qualityInterval;
 
   final CallMediaHub hub;
+
+  /// What runs around a screen capture (Android's foreground service).
+  final RemoteScreenCaptureHost? screenCapture;
   final String Function() _newId;
   final Duration _qualityInterval;
 
@@ -59,6 +63,7 @@ final class WebRtcCallMediaFactory implements CallMediaFactory {
       engine: RemoteWebRtcCallEngine(
         iceConfig: ice,
         qualitySampleInterval: _qualityInterval,
+        screenCapture: screenCapture,
       ),
       callId: _newId(),
       video: config.video,
@@ -93,6 +98,8 @@ final class WebRtcCallMediaSession implements CallMediaSession {
       StreamController<IceCandidatePayload>();
   final StreamController<CallMediaState> _states =
       StreamController<CallMediaState>.broadcast();
+  final StreamController<void> _screenEnded =
+      StreamController<void>.broadcast();
   bool _closed = false;
 
   @override
@@ -144,6 +151,8 @@ final class WebRtcCallMediaSession implements CallMediaSession {
         hub.update((info) => info.copyWith(weak: event.metrics.isWeak));
       case RemoteCameraFacingEvent():
         hub.update((info) => info.copyWith(frontCamera: event.isFrontCamera));
+      case RemoteScreenShareEndedEvent():
+        _screenEnded.add(null);
       case RemoteCallEngineDiagnosticEvent() || RemoteVideoStateEvent():
         break;
     }
@@ -180,6 +189,15 @@ final class WebRtcCallMediaSession implements CallMediaSession {
   }
 
   @override
+  Stream<void> get screenSharingEnded => _screenEnded.stream;
+
+  @override
+  Future<bool> setScreenSharing({required bool enabled}) async {
+    if (!video || _closed) return false;
+    return _engine.setScreenSharing(callId, enabled: enabled);
+  }
+
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -195,6 +213,7 @@ final class WebRtcCallMediaSession implements CallMediaSession {
     }
     unawaited(_states.close());
     unawaited(_candidates.close());
+    unawaited(_screenEnded.close());
   }
 }
 
@@ -211,5 +230,23 @@ final class _RendererSurface implements CallVideoSurface {
   bool get hasFrames => _source.hasFrames;
 
   @override
-  Widget build({bool mirror = false}) => _source.build(mirror: mirror);
+  Widget build({bool mirror = false, bool fit = false}) =>
+      _source.build(mirror: mirror, fit: fit);
+}
+
+/// The screen capture's foreground service, through the call platform: the
+/// engine calls [prepare] once the person consented, and [release] when the
+/// share ends.
+final class PlatformScreenCaptureHost implements RemoteScreenCaptureHost {
+  const PlatformScreenCaptureHost(this._setService);
+
+  final Future<bool> Function({required bool enabled}) _setService;
+
+  @override
+  Future<bool> prepare() => _setService(enabled: true);
+
+  @override
+  Future<void> release() async {
+    await _setService(enabled: false);
+  }
 }

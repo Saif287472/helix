@@ -31,10 +31,10 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 39 | see "Already built" |
+| Already built | 40 | see "Already built" |
 | S (one file) | 0 | none left |
 | M (about 10 files) | 0 | none left |
-| L (more than that) | 1 | D1 |
+| L (more than that) | 0 | none left |
 | L+ (a project of its own) | 1 | D3 |
 | Not planned | 16 | see "Not planned" (ten of them to be looked at again about 2027-10) |
 
@@ -62,6 +62,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | Storage page (free space by kind), report user, block | `settings/storage_page.dart`, reports in server |
 | Text formatting `*bold*` `_italic_` `~strike~` `` `mono` `` (built 2026-10-26, A1) | `orbit_ui` `components/timeline.dart` `_formatted` |
 | Find a group by the name of someone in it (built 2026-10-26, B7) | `app/features/chats/application/chat_search.dart` |
+| Screen sharing in a video call (built 2026-10-28, D1) | engine `calls_service.dart`; `helix_remote_calls` `web_rtc_call_engine.dart`; orbit_ui `call_screens.dart` |
 | Chat lock (built 2026-10-27, C3) and a bubble colour per chat (B2) | `core/security/locked_chats.dart`, `shared/widgets/locked_chat_gate.dart`; orbit_ui `locked_chats_screen.dart`, `HelixBubbleTint` |
 | Chat lists (built 2026-10-27, B3; local to the device) | `features/chats/application/chat_list_provider.dart`, `chat_actions.dart`; engine `chats_service.dart` |
 | Live location (built 2026-10-27, E4) | `core/location/`, `core/platform/location_source.dart`; engine `chats_service.dart` |
@@ -118,7 +119,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | ID | Feature | Status | Size | Probable files |
 |---|---|---|---|---|
-| D1 | Screen sharing (1:1) | Not built | **L** | `helix_remote_calls` (WebRTC capture, Android foreground-service permission), call signalling field, call screen controls in `ui/screens/calls/`, platform manifests. |
+| D1 | Screen sharing (1:1) | **Built 2026-10-28 (video calls; needs a phone check)** | done | Wire: sealed call signal `media` with `screen` (REST_V2.md). Engine `CallsService.setScreenSharing`, `CallSnapshot.screenSharing / peerScreenSharing`, `CallMediaSession.setScreenSharing`. `helix_remote_calls`: `setScreenSharing` replaces the outgoing video track with `getDisplayMedia` (nothing is renegotiated) and puts the camera back; Android asks for consent, then runs a media-projection foreground service (`CallForegroundService`, `FOREGROUND_SERVICE_MEDIA_PROJECTION`); Windows shares the primary screen. orbit_ui: Share button, "You are sharing your screen" banner with Stop, and their screen drawn whole. Not done: sharing in a voice call (needs a mid-call renegotiation), choosing a window or screen on Windows, sharing the phone's sound. **Not verified on a device**: the capture, the Android 14 service rules, the system Stop control. |
 | D2 | Call transfer between devices | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** Multi-device call handoff in the calls state machine (engine `calls`), a signal type, server calls module, UI. |
 | D3 | Group calls | Not built (deferred by the plan) | **L+** | Needs an SFU and the `group_calls` module; the plan reserves room. Needs its own plan and ADR; not a one-day item. |
 | D4 | Call links, waiting room, scheduled calls with RSVP | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L+** Server module and routes, `event` type exists for RSVP, but joining rooms needs group calls (D3). |

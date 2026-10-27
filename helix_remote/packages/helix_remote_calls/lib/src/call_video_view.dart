@@ -32,6 +32,13 @@ class RemoteVideoSource {
 
   bool get hasFrames => renderer.renderVideo && renderer.videoWidth > 0;
 
-  Widget build({bool mirror = false}) =>
-      RemoteCallVideoView(renderer: renderer, mirror: mirror);
+  /// With [fit] the whole picture is drawn inside the window (a shared
+  /// screen), instead of cropped to fill it (a face).
+  Widget build({bool mirror = false, bool fit = false}) => RemoteCallVideoView(
+    renderer: renderer,
+    mirror: mirror,
+    objectFit: fit
+        ? webrtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+        : webrtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+  );
 }

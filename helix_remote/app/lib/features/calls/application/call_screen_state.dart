@@ -50,6 +50,8 @@ final class CallScreenState {
     this.talkTime,
     this.muted = false,
     this.cameraOn = false,
+    this.screenSharing = false,
+    this.peerScreenSharing = false,
     this.frontCamera = true,
     this.audio = const CallAudioState(),
     this.quality = CallQuality.good,
@@ -91,6 +93,10 @@ final class CallScreenState {
   final Duration? talkTime;
   final bool muted;
   final bool cameraOn;
+
+  /// This device shares its screen, and the other side does.
+  final bool screenSharing;
+  final bool peerScreenSharing;
   final bool frontCamera;
   final CallAudioState audio;
   final CallQuality quality;
@@ -138,6 +144,8 @@ final class CallScreenState {
     talkTime: talkTime,
     muted: muted,
     cameraOn: cameraOn,
+    screenSharing: screenSharing,
+    peerScreenSharing: peerScreenSharing,
     frontCamera: frontCamera,
     audio: audio,
     quality: quality,
@@ -191,6 +199,8 @@ final class CallScreenState {
           : null,
       muted: call.muted,
       cameraOn: call.cameraOn,
+      screenSharing: call.screenSharing,
+      peerScreenSharing: call.peerScreenSharing,
       frontCamera: media?.frontCamera ?? true,
       audio: audio,
       quality: reconnecting
@@ -218,6 +228,8 @@ final class CallScreenState {
       other.talkTime == talkTime &&
       other.muted == muted &&
       other.cameraOn == cameraOn &&
+      other.screenSharing == screenSharing &&
+      other.peerScreenSharing == peerScreenSharing &&
       other.frontCamera == frontCamera &&
       other.audio.route == audio.route &&
       listEquals(other.audio.available, audio.available) &&
@@ -235,6 +247,8 @@ final class CallScreenState {
     statusText,
     muted,
     cameraOn,
+    screenSharing,
+    peerScreenSharing,
     notice,
     busy,
   );
