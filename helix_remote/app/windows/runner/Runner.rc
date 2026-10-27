@@ -92,7 +92,7 @@ BEGIN
             VALUE "CompanyName", "com.example.helix_remote" "\0"
             VALUE "FileDescription", "Orbit" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "Orbit" "\0"
+            VALUE "InternalName", "helix_remote" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example.helix_remote. All rights reserved." "\0"
             VALUE "OriginalFilename", "helix_remote.exe" "\0"
             VALUE "ProductName", "Orbit" "\0"
