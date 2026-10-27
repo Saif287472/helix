@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:orbit_ui/src/components/avatar.dart';
 import 'package:orbit_ui/src/components/bars.dart';
 import 'package:orbit_ui/src/components/button.dart';
+import 'package:orbit_ui/src/components/call_picker.dart';
 import 'package:orbit_ui/src/components/chip_tag.dart';
 import 'package:orbit_ui/src/components/composer.dart';
 import 'package:orbit_ui/src/components/gif_tray.dart';
@@ -134,6 +135,7 @@ class ChatModel {
     this.verified = false,
     this.isGroup = false,
     this.showCallButtons = true,
+    this.callCandidates = const [],
     this.hasInfoPage = true,
     this.pendingMembers = const [],
     this.items = const [],
@@ -180,6 +182,10 @@ class ChatModel {
   final bool verified;
   final bool isGroup;
   final bool showCallButtons;
+
+  /// In a group: the other members a call can ring (people who can be called,
+  /// not blocked). Up to three are rung; more are chosen in a sheet.
+  final List<HelixPersonItem> callCandidates;
 
   /// There is a contact or group info page (the header and ⋮ open it).
   final bool hasInfoPage;
@@ -238,6 +244,7 @@ class ChatActions {
     this.onOpenSharedMedia,
     this.onOpenSettings,
     this.onCall,
+    this.onGroupCall,
     this.onReply,
     this.onEdit,
     this.onCopy,
@@ -300,6 +307,11 @@ class ChatActions {
 
   /// Places a call; returns a sentence to show when it could not start.
   final FutureOr<String?> Function({required bool video})? onCall;
+
+  /// A group call: rings [invite] (account ids; one to three of
+  /// [ChatModel.callCandidates]). Null when it started, else a sentence.
+  final FutureOr<String?> Function(List<String> invite, {required bool video})?
+  onGroupCall;
 
   /// Quote the message in the next one; the field gets the cursor after.
   final FutureOr<void> Function(String id)? onReply;
@@ -1199,6 +1211,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _call({required bool video}) async {
+    final m = widget.model;
+    if (m.isGroup) {
+      final candidates = m.callCandidates;
+      final invite = candidates.length <= orbitGroupCallInvites
+          ? [for (final p in candidates) p.id]
+          : await showOrbitGroupCallPicker(
+              context,
+              candidates: candidates,
+              video: video,
+            );
+      if (invite == null || invite.isEmpty || !mounted) return;
+      _toast(await widget.actions.onGroupCall?.call(invite, video: video));
+      return;
+    }
     final said = await widget.actions.onCall?.call(video: video);
     _toast(said);
   }

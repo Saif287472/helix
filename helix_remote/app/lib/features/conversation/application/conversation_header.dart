@@ -30,6 +30,7 @@ class ConversationHeader {
     this.muted = false,
     this.disappearingSeconds,
     this.composerDisabledReason,
+    this.callees = const [],
   });
 
   final String id;
@@ -58,9 +59,14 @@ class ConversationHeader {
   /// composer shows it instead of the text field.
   final String? composerDisabledReason;
 
+  /// In a group: the other members a call can ring (not blocked), as people.
+  final List<HelixPersonItem> callees;
+
   /// The header offers voice and video calls: a direct chat that neither
-  /// side has blocked (group calls are not part of this release).
-  bool get canCall => peerAccount != null && !blocked && !blockedByPeer;
+  /// side has blocked, or a group that still has someone to ring.
+  bool get canCall =>
+      (peerAccount != null && !blocked && !blockedByPeer) ||
+      (isGroup && composerDisabledReason == null && callees.isNotEmpty);
 
   @override
   bool operator ==(Object other) =>
@@ -77,7 +83,8 @@ class ConversationHeader {
       other.blockedByPeer == blockedByPeer &&
       other.muted == muted &&
       other.disappearingSeconds == disappearingSeconds &&
-      other.composerDisabledReason == composerDisabledReason;
+      other.composerDisabledReason == composerDisabledReason &&
+      listEquals(other.callees, callees);
 
   @override
   int get hashCode => Object.hash(
@@ -94,6 +101,7 @@ class ConversationHeader {
     muted,
     disappearingSeconds,
     composerDisabledReason,
+    Object.hashAll(callees),
   );
 }
 
@@ -270,6 +278,13 @@ final conversationHeaderProvider = Provider.autoDispose
         typing: typing.isNotEmpty,
         muted: muted,
         disappearingSeconds: chat.disappearingSeconds,
+        callees: [
+          for (final m in members ?? const <GroupMemberRow>[])
+            if (!m.isSelf &&
+                m.accountId != self &&
+                !people.isBlocked(m.accountId))
+              people.nameOf(m.accountId, fallbackName: m.displayName).toItem(),
+        ],
         composerDisabledReason: !stillIn
             ? 'You can no longer send messages to this group.'
             : !canSend

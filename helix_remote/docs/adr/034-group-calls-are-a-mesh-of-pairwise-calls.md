@@ -1,8 +1,8 @@
 # ADR 034: Group calls are a mesh of pairwise calls, up to four people
 
 Status: accepted (2026-10-28), after the user chose "mesh, up to 4" and
-"voice and video" when asked on 2026-10-28. Steps 1 to 3 of "Build order" are built (2026-10-28); the app
-and the end-to-end checks are not.
+"voice and video" when asked on 2026-10-28. Steps 1 to 4 of "Build order" are built (2026-10-28); the
+end-to-end test, the coturn range and the device checks are not.
 
 Plan of record: `docs/architecture/ARCHITECTURE_V2_PLAN.md` (§3 module list,
 `group_calls`; §12 change log). Un-defers the 2026-10-01 decision "group calls

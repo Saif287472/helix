@@ -14,6 +14,13 @@ final class ConversationCalls {
   /// Null when the call started, else one sentence to show.
   Future<String?> start(String peerAccount, {required bool video}) =>
       _launcher.start(peerAccount: peerAccount, video: video);
+
+  /// A group call ringing [invite]; null when it started, else a sentence.
+  Future<String?> startGroup(
+    String conversation,
+    List<String> invite, {
+    required bool video,
+  }) => _launcher.startGroup(conversation, invite: invite, video: video);
 }
 
 final conversationCallsProvider = Provider<ConversationCalls>(

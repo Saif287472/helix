@@ -167,6 +167,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     return calls.start(peer, video: video);
   }
 
+  Future<String?> _groupCall(List<String> invite, {required bool video}) async {
+    final calls = ref.read(conversationCallsProvider);
+    if (!calls.isAvailable) return 'Calls are not available on this device.';
+    return calls.startGroup(_id, invite, video: video);
+  }
+
   Future<ChatMessageMenu?> _menu(String id) async {
     final rowid = _rowid(id);
     if (rowid == null) return null;
@@ -465,6 +471,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
       verified: header?.verified ?? false,
       isGroup: header?.isGroup ?? group != null,
       showCallButtons: header?.canCall ?? false,
+      callCandidates: header?.callees ?? const [],
       hasInfoPage: infoRoute != null,
       pendingMembers: pending,
       items: items,
@@ -522,6 +529,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         onOpenSharedMedia: () => context.push(sharedMediaLocation(_id)),
         onOpenSettings: () => context.push(chatSettingsLocation(_id)),
         onCall: _call,
+        onGroupCall: _groupCall,
         messageMenu: _menu,
         onReact: (id, emoji) {
           final rowid = _rowid(id);

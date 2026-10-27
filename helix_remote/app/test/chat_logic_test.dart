@@ -146,6 +146,12 @@ void main() {
         payload: '{"outcome":"missed","media":"audio"}',
       );
       expect(callLogText(missed), 'Missed voice call');
+      final room = row(
+        5,
+        kind: 'call_log',
+        payload: '{"outcome":"answered","media":"video","duration_s":75}',
+      ).copyWith(conversationId: 'group:g1');
+      expect(callLogText(room), 'Group video call, 1:15');
     });
   });
 

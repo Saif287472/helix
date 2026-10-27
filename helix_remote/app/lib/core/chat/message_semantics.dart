@@ -198,11 +198,14 @@ String? systemNoticeText(
 String callLogText(MessageRow row) {
   final payload = payloadOf(row);
   final video = payload['media'] == 'video';
-  final kind = video ? 'video call' : 'voice call';
+  final group = row.conversationId.startsWith('group:') ? 'group ' : '';
+  final kind = video ? '${group}video call' : '${group}voice call';
   final seconds = (payload['duration_s'] as num?)?.toInt();
   switch (payload['outcome']) {
     case 'answered':
-      final label = video ? 'Video call' : 'Voice call';
+      final label = group.isEmpty
+          ? (video ? 'Video call' : 'Voice call')
+          : (video ? 'Group video call' : 'Group voice call');
       return seconds == null || seconds <= 0
           ? label
           : '$label, ${formatDurationMs(seconds * 1000)}';

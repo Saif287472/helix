@@ -55,7 +55,11 @@ conversation_routes.dart    /chat/:id and its sub-routes
 
 - **Calls:** the header buttons go through `callLauncherProvider`
   (`core/calls/call_launcher.dart`), which resolves to `placeCallProvider`; a failure
-  is the outcome's sentence in a snackbar.
+  is the outcome's sentence in a snackbar. A group chat has the same two buttons
+  when the header has someone to ring (`ConversationHeader.callees`: the other
+  members you have not blocked): up to three are rung at once; in a larger
+  group a sheet picks up to three (`showOrbitGroupCallPicker`). They go
+  through `CallLauncher.startGroup` -> `placeGroupCallProvider`.
 - **Blocks:** when you blocked them, or they blocked you (`peerBlocksMeProvider`,
   told by the server at once), the header has no call buttons and the composer
   shows `ConversationHeader.composerDisabledReason` ("<Name> has blocked you.
