@@ -1321,10 +1321,14 @@ class ChatsSettingsModel {
     this.voice = DownloadWhen.always,
     this.videos = DownloadWhen.never,
     this.documents = DownloadWhen.never,
+    this.linkPreviews,
   });
 
   final TextSizeChoice textSize;
   final bool enterSends;
+
+  /// Link previews are on; null when the app does not offer them.
+  final bool? linkPreviews;
   final DownloadWhen photos;
   final DownloadWhen voice;
   final DownloadWhen videos;
@@ -1335,11 +1339,13 @@ class ChatsSettingsActions {
   const ChatsSettingsActions({
     this.onTextSize,
     this.onEnterSends,
+    this.onLinkPreviews,
     this.onDownload,
   });
 
   final ValueChanged<TextSizeChoice>? onTextSize;
   final ValueChanged<bool>? onEnterSends;
+  final ValueChanged<bool>? onLinkPreviews;
 
   /// "photos", "voice", "videos" or "documents".
   final void Function(String kind, DownloadWhen when)? onDownload;
@@ -1364,6 +1370,7 @@ class ChatsSettingsScreen extends StatefulWidget {
 class _ChatsSettingsScreenState extends State<ChatsSettingsScreen> {
   late var _size = widget.model.textSize;
   late var _enter = widget.model.enterSends;
+  late var _previews = widget.model.linkPreviews ?? false;
   late final Map<String, DownloadWhen> _dl = _downloads(widget.model);
 
   static Map<String, DownloadWhen> _downloads(ChatsSettingsModel m) => {
@@ -1382,6 +1389,7 @@ class _ChatsSettingsScreenState extends State<ChatsSettingsScreen> {
     if (old.model != m) {
       _size = m.textSize;
       _enter = m.enterSends;
+      _previews = m.linkPreviews ?? false;
       _dl.addAll(_downloads(m));
     }
   }
@@ -1474,6 +1482,29 @@ class _ChatsSettingsScreenState extends State<ChatsSettingsScreen> {
             ),
           ],
         ),
+        if (widget.model.linkPreviews != null)
+          OrbitSection(
+            title: 'Links',
+            footer:
+                'Your phone asks the website for its title and description '
+                'when you send a link, so the site sees your phone\u2019s '
+                'address. Nothing is fetched when you receive a link.',
+            rows: [
+              OrbitListRow(
+                icon: OrbitIcons.linkSimple,
+                iconColor: 1,
+                title: 'Link previews',
+                sub:
+                    'Show a card with the page\u2019s title under a link you send',
+                end: OrbitRowEnd.toggle,
+                on: _previews,
+                onChanged: (v) {
+                  setState(() => _previews = v);
+                  a.onLinkPreviews?.call(v);
+                },
+              ),
+            ],
+          ),
         OrbitSection(
           title: 'Download automatically',
           footer:

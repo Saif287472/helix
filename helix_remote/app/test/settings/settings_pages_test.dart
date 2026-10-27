@@ -769,6 +769,13 @@ void main() {
       await settle(tester);
       expect(settings.read(AppSettings.enterToSend), isTrue);
 
+      // Link previews start off: the site sees the sender's address.
+      expect(settings.read(AppSettings.linkPreviews), isFalse);
+      await reveal(tester, find.text('Link previews'));
+      await tester.tap(find.text('Link previews'));
+      await settle(tester);
+      expect(settings.read(AppSettings.linkPreviews), isTrue);
+
       await reveal(tester, find.text('Videos'));
       await tester.tap(
         find.descendant(

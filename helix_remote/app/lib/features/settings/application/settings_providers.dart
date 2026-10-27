@@ -53,6 +53,7 @@ final notificationPreviewsProvider = settingProvider(
 
 final fontScaleSettingProvider = settingProvider(AppSettings.fontScalePercent);
 final enterToSendProvider = settingProvider(AppSettings.enterToSend);
+final linkPreviewsProvider = settingProvider(AppSettings.linkPreviews);
 
 final mediaImagesProvider = settingProvider(AppSettings.mediaImages);
 final mediaAudioProvider = settingProvider(AppSettings.mediaAudio);
@@ -171,6 +172,9 @@ final class SettingsActions {
 
   Future<void> setEnterToSend(bool on) =>
       _store.set(AppSettings.enterToSend, on);
+
+  Future<void> setLinkPreviews(bool on) =>
+      _store.set(AppSettings.linkPreviews, on);
 
   Future<void> setMediaPolicy(MediaKindChoice kind, MediaDownloadPolicy p) =>
       switch (kind) {

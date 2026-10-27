@@ -13,7 +13,7 @@ several features); every tile and row opens a page registered in
 | Accounts | the accounts signed in on this phone, to open, add or remove (asks first) | `accountLinesProvider`, `accountsPageProvider` (`core/engine/runtime_providers.dart`) |
 | Privacy | last seen / online / group-add audiences, found by phone / `~name` (server); read receipts, typing, silence unknown callers (`EngineSettings.silenceUnknownCallers`: a stranger's call is a missed call in the log and does not ring), default disappearing timer, the device's app lock, blocked list | server `people.privacy`, engine `EngineSettings`, `AppSettings`, `PeopleService.watchAll`, `accountsProvider`'s `DeviceLock` |
 | Notifications | alerts for messages / groups / calls, sound, vibrate, previews, OS permission, muted chats (with unmute), the ringtone a call rings with | `AppSettings.notify*`, `NotificationPermissionSource`, `ChatsService.watchChats` |
-| Chats | text size, Enter sends, media auto-download per kind | `AppSettings`, `MediaPolicySync` |
+| Chats | text size, Enter sends, link previews (off by default), media auto-download per kind | `AppSettings`, `MediaPolicySync` |
 | Storage and data | database and media size, the bar's split by kind, the biggest chats, and freeing one chat's photos and videos or documents (its messages stay) | `StorageUsageProbe`, `SettingsGateway.mediaStorage/biggestChats/freeChatSpace` (engine `MediaService`) |
 | Help and about | version, server, legal documents (ops API, bundled fallback), licences, a line saying problem reports go to the server | `SettingsGateway.serverDetails/legal`, `core/diagnostics/anomaly_log.dart` |
 | Advanced | server facts and allowed feature flags, sync now | `ops.serverInfo`, `Engine.syncOnce` |
@@ -216,3 +216,14 @@ ring. Both the running app (`NotificationCallRinger`) and the FCM isolate read
 `Ringtones.chosen()`, which re-checks the pack through the gate on every call;
 null - no Windows, no choice, no pack or no copy - is the phone's own ringtone
 channel, unchanged.
+
+## Link previews
+
+Off by default (`AppSettings.linkPreviews`, Chats > Links). When on, sending a message with a link makes the
+sender's phone ask the site for its title and description (`core/platform/link_preview_source.dart`) and send them
+as the message's `link_preview` card; the reader's phone never fetches anything and draws only the text it was sent.
+The fetch is plain on purpose: HTTPS on 443 only, public hosts only (every address the name resolves to, again on each
+of at most 3 redirects: not loopback, private, link-local, carrier NAT or multicast), no cookies, HTML only, 256 KiB,
+6 seconds, no picture. A site that does not answer, or answers with anything else, is no card; the message still
+goes. The site sees the sender's IP address and the link; the Chats page says so. A name that resolves to a public
+address when checked and to a private one when connected (DNS rebinding) is not defended against.

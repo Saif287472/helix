@@ -51,6 +51,11 @@ abstract final class AppSettings {
   static Setting<String> chatWallpaper(String conversationId) =>
       Setting<String>('app.wallpaper.chat.$conversationId', '');
 
+  /// Fetch a link's title and description from the website when a message with
+  /// a link is sent, and send them as a card. Off by default: the site sees
+  /// the sender's address. The reader never fetches anything.
+  static const linkPreviews = Setting<bool>('app.link_previews', false);
+
   /// The Enter key sends a message (hardware keyboards, Windows). Read by the
   /// composer.
   static const enterToSend = Setting<bool>('app.enter_to_send', false);

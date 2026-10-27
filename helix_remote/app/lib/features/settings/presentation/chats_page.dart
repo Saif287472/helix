@@ -44,6 +44,7 @@ class ChatsSettingsPage extends ConsumerWidget {
       model: orbit.ChatsSettingsModel(
         textSize: sizeOf(ref.watch(fontScaleSettingProvider).value ?? 100),
         enterSends: ref.watch(enterToSendProvider).value ?? false,
+        linkPreviews: ref.watch(linkPreviewsProvider).value ?? false,
         photos: whenOf(
           ref.watch(mediaImagesProvider).value ?? MediaDownloadPolicy.wifi,
         ),
@@ -60,6 +61,7 @@ class ChatsSettingsPage extends ConsumerWidget {
       actions: orbit.ChatsSettingsActions(
         onTextSize: (size) => actions.setFontScale(percentOf(size)),
         onEnterSends: actions.setEnterToSend,
+        onLinkPreviews: actions.setLinkPreviews,
         onDownload: (kind, when) {
           final media = switch (kind) {
             'photos' => MediaKindChoice.images,

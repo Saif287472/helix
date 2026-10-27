@@ -182,9 +182,19 @@ final class ChatsService {
     String text, {
     MessageRef? replyTo,
     List<Mention> mentions = const [],
+    LinkPreview? linkPreview,
   }) async {
     if (text.trim().isEmpty) {
       throw ArgumentError.value(text, 'text', 'is empty');
+    }
+    // A preview is of a link the message holds: one for an address that is not
+    // in the text would be a card the sender never showed.
+    if (linkPreview != null && !text.contains(linkPreview.url)) {
+      throw ArgumentError.value(
+        linkPreview.url,
+        'linkPreview',
+        'is not in text',
+      );
     }
     if (text.length > ContentLimits.maxTextLength) {
       throw ArgumentError.value(
@@ -198,7 +208,7 @@ final class ChatsService {
     }
     return _sendVisible(
       conversationId,
-      TextBody(text: text, mentions: mentions),
+      TextBody(text: text, mentions: mentions, linkPreview: linkPreview),
       reply: replyTo,
     );
   }

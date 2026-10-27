@@ -14,7 +14,7 @@ import 'package:helix_remote_crypto/v2.dart' show SecureCryptoRandom;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show Mention, MessageRef, PresenceResponse, RsvpState;
+    show LinkPreview, Mention, MessageRef, PresenceResponse, RsvpState;
 import 'a3b_fakes.dart' show FakeLocalSettings;
 import 'orbit_theme.dart';
 
@@ -148,8 +148,12 @@ class TestChatGateway extends ChatGateway {
     String text, {
     MessageRef? replyTo,
     List<Mention> mentions = const [],
+    LinkPreview? linkPreview,
   }) async {
     log.add('sendText:$conversationId:$text');
+    if (linkPreview != null) {
+      log.add('linkPreview:${linkPreview.url}:${linkPreview.title}');
+    }
     await outgoing(
       conversationId,
       text,

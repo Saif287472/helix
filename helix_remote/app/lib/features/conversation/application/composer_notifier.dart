@@ -11,6 +11,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart'
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/attachment_picker.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
+import 'package:helix_remote/core/platform/link_preview_source.dart';
 import 'package:helix_remote/core/platform/media_sanitizer.dart';
 import 'package:helix_remote/core/platform/voice_recorder.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
@@ -18,7 +19,7 @@ import 'package:helix_remote/features/conversation/application/audio_playback.da
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show MediaInput;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show Mention, MediaItemKind, MessageRef;
+    show LinkPreview, Mention, MediaItemKind, MessageRef;
 import 'package:orbit_ui/models.dart';
 
 /// What kind of file a picked attachment is, for the preview.
@@ -438,6 +439,7 @@ final class ComposerNotifier extends Notifier<ComposerState> {
               ? null
               : MessageRef(id: reply.messageId, author: reply.author),
           mentions: mentionsIn(text),
+          linkPreview: await _previewOf(text),
         );
         state = state.copyWith(reply: () => null);
         await gateway.setDraft(conversationId, null);
@@ -449,6 +451,32 @@ final class ComposerNotifier extends Notifier<ComposerState> {
     _pendingMentions.clear();
     await _stopTyping();
     return true;
+  }
+
+  /// The card for the first link in [text], when the person turned link
+  /// previews on and the site answers in time; otherwise null and the message
+  /// goes without one. Never fails a send.
+  Future<LinkPreview?> _previewOf(String text) async {
+    try {
+      if (!await ref
+          .read(localSettingsProvider)
+          .get(AppSettings.linkPreviews)) {
+        return null;
+      }
+      final link = firstLinkIn(text);
+      if (link == null) return null;
+      final data = await ref
+          .read(linkPreviewSourceProvider)
+          .fetch(Uri.parse(link));
+      if (data == null) return null;
+      return LinkPreview(
+        url: link,
+        title: data.title,
+        description: data.description,
+      );
+    } on Object {
+      return null;
+    }
   }
 
   // ----------------------------------------------------------- attachments

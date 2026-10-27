@@ -6,6 +6,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show
         EventBody,
+        LinkPreview,
         Mention,
         MessageRef,
         PollBody,
@@ -225,10 +226,12 @@ class ChatGateway {
     String text, {
     MessageRef? replyTo,
     List<Mention> mentions = const [],
+    LinkPreview? linkPreview,
   }) => _chats.sendText(
     conversationId,
     text,
     replyTo: replyTo,
+    linkPreview: linkPreview,
     mentions: mentions,
   );
 
