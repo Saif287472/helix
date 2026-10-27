@@ -34,9 +34,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | Already built | 37 | see "Already built" |
 | S (one file) | 1 | B2 |
 | M (about 10 files) | 0 | none left |
-| L (more than that) | 8 | A5, A7, A8, A13, C3, C4, D1, D2 |
-| L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
-| Not planned | 6 | see "Not planned" |
+| L (more than that) | 2 | C3, D1 |
+| L+ (a project of its own) | 1 | D3 |
+| Not planned | 16 | see "Not planned" (ten of them to be looked at again about 2027-10) |
 
 ## Already built (no work; listed so they are not requested twice)
 
@@ -76,15 +76,15 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | A2 | Polls: draw, create and vote | **Built 2026-10-26** | done | `orbit_ui` `timeline.dart` (`_Poll`), `compose_pages.dart` (`OrbitNewPollPage`), `chat_screen.dart` (attach sheet, `onVote`, `onCreatePoll`); app `message_mapper.dart`, `chat_gateway.dart`, `message_actions.dart`, `conversation_screen.dart`. Tests: `orbit_ui/test/polls_events_test.dart`, `app/test/poll_event_flow_test.dart`. Not done: closing a poll (honoured when received, not offered), who voted. |
 | A3 | Pin message in a chat | **Built 2026-10-27** | done | New `pin` content action (protocol `bodies/actions.dart`, `content_pin.json`, CONTENT_V2.md), DB schema 6 `messages.pinned_at`, engine `ChatsService.pinMessage` and `apply.dart` `_pin`, backup record; `orbit_ui` pinned banner and menu items; app `pinned_messages.dart`. A chat keeps 3; any member may pin. Not done: a "Pinned messages" list page; pinning a message for a limited time. |
 | A4 | Starred (saved) messages | **Built 2026-10-27** | done | DB schema 6 `messages.starred_at` (private, in the backup), engine `setStarred`/`watchStarred`, `orbit_ui` menu item, bubble star and `StarredMessagesScreen`; app `starred_messages.dart`, route `/settings/starred`, a row on You. |
-| A5 | Stickers and animated emoji | Partial (`sticker` type exists, UI "needs newer version") | **L** | Draw sticker bubble; sticker picker and packs (storage, download, a pack format like `THEME_PACK_FORMAT.md`); sticker maker (image to webp via `FlutterMediaProcessor`); send path in engine. New pack format means a doc and tests. |
+| A5 | Stickers and animated emoji | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** Draw sticker bubble; sticker picker and packs (storage, download, a pack format like `THEME_PACK_FORMAT.md`); sticker maker (image to webp via `FlutterMediaProcessor`); send path in engine. New pack format means a doc and tests. |
 | A6 | GIF picker | **Built 2026-10-27** (saved GIFs only, as chosen) | done | `MessagesDao.recentGifs`, `orbit_ui` `gif_tray.dart` and a GIF tile in the attach sheet, app `savedGifs`/`gifFile`. No search and no third party; the tray is the GIFs already on the phone. |
-| A7 | Live and motion photos | Not built | **L** | Picker plugin support on Android, `MediaSanitizer` handling of the embedded video, a new `MediaItem` kind (proto change plus fixtures), viewer. Sizeable and low value. |
-| A8 | Voice message transcripts (on-device) | Not built | **L** | Needs an on-device speech model (new plugin and platform code, large download), an adapter file in `app/core/platform/`, a transcript store (cache or DB column), UI on the voice bubble. Privacy gain is that nothing leaves the phone. |
+| A7 | Live and motion photos | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** Picker plugin support on Android, `MediaSanitizer` handling of the embedded video, a new `MediaItem` kind (proto change plus fixtures), viewer. Sizeable and low value. |
+| A8 | Voice message transcripts (on-device) | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** Needs an on-device speech model (new plugin and platform code, large download), an adapter file in `app/core/platform/`, a transcript store (cache or DB column), UI on the voice bubble. Privacy gain is that nothing leaves the phone. |
 | A9 | Rich link previews | **Built 2026-10-27** (opt-in) | done | Engine `sendText(linkPreview:)`; app `link_preview_source.dart` (HTTPS/443, public hosts, 256 KiB, 6 s, no picture, no cookies), a composer hook, Settings > Chats > Links switch, **off by default**. The reader fetches nothing. Not done: a preview picture; a preview while typing. |
 | A10 | Edit revision history | **Built 2026-10-27** | done | No schema change: `MessagesDao.editMessage` keeps the replaced text in the row payload (`revisionsOf`, last 10); Message info lists them (`orbit_ui` `MessageEditItem`, app `message_info.dart`) and is offered for any edited message. Both sides keep them; they never travel and go with the message. |
 | A11 | Media draft with caption, waveform, duration, view-once | Built (send-files page, composer) | n/a | Nothing to do. |
 | A12 | Transfer progress (0.0 to 1.0) | Built (transfer queue with progress) | n/a | Nothing to do. |
-| A13 | RAM-only ephemeral files | Not built | **L** | Today view-once files are on disk until opened, then deleted. True RAM-only means a decrypt-to-memory viewer, no cache writes (`MediaTemp`, `media_viewer_screen.dart`, video player cannot play from memory, so images only). Document the limit honestly in `PRIVACY_CLAIM_MATRIX.md`. |
+| A13 | RAM-only ephemeral files | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** Today view-once files are on disk until opened, then deleted. True RAM-only means a decrypt-to-memory viewer, no cache writes (`MediaTemp`, `media_viewer_screen.dart`, video player cannot play from memory, so images only). Document the limit honestly in `PRIVACY_CLAIM_MATRIX.md`. |
 
 ## B. Chat organisation and personalisation
 
@@ -106,7 +106,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | C1 | Silence unknown callers | **Built 2026-10-27** | done | Engine `EngineSettings.silenceUnknownCallers`, `calls_service.dart` (`_isSilenced`, `_logSilenced`, `peekPending`), `MessagesDao.hasOutgoing`; `orbit_ui` Privacy > Calls switch; app `privacy_page.dart`. Unknown = not in the contacts, no nickname, never written to. Logged as missed, no ring and no notice. |
 | C2 | Show your own "online" separately | **Already built** | n/a | `PrivacySettings.online` and the privacy page row. |
 | C3 | Chat lock (per-chat biometric lock, hidden list) | Not built | **L** | `conversations.locked` (schema 6); a Locked folder in the chats tab; biometric prompt (`app_lock.dart` generalised); redacted notification previews (`core/notifications/`); excluded from search and from `watchSharedAttachments`; a note that backup contains locked chats. |
-| C4 | Passkeys (WebAuthn) in place of SMS | Not built | **L** | New identity endpoints (server `identity` module, `proto/modules/identity.dart`, fixtures), a platform plugin, recovery-flow changes. A new auth mechanism: needs an ADR and crypto review note. Do not weaken the password-derived key rule. |
+| C4 | Passkeys (WebAuthn) in place of SMS | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** New identity endpoints (server `identity` module, `proto/modules/identity.dart`, fixtures), a platform plugin, recovery-flow changes. A new auth mechanism: needs an ADR and crypto review note. Do not weaken the password-derived key rule. |
 | C5 | Biometric-protected backup key | **Skipped by decision 2026-10-27** | n/a | The recovery secret exists for the day the phone is lost; keeping it behind biometrics on that phone adds no protection against that. |
 | C6 | Usernames in place of numbers | Built (`~name`, share link, "find me by ~name") | n/a | Nothing to do. |
 | C7 | Data export (account report) | **Already built** | n/a | Server `GET /v1/account/export` (compliance module) and Settings > Account > Export; the backlog row was wrong. |
@@ -118,18 +118,18 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | ID | Feature | Status | Size | Probable files |
 |---|---|---|---|---|
 | D1 | Screen sharing (1:1) | Not built | **L** | `helix_remote_calls` (WebRTC capture, Android foreground-service permission), call signalling field, call screen controls in `ui/screens/calls/`, platform manifests. |
-| D2 | Call transfer between devices | Not built | **L** | Multi-device call handoff in the calls state machine (engine `calls`), a signal type, server calls module, UI. |
+| D2 | Call transfer between devices | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L** Multi-device call handoff in the calls state machine (engine `calls`), a signal type, server calls module, UI. |
 | D3 | Group calls | Not built (deferred by the plan) | **L+** | Needs an SFU and the `group_calls` module; the plan reserves room. Needs its own plan and ADR; not a one-day item. |
-| D4 | Call links, waiting room, scheduled calls with RSVP | Not built | **L+** | Server module and routes, `event` type exists for RSVP, but joining rooms needs group calls (D3). |
+| D4 | Call links, waiting room, scheduled calls with RSVP | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L+** Server module and routes, `event` type exists for RSVP, but joining rooms needs group calls (D3). |
 | D5 | Noise suppression, QuickHD | **Noise suppression built 2026-10-26** | done | `web_rtc_call_engine.dart` `getUserMedia` audio constraints (echo cancellation, noise suppression, auto gain). QuickHD (a fast first video resolution) is not done. No test: it needs a real microphone. |
-| D6 | Web calling (browser) | Not built | **L+** | A web client; the engine is pure Dart, but a web app, Wasm drift and a WebSocket story are a new project. |
+| D6 | Web calling (browser) | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L+** A web client; the engine is pure Dart, but a web app, Wasm drift and a WebSocket story are a new project. |
 
 ## E. Communities, channels, platform
 
 | ID | Feature | Status | Size | Probable files |
 |---|---|---|---|---|
-| E1 | Communities (umbrella of groups) | Not built | **L+** | New server module, protocol, engine and app feature; new package registrations in `architecture_rules`. Plan and ADR first. |
-| E2 | Channels (one-way broadcast) | Not built | **L+** | Unencrypted or fan-out model conflicts with the E2EE design; needs an ADR. |
+| E1 | Communities (umbrella of groups) | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L+** New server module, protocol, engine and app feature; new package registrations in `architecture_rules`. Plan and ADR first. |
+| E2 | Channels (one-way broadcast) | **Not doing (decided 2026-10-27; look at it again about 2027-10)** | n/a | Was: **L+** Unencrypted or fan-out model conflicts with the E2EE design; needs an ADR. |
 | E3 | Group events and RSVPs | **Built 2026-10-26** | done | Same slices as A2 (`_Event`, `OrbitNewEventPage`). Not done: end time, plus-ones, calendar export. The zone is sent as `UTC±HH:MM` (documented in CONTENT_V2.md). |
 | E4 | Live location | **Built 2026-10-27** | done | Engine `ChatsService.startLiveLocation / updateLiveLocation / stopLiveLocation` and the receive side in `apply.dart`; `MessagesDao.endLiveLocations` scrubs a finished share's place; app `LocationSource` (geolocator), `LiveLocationService`, the Location tile and sheet, and a map-less bubble (coordinates, "Live until 14:30", Stop sharing, tap opens a maps app). 15 min, 1 h or 8 h, or send the place once. Android foreground service with a notification while a share runs. Not done: a real map, sharing to several chats at once from one screen, a battery-saver mode. Needs a phone check (location permission, the foreground notification, screen off). |
 
@@ -140,6 +140,16 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | F1 | Meta AI assistant, summaries, AI photo editing, AI themes | Not planned | n/a | Any server-side AI sees plaintext and breaks the end-to-end claim. Only an on-device model (large download) could fit, which is L+ and a separate decision. |
 
 ## Not planned (and why)
+
+Decided by the user on 2026-10-27, to be looked at again in about a year (2027-10):
+
+- A5 stickers and animated emoji; A7 live and motion photos; A8 on-device voice transcripts; A13
+  memory-only view-once files; C4 passkeys; D2 moving a call to another device; D4 call links, waiting
+  rooms and scheduled calls; D6 web calling; E1 communities; E2 channels. Each row above keeps its old
+  notes after "Was:".
+- D3 group calls and D1 screen sharing stay planned.
+
+Not planned for other reasons:
 
 - View-once that "cannot be screenshotted": screenshots are allowed everywhere by product rule.
 - Contact request workflows: there are no contact requests by design.
