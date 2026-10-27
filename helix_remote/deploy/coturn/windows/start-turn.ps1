@@ -25,7 +25,7 @@ under /run inside WSL.
 
 Prerequisites (one-time, see deploy/coturn/README.md "Windows home PC"):
 router port forwards and Windows Firewall rules for UDP/TCP 3478 and UDP
-49160-49200, and `apt install coturn` in the WSL distro.
+49160-49400, and `apt install coturn` in the WSL distro.
 
 .PARAMETER PublicIp
 The router's public IPv4. Detected automatically when omitted.

@@ -99,9 +99,10 @@ The user chose the mesh, capped at four people, voice and video.
   relay for every other.
 - **Load on the PC.** A four-person video call is about 12 relayed streams, a
   few Mbit/s each way. Three simultaneous rooms of four would be about 35
-  streams. The relay's port range (49160-49200) is 41 ports, enough for about
-  20 relayed allocations, so the range in `deploy/coturn` must be widened
-  before the feature is turned on. The release notes say so.
+  streams. The relay's port range was 49160-49200 (41 ports, about
+  20 relayed allocations); it is now 49160-49400 in `deploy/coturn`, and the
+  router, Windows Firewall and WSL relay must be changed to match before
+  group calls are used. The release notes say so.
 - **Battery and data.** Each phone uploads one video stream per other person,
   and decodes up to three. Voice-only rooms are cheap; video rooms are the
   expensive case, hence the caps.

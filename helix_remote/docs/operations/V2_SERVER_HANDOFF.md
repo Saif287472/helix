@@ -60,7 +60,7 @@ phones --TLS--> Caddy (80/443) --> 127.0.0.1:8080  helix_remote_server  --> Post
                                                         |
                                                         +--> helix_blobs/ (local object storage, or S3)
                                                         +--> FCM (push), BulkSMSBD (SMS)
-phones --UDP/TCP 3478, 49160-49200--> coturn (WSL1)   (credentials minted by the server)
+phones --UDP/TCP 3478, 49160-49400--> coturn (WSL1)   (credentials minted by the server)
 ```
 
 - **PostgreSQL 17** runs natively as the Windows service
@@ -346,7 +346,8 @@ local Caddy 2.11 on 2026-10-09.
 - The server settings are `HELIX_TURN_URLS` and `HELIX_TURN_SECRET`.
   coturn's `static-auth-secret` must be the same value, and `use-auth-secret`
   must be on (`deploy/coturn/turnserver.conf` already does this).
-- Ports are unchanged from v1: TCP 3478, UDP 3478, UDP 49160-49200 on the
+- TCP 3478, UDP 3478 and UDP 49160-49400 (widened for group calls; it was
+  49160-49200 in v1) on the
   router and in Windows Firewall (`deploy/coturn/README.md`, "Windows home
   PC").
 - **`turns:` (TLS).** On plain `turn:` the credentials, and the fact that an

@@ -1,8 +1,10 @@
 # Agent Instructions
 
 Helix is two privacy-focused messengers in one repo. **Helix Remote**
-(internet, persistent, end-to-end encrypted) is the product under active
-development; **Helix Local** (LAN-only, ephemeral) is dormant. Unless the
+(internet, persistent, end-to-end encrypted; shown to people as **Orbit**, and
+its admin console as **Orbit Console** - display names only: code identifiers,
+package names, the Android application id and exe names stay `helix_*`) is the
+product under active development; **Helix Local** (LAN-only, ephemeral) is dormant. Unless the
 user says otherwise, work means Helix Remote.
 
 For any non-trivial Helix Remote change, use the project skills:
@@ -149,6 +151,13 @@ instructions. `docs/codebase/` is a gitignored code dump - never read it.
   `Theme.of(context)`); no `Color(0x…)`/`Colors.x` in `app/lib`
   (`product_rules_test`), and no second dark or high-contrast theme. (Until
   2026-10-20 the app was light theme only.)
+- **Calls.** One-to-one calls and group calls (ADR-034: a mesh of pairwise
+  calls, voice or video, up to four people, no late join, no server change)
+  share one engine path; all media is relayed by the user's PC (TURN), so the
+  relay's UDP range (49160-49400 in `deploy/coturn`, the router and Windows
+  Firewall) bounds how many calls run at once. Screen sharing is a video-call
+  feature (it replaces the outgoing video track). The group chat header's call
+  buttons ring up to three members; a larger group picks them in a sheet.
 - **Screenshots are allowed everywhere.** No FLAG_SECURE, no Windows display
   affinity, no per-screen capture blocking (removed 2026-09-30 - people need
   to screenshot chats; `product_rules_test`, and the governance check). Never

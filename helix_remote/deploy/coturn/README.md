@@ -64,7 +64,7 @@ sudo ufw allow 3478/tcp comment 'TURN'
 sudo ufw allow 3478/udp comment 'TURN'
 sudo ufw allow 5349/tcp comment 'TURN over TLS'
 sudo ufw allow 5349/udp comment 'TURN over TLS'
-sudo ufw allow 49160:49200/udp comment 'TURN relay range'
+sudo ufw allow 49160:49400/udp comment 'TURN relay range'
 sudo ufw status
 ```
 
@@ -137,11 +137,11 @@ on the PC's LAN address and advertises the router's public one.
 2. **Give the PC a fixed LAN address** (a DHCP reservation in the router),
    because the port forwards below point at it.
 3. **Forward on the router** to that LAN address: UDP 3478, TCP 3478, and
-   UDP 49160-49200 (the relay range in `turnserver.conf`).
+   UDP 49160-49400 (the relay range in `turnserver.conf`).
 4. **Allow them through Windows Firewall** (elevated PowerShell):
 
    ```powershell
-   New-NetFirewallRule -DisplayName 'Helix TURN (UDP)' -Direction Inbound -Protocol UDP -LocalPort 3478,49160-49200 -Action Allow
+   New-NetFirewallRule -DisplayName 'Helix TURN (UDP)' -Direction Inbound -Protocol UDP -LocalPort 3478,49160-49400 -Action Allow
    New-NetFirewallRule -DisplayName 'Helix TURN (TCP)' -Direction Inbound -Protocol TCP -LocalPort 3478 -Action Allow
    ```
 
