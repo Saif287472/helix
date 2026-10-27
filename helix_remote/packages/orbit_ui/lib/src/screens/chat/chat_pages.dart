@@ -1768,6 +1768,7 @@ class ChatSettingsModel {
     this.blocked = false,
     this.wallpaper,
     this.bubbleTint = HelixBubbleTint.theme,
+    this.locked = false,
   });
 
   final bool loading;
@@ -1777,6 +1778,9 @@ class ChatSettingsModel {
 
   /// The colour of your own bubbles in this chat.
   final HelixBubbleTint bubbleTint;
+
+  /// The chat is locked.
+  final bool locked;
   final String title;
   final String? subtitle;
   final HelixAvatarModel avatar;
@@ -1801,6 +1805,7 @@ class ChatSettingsActions {
     this.onUnblock,
     this.onSetWallpaper,
     this.onSetBubbleTint,
+    this.onSetLocked,
   });
 
   /// Gives the chat its own wallpaper; null goes back to the one for all
@@ -1810,6 +1815,9 @@ class ChatSettingsActions {
   /// Gives your bubbles in this chat a colour. With it set, the page offers
   /// Bubble colour.
   final ValueChanged<HelixBubbleTint>? onSetBubbleTint;
+
+  /// Locks the chat, or unlocks it. With it set, the page offers Lock chat.
+  final ValueChanged<bool>? onSetLocked;
   final VoidCallback? onOpenInfo;
   final VoidCallback? onOpenSharedMedia;
 
@@ -1923,6 +1931,18 @@ class ChatSettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (a.onSetLocked != null)
+              OrbitListRow(
+                icon: OrbitIcons.lock,
+                iconColor: 3,
+                title: 'Lock chat',
+                sub:
+                    'Keeps it in Locked chats, behind your phone’s unlock. '
+                    'Notifications show no name or text.',
+                end: OrbitRowEnd.toggle,
+                on: m.locked,
+                onChanged: a.onSetLocked,
+              ),
             if (a.onSetWallpaper != null)
               OrbitListRow(
                 icon: OrbitIcons.palette,

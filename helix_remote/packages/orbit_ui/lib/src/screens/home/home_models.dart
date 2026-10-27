@@ -200,7 +200,11 @@ class ChatsTabModel {
     this.openChatId,
     this.search = const ChatSearchModel(),
     this.lists = const [],
+    this.lockedCount = 0,
   });
+
+  /// How many chats are locked (the menu's Locked chats shows only then).
+  final int lockedCount;
 
   /// The person's own lists, in the order of their chips.
   final List<HelixChatList> lists;
@@ -311,6 +315,8 @@ class HomeActions {
     this.onRenameList,
     this.onDeleteList,
     this.onSetOnList,
+    this.onSetLocked,
+    this.onOpenLocked,
     this.onSetArchived,
     this.onMute,
     this.onMarkRead,
@@ -356,6 +362,15 @@ class HomeActions {
     required bool member,
   })?
   onSetOnList;
+
+  /// Locks the chats, or unlocks them. With it set, the selection menu offers
+  /// Lock chat.
+  final Future<void> Function(Set<String> ids, {required bool locked})?
+  onSetLocked;
+
+  /// Opens the Locked chats screen (the app asks for the phone's unlock
+  /// first). With it set, and chats locked, the ⋮ menu offers it.
+  final void Function()? onOpenLocked;
   final Future<void> Function(Set<String> ids, {required bool archived})?
   onSetArchived;
   final Future<void> Function(Set<String> ids, MuteFor? length)? onMute;

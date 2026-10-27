@@ -114,6 +114,12 @@ class _HomeScreenState extends State<HomeScreen> {
         label: n > 0 ? 'Archived chats ($n)' : 'Archived chats',
         onTap: _a.onOpenArchived,
       ),
+      if (_a.onOpenLocked != null && widget.model.chats.lockedCount > 0)
+        OrbitMenuItem(
+          icon: OrbitIcons.lock,
+          label: 'Locked chats',
+          onTap: _a.onOpenLocked,
+        ),
     ]);
   }
 
@@ -216,6 +222,21 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: () {
             _a.onSetFavourite?.call(ids, favourite: !allFavourite);
             _clear();
+          },
+        ),
+      if (_a.onSetLocked != null)
+        OrbitMenuItem(
+          icon: OrbitIcons.lock,
+          label: 'Lock chat',
+          onTap: () {
+            _a.onSetLocked?.call(ids, locked: true);
+            _clear();
+            showOrbitToast(
+              context,
+              ids.length > 1
+                  ? 'Chats locked. Find them in Locked chats.'
+                  : 'Chat locked. Find it in Locked chats.',
+            );
           },
         ),
       if (_a.onCreateList != null && _a.onSetOnList != null)
