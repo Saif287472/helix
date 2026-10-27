@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:orbit_ui/src/models/view_models.dart';
 
 /// Whether a list has loaded (`contracts/home.md`, shared types).
@@ -197,8 +199,11 @@ class ChatsTabModel {
     this.archivedCount = 0,
     this.openChatId,
     this.search = const ChatSearchModel(),
+    this.lists = const [],
   });
 
+  /// The person's own lists, in the order of their chips.
+  final List<HelixChatList> lists;
   final List<HelixChatListItem> chats;
   final ListStatus status;
   final int archivedCount;
@@ -302,6 +307,10 @@ class HomeActions {
     this.onOpenChat,
     this.onSetPinned,
     this.onSetFavourite,
+    this.onCreateList,
+    this.onRenameList,
+    this.onDeleteList,
+    this.onSetOnList,
     this.onSetArchived,
     this.onMute,
     this.onMarkRead,
@@ -329,6 +338,24 @@ class HomeActions {
   /// offers Favourite.
   final Future<void> Function(Set<String> ids, {required bool favourite})?
   onSetFavourite;
+
+  /// Makes a list called [name] holding [chatIds] (none from the New list
+  /// chip); the sentence to show when it could not be made. With it set, the
+  /// chat filters end in New list and the selection menu offers Add to list.
+  final FutureOr<String?> Function(String name, Set<String> chatIds)?
+  onCreateList;
+
+  /// Renames a list; the sentence to show when it could not be.
+  final FutureOr<String?> Function(String id, String name)? onRenameList;
+  final Future<void> Function(String id)? onDeleteList;
+
+  /// Puts the chats on a list, or takes them off it.
+  final Future<void> Function(
+    Set<String> chatIds,
+    String listId, {
+    required bool member,
+  })?
+  onSetOnList;
   final Future<void> Function(Set<String> ids, {required bool archived})?
   onSetArchived;
   final Future<void> Function(Set<String> ids, MuteFor? length)? onMute;

@@ -290,6 +290,16 @@ class HelixChatPreview extends HelixValue {
   List<Object?> get props => [text, kind, senderPrefix, status, isDraft];
 }
 
+/// A list the person made on the Chats tab ("Work"): a chip that shows the
+/// chats on it.
+class HelixChatList extends HelixValue {
+  const HelixChatList({required this.id, required this.name});
+  final String id;
+  final String name;
+  @override
+  List<Object?> get props => [id, name];
+}
+
 /// One row of the chat list.
 class HelixChatListItem extends HelixValue {
   const HelixChatListItem({
@@ -303,6 +313,7 @@ class HelixChatListItem extends HelixValue {
     this.markedUnread = false,
     this.pinned = false,
     this.favourite = false,
+    this.lists = const [],
     this.muted = false,
     this.archived = false,
     this.typingLabel,
@@ -328,6 +339,9 @@ class HelixChatListItem extends HelixValue {
 
   /// A favourite: the Favourites filter shows it.
   final bool favourite;
+
+  /// The ids of the person's lists this chat is on.
+  final List<String> lists;
   final bool muted;
   final bool archived;
 
@@ -352,6 +366,7 @@ class HelixChatListItem extends HelixValue {
     markedUnread,
     pinned,
     favourite,
+    ...lists,
     muted,
     archived,
     typingLabel,

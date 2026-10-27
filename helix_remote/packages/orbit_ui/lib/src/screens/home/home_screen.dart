@@ -48,6 +48,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late HomeTab _tab = widget.start.tab;
   late final _pages = PageController(initialPage: _tab.index);
   late ChatFilter _filter = widget.start.filter;
+
+  /// A list of the person's own chosen in place of a built-in filter.
+  String? _list;
   late bool _searching = widget.start.searching;
   late bool _callSearching = widget.start.callSearching;
   late final _query = TextEditingController(text: widget.start.query);
@@ -215,6 +218,12 @@ class _HomeScreenState extends State<HomeScreen> {
             _clear();
           },
         ),
+      if (_a.onCreateList != null && _a.onSetOnList != null)
+        OrbitMenuItem(
+          icon: OrbitIcons.list,
+          label: 'Add to list',
+          onTap: () => _listSheet(ids, chats),
+        ),
       OrbitMenuItem(
         icon: OrbitIcons.bellSlash,
         label: allMuted
@@ -235,6 +244,91 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
     ]);
   }
+
+  /// Which lists the selected chats are on, a tick where all of them are; a
+  /// touch puts them on, or takes them off, and New list makes one holding them.
+  void _listSheet(Set<String> ids, List<HelixChatListItem> chats) {
+    final lists = widget.model.chats.lists;
+    showOrbitSheet(
+      context,
+      title: 'Add to list',
+      items: [
+        for (final l in lists)
+          () {
+            final all = chats.every((c) => c.lists.contains(l.id));
+            return OrbitMenuItem(
+              icon: OrbitIcons.list,
+              label: l.name,
+              on: all,
+              onTap: () {
+                _a.onSetOnList?.call(ids, l.id, member: !all);
+                _clear();
+              },
+            );
+          }(),
+        if (lists.isNotEmpty) OrbitMenuItem.divider,
+        OrbitMenuItem(
+          icon: OrbitIcons.plus,
+          label: 'New list',
+          onTap: () => _newList(ids),
+        ),
+      ],
+    );
+  }
+
+  /// Asks for a name and makes the list, holding [ids] when given.
+  void _newList(Set<String> ids) => showOrbitInputDialog(
+    context,
+    title: 'New list',
+    label: 'List name',
+    maxLength: 24,
+    confirmLabel: 'Create',
+    onConfirm: (name) async {
+      final error = await _a.onCreateList?.call(name, ids);
+      if (!mounted) return;
+      if (error != null) {
+        showOrbitToast(context, error, error: true);
+      } else {
+        _clear();
+      }
+    },
+  );
+
+  void _listMenu(HelixChatList l) => showOrbitSheet(
+    context,
+    title: l.name,
+    items: [
+      if (_a.onRenameList != null)
+        OrbitMenuItem(
+          icon: OrbitIcons.pencilSimple,
+          label: 'Rename',
+          onTap: () => showOrbitInputDialog(
+            context,
+            title: 'Rename list',
+            label: 'List name',
+            value: l.name,
+            maxLength: 24,
+            onConfirm: (name) async {
+              final error = await _a.onRenameList?.call(l.id, name);
+              if (error != null && mounted) {
+                showOrbitToast(context, error, error: true);
+              }
+            },
+          ),
+        ),
+      if (_a.onDeleteList != null)
+        OrbitMenuItem(
+          icon: OrbitIcons.trash,
+          label: 'Delete list',
+          sub: 'The chats on it stay',
+          danger: true,
+          onTap: () {
+            _a.onDeleteList?.call(l.id);
+            if (_list == l.id) setState(() => _list = null);
+          },
+        ),
+    ],
+  );
 
   void _callSheet(HelixCallLogItem c) => showOrbitSheet(
     context,
@@ -544,7 +638,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
     }
     int count(ChatFilter f) => m.chats.where(f.matches).length;
-    final shown = m.chats.where(_filter.matches).toList();
+    final lists = widget.model.chats.lists;
+    final list = lists.where((l) => l.id == _list).firstOrNull;
+    final shown = m.chats
+        .where(
+          list == null ? _filter.matches : (c) => c.lists.contains(list.id),
+        )
+        .toList();
     final ordered = [
       ...shown.where((c) => c.pinned),
       ...shown.where((c) => !c.pinned),
@@ -565,17 +665,51 @@ class _HomeScreenState extends State<HomeScreen> {
               if (i > 0) const SizedBox(width: 8),
               OrbitChip(
                 label: f.label,
-                on: _filter == f,
+                on: list == null && _filter == f,
                 height: 36,
                 count: f == ChatFilter.all ? null : count(f),
-                onTap: () => setState(() => _filter = f),
+                onTap: () => setState(() {
+                  _filter = f;
+                  _list = null;
+                }),
+              ),
+            ],
+            for (final l in lists) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onLongPress: () => _listMenu(l),
+                child: OrbitChip(
+                  label: l.name,
+                  on: list?.id == l.id,
+                  height: 36,
+                  count: m.chats.where((c) => c.lists.contains(l.id)).length,
+                  onTap: () => setState(() => _list = l.id),
+                ),
+              ),
+            ],
+            if (_a.onCreateList != null && lists.length < 10) ...[
+              const SizedBox(width: 8),
+              OrbitChip(
+                label: 'New list',
+                icon: OrbitIcons.plus,
+                on: false,
+                height: 36,
+                onTap: () => _newList(const {}),
               ),
             ],
           ],
         ),
       ),
     );
-    final none = _filter == ChatFilter.unread
+    final none = list != null
+        ? const OrbitEmptyState(
+            icon: OrbitIcons.list,
+            title: 'Nothing on this list',
+            text:
+                'Touch and hold a chat, open the menu and choose Add to list. '
+                'Touch and hold the list’s name to rename or delete it.',
+          )
+        : _filter == ChatFilter.unread
         ? const OrbitEmptyState(
             icon: OrbitIcons.checks,
             title: 'No unread chats',
