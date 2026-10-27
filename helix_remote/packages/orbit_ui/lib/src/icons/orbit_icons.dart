@@ -4032,6 +4032,33 @@ abstract final class OrbitIcons {
     ),
   );
 
+  /// `ph-star`.
+  static const star = OrbitGlyph(
+    'star',
+    regular: IconData(
+      0xE46A,
+      fontFamily: 'PhosphorRegular',
+      fontPackage: 'orbit_ui',
+    ),
+    light: IconData(
+      0xE46A,
+      fontFamily: 'PhosphorLight',
+      fontPackage: 'orbit_ui',
+    ),
+    bold: IconData(0xE46A, fontFamily: 'PhosphorBold', fontPackage: 'orbit_ui'),
+    fill: IconData(0xE46A, fontFamily: 'PhosphorFill', fontPackage: 'orbit_ui'),
+    duotone: IconData(
+      0xE46B,
+      fontFamily: 'PhosphorDuotone',
+      fontPackage: 'orbit_ui',
+    ),
+    duotoneBack: IconData(
+      0xE46A,
+      fontFamily: 'PhosphorDuotone',
+      fontPackage: 'orbit_ui',
+    ),
+  );
+
   /// `ph-sticker`.
   static const sticker = OrbitGlyph(
     'sticker',

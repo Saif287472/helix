@@ -45,6 +45,7 @@ export 'src/screens/chat/compose_pages.dart';
 export 'src/screens/calls/call_screens.dart';
 export 'src/screens/people/people_screens.dart';
 export 'src/screens/groups/group_screens.dart';
+export 'src/screens/you/starred_screen.dart';
 export 'src/screens/you/you_screens.dart';
 export 'src/screens/you/topic_screens.dart';
 export 'src/screens/you/settings_screens.dart';

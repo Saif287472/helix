@@ -6,12 +6,18 @@ import 'package:helix_remote/features/conversation/presentation/media_viewer_scr
 import 'package:helix_remote/features/conversation/presentation/message_info_screen.dart';
 import 'package:helix_remote/features/conversation/presentation/send_files_screen.dart';
 import 'package:helix_remote/features/conversation/presentation/shared_media_screen.dart';
+import 'package:helix_remote/features/conversation/presentation/starred_screen.dart';
+import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
 
 /// The routes the conversation feature owns. They sit above the home shell,
 /// so back returns to whichever tab opened the conversation. The router adds
 /// these to its route list.
 final List<RouteBase> conversationRoutes = [
+  GoRoute(
+    path: RoutePaths.starred,
+    builder: (context, state) => const StarredScreen(),
+  ),
   GoRoute(
     path: ChatRoutes.conversation,
     builder: (context, state) => ConversationScreen(

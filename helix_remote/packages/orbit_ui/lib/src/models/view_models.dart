@@ -302,6 +302,7 @@ class HelixChatListItem extends HelixValue {
     this.hasMention = false,
     this.markedUnread = false,
     this.pinned = false,
+    this.favourite = false,
     this.muted = false,
     this.archived = false,
     this.typingLabel,
@@ -324,6 +325,9 @@ class HelixChatListItem extends HelixValue {
   /// Manually marked unread (a dot, no count).
   final bool markedUnread;
   final bool pinned;
+
+  /// A favourite: the Favourites filter shows it.
+  final bool favourite;
   final bool muted;
   final bool archived;
 
@@ -347,6 +351,7 @@ class HelixChatListItem extends HelixValue {
     hasMention,
     markedUnread,
     pinned,
+    favourite,
     muted,
     archived,
     typingLabel,
@@ -806,6 +811,7 @@ class HelixMessage extends HelixValue {
     this.reactions = const [],
     this.expiresLabel,
     this.starred = false,
+    this.pinned = false,
     this.highlighted = false,
     this.failedAction,
   });
@@ -841,7 +847,12 @@ class HelixMessage extends HelixValue {
 
   /// The disappearing timer marker, "1d" / "1h"; null when off.
   final String? expiresLabel;
+
+  /// You starred it (a private bookmark).
   final bool starred;
+
+  /// It is pinned in the chat, for everyone in it.
+  final bool pinned;
 
   /// Briefly highlighted after jumping to it from a quote or search.
   final bool highlighted;
@@ -876,6 +887,7 @@ class HelixMessage extends HelixValue {
     reactions: reactions,
     expiresLabel: expiresLabel,
     starred: starred,
+    pinned: pinned,
     highlighted: highlighted ?? this.highlighted,
     failedAction: failedAction,
   );
@@ -899,9 +911,27 @@ class HelixMessage extends HelixValue {
     ...reactions,
     expiresLabel,
     starred,
+    pinned,
     highlighted,
     failedAction,
   ];
+}
+
+/// A message pinned in the chat, as the banner under the header shows it.
+class ChatPinnedMessage extends HelixValue {
+  const ChatPinnedMessage({required this.id, required this.text, this.author});
+
+  /// The message's id, which a tap jumps to.
+  final String id;
+
+  /// What it says, on one line ("Photo" for a picture).
+  final String text;
+
+  /// Who wrote it ("You" or a first name), shown in a group; null otherwise.
+  final String? author;
+
+  @override
+  List<Object?> get props => [id, text, author];
 }
 
 /// Splits [messages] (oldest first) into runs of one sender within

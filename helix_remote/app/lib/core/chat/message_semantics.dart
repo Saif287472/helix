@@ -232,3 +232,26 @@ String _list(List<String> names) {
   if (names.length == 1) return names.first;
   return '${names.take(names.length - 1).join(', ')} and ${names.last}';
 }
+
+/// What a message says on one line where its bubble does not fit (the pinned
+/// banner, the starred list): its text, else what kind of thing it is.
+String oneLineOf(MessageRow row) {
+  final text = previewTextOf(row);
+  if (text.isNotEmpty) return text;
+  return switch (previewKindOf(row)) {
+    HelixPreviewKind.image => 'Photo',
+    HelixPreviewKind.video => 'Video',
+    HelixPreviewKind.gif => 'GIF',
+    HelixPreviewKind.voiceNote => 'Voice message',
+    HelixPreviewKind.document => 'Document',
+    HelixPreviewKind.sticker => 'Sticker',
+    HelixPreviewKind.location => 'Location',
+    HelixPreviewKind.contact => 'Contact',
+    HelixPreviewKind.poll => row.kind == 'event' ? 'Event' : 'Poll',
+    HelixPreviewKind.call => 'Call',
+    HelixPreviewKind.deleted => 'This message was deleted',
+    HelixPreviewKind.undecryptable => 'Waiting for this message',
+    HelixPreviewKind.unsupported => 'Needs a newer version of Orbit',
+    HelixPreviewKind.text => '',
+  };
+}

@@ -27,6 +27,7 @@ HelixChatListItem chatListItemOf(
     unreadCount: chat.unreadCount,
     hasMention: chat.mentionCount > 0,
     pinned: chat.pinnedAt != null,
+    favourite: chat.favouriteAt != null,
     muted: chat.mutedUntil?.isAfter(now) ?? false,
     archived: chat.archived,
     verified: peer != null && people.isVerified(peer),

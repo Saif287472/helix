@@ -5,6 +5,7 @@ import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart' show ChatsService;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ContentLimits, RsvpState;
 import 'package:orbit_ui/models.dart';
@@ -17,6 +18,7 @@ abstract final class MessageActionIds {
   static const copy = 'copy';
   static const edit = 'edit';
   static const star = 'star';
+  static const pin = 'pin';
   static const info = 'info';
   static const select = 'select';
   static const deleteForMe = 'delete_for_me';
@@ -31,12 +33,18 @@ class MessageMenu {
     required this.actions,
     required this.allowReactions,
     this.currentReaction,
+    this.starred = false,
+    this.pinned = false,
   });
 
   /// The action ids, in menu order.
   final List<String> actions;
   final bool allowReactions;
   final String? currentReaction;
+
+  /// The message is starred / pinned now, so the menu offers to undo it.
+  final bool starred;
+  final bool pinned;
 }
 
 /// What a person can do to the messages of one conversation.
@@ -59,6 +67,38 @@ final class ConversationActions {
     MessageStatus.read,
     MessageStatus.viewed,
   };
+
+  /// Stars or unstars a message (a private bookmark).
+  Future<void> star(int rowid, {required bool starred}) async {
+    try {
+      await (await _gateway).setStarred(rowid, starred: starred);
+    } on Object {
+      // The message is gone; the menu closes on a list that no longer has it.
+    }
+  }
+
+  /// Pins or unpins a message for everyone in the chat: null when it went,
+  /// else the sentence to show. A chat keeps three.
+  Future<String?> pin(int rowid, {required bool pinned}) async {
+    try {
+      final gateway = await _gateway;
+      if (pinned) {
+        final row = await gateway.message(rowid);
+        if (row != null && row.pinnedAt == null) {
+          final held = await gateway.watchPinned(row.conversationId).first;
+          if (held.length >= ChatsService.maxPinnedMessages) {
+            return 'A chat keeps three pinned messages. Unpin one first.';
+          }
+        }
+      }
+      await gateway.pinMessage(rowid, pinned: pinned);
+      return null;
+    } on Object {
+      return pinned
+          ? 'The message could not be pinned.'
+          : 'The message could not be unpinned.';
+    }
+  }
 
   /// Votes in a poll. A poll that is gone, or an answer it does not have, is
   /// not an error worth showing: the bubble redraws from what is stored.
@@ -149,6 +189,7 @@ final class ConversationActions {
       if (hasText) MessageActionIds.copy,
       MessageActionIds.forward,
       MessageActionIds.star,
+      MessageActionIds.pin,
       if (canEdit) MessageActionIds.edit,
       if (row.outgoing) MessageActionIds.info,
       MessageActionIds.select,
@@ -179,6 +220,8 @@ final class ConversationActions {
       actions: actions,
       allowReactions: !deleted && !broken,
       currentReaction: current,
+      starred: row.starredAt != null,
+      pinned: row.pinnedAt != null,
     );
   }
 
@@ -190,9 +233,11 @@ final class ConversationActions {
     required bool canForward,
   }) {
     switch (id) {
-      // The engine keeps no stars, so the menu does not offer one.
+      // A star or a pin is of a message that is there and stays: not a deleted
+      // or broken one, and not a view-once photo that will not.
       case MessageActionIds.star:
-        return false;
+      case MessageActionIds.pin:
+        return !deleted && !broken && !viewOnce;
       case MessageActionIds.reply:
         return !deleted && !broken && !viewOnce;
       case MessageActionIds.forward:

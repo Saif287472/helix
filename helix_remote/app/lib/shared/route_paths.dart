@@ -46,6 +46,9 @@ abstract final class RoutePaths {
   static const notifications = '/settings/notifications';
   static const ringtones = '/settings/notifications/ringtones';
   static const chats = '/settings/chats';
+
+  /// Every message you starred, across your chats.
+  static const starred = '/settings/starred';
   static const storage = '/settings/storage';
   static const about = '/settings/about';
   static const legal = '/settings/about/legal';

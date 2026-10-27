@@ -46,6 +46,7 @@ enum YouTopic {
   recovery,
   password,
   blocked,
+  starred,
 }
 
 // ------------------------------------------------------------ the profile
@@ -686,6 +687,13 @@ class _YouScreenState extends State<YouScreen> {
   }
 
   List<(YouTopic, OrbitGlyph, int, String, String)> get _rows => [
+    (
+      YouTopic.starred,
+      OrbitIcons.star,
+      3,
+      'Starred messages',
+      'The messages you kept',
+    ),
     (
       YouTopic.account,
       OrbitIcons.userCircle,

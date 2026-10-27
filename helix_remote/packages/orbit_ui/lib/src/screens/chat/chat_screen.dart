@@ -67,6 +67,8 @@ enum ChatMessageAction {
   reply,
   copy,
   forward,
+  star,
+  pin,
   edit,
   info,
   select,
@@ -81,9 +83,15 @@ class ChatMessageMenu {
     required this.actions,
     this.allowReactions = true,
     this.currentReaction,
+    this.starred = false,
+    this.pinned = false,
   });
 
   final Set<ChatMessageAction> actions;
+
+  /// The message is starred / pinned now, so the menu offers to undo it.
+  final bool starred;
+  final bool pinned;
 
   /// The reactions pill is offered.
   final bool allowReactions;
@@ -145,6 +153,7 @@ class ChatModel {
     this.searchHits,
     this.searchStatus = ListStatus.ready,
     this.wallpaper = HelixWallpaper.theme,
+    this.pinned = const [],
   });
 
   final String conversationId;
@@ -154,6 +163,10 @@ class ChatModel {
 
   /// What the timeline is drawn on.
   final HelixWallpaper wallpaper;
+
+  /// The messages pinned in this chat, the newest pin first; the banner
+  /// under the header shows them one at a time.
+  final List<ChatPinnedMessage> pinned;
 
   /// "online", "last seen today at 08:31", "5 members", "typing...".
   final String? subtitle;
@@ -255,6 +268,8 @@ class ChatActions {
     this.onPickMention,
     this.onCancelBanner,
     this.onPickFiles,
+    this.onStar,
+    this.onPin,
     this.onVote,
     this.onRsvp,
     this.onCreatePoll,
@@ -359,6 +374,14 @@ class ChatActions {
   onPickMention;
   final VoidCallback? onCancelBanner;
   final ValueChanged<ChatAttachSource>? onPickFiles;
+
+  /// Stars or unstars a message: a private bookmark. With it set, the menu
+  /// offers Star.
+  final void Function(String id, {required bool starred})? onStar;
+
+  /// Pins or unpins a message for everyone in the chat; the sentence to show
+  /// when it could not (a chat keeps three). With it set, the menu offers Pin.
+  final FutureOr<String?> Function(String id, {required bool pinned})? onPin;
 
   /// An answer of a poll was tapped: the poll, and every answer of yours now
   /// (an empty list takes your vote back).
@@ -490,6 +513,9 @@ class _ChatScreenState extends State<ChatScreen> {
   var _flushQueued = false;
 
   final Set<String> _busyMembers = {};
+
+  /// Which pinned message the banner shows (it moves on each tap).
+  int _pinShown = 0;
   late OrbitBubbleActions _bubble = _bubbleFor(widget);
 
   ChatActions get _a => widget.actions;
@@ -885,6 +911,9 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!placeholder && c is! HelixViewOnceContent) ChatMessageAction.reply,
         if (hasText) ChatMessageAction.copy,
         if (!deleted && textOrMedia) ChatMessageAction.forward,
+        if (!placeholder && widget.actions.onStar != null)
+          ChatMessageAction.star,
+        if (!placeholder && widget.actions.onPin != null) ChatMessageAction.pin,
         if (m.outgoing && sent && textOrMedia) ChatMessageAction.edit,
         if (m.outgoing) ChatMessageAction.info,
         ChatMessageAction.select,
@@ -893,6 +922,8 @@ class _ChatScreenState extends State<ChatScreen> {
       },
       allowReactions: !placeholder,
       currentReaction: mine,
+      starred: m.starred,
+      pinned: m.pinned,
     );
   }
 
@@ -930,6 +961,18 @@ class _ChatScreenState extends State<ChatScreen> {
         'Forward',
         false,
         () => a.onForward?.call({id}),
+      ),
+      ChatMessageAction.star: (
+        OrbitIcons.star,
+        menu.starred ? 'Unstar' : 'Star',
+        false,
+        () => a.onStar?.call(id, starred: !menu.starred),
+      ),
+      ChatMessageAction.pin: (
+        OrbitIcons.pushPin,
+        menu.pinned ? 'Unpin' : 'Pin',
+        false,
+        () => _pin(id, pinned: !menu.pinned),
       ),
       ChatMessageAction.edit: (
         OrbitIcons.pencilSimple,
@@ -985,6 +1028,10 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pin(String id, {required bool pinned}) async {
+    _toast(await widget.actions.onPin?.call(id, pinned: pinned));
   }
 
   /// "+": every emoji, to react with (`App.sheet({ title: 'React' })`).
@@ -1431,6 +1478,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     onConfirm: () => _confirmMember(p),
                     onRemove: () => _removeMember(p),
                   ),
+              if (!_searching && _selected.isEmpty && m.pinned.isNotEmpty)
+                _PinnedBanner(
+                  pins: m.pinned,
+                  shown: _pinShown % m.pinned.length,
+                  onTap: () {
+                    final i = _pinShown % m.pinned.length;
+                    widget.actions.onJumpTo?.call(m.pinned[i].id);
+                    setState(() => _pinShown = (i + 1) % m.pinned.length);
+                  },
+                ),
               Expanded(child: body),
               if (showComposer)
                 OrbitComposer(
@@ -2057,6 +2114,81 @@ class _ToLatest extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The pinned message under the header: a pin, "Pinned message" (with "1 of 3"
+/// when there are several) and what it says. A tap jumps to it and moves the
+/// banner on to the next one.
+class _PinnedBanner extends StatelessWidget {
+  const _PinnedBanner({
+    required this.pins,
+    required this.shown,
+    required this.onTap,
+  });
+
+  final List<ChatPinnedMessage> pins;
+  final int shown;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    final pin = pins[shown];
+    final title = pins.length == 1
+        ? 'Pinned message'
+        : 'Pinned message ${shown + 1} of ${pins.length}';
+    final said = pin.author == null ? pin.text : '${pin.author}: ${pin.text}';
+    return Semantics(
+      button: true,
+      label: '$title, $said',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: OrbitSpace.target),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: t.surface,
+            border: Border(bottom: BorderSide(color: t.line2)),
+          ),
+          child: Row(
+            children: [
+              OrbitIcon(
+                OrbitIcons.pushPin,
+                weight: OrbitIconWeight.fill,
+                size: 18,
+                color: t.accent,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OrbitText(
+                      title,
+                      style: t.mono.style(
+                        size: OrbitType.meta,
+                        color: t.accentInk,
+                        letterSpacingEm: 0.03,
+                      ),
+                    ),
+                    OrbitText(
+                      said,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.font.style(size: OrbitType.small, color: t.ink2),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

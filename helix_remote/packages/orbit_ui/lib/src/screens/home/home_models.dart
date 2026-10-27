@@ -6,11 +6,13 @@ enum ListStatus { loading, failed, ready }
 /// The Home tabs.
 enum HomeTab { chats, calls }
 
-/// The chat filters (design decision 2026-10-16): All, Unread, Groups.
+/// The chat filters (design decision 2026-10-16): All, Unread, Groups; and
+/// Favourites, the chats the person starred in the list.
 enum ChatFilter {
   all('All'),
   unread('Unread'),
-  groups('Groups');
+  groups('Groups'),
+  favourites('Favourites');
 
   const ChatFilter(this.label);
 
@@ -20,6 +22,7 @@ enum ChatFilter {
     all => true,
     unread => c.unreadCount > 0,
     groups => c.avatar.isGroup,
+    favourites => c.favourite,
   };
 }
 
@@ -298,6 +301,7 @@ class HomeActions {
     this.onTabChanged,
     this.onOpenChat,
     this.onSetPinned,
+    this.onSetFavourite,
     this.onSetArchived,
     this.onMute,
     this.onMarkRead,
@@ -320,6 +324,11 @@ class HomeActions {
   final void Function(String chatId, {String? messageId})? onOpenChat;
   final Future<void> Function(Set<String> ids, {required bool pinned})?
   onSetPinned;
+
+  /// Makes the chats favourites, or not. With it set, the selection menu
+  /// offers Favourite.
+  final Future<void> Function(Set<String> ids, {required bool favourite})?
+  onSetFavourite;
   final Future<void> Function(Set<String> ids, {required bool archived})?
   onSetArchived;
   final Future<void> Function(Set<String> ids, MuteFor? length)? onMute;

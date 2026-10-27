@@ -11,7 +11,7 @@ application/
                             StreamProviders over the engine's watchChats),
                             chatTypingProvider (kept apart so typing rebuilds
                             one row, not the list)
-  chat_actions.dart         pin / archive / mute / delete / mark read
+  chat_actions.dart         pin / favourite / archive / mute / delete / mark read
   chat_selection.dart       the ticked chats
   chat_search.dart          debounced search: chats by name + FTS messages
 presentation/
@@ -43,3 +43,9 @@ conversation needs the same ones and features may not import each other.
 Fixed row extent (`HelixChatListTile.extentFor`), only rows on screen are
 built (`test/chat_performance_test.dart`: 5,000 chats), every IconButton has
 a tooltip, no colours of its own, plain English literals.
+
+## Favourites
+
+The selection menu's "Add to favourites" / "Remove from favourites" (`ChatActions.favourite` ->
+`ChatsService.setFavourite`) flags chats privately (`conversations.favourite_at`, schema 6; never sent). The
+list shows a small star on a favourite and has a **Favourites** filter beside All, Unread and Groups.

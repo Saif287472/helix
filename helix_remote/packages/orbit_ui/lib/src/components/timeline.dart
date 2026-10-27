@@ -909,6 +909,8 @@ class OrbitMessageBubble extends StatelessWidget {
         );
     }
     if (m.edited) b.write(', edited');
+    if (m.pinned) b.write(', pinned');
+    if (m.starred) b.write(', starred');
     if (m.expiresLabel != null) b.write(', disappears after ${m.expiresLabel}');
     b.write(', ${m.timeLabel}');
     if (m.outgoing) {
@@ -1105,6 +1107,26 @@ class _Meta extends StatelessWidget {
               const SizedBox(width: 2),
               Text(m.expiresLabel!, style: style),
             ],
+          ),
+        ),
+      if (m.pinned)
+        Semantics(
+          label: 'Pinned',
+          child: OrbitIcon(
+            OrbitIcons.pushPin,
+            weight: OrbitIconWeight.fill,
+            size: 12,
+            color: color,
+          ),
+        ),
+      if (m.starred)
+        Semantics(
+          label: 'Starred',
+          child: OrbitIcon(
+            OrbitIcons.star,
+            weight: OrbitIconWeight.fill,
+            size: 12,
+            color: color,
           ),
         ),
       if (withEdited && m.edited) Text('Edited', style: style),

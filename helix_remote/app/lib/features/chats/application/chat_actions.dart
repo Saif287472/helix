@@ -22,6 +22,17 @@ final class ChatActions {
     }
   }
 
+  /// Makes the chats favourites, or not (the Favourites filter).
+  Future<void> favourite(
+    Iterable<String> ids, {
+    required bool favourite,
+  }) async {
+    final gateway = await _gateway;
+    for (final id in ids) {
+      await gateway.setFavourite(id, favourite: favourite);
+    }
+  }
+
   Future<void> archive(Iterable<String> ids, {required bool archived}) async {
     final gateway = await _gateway;
     for (final id in ids) {

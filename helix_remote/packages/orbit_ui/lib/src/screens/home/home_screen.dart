@@ -193,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
     final ids = {..._selected};
     final allPinned = chats.every((c) => c.pinned);
+    final allFavourite = chats.every((c) => c.favourite);
     final allMuted = chats.every((c) => c.muted);
     final anyMuted = chats.any((c) => c.muted);
     final anyUnread = chats.any((c) => c.unreadCount > 0);
@@ -205,6 +206,15 @@ class _HomeScreenState extends State<HomeScreen> {
           _clear();
         },
       ),
+      if (_a.onSetFavourite != null)
+        OrbitMenuItem(
+          icon: OrbitIcons.star,
+          label: allFavourite ? 'Remove from favourites' : 'Add to favourites',
+          onTap: () {
+            _a.onSetFavourite?.call(ids, favourite: !allFavourite);
+            _clear();
+          },
+        ),
       OrbitMenuItem(
         icon: OrbitIcons.bellSlash,
         label: allMuted
@@ -546,19 +556,23 @@ class _HomeScreenState extends State<HomeScreen> {
         OrbitSpace.gutter,
         8,
       ),
-      child: Row(
-        children: [
-          for (final (i, f) in ChatFilter.values.indexed) ...[
-            if (i > 0) const SizedBox(width: 8),
-            OrbitChip(
-              label: f.label,
-              on: _filter == f,
-              height: 36,
-              count: f == ChatFilter.all ? null : count(f),
-              onTap: () => setState(() => _filter = f),
-            ),
+      // Four chips do not fit a narrow phone: they slide sideways.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final (i, f) in ChatFilter.values.indexed) ...[
+              if (i > 0) const SizedBox(width: 8),
+              OrbitChip(
+                label: f.label,
+                on: _filter == f,
+                height: 36,
+                count: f == ChatFilter.all ? null : count(f),
+                onTap: () => setState(() => _filter = f),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
     final none = _filter == ChatFilter.unread
@@ -568,6 +582,14 @@ class _HomeScreenState extends State<HomeScreen> {
             text:
                 'You’re all caught up. New messages show up here until you '
                 'read them.',
+          )
+        : _filter == ChatFilter.favourites
+        ? const OrbitEmptyState(
+            icon: OrbitIcons.star,
+            title: 'No favourite chats',
+            text:
+                'Touch and hold a chat, open the menu and choose Add to '
+                'favourites. They are kept here, ready to open.',
           )
         : OrbitEmptyState(
             icon: OrbitIcons.usersThree,

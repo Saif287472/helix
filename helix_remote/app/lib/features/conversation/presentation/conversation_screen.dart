@@ -13,6 +13,7 @@ import 'package:helix_remote/features/conversation/application/media_content.dar
 import 'package:helix_remote/features/conversation/application/media_viewer.dart';
 import 'package:helix_remote/features/conversation/application/message_actions.dart';
 import 'package:helix_remote/features/conversation/application/message_info.dart';
+import 'package:helix_remote/features/conversation/application/pinned_messages.dart';
 import 'package:helix_remote/features/conversation/application/read_tracker.dart';
 import 'package:helix_remote/features/conversation/application/timeline_builder.dart';
 import 'package:helix_remote/features/conversation/application/timeline_provider.dart';
@@ -131,6 +132,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     MessageActionIds.reply => ChatMessageAction.reply,
     MessageActionIds.copy => ChatMessageAction.copy,
     MessageActionIds.forward => ChatMessageAction.forward,
+    MessageActionIds.star => ChatMessageAction.star,
+    MessageActionIds.pin => ChatMessageAction.pin,
     MessageActionIds.edit => ChatMessageAction.edit,
     MessageActionIds.info => ChatMessageAction.info,
     MessageActionIds.select => ChatMessageAction.select,
@@ -172,6 +175,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
       actions: {for (final id in menu.actions) ?_actionOf(id)},
       allowReactions: menu.allowReactions,
       currentReaction: menu.currentReaction,
+      starred: menu.starred,
+      pinned: menu.pinned,
     );
   }
 
@@ -438,6 +443,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
     final model = ChatModel(
       conversationId: _id,
       wallpaper: ref.watch(chatWallpaperProvider(_id)),
+      pinned: ref.watch(pinnedMessagesProvider(_id)).value ?? const [],
       title: header?.title ?? '',
       avatar: header?.avatar ?? const HelixAvatarModel(name: ''),
       loadState: load,
@@ -507,6 +513,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         onReact: (id, emoji) {
           final rowid = _rowid(id);
           if (rowid != null) unawaited(_actions.react(rowid, emoji));
+        },
+        onStar: (id, {required starred}) {
+          final rowid = _rowid(id);
+          if (rowid != null) unawaited(_actions.star(rowid, starred: starred));
+        },
+        onPin: (id, {required pinned}) async {
+          final rowid = _rowid(id);
+          return rowid == null ? null : _actions.pin(rowid, pinned: pinned);
         },
         onVote: (id, ids) {
           final rowid = _rowid(id);

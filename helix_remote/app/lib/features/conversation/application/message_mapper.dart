@@ -59,6 +59,8 @@ HelixMessage mapMessage(
     reply: row.replyToId == null ? null : reply,
     forwarded: row.forwarded,
     edited: row.editedAt != null && row.deletedAt == null,
+    starred: row.starredAt != null && row.deletedAt == null,
+    pinned: row.pinnedAt != null && row.deletedAt == null,
     reactions: row.deletedAt == null
         ? aggregateReactions(reactions, ctx.selfId)
         : const [],

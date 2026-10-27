@@ -186,6 +186,27 @@ class ChatGateway {
     ),
   );
 
+  /// Stars a message, or takes the star off: a private bookmark.
+  Future<void> setStarred(int rowid, {required bool starred}) =>
+      _chats.setStarred(rowid, starred: starred);
+
+  /// The starred messages of every chat, the newest star first.
+  Stream<List<MessageRow>> watchStarred() => _chats.watchStarred();
+
+  /// The messages pinned in [conversationId], the newest pin first.
+  Stream<List<MessageRow>> watchPinned(String conversationId) =>
+      _chats.watchPinned(conversationId);
+
+  /// Pins a message for everyone in its chat, or takes the pin off. Throws
+  /// [EngineStateException] when the chat already keeps
+  /// [ChatsService.maxPinnedMessages].
+  Future<void> pinMessage(int rowid, {required bool pinned}) =>
+      _chats.pinMessage(rowid, pinned: pinned);
+
+  /// Makes a chat a favourite, or not one.
+  Future<void> setFavourite(String id, {required bool favourite}) =>
+      _chats.setFavourite(id, favourite: favourite);
+
   Future<void> markDisplayed(int rowid) => _chats.markDisplayed(rowid);
 
   // -------------------------------------------------------------- sending

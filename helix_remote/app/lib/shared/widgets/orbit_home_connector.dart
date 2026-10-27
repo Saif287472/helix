@@ -203,6 +203,8 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
       },
       onSetPinned: (ids, {required pinned}) =>
           chatActions.pin(ids, pinned: pinned),
+      onSetFavourite: (ids, {required favourite}) =>
+          chatActions.favourite(ids, favourite: favourite),
       onSetArchived: (ids, {required archived}) =>
           chatActions.archive(ids, archived: archived),
       onMute: (ids, length) => chatActions.mute(ids, _mapMute(length)),

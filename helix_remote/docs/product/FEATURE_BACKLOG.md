@@ -31,10 +31,10 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 26 | see "Already built" |
+| Already built | 29 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 10 | A4, A6, A9, A10, B4, B8, C1, C5, C7, E4 |
-| L (more than that) | 10 | A3, A5, A7, A8, A13, B3, C3, C4, D1, D2 |
+| M (about 10 files) | 8 | A6, A9, A10, B8, C1, C5, C7, E4 |
+| L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
 
@@ -72,8 +72,8 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 |---|---|---|---|---|
 | A1 | Text formatting (bold, italic, strike, mono) | **Built 2026-10-26** | done | `orbit_ui` `timeline.dart` (`_formatted`, WhatsApp word-edge rules, markers hidden, wire text stays plain), test `orbit_ui/test/message_formatting_test.dart`. Not done: composer toolbar buttons, formatting in chat-list previews and notifications (they show the markers). |
 | A2 | Polls: draw, create and vote | **Built 2026-10-26** | done | `orbit_ui` `timeline.dart` (`_Poll`), `compose_pages.dart` (`OrbitNewPollPage`), `chat_screen.dart` (attach sheet, `onVote`, `onCreatePoll`); app `message_mapper.dart`, `chat_gateway.dart`, `message_actions.dart`, `conversation_screen.dart`. Tests: `orbit_ui/test/polls_events_test.dart`, `app/test/poll_event_flow_test.dart`. Not done: closing a poll (honoured when received, not offered), who voted. |
-| A3 | Pin message in a chat | Not built | **L** | A pin is shared state, so it needs a new content action `pin` (proto `bodies/actions.dart`, CONTENT_V2.md, fixtures, `HELIX_UPDATE_FIXTURES=1`), engine apply (`messaging/apply.dart`), a `messages` column (`pinnedAt`: **DB schema 6**, codegen), app banner and menu. Local-only pin would be M (DB column plus UI) but would not show to the other side. |
-| A4 | Starred (saved) messages | Not built (engine keeps none) | **M** | Local only: `messages.starred` column means DB schema 6 (if bundled with A3, one bump), DAO query, engine service method, app Starred page and menu entry, `ui/` screen. Counts L if it is the only thing bumping the schema. |
+| A3 | Pin message in a chat | **Built 2026-10-27** | done | New `pin` content action (protocol `bodies/actions.dart`, `content_pin.json`, CONTENT_V2.md), DB schema 6 `messages.pinned_at`, engine `ChatsService.pinMessage` and `apply.dart` `_pin`, backup record; `orbit_ui` pinned banner and menu items; app `pinned_messages.dart`. A chat keeps 3; any member may pin. Not done: a "Pinned messages" list page; pinning a message for a limited time. |
+| A4 | Starred (saved) messages | **Built 2026-10-27** | done | DB schema 6 `messages.starred_at` (private, in the backup), engine `setStarred`/`watchStarred`, `orbit_ui` menu item, bubble star and `StarredMessagesScreen`; app `starred_messages.dart`, route `/settings/starred`, a row on You. |
 | A5 | Stickers and animated emoji | Partial (`sticker` type exists, UI "needs newer version") | **L** | Draw sticker bubble; sticker picker and packs (storage, download, a pack format like `THEME_PACK_FORMAT.md`); sticker maker (image to webp via `FlutterMediaProcessor`); send path in engine. New pack format means a doc and tests. |
 | A6 | GIF picker | Partial (GIF attachments exist) | **M** | A provider (Tenor or Giphy) leaks the query to a third party and breaks the privacy claims; only an in-app saved-GIFs list is safe. Needs a privacy decision first. |
 | A7 | Live and motion photos | Not built | **L** | Picker plugin support on Android, `MediaSanitizer` handling of the embedded video, a new `MediaItem` kind (proto change plus fixtures), viewer. Sizeable and low value. |
@@ -91,7 +91,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | B1 | Chat wallpapers (local, per chat or default) | **Built 2026-10-26** | done | `orbit_ui` `components/wallpaper.dart` (`wallpaperLook`, `showOrbitWallpaperSheet`), `chat_screen.dart`, `chat_pages.dart` (chat settings row), `you_screens.dart` (Appearance row); app `shared/wallpaper.dart`, `app_settings.dart`, `conversation_settings.dart`, `conversation_screen.dart`, `appearance_page.dart`. Tests: `orbit_ui/test/wallpaper_test.dart`, `app/test/wallpaper_test.dart`. Six theme-coloured wallpapers; no photo wallpapers (they need a picker, a sanitised local copy and storage). Account settings, not device settings. |
 | B2 | Custom chat bubble colours | Partial (Orbit theme tokens) | **S** | Theme tokens only; a per-chat colour is M. Must come from `OrbitTokens`. |
 | B3 | Custom lists and filters (folders) | Not built | **L** | `conversation_lists` plus members tables: **DB schema 6**, DAO, engine `chats_service.dart`, chats-tab chips, manage-lists screen in `ui/`, backup (lists should survive restore: `backup` crypto payload change, a note in the crypto review). Local-only without backup is M. |
-| B4 | Favourites | Not built | **M** | Like pin chat but a flag: a `favourite` column (schema 6), filter chip in chats tab. Can be the first built-in list of B3. |
+| B4 | Favourites | **Built 2026-10-27** | done | DB schema 6 `conversations.favourite_at` (private, in the backup), engine `setFavourite`, `orbit_ui` Favourites filter, star flag on the row and the selection-menu item; app `ChatActions.favourite`. |
 | B5 | Clear chat history and purge media | **Already built** | n/a | `ConversationSettings.clear()` and `ChatGateway.clearChat`; the storage page frees media. |
 | B6 | Per-chat notification policy | Built (per-chat mute; overrides on the chat) | n/a | Nothing to do. |
 | B7 | Group search by mutual contact names | **Built 2026-10-26** | done | `chat_search.dart` (`memberNamed`), test `app/test/chat_search_members_test.dart`. Not done: the same match inside the People tab. |
@@ -152,7 +152,7 @@ Given the sizes above, one day (a gate of analyze and tests after each step) fit
 1. **Morning, small wins:** A1 formatting, B7 group search, D5 noise suppression (done 2026-10-26).
 2. **Midday, two M slices:** A2 polls UI (pairs with E3 events), B1 wallpapers.
 3. **Afternoon, one L that shares a single schema bump:** DB schema 6 carrying A3 (pinned message),
-   A4 (starred) and B4 (favourites) together, one migration and one codegen run.
+   A4 (starred) and B4 (favourites) together, one migration and one codegen run (done 2026-10-27).
 
 Not in this batch: C3 chat lock, C4 passkeys, D1/D2 calls, A5 stickers, A8 transcripts. Each needs its own day or more.
 

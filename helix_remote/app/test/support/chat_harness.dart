@@ -158,6 +158,19 @@ class TestChatGateway extends ChatGateway {
     );
   }
 
+  /// Pins are simulated like the other sends: the row changes the way the
+  /// engine would change it, and a fourth is refused as the engine refuses it.
+  @override
+  Future<void> pinMessage(int rowid, {required bool pinned}) async {
+    log.add('pin:$rowid:$pinned');
+    final row = (await db.messagesDao.byRowid(rowid))!;
+    if (pinned &&
+        (await db.messagesDao.pinnedIn(row.conversationId)).length >= 3) {
+      throw StateError('a chat keeps at most 3 pinned messages');
+    }
+    await db.messagesDao.setPinned(rowid, pinned ? testNow : null);
+  }
+
   /// Your own vote or RSVP goes into the message's payload, as the engine
   /// does, which is what the bubble then draws.
   Future<void> _answer(int rowid, String key, Object? answer) async {

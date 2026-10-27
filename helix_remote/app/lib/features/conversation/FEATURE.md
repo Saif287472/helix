@@ -96,8 +96,20 @@ the message payload; a tap calls `vote` / `rsvp` and the bubble redraws from the
 Polls are single or multiple choice; closing a poll (`closes_at`) is honoured, not offered. Events
 have a title, a start, and a place; plus-ones and an end time are not offered.
 
+## Stars and pins
+
+The message menu offers **Star** and **Pin** (not for a deleted, broken or view-once message).
+A star is a private bookmark: `ConversationActions.star` -> `ChatsService.setStarred`, nothing is sent,
+and the bubble shows a small star. Every starred message of every chat is on **You > Starred
+messages** (`StarredScreen`, `starred_messages.dart`; a row opens the chat at the message).
+A pin is shared: `ConversationActions.pin` -> `ChatsService.pinMessage` sends a `pin` action
+(CONTENT_V2.md §3) and the other side's engine applies it. A chat keeps three; a fourth is refused with
+"A chat keeps three pinned messages. Unpin one first." The pinned messages show as a banner under the
+conversation's header (`pinned_messages.dart`), one at a time: a tap jumps to it and moves on to the
+next. Both survive a backup restore. Favourite *chats* are the chats feature's.
+
 ## Not here
 
 Stickers and live-location bubbles (drawn as "needs a newer version"),
 proximity/earpiece playback,
-video notes recorded in app, starred messages (the engine keeps none), report.
+video notes recorded in app, report.

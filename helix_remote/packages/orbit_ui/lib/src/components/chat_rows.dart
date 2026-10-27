@@ -319,8 +319,8 @@ class _RowName extends StatelessWidget {
 ///   `--danger`; or the tick and the sender ("You:", "Ammu:" in `--ink-2`),
 ///   then the kind's icon and the text or the kind's label (italic for a
 ///   deleted, undecryptable or unsupported message).
-/// - The flags at the end, 6px apart in `--ink-4`: muted, pinned, archived
-///   (when [showArchived]), then the `@` and count badges.
+/// - The flags at the end, 6px apart in `--ink-4`: muted, pinned, favourite,
+///   archived (when [showArchived]), then the `@` and count badges.
 /// - [selected] shows the avatar ticked on `--accent-soft`.
 class OrbitChatListTile extends StatelessWidget {
   const OrbitChatListTile({
@@ -361,6 +361,13 @@ class OrbitChatListTile extends StatelessWidget {
       if (item.pinned)
         OrbitIcon(
           OrbitIcons.pushPin,
+          weight: OrbitIconWeight.fill,
+          size: 16,
+          color: t.ink4,
+        ),
+      if (item.favourite)
+        OrbitIcon(
+          OrbitIcons.star,
           weight: OrbitIconWeight.fill,
           size: 16,
           color: t.ink4,

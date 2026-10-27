@@ -49,6 +49,7 @@ class OrbitYouConnector extends ConsumerWidget {
     orbit.YouTopic.recovery => RoutePaths.backupRecovery,
     orbit.YouTopic.password => RoutePaths.changePassword,
     orbit.YouTopic.blocked => RoutePaths.blocked,
+    orbit.YouTopic.starred => RoutePaths.starred,
   };
 
   static orbit.CheckupItem _item(YouCheck c) => switch (c.key) {
