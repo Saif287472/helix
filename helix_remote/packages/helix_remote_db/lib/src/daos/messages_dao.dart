@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:helix_remote_db/src/chunks.dart';
 import 'package:helix_remote_db/src/database.dart';
@@ -23,6 +25,46 @@ final class MessagePage {
   /// Cursors for the next page in each direction.
   String? get oldestSortKey => messages.isEmpty ? null : messages.first.sortKey;
   String? get newestSortKey => messages.isEmpty ? null : messages.last.sortKey;
+}
+
+/// An earlier version of an edited message: its text (or caption) as it was
+/// before an edit replaced it.
+@immutable
+final class MessageRevision {
+  const MessageRevision({required this.at, required this.body});
+
+  /// When this version was written.
+  final DateTime at;
+
+  /// The text or caption of that version.
+  final String body;
+}
+
+/// The earlier versions of [row], the newest first (empty when it was never
+/// edited). They are kept in the row's payload under `revisions`, so they
+/// leave with the message: a delete for everyone clears the payload, and
+/// removing the row removes them.
+List<MessageRevision> revisionsOf(MessageRow row) {
+  final raw = row.payload;
+  if (raw == null || raw.isEmpty) return const [];
+  try {
+    final decoded = jsonDecode(raw);
+    final list = decoded is Map ? decoded['revisions'] : null;
+    if (list is! List) return const [];
+    return [
+      for (final r in list.reversed)
+        if (r is Map && r['at'] is num && r['body'] is String)
+          MessageRevision(
+            at: DateTime.fromMillisecondsSinceEpoch(
+              (r['at'] as num).toInt(),
+              isUtc: true,
+            ),
+            body: r['body'] as String,
+          ),
+    ];
+  } on FormatException {
+    return const [];
+  }
 }
 
 /// An attachment of a conversation, with when its message was sent: one item
@@ -107,8 +149,14 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     return row;
   });
 
+  /// The most earlier versions of an edited message this device keeps.
+  static const maxRevisions = 10;
+
   /// An edit by the author (CONTENT_V2.md §3): new text or caption, and
-  /// optionally a new [payload].
+  /// optionally a new [payload] (a restore brings the other device's, with its
+  /// own revisions). Without one, the text being replaced is kept as a
+  /// revision in the row's payload (see [revisionsOf]), the newest
+  /// [maxRevisions] of them.
   Future<void> editMessage(
     int rowid, {
     required String? body,
@@ -116,10 +164,33 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     required DateTime editedAt,
   }) => transaction(() async {
     final row = await _message(rowid);
+    var next = payload;
+    final before = row.body;
+    if (next == null && before != null && before != body) {
+      Map<String, Object?> map;
+      try {
+        final decoded = row.payload == null ? null : jsonDecode(row.payload!);
+        map = decoded is Map ? decoded.cast<String, Object?>() : {};
+      } on FormatException {
+        map = {};
+      }
+      final kept = [
+        for (final r in (map['revisions'] as List? ?? const []))
+          if (r is Map) r,
+        {
+          'at': (row.editedAt ?? row.sentAt).millisecondsSinceEpoch,
+          'body': before,
+        },
+      ];
+      map['revisions'] = kept.length > maxRevisions
+          ? kept.sublist(kept.length - maxRevisions)
+          : kept;
+      next = jsonEncode(map);
+    }
     await (update(messages)..where((m) => m.localRowid.equals(rowid))).write(
       MessagesCompanion(
         body: Value(body),
-        payload: payload == null ? const Value.absent() : Value(payload),
+        payload: next == null ? const Value.absent() : Value(next),
         editedAt: Value(editedAt),
       ),
     );

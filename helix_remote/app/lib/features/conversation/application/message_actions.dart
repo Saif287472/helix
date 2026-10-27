@@ -191,7 +191,8 @@ final class ConversationActions {
       MessageActionIds.star,
       MessageActionIds.pin,
       if (canEdit) MessageActionIds.edit,
-      if (row.outgoing) MessageActionIds.info,
+      // Receipts are of what you sent; an edited message also has a history.
+      if (row.outgoing || row.editedAt != null) MessageActionIds.info,
       MessageActionIds.select,
       MessageActionIds.deleteForMe,
       if (canDeleteForEveryone) MessageActionIds.deleteForEveryone,

@@ -915,7 +915,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ChatMessageAction.star,
         if (!placeholder && widget.actions.onPin != null) ChatMessageAction.pin,
         if (m.outgoing && sent && textOrMedia) ChatMessageAction.edit,
-        if (m.outgoing) ChatMessageAction.info,
+        if (m.outgoing || m.edited) ChatMessageAction.info,
         ChatMessageAction.select,
         ChatMessageAction.deleteForMe,
         if (!deleted && m.outgoing && sent) ChatMessageAction.deleteForEveryone,

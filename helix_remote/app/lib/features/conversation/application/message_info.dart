@@ -6,6 +6,7 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/message_mapper.dart';
+import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:orbit_ui/models.dart';
 
 /// One person's receipts for a message.
@@ -36,7 +37,12 @@ class MessageInfo {
     this.message,
     this.isGroup = false,
     this.hasMedia = false,
+    this.edits = const [],
   });
+
+  /// Every version of an edited message, the current one first (empty when it
+  /// was never edited): text, when it was written, and whether it is current.
+  final List<({String text, String whenLabel, bool current})> edits;
 
   final String sentLabel;
   final List<ReceiptLine> lines;
@@ -99,10 +105,12 @@ final messageInfoProvider = FutureProvider.autoDispose
             row.kind == 'media' &&
             row.viewOnceState == null &&
             row.deletedAt == null,
+        edits: _editsOf(row, now),
         sentLabel: formatDateTime(row.sentAt, now),
         preview: (row.body ?? '').replaceAll(RegExp(r'\s+'), ' ').trim(),
+        // Receipts are of what you sent: a message from someone else has none.
         lines: [
-          for (final account in accounts)
+          for (final account in row.outgoing ? accounts : const <String>[])
             ReceiptLine(
               name: people.displayOf(account),
               avatar: people.avatarOf(account),
@@ -114,6 +122,30 @@ final messageInfoProvider = FutureProvider.autoDispose
         ],
       );
     });
+
+/// The versions of an edited message, the current one first, with when each
+/// was written.
+List<({String text, String whenLabel, bool current})> _editsOf(
+  MessageRow row,
+  DateTime now,
+) {
+  final editedAt = row.editedAt;
+  if (editedAt == null || row.deletedAt != null) return const [];
+  final earlier = revisionsOf(row);
+  return [
+    (
+      text: (row.body ?? '').trim(),
+      whenLabel: formatDateTime(editedAt, now),
+      current: true,
+    ),
+    for (final r in earlier)
+      (
+        text: r.body.trim(),
+        whenLabel: formatDateTime(r.at, now),
+        current: false,
+      ),
+  ];
+}
 
 /// One person's reaction to a message.
 @immutable

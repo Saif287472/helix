@@ -99,6 +99,13 @@ the message payload; a tap calls `vote` / `rsvp` and the bubble redraws from the
 Polls are single or multiple choice; closing a poll (`closes_at`) is honoured, not offered. Events
 have a title, a start, and a place; plus-ones and an end time are not offered.
 
+## Edit history
+
+An edited message keeps what it said before (the last 10 versions, on this device; `revisionsOf`). Message info lists
+them, the current one first, under "Edit history". Message info is offered for your own messages (with the receipts) and
+for anyone's edited message (history only). The versions go when the message does (delete for everyone, delete for me,
+disappearing) and are never sent again.
+
 ## Stars and pins
 
 The message menu offers **Star** and **Pin** (not for a deleted, broken or view-once message).

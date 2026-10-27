@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 31 | see "Already built" |
+| Already built | 32 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 6 | A6, A9, A10, C5, C7, E4 |
+| M (about 10 files) | 5 | A6, A9, C5, C7, E4 |
 | L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -79,7 +79,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | A7 | Live and motion photos | Not built | **L** | Picker plugin support on Android, `MediaSanitizer` handling of the embedded video, a new `MediaItem` kind (proto change plus fixtures), viewer. Sizeable and low value. |
 | A8 | Voice message transcripts (on-device) | Not built | **L** | Needs an on-device speech model (new plugin and platform code, large download), an adapter file in `app/core/platform/`, a transcript store (cache or DB column), UI on the voice bubble. Privacy gain is that nothing leaves the phone. |
 | A9 | Rich link previews | Partial (`link_preview` in text body) | **M** | Fetching the URL from the sender's phone is a metadata leak to the site; app, composer and bubble work. Decide the privacy stance first. |
-| A10 | Edit revision history | Not built | **M** (was S) | "Edited" already shows. The engine overwrites `messages.body` and keeps only `editedAt`, so a revision list needs a table or column: **DB schema 6**, DAO, engine apply and send paths, backup snapshot, `message_info_screen.dart`. |
+| A10 | Edit revision history | **Built 2026-10-27** | done | No schema change: `MessagesDao.editMessage` keeps the replaced text in the row payload (`revisionsOf`, last 10); Message info lists them (`orbit_ui` `MessageEditItem`, app `message_info.dart`) and is offered for any edited message. Both sides keep them; they never travel and go with the message. |
 | A11 | Media draft with caption, waveform, duration, view-once | Built (send-files page, composer) | n/a | Nothing to do. |
 | A12 | Transfer progress (0.0 to 1.0) | Built (transfer queue with progress) | n/a | Nothing to do. |
 | A13 | RAM-only ephemeral files | Not built | **L** | Today view-once files are on disk until opened, then deleted. True RAM-only means a decrypt-to-memory viewer, no cache writes (`MediaTemp`, `media_viewer_screen.dart`, video player cannot play from memory, so images only). Document the limit honestly in `PRIVACY_CLAIM_MATRIX.md`. |

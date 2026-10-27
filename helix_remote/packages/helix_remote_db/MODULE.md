@@ -363,3 +363,11 @@ bodies - through a sign-out. The last test in `test/wipe_test.dart` reads the
 list back out of `database.dart` and compares it with `db.allTables`, so that
 cannot happen quietly. (`messages_fts` is the one table the list does not name:
 the triggers on `messages` empty it as `messages` itself is deleted.)
+
+## Edit history (no schema change)
+
+`MessagesDao.editMessage` keeps the text it replaces as a revision inside the row's `payload`
+(`{"revisions": [{"at": ms, "body": "..."}]}`, the newest `MessagesDao.maxRevisions` = 10), read back newest first
+with `revisionsOf(row)`. They live and die with the message: a delete for everyone clears the payload, removing the row
+removes them, a sign-out wipes them with everything else. A payload handed in (a restore) is kept as it comes; an edit
+that changes nothing adds no revision. They never travel: `ContentCodec.join` builds the body from known fields only.

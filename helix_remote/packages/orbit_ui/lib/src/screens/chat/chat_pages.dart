@@ -275,6 +275,21 @@ class ReceiptItem {
   final String? deliveredLabel;
 }
 
+/// One version of an edited message: what it said and when that was.
+class MessageEditItem {
+  const MessageEditItem({
+    required this.text,
+    required this.whenLabel,
+    this.current = false,
+  });
+
+  final String text;
+  final String whenLabel;
+
+  /// The version the bubble shows now.
+  final bool current;
+}
+
 class MessageInfoModel {
   const MessageInfoModel({
     this.loadState = MessageInfoState.ready,
@@ -282,7 +297,12 @@ class MessageInfoModel {
     this.sentLabel = '',
     this.isGroup = false,
     this.recipients = const [],
+    this.edits = const [],
   });
+
+  /// Every version of an edited message, the current one first; empty when it
+  /// was never edited.
+  final List<MessageEditItem> edits;
 
   final MessageInfoState loadState;
   final HelixMessage? message;
@@ -357,10 +377,25 @@ class MessageInfoScreen extends StatelessWidget {
               ),
             ],
           ),
-          OrbitSection(
-            title: m.isGroup ? 'Recipients' : '',
-            rows: [for (final r in m.recipients) _receipt(t, r)],
-          ),
+          if (m.edits.isNotEmpty)
+            OrbitSection(
+              title: 'Edit history',
+              rows: [
+                for (final e in m.edits)
+                  OrbitListRow(
+                    icon: e.current ? OrbitIcons.pencilSimple : null,
+                    iconColor: 5,
+                    title: e.text,
+                    sub: e.current ? 'Now \u00b7 ${e.whenLabel}' : e.whenLabel,
+                    minHeight: 52,
+                  ),
+              ],
+            ),
+          if (m.recipients.isNotEmpty)
+            OrbitSection(
+              title: m.isGroup ? 'Recipients' : '',
+              rows: [for (final r in m.recipients) _receipt(t, r)],
+            ),
         ],
       },
     );

@@ -16,7 +16,8 @@ across the public internet.
 
 ## 2. Retention and persistence policy
 - **Chat history**: stored in a local SQLCipher database on the device, decrypted once on arrival
-  into structured rows. It persists until the person deletes it.
+  into structured rows. It persists until the person deletes it. An edited message keeps its earlier versions
+  (the last 10) with it on the device, shown in Message info, until the message is deleted.
 - **Server mailboxes**: encrypted message envelopes are held per recipient device until that device
   acknowledges them, then deleted; undelivered envelopes expire after 30 days, and a device that
   has more than 10,000 waiting loses the oldest first (so one unused device never blocks messages

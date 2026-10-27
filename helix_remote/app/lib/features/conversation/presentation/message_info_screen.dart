@@ -58,6 +58,14 @@ class MessageInfoScreen extends ConsumerWidget {
       message: message,
       sentLabel: info.sentLabel,
       isGroup: info.isGroup,
+      edits: [
+        for (final e in info.edits)
+          orbit.MessageEditItem(
+            text: e.text,
+            whenLabel: e.whenLabel,
+            current: e.current,
+          ),
+      ],
       recipients: [
         for (final line in info.lines)
           orbit.ReceiptItem(
