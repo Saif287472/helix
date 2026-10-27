@@ -225,4 +225,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Add to list'), findsNothing);
   });
+
+  test('copying a row for typing and lists keeps every other field', () {
+    const row = HelixChatListItem(
+      id: 'a',
+      title: 'Anika',
+      avatar: HelixAvatarModel(name: 'Anika'),
+      timeLabel: '14:05',
+      unreadCount: 2,
+      hasMention: true,
+      markedUnread: true,
+      pinned: true,
+      favourite: true,
+      muted: true,
+      archived: true,
+      online: true,
+      verified: true,
+    );
+    final copy = row.copyWith(typingLabel: 'typing...', lists: ['w']);
+    expect(copy.lists, ['w']);
+    expect(copy.typingLabel, 'typing...');
+    expect(
+      HelixChatListItem(
+        id: copy.id,
+        title: copy.title,
+        avatar: copy.avatar,
+        timeLabel: copy.timeLabel,
+        unreadCount: copy.unreadCount,
+        hasMention: copy.hasMention,
+        markedUnread: copy.markedUnread,
+        pinned: copy.pinned,
+        favourite: copy.favourite,
+        lists: row.lists,
+        muted: copy.muted,
+        archived: copy.archived,
+        online: copy.online,
+        verified: copy.verified,
+      ),
+      row,
+    );
+    expect(row.copyWith().favourite, isTrue);
+  });
 }

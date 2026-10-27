@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart'
+    show ChatsService, EngineStateException;
 
 /// What a person can do to chats from the list: the swipe actions, the
 /// selection bar and the long-press menu all land here.
@@ -32,6 +34,49 @@ final class ChatActions {
       await gateway.setFavourite(id, favourite: favourite);
     }
   }
+
+  /// Makes a list called [name] holding [ids]: null when it was made, else the
+  /// sentence to show.
+  Future<String?> createList(String name, Set<String> ids) async {
+    try {
+      final gateway = await _gateway;
+      final id = await gateway.createChatList(name);
+      if (ids.isNotEmpty) {
+        await gateway.setChatsOnList(id, ids, member: true);
+      }
+      return null;
+    } on ArgumentError {
+      return 'A list name is 1 to ${ChatsService.maxChatListName} characters.';
+    } on EngineStateException {
+      return 'You already have a list with that name, or ten lists.';
+    } on Object {
+      return 'The list could not be made.';
+    }
+  }
+
+  /// Renames a list: null when it was, else the sentence to show.
+  Future<String?> renameList(String id, String name) async {
+    try {
+      await (await _gateway).renameChatList(id, name);
+      return null;
+    } on ArgumentError {
+      return 'A list name is 1 to ${ChatsService.maxChatListName} characters.';
+    } on EngineStateException {
+      return 'You already have a list with that name.';
+    } on Object {
+      return 'The list could not be renamed.';
+    }
+  }
+
+  Future<void> deleteList(String id) async =>
+      (await _gateway).deleteChatList(id);
+
+  /// Puts the chats on a list, or takes them off it.
+  Future<void> setOnList(
+    Iterable<String> ids,
+    String listId, {
+    required bool member,
+  }) async => (await _gateway).setChatsOnList(listId, ids, member: member);
 
   Future<void> archive(Iterable<String> ids, {required bool archived}) async {
     final gateway = await _gateway;

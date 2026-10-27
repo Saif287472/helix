@@ -65,3 +65,25 @@ final chatTypingLabelProvider = Provider.family<String?, String>(
   (ref, conversationId) =>
       ref.watch(chatTypingProvider.select((m) => m.value?[conversationId])),
 );
+
+/// The person's own lists, as the chips of the Chats tab.
+final chatListsProvider = StreamProvider<List<HelixChatList>>((ref) async* {
+  final gateway = await ref.watch(chatGatewayProvider.future);
+  yield* gateway.watchChatLists().map(
+    (rows) => [for (final r in rows) HelixChatList(id: r.id, name: r.name)],
+  );
+});
+
+/// For each chat, the ids of the lists it is on.
+final chatListMembershipProvider = StreamProvider<Map<String, List<String>>>((
+  ref,
+) async* {
+  final gateway = await ref.watch(chatGatewayProvider.future);
+  yield* gateway.watchChatListMembers().map((rows) {
+    final byChat = <String, List<String>>{};
+    for (final r in rows) {
+      (byChat[r.conversationId] ??= []).add(r.listId);
+    }
+    return byChat;
+  });
+});

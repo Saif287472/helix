@@ -49,3 +49,14 @@ a tooltip, no colours of its own, plain English literals.
 The selection menu's "Add to favourites" / "Remove from favourites" (`ChatActions.favourite` ->
 `ChatsService.setFavourite`) flags chats privately (`conversations.favourite_at`, schema 6; never sent). The
 list shows a small star on a favourite and has a **Favourites** filter beside All, Unread and Groups.
+
+## Lists
+
+The person's own lists ("Work", "Family") are chips after the built-in filters. They are private
+to the device and never sent. `chatListsProvider` and `chatListMembershipProvider` read them
+(`ChatsService.watchChatLists`, `watchChatListMembers`); `ChatActions.createList`, `renameList`,
+`deleteList` and `setOnList` change them and turn the engine's refusals (a name of 1 to 24
+characters, no duplicates, at most ten lists) into the sentence the sheet shows. Selecting chats and
+choosing Add to list puts them on a list; touching and holding a chip renames or deletes it (the
+chats stay). `HelixChatListItem.copyWith` is how the live bits (typing, lists) are put on a row, so
+no field is dropped on the way to the screen. Lists are not in a backup yet.

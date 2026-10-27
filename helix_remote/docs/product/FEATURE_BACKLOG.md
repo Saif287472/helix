@@ -31,10 +31,10 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 36 | see "Already built" |
+| Already built | 37 | see "Already built" |
 | S (one file) | 1 | B2 |
 | M (about 10 files) | 0 | none left |
-| L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
+| L (more than that) | 8 | A5, A7, A8, A13, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 6 | see "Not planned" |
 
@@ -62,6 +62,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | Storage page (free space by kind), report user, block | `settings/storage_page.dart`, reports in server |
 | Text formatting `*bold*` `_italic_` `~strike~` `` `mono` `` (built 2026-10-26, A1) | `orbit_ui` `components/timeline.dart` `_formatted` |
 | Find a group by the name of someone in it (built 2026-10-26, B7) | `app/features/chats/application/chat_search.dart` |
+| Chat lists (built 2026-10-27, B3; local to the device) | `features/chats/application/chat_list_provider.dart`, `chat_actions.dart`; engine `chats_service.dart` |
 | Live location (built 2026-10-27, E4) | `core/location/`, `core/platform/location_source.dart`; engine `chats_service.dart` |
 | Echo cancellation, noise suppression, auto gain on calls (built 2026-10-26, D5) | `helix_remote_calls` `web_rtc_call_engine.dart` |
 | Clear chat history (B5) and the "online" audience (C2) | `conversation_settings.dart`; `PrivacySettings.online` |
@@ -91,7 +92,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 |---|---|---|---|---|
 | B1 | Chat wallpapers (local, per chat or default) | **Built 2026-10-26** | done | `orbit_ui` `components/wallpaper.dart` (`wallpaperLook`, `showOrbitWallpaperSheet`), `chat_screen.dart`, `chat_pages.dart` (chat settings row), `you_screens.dart` (Appearance row); app `shared/wallpaper.dart`, `app_settings.dart`, `conversation_settings.dart`, `conversation_screen.dart`, `appearance_page.dart`. Tests: `orbit_ui/test/wallpaper_test.dart`, `app/test/wallpaper_test.dart`. Six theme-coloured wallpapers; no photo wallpapers (they need a picker, a sanitised local copy and storage). Account settings, not device settings. |
 | B2 | Custom chat bubble colours | Partial (Orbit theme tokens) | **S** | Theme tokens only; a per-chat colour is M. Must come from `OrbitTokens`. |
-| B3 | Custom lists and filters (folders) | Not built | **L** | `conversation_lists` plus members tables: **DB schema 6**, DAO, engine `chats_service.dart`, chats-tab chips, manage-lists screen in `ui/`, backup (lists should survive restore: `backup` crypto payload change, a note in the crypto review). Local-only without backup is M. |
+| B3 | Custom lists and filters (folders) | **Built 2026-10-27 (this device only)** | done | DB schema 7 (`chat_lists`, `chat_list_members`), `ConversationsDao` list methods, engine `ChatsService.createChatList / renameChatList / deleteChatList / setChatsOnList`, orbit_ui list chips, New list, Add to list and long-press Rename/Delete on the Chats tab, app `chat_actions.dart` and `chatListsProvider`. Up to ten lists, names of 1 to 24 characters, unique. Not done: lists in a backup or restore (a backup payload change and a note in the crypto review), reordering chips, per-list unread badges beyond the chip count. |
 | B4 | Favourites | **Built 2026-10-27** | done | DB schema 6 `conversations.favourite_at` (private, in the backup), engine `setFavourite`, `orbit_ui` Favourites filter, star flag on the row and the selection-menu item; app `ChatActions.favourite`. |
 | B5 | Clear chat history and purge media | **Already built** | n/a | `ConversationSettings.clear()` and `ChatGateway.clearChat`; the storage page frees media. |
 | B6 | Per-chat notification policy | Built (per-chat mute; overrides on the chat) | n/a | Nothing to do. |

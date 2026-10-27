@@ -263,6 +263,26 @@ class ChatGateway {
   Future<void> pinMessage(int rowid, {required bool pinned}) =>
       _chats.pinMessage(rowid, pinned: pinned);
 
+  /// The person's own chat lists, in the order of their chips, live.
+  Stream<List<ChatListRow>> watchChatLists() => _chats.watchChatLists();
+
+  /// Which chats are on which list, live.
+  Stream<List<ChatListMemberRow>> watchChatListMembers() =>
+      _chats.watchChatListMembers();
+
+  Future<String> createChatList(String name) => _chats.createChatList(name);
+
+  Future<void> renameChatList(String id, String name) =>
+      _chats.renameChatList(id, name);
+
+  Future<void> deleteChatList(String id) => _chats.deleteChatList(id);
+
+  Future<void> setChatsOnList(
+    String listId,
+    Iterable<String> conversationIds, {
+    required bool member,
+  }) => _chats.setChatsOnList(listId, conversationIds, member: member);
+
   /// Makes a chat a favourite, or not one.
   Future<void> setFavourite(String id, {required bool favourite}) =>
       _chats.setFavourite(id, favourite: favourite);

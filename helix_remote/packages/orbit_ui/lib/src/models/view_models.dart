@@ -354,6 +354,29 @@ class HelixChatListItem extends HelixValue {
 
   bool get hasUnread => unreadCount > 0 || markedUnread;
 
+  /// This row with the live bits replaced: who is typing, and which lists it is
+  /// on. Everything else is carried over, so a field added later cannot be
+  /// dropped by a copy.
+  HelixChatListItem copyWith({String? typingLabel, List<String>? lists}) =>
+      HelixChatListItem(
+        id: id,
+        title: title,
+        avatar: avatar,
+        preview: preview,
+        timeLabel: timeLabel,
+        unreadCount: unreadCount,
+        hasMention: hasMention,
+        markedUnread: markedUnread,
+        pinned: pinned,
+        favourite: favourite,
+        lists: lists ?? this.lists,
+        muted: muted,
+        archived: archived,
+        typingLabel: typingLabel ?? this.typingLabel,
+        online: online,
+        verified: verified,
+      );
+
   @override
   List<Object?> get props => [
     id,

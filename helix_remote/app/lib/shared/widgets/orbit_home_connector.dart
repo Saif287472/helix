@@ -54,24 +54,12 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
     final archivedAsync = ref.watch(archivedChatListProvider);
     final typing = ref.watch(chatTypingProvider).asData?.value ?? const {};
     final rawChats = chatListAsync.value ?? const <HelixChatListItem>[];
+    final lists = ref.watch(chatListsProvider).asData?.value ?? const [];
+    final onLists =
+        ref.watch(chatListMembershipProvider).asData?.value ?? const {};
     final chats = [
       for (final c in rawChats)
-        HelixChatListItem(
-          id: c.id,
-          title: c.title,
-          avatar: c.avatar,
-          preview: c.preview,
-          timeLabel: c.timeLabel,
-          unreadCount: c.unreadCount,
-          hasMention: c.hasMention,
-          markedUnread: c.markedUnread,
-          pinned: c.pinned,
-          muted: c.muted,
-          archived: c.archived,
-          typingLabel: typing[c.id] ?? c.typingLabel,
-          online: c.online,
-          verified: c.verified,
-        ),
+        c.copyWith(typingLabel: typing[c.id], lists: onLists[c.id]),
     ];
     final chatStatus = chatListAsync.isLoading
         ? ListStatus.loading
@@ -166,6 +154,7 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
       status: chatStatus,
       archivedCount: archivedCount,
       search: chatSearch,
+      lists: lists,
     );
 
     final model = HomeModel(
@@ -205,6 +194,11 @@ class _OrbitHomeConnectorState extends ConsumerState<OrbitHomeConnector> {
           chatActions.pin(ids, pinned: pinned),
       onSetFavourite: (ids, {required favourite}) =>
           chatActions.favourite(ids, favourite: favourite),
+      onCreateList: chatActions.createList,
+      onRenameList: chatActions.renameList,
+      onDeleteList: chatActions.deleteList,
+      onSetOnList: (ids, listId, {required member}) =>
+          chatActions.setOnList(ids, listId, member: member),
       onSetArchived: (ids, {required archived}) =>
           chatActions.archive(ids, archived: archived),
       onMute: (ids, length) => chatActions.mute(ids, _mapMute(length)),
