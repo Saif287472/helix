@@ -36,6 +36,8 @@ class OrbitBubbleActions {
     this.onAudioSeek,
     this.onVote,
     this.onRsvp,
+    this.onLocation,
+    this.onStopLive,
     this.onAuthor,
   });
 
@@ -70,6 +72,12 @@ class OrbitBubbleActions {
 
   /// An event's Going, Maybe or Can't go was tapped.
   final void Function(String id, HelixRsvp answer)? onRsvp;
+
+  /// A location card was touched (open it in a maps app).
+  final ValueChanged<String>? onLocation;
+
+  /// Stop sharing, on your own running live location.
+  final ValueChanged<String>? onStopLive;
 
   /// The author's picture beside a group bubble was tapped.
   final ValueChanged<String>? onAuthor;
@@ -2661,6 +2669,56 @@ class _Location extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = look.t;
+    final taps = _BubbleTaps.of(context);
+    final live = content.live;
+    final ended = live != null && !live.active;
+    final onOpen = content.openable && !ended ? taps?.actions.onLocation : null;
+    final onStop = live != null && live.active && live.mine
+        ? taps?.actions.onStopLive
+        : null;
+    final subtitle = live == null ? content.address : live.statusLabel;
+    final card = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: 120,
+            child: CustomPaint(
+              painter: _MapPainter(bg: t.mapBg, line: t.mapLine),
+              child: Center(
+                child: OrbitIcon(
+                  OrbitIcons.mapPin,
+                  weight: OrbitIconWeight.fill,
+                  size: 34,
+                  color: ended ? t.ink3 : t.accent,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              OrbitText(
+                content.label.isEmpty ? 'Location' : content.label,
+                style: t.font.style(
+                  size: OrbitType.small,
+                  weight: 600,
+                  color: look.ink,
+                ),
+              ),
+              OrbitText(
+                subtitle,
+                style: t.font.style(size: OrbitType.caption, color: t.ink3),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
     return SizedBox(
       width: 248,
       child: Padding(
@@ -2668,43 +2726,44 @@ class _Location extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 120,
-                child: CustomPaint(
-                  painter: _MapPainter(bg: t.mapBg, line: t.mapLine),
-                  child: Center(
-                    child: OrbitIcon(
-                      OrbitIcons.mapPin,
-                      weight: OrbitIconWeight.fill,
-                      size: 34,
-                      color: t.accent,
+            Semantics(
+              container: true,
+              button: onOpen != null,
+              label: onOpen == null ? null : 'Open location in maps',
+              child: _tappable(
+                onOpen == null ? null : () => onOpen(taps!.id),
+                card,
+              ),
+            ),
+            if (onStop != null)
+              _tappable(
+                () => onStop(taps!.id),
+                Semantics(
+                  container: true,
+                  button: true,
+                  label: 'Stop sharing live location',
+                  child: ExcludeSemantics(
+                    child: Container(
+                      height: 40,
+                      margin: const EdgeInsets.only(top: 8),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: look.out ? t.outInk : t.accent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: OrbitText(
+                        'Stop sharing',
+                        style: t.font.style(
+                          size: OrbitType.small,
+                          weight: 600,
+                          color: look.out ? t.out : t.onAccent,
+                        ),
+                      ),
                     ),
                   ),
                 ),
+                target: true,
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  OrbitText(
-                    content.label.isEmpty ? 'Location' : content.label,
-                    style: t.font.style(
-                      size: OrbitType.small,
-                      weight: 600,
-                      color: look.ink,
-                    ),
-                  ),
-                  OrbitText(
-                    content.address,
-                    style: t.font.style(size: OrbitType.caption, color: t.ink3),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),

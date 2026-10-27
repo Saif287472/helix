@@ -10,6 +10,7 @@ import 'package:orbit_ui/src/components/button.dart';
 import 'package:orbit_ui/src/components/chip_tag.dart';
 import 'package:orbit_ui/src/components/composer.dart';
 import 'package:orbit_ui/src/components/gif_tray.dart';
+import 'package:orbit_ui/src/components/location_sheet.dart';
 import 'package:orbit_ui/src/components/icon_button.dart';
 import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
@@ -275,6 +276,9 @@ class ChatActions {
     this.onSendGif,
     this.onVote,
     this.onRsvp,
+    this.onShareLocation,
+    this.onOpenLocation,
+    this.onStopLive,
     this.onCreatePoll,
     this.onCreateEvent,
     this.onVoiceStart,
@@ -397,6 +401,16 @@ class ChatActions {
 
   /// An event's Going, Maybe or Can't go was tapped.
   final void Function(String id, HelixRsvp answer)? onRsvp;
+
+  /// Shares where you are: [live] is how long to keep sharing, or null to
+  /// send the place once. The sentence to show when it could not be done (no
+  /// permission, no signal), null when it was. With it set, the attach sheet
+  /// offers Location.
+  final FutureOr<String?> Function(Duration? live)? onShareLocation;
+
+  /// A location card was touched, and Stop sharing on your running live one.
+  final ValueChanged<String>? onOpenLocation;
+  final ValueChanged<String>? onStopLive;
 
   /// Sends a poll; the sentence to show when it could not be sent, null when
   /// it was. With it set, the attach sheet offers Poll.
@@ -605,6 +619,12 @@ class _ChatScreenState extends State<ChatScreen> {
       onRsvp: a.onRsvp == null
           ? null
           : (id, answer) => widget.actions.onRsvp?.call(id, answer),
+      onLocation: a.onOpenLocation == null
+          ? null
+          : (id) => widget.actions.onOpenLocation?.call(id),
+      onStopLive: a.onStopLive == null
+          ? null
+          : (id) => widget.actions.onStopLive?.call(id),
       onAudioToggle: a.onToggleAudio == null
           ? null
           : (id) => widget.actions.onToggleAudio?.call(id),
@@ -1355,6 +1375,8 @@ class _ChatScreenState extends State<ChatScreen> {
         tile(OrbitIcons.chartBarHorizontal, 2, 'Poll', _newPoll),
       if (widget.actions.onCreateEvent != null)
         tile(OrbitIcons.calendarBlank, 1, 'Event', _newEvent),
+      if (widget.actions.onShareLocation != null)
+        tile(OrbitIcons.mapPin, 4, 'Location', _shareLocation),
     ];
     Widget row(List<Widget> tiles) => Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1388,6 +1410,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final send = widget.actions.onSendGif;
     if (load == null || send == null) return;
     showOrbitGifSheet(context, load: load, onPick: send);
+  }
+
+  void _shareLocation() {
+    final share = widget.actions.onShareLocation;
+    if (share == null) return;
+    showOrbitLocationSheet(context, onShare: share);
   }
 
   void _newPoll() {

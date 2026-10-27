@@ -619,13 +619,42 @@ class HelixDocumentContent extends HelixMessageContent {
   ];
 }
 
-/// A static location (placeholder map tile; the app supplies no map).
+/// A live location's state in its bubble.
+class HelixLiveShare extends HelixValue {
+  const HelixLiveShare({
+    required this.active,
+    required this.statusLabel,
+    this.mine = false,
+  });
+
+  /// Still sharing; false once it was stopped or its time ran out.
+  final bool active;
+
+  /// "Live until 14:30" or "Live location ended".
+  final String statusLabel;
+
+  /// Your own share, which shows Stop sharing while it runs.
+  final bool mine;
+  @override
+  List<Object?> get props => [active, statusLabel, mine];
+}
+
+/// A location (the app draws no map: a ruled tile with a pin). [live] is set
+/// for a live share; [openable] says a place is known, so a touch opens it in
+/// a maps app.
 class HelixLocationContent extends HelixMessageContent {
-  const HelixLocationContent({this.label = '', this.address = ''});
+  const HelixLocationContent({
+    this.label = '',
+    this.address = '',
+    this.live,
+    this.openable = false,
+  });
   final String label;
   final String address;
+  final HelixLiveShare? live;
+  final bool openable;
   @override
-  List<Object?> get props => [label, address];
+  List<Object?> get props => [label, address, live, openable];
 }
 
 /// A shared contact card.

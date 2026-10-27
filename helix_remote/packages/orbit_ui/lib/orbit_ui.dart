@@ -39,6 +39,7 @@ export 'src/screens/home/home_models.dart';
 export 'src/screens/home/home_screen.dart';
 export 'src/screens/home/people_panel.dart';
 export 'src/components/gif_tray.dart';
+export 'src/components/location_sheet.dart';
 export 'src/components/wallpaper.dart';
 export 'src/screens/chat/chat_screen.dart';
 export 'src/screens/chat/chat_pages.dart';
