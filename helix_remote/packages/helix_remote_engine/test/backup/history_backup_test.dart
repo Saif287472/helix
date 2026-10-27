@@ -303,6 +303,21 @@ void main() {
       );
     });
 
+    test('a locked chat is still locked after a restore', () async {
+      await addHistory(alice, bobId, 3);
+      final chat = directConversationId(bobId);
+      await alice.db.conversationsDao.setLocked(chat, DateTime.utc(2026, 5, 5));
+      await alice.backup.backUpNow();
+
+      final second = await world.link(alice, 'alice2');
+      await second.backup.restoreHistory();
+      expect(
+        (await second.db.conversationsDao.byId(chat))!.lockedAt,
+        DateTime.utc(2026, 5, 5),
+      );
+      expect(await second.db.conversationsDao.watchList().first, isEmpty);
+    });
+
     test('restoring twice changes nothing', () async {
       await addHistory(alice, bobId, 12);
       await alice.backup.backUpNow();

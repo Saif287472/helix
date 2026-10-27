@@ -358,6 +358,15 @@ class $ConversationsTable extends Conversations
         requiredDuringInsert: false,
       ).withConverter<DateTime?>($ConversationsTable.$converterfavouriteAtn);
   @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> lockedAt =
+      GeneratedColumn<int>(
+        'locked_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($ConversationsTable.$converterlockedAtn);
+  @override
   List<GeneratedColumn> get $columns => [
     id,
     kind,
@@ -377,6 +386,7 @@ class $ConversationsTable extends Conversations
     disappearingSeconds,
     createdAt,
     favouriteAt,
+    lockedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -575,6 +585,12 @@ class $ConversationsTable extends Conversations
           data['${effectivePrefix}favourite_at'],
         ),
       ),
+      lockedAt: $ConversationsTable.$converterlockedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}locked_at'],
+        ),
+      ),
     );
   }
 
@@ -598,6 +614,9 @@ class $ConversationsTable extends Conversations
   static TypeConverter<DateTime, int> $converterfavouriteAt = const EpochMs();
   static TypeConverter<DateTime?, int?> $converterfavouriteAtn =
       NullAwareTypeConverter.wrap($converterfavouriteAt);
+  static TypeConverter<DateTime, int> $converterlockedAt = const EpochMs();
+  static TypeConverter<DateTime?, int?> $converterlockedAtn =
+      NullAwareTypeConverter.wrap($converterlockedAt);
 }
 
 class ConversationRow extends DataClass implements Insertable<ConversationRow> {
@@ -627,6 +646,12 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
   /// When the chat was made a favourite (a private filter on the chat list,
   /// never sent). Null when it is not one. Schema 6.
   final DateTime? favouriteAt;
+
+  /// When the chat was locked: it is out of the chat list, out of search,
+  /// starred messages and the GIF tray, and its notifications show no name or
+  /// text; it is opened from Locked chats after the phone's own unlock. Null
+  /// when it is not locked. Private to the device, never sent. Schema 8.
+  final DateTime? lockedAt;
   const ConversationRow({
     required this.id,
     required this.kind,
@@ -646,6 +671,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     this.disappearingSeconds,
     required this.createdAt,
     this.favouriteAt,
+    this.lockedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -708,6 +734,11 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
         $ConversationsTable.$converterfavouriteAtn.toSql(favouriteAt),
       );
     }
+    if (!nullToAbsent || lockedAt != null) {
+      map['locked_at'] = Variable<int>(
+        $ConversationsTable.$converterlockedAtn.toSql(lockedAt),
+      );
+    }
     return map;
   }
 
@@ -755,6 +786,9 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       favouriteAt: favouriteAt == null && nullToAbsent
           ? const Value.absent()
           : Value(favouriteAt),
+      lockedAt: lockedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lockedAt),
     );
   }
 
@@ -790,6 +824,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       favouriteAt: serializer.fromJson<DateTime?>(json['favouriteAt']),
+      lockedAt: serializer.fromJson<DateTime?>(json['lockedAt']),
     );
   }
   @override
@@ -816,6 +851,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       'disappearingSeconds': serializer.toJson<int?>(disappearingSeconds),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'favouriteAt': serializer.toJson<DateTime?>(favouriteAt),
+      'lockedAt': serializer.toJson<DateTime?>(lockedAt),
     };
   }
 
@@ -838,6 +874,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     Value<int?> disappearingSeconds = const Value.absent(),
     DateTime? createdAt,
     Value<DateTime?> favouriteAt = const Value.absent(),
+    Value<DateTime?> lockedAt = const Value.absent(),
   }) => ConversationRow(
     id: id ?? this.id,
     kind: kind ?? this.kind,
@@ -869,6 +906,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
         : this.disappearingSeconds,
     createdAt: createdAt ?? this.createdAt,
     favouriteAt: favouriteAt.present ? favouriteAt.value : this.favouriteAt,
+    lockedAt: lockedAt.present ? lockedAt.value : this.lockedAt,
   );
   ConversationRow copyWithCompanion(ConversationsCompanion data) {
     return ConversationRow(
@@ -910,6 +948,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       favouriteAt: data.favouriteAt.present
           ? data.favouriteAt.value
           : this.favouriteAt,
+      lockedAt: data.lockedAt.present ? data.lockedAt.value : this.lockedAt,
     );
   }
 
@@ -933,7 +972,8 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
           ..write('draft: $draft, ')
           ..write('disappearingSeconds: $disappearingSeconds, ')
           ..write('createdAt: $createdAt, ')
-          ..write('favouriteAt: $favouriteAt')
+          ..write('favouriteAt: $favouriteAt, ')
+          ..write('lockedAt: $lockedAt')
           ..write(')'))
         .toString();
   }
@@ -958,6 +998,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     disappearingSeconds,
     createdAt,
     favouriteAt,
+    lockedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -980,7 +1021,8 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
           other.draft == this.draft &&
           other.disappearingSeconds == this.disappearingSeconds &&
           other.createdAt == this.createdAt &&
-          other.favouriteAt == this.favouriteAt);
+          other.favouriteAt == this.favouriteAt &&
+          other.lockedAt == this.lockedAt);
 }
 
 class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
@@ -1002,6 +1044,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
   final Value<int?> disappearingSeconds;
   final Value<DateTime> createdAt;
   final Value<DateTime?> favouriteAt;
+  final Value<DateTime?> lockedAt;
   final Value<int> rowid;
   const ConversationsCompanion({
     this.id = const Value.absent(),
@@ -1022,6 +1065,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     this.disappearingSeconds = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.favouriteAt = const Value.absent(),
+    this.lockedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ConversationsCompanion.insert({
@@ -1043,6 +1087,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     this.disappearingSeconds = const Value.absent(),
     required DateTime createdAt,
     this.favouriteAt = const Value.absent(),
+    this.lockedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        kind = Value(kind),
@@ -1066,6 +1111,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     Expression<int>? disappearingSeconds,
     Expression<int>? createdAt,
     Expression<int>? favouriteAt,
+    Expression<int>? lockedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1090,6 +1136,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
         'disappearing_seconds': disappearingSeconds,
       if (createdAt != null) 'created_at': createdAt,
       if (favouriteAt != null) 'favourite_at': favouriteAt,
+      if (lockedAt != null) 'locked_at': lockedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1113,6 +1160,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     Value<int?>? disappearingSeconds,
     Value<DateTime>? createdAt,
     Value<DateTime?>? favouriteAt,
+    Value<DateTime?>? lockedAt,
     Value<int>? rowid,
   }) {
     return ConversationsCompanion(
@@ -1134,6 +1182,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
       disappearingSeconds: disappearingSeconds ?? this.disappearingSeconds,
       createdAt: createdAt ?? this.createdAt,
       favouriteAt: favouriteAt ?? this.favouriteAt,
+      lockedAt: lockedAt ?? this.lockedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1207,6 +1256,11 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
         $ConversationsTable.$converterfavouriteAtn.toSql(favouriteAt.value),
       );
     }
+    if (lockedAt.present) {
+      map['locked_at'] = Variable<int>(
+        $ConversationsTable.$converterlockedAtn.toSql(lockedAt.value),
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1234,6 +1288,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
           ..write('disappearingSeconds: $disappearingSeconds, ')
           ..write('createdAt: $createdAt, ')
           ..write('favouriteAt: $favouriteAt, ')
+          ..write('lockedAt: $lockedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -16658,6 +16713,7 @@ typedef $$ConversationsTableCreateCompanionBuilder =
       Value<int?> disappearingSeconds,
       required DateTime createdAt,
       Value<DateTime?> favouriteAt,
+      Value<DateTime?> lockedAt,
       Value<int> rowid,
     });
 typedef $$ConversationsTableUpdateCompanionBuilder =
@@ -16680,6 +16736,7 @@ typedef $$ConversationsTableUpdateCompanionBuilder =
       Value<int?> disappearingSeconds,
       Value<DateTime> createdAt,
       Value<DateTime?> favouriteAt,
+      Value<DateTime?> lockedAt,
       Value<int> rowid,
     });
 
@@ -16873,6 +16930,12 @@ class $$ConversationsTableFilterComposer
   ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get favouriteAt =>
       $composableBuilder(
         column: $table.favouriteAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get lockedAt =>
+      $composableBuilder(
+        column: $table.lockedAt,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
 
@@ -17075,6 +17138,11 @@ class $$ConversationsTableOrderingComposer
     column: $table.favouriteAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get lockedAt => $composableBuilder(
+    column: $table.lockedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ConversationsTableAnnotationComposer
@@ -17162,6 +17230,9 @@ class $$ConversationsTableAnnotationComposer
         column: $table.favouriteAt,
         builder: (column) => column,
       );
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get lockedAt =>
+      $composableBuilder(column: $table.lockedAt, builder: (column) => column);
 
   Expression<T> messagesRefs<T extends Object>(
     Expression<T> Function($$MessagesTableAnnotationComposer a) f,
@@ -17316,6 +17387,7 @@ class $$ConversationsTableTableManager
                 Value<int?> disappearingSeconds = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> favouriteAt = const Value.absent(),
+                Value<DateTime?> lockedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ConversationsCompanion(
                 id: id,
@@ -17336,6 +17408,7 @@ class $$ConversationsTableTableManager
                 disappearingSeconds: disappearingSeconds,
                 createdAt: createdAt,
                 favouriteAt: favouriteAt,
+                lockedAt: lockedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -17358,6 +17431,7 @@ class $$ConversationsTableTableManager
                 Value<int?> disappearingSeconds = const Value.absent(),
                 required DateTime createdAt,
                 Value<DateTime?> favouriteAt = const Value.absent(),
+                Value<DateTime?> lockedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ConversationsCompanion.insert(
                 id: id,
@@ -17378,6 +17452,7 @@ class $$ConversationsTableTableManager
                 disappearingSeconds: disappearingSeconds,
                 createdAt: createdAt,
                 favouriteAt: favouriteAt,
+                lockedAt: lockedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

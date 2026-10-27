@@ -13,6 +13,7 @@ import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
 import 'generated/schema_v6.dart' as v6;
+import 'generated/schema_v7.dart' as v7;
 
 /// Migration tests against the checked-in schema dumps (plan §6.2: every
 /// migration has a drift_dev test from the first release onward).
@@ -303,6 +304,29 @@ void main() {
                 .get())
             .map((r) => r.read<String>('name'));
     expect(indexes, contains('chat_list_members_chat'));
+  });
+
+  test('7 to 8 keeps every chat, and none starts locked', () async {
+    final schema = await verifier.schemaAt(7);
+    final old = v7.DatabaseAtV7(schema.newConnection());
+    await old.customStatement(
+      "INSERT INTO conversations (id, kind, created_at) "
+      "VALUES ('direct:bob', 'direct', 1000)",
+    );
+    await old.close();
+
+    final db = HelixDb.withExecutor(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 8);
+
+    final chat = await db.conversationsDao.byId('direct:bob');
+    expect(chat, isNotNull);
+    expect(chat!.lockedAt, isNull);
+    await db.conversationsDao.setLocked('direct:bob', DateTime.utc(2026));
+    expect(
+      (await db.conversationsDao.byId('direct:bob'))!.lockedAt,
+      DateTime.utc(2026),
+    );
   });
 
   test(

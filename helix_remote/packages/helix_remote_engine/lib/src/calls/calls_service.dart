@@ -922,7 +922,8 @@ final class CallsService implements CallSignalSink {
   }) async {
     final now = _now();
     final chat = directConversationId(peer);
-    final muted = (await _db.conversationsDao.byId(chat))?.mutedUntil;
+    final conversation = await _db.conversationsDao.byId(chat);
+    final muted = conversation?.mutedUntil;
     _emit(
       MissedCallEvent(
         IncomingNotice(
@@ -934,6 +935,7 @@ final class CallsService implements CallSignalSink {
           preview: video ? 'Missed video call' : 'Missed voice call',
           muted: muted != null && muted.isAfter(now),
           sentAt: now,
+          locked: conversation?.lockedAt != null,
         ),
       ),
     );

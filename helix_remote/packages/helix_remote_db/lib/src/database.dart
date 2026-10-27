@@ -97,7 +97,7 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -185,6 +185,13 @@ class HelixDb extends _$HelixDb {
         await m.create(schema.chatLists);
         await m.create(schema.chatListMembers);
         await m.create(schema.chatListMembersChat);
+      },
+      // Schema 8 adds one nullable column: when a chat was locked. No row is
+      // rewritten; every chat starts unlocked.
+      from7To8: (m, schema) async {
+        await m.database.customStatement(
+          'ALTER TABLE conversations ADD COLUMN locked_at INTEGER NULL',
+        );
       },
     ),
   );

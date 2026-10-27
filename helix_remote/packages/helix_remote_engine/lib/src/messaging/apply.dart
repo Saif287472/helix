@@ -364,6 +364,7 @@ final class ContentApplier {
         muted: muted != null && muted.isAfter(now),
         sentAt: row.sentAt,
         mentionsMe: row.mentionsMe,
+        locked: conversation?.lockedAt != null,
       ),
     );
   }

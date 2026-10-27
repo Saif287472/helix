@@ -241,6 +241,14 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     return changed;
   }
 
+  /// The ids of the locked chats, for leaving them out of what spans chats.
+  BaseSelectStatement<TypedResult> _lockedChats() {
+    final c = attachedDatabase.conversations;
+    return attachedDatabase.selectOnly(c)
+      ..addColumns([c.id])
+      ..where(c.lockedAt.isNotNull());
+  }
+
   /// Delete for everyone: the row stays as "This message was deleted", its
   /// text, payload, reactions and media rows go. Returns the removed media
   /// rows so the caller can delete their local files.
@@ -549,7 +557,8 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
               ..where(
                 attachments.kind.equals('gif') &
                     attachments.localPath.isNotNull() &
-                    messages.deletedAt.isNull(),
+                    messages.deletedAt.isNull() &
+                    messages.conversationId.isNotInQuery(_lockedChats()),
               )
               ..orderBy([OrderingTerm.desc(messages.sentAt)])
               ..limit(limit * 4))
@@ -804,7 +813,12 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
   /// emits on every change.
   Stream<List<MessageRow>> watchStarred({int limit = 500}) =>
       (select(messages)
-            ..where((m) => m.starredAt.isNotNull() & m.deletedAt.isNull())
+            ..where(
+              (m) =>
+                  m.starredAt.isNotNull() &
+                  m.deletedAt.isNull() &
+                  m.conversationId.isNotInQuery(_lockedChats()),
+            )
             ..orderBy([(m) => OrderingTerm.desc(m.starredAt)])
             ..limit(limit))
           .watch();
@@ -989,7 +1003,9 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
       'SELECT m.* FROM messages_fts f '
       'JOIN messages m ON m.local_rowid = f.rowid '
       'WHERE messages_fts MATCH ? AND m.deleted_at IS NULL '
-      '${conversationId == null ? '' : 'AND m.conversation_id = ? '}'
+      // A search of everything never reaches into a locked chat; a search
+      // inside one chat (its own screen, behind the unlock) does.
+      '${conversationId == null ? 'AND m.conversation_id NOT IN (SELECT id FROM conversations WHERE locked_at IS NOT NULL) ' : 'AND m.conversation_id = ? '}'
       'ORDER BY m.sort_key DESC LIMIT ?',
       variables: [
         Variable.withString(match),

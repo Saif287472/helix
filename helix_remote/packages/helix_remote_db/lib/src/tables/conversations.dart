@@ -35,6 +35,12 @@ class Conversations extends Table {
   /// never sent). Null when it is not one. Schema 6.
   IntColumn get favouriteAt => integer().nullable().map(const EpochMs())();
 
+  /// When the chat was locked: it is out of the chat list, out of search,
+  /// starred messages and the GIF tray, and its notifications show no name or
+  /// text; it is opened from Locked chats after the phone's own unlock. Null
+  /// when it is not locked. Private to the device, never sent. Schema 8.
+  IntColumn get lockedAt => integer().nullable().map(const EpochMs())();
+
   @override
   Set<Column> get primaryKey => {id};
 }

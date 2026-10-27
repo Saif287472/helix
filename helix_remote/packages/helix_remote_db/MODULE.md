@@ -21,7 +21,7 @@ all open it. May depend only on `helix_remote_domain` and
 - `DatabaseKey.toString()` is redacted; the key lives in the platform
   keystore and is never logged.
 
-## Schema (version 7)
+## Schema (version 8)
 
 Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 
@@ -85,6 +85,12 @@ row behind), with `chat_list_members_chat`. A chat may be on several lists. They
 private to the device and never sent; `ConversationsDao` has `createList`, `renameList`,
 `deleteList`, `addToList`, `removeFromList` and the `watch`/read pairs. `wipeAll` empties
 both.
+
+Schema 8 (locked chats) is one nullable column (`from7To8`): `conversations.locked_at`
+(`ConversationsDao.setLocked`, `watchLocked`). A locked chat is left out of `watchList`
+(and its archived variant), of `watchUnreadTotals`, and of what spans chats: `search`
+without a `conversationId`, `watchStarred` and `recentGifs`. A search inside the chat still
+works, because its screen is behind the unlock. Private to the device, never sent.
 
 ## Two engines, one database file
 

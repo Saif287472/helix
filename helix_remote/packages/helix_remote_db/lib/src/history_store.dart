@@ -124,6 +124,7 @@ final class HistoryStore {
     String? title,
     DateTime? pinnedAt,
     DateTime? favouriteAt,
+    DateTime? lockedAt,
     DateTime? mutedUntil,
     bool archived = false,
     String? draft,
@@ -144,6 +145,7 @@ final class HistoryStore {
               title: Value(title),
               pinnedAt: Value(pinnedAt),
               favouriteAt: Value(favouriteAt),
+              lockedAt: Value(lockedAt),
               mutedUntil: Value(mutedUntil),
               archived: Value(archived),
               draft: Value(draft),
@@ -166,6 +168,11 @@ final class HistoryStore {
               : const Value.absent(),
           favouriteAt: existing.favouriteAt == null && favouriteAt != null
               ? Value(favouriteAt)
+              : const Value.absent(),
+          // A chat locked here stays locked, and one the backup locked
+          // arrives locked: a restore never takes a lock off.
+          lockedAt: existing.lockedAt == null && lockedAt != null
+              ? Value(lockedAt)
               : const Value.absent(),
           mutedUntil: existing.mutedUntil == null && mutedUntil != null
               ? Value(mutedUntil)

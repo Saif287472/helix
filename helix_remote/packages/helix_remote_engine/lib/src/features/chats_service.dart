@@ -861,6 +861,17 @@ final class ChatsService {
     }
   }
 
+  /// Locks the chat, or unlocks it: a private flag that takes it out of the
+  /// chat list and of everything that reads across chats, and hides its name
+  /// and text from notifications. Never sent. The unlock itself (the phone's
+  /// biometric or PIN) is the app's.
+  Future<void> setLocked(String id, {required bool locked}) =>
+      _db.conversationsDao.setLocked(id, locked ? _ctx.now() : null);
+
+  /// The locked chats, newest activity first, live.
+  Stream<List<ConversationListItem>> watchLockedChats() =>
+      _db.conversationsDao.watchLocked();
+
   Future<void> setMutedUntil(String id, DateTime? until) =>
       _db.conversationsDao.setMutedUntil(id, until);
 

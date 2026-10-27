@@ -136,7 +136,10 @@ class ConversationsDao extends DatabaseAccessor<HelixDb>
               messages.localRowid.equalsExp(conversations.lastMessageRowid),
             ),
           ])
-          ..where(conversations.archived.equals(archived))
+          ..where(
+            conversations.archived.equals(archived) &
+                conversations.lockedAt.isNull(),
+          )
           ..orderBy([
             OrderingTerm(
               expression: conversations.pinnedAt,
@@ -164,7 +167,7 @@ class ConversationsDao extends DatabaseAccessor<HelixDb>
         'SELECT coalesce(sum(unread_count), 0) AS messages, '
         'coalesce(sum(unread_count > 0), 0) AS conversations, '
         'coalesce(sum(mention_count), 0) AS mentions '
-        'FROM conversations WHERE archived = 0',
+        'FROM conversations WHERE archived = 0 AND locked_at IS NULL',
         readsFrom: {conversations},
       ).watchSingle().map(
         (row) => UnreadTotals(
@@ -256,6 +259,39 @@ class ConversationsDao extends DatabaseAccessor<HelixDb>
                 m.conversationId.equals(conversationId),
           ))
           .go();
+
+  /// Locks the chat at [at], or unlocks it with null.
+  Future<void> setLocked(String id, DateTime? at) =>
+      _write(id, ConversationsCompanion(lockedAt: Value(at)));
+
+  /// The locked chats, newest activity first (the Locked chats screen).
+  Stream<List<ConversationListItem>> watchLocked() {
+    final activity = coalesce([
+      conversations.lastMessageAt,
+      conversations.createdAt,
+    ]);
+    final query =
+        select(conversations).join([
+            leftOuterJoin(
+              messages,
+              messages.localRowid.equalsExp(conversations.lastMessageRowid),
+            ),
+          ])
+          ..where(conversations.lockedAt.isNotNull())
+          ..orderBy([
+            OrderingTerm.desc(activity),
+            OrderingTerm.asc(conversations.id),
+          ]);
+    return query.watch().map(
+      (rows) => [
+        for (final r in rows)
+          ConversationListItem(
+            r.readTable(conversations),
+            r.readTableOrNull(messages),
+          ),
+      ],
+    );
+  }
 
   Future<void> setMutedUntil(String id, DateTime? until) =>
       _write(id, ConversationsCompanion(mutedUntil: Value(until)));

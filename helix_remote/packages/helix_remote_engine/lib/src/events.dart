@@ -38,6 +38,7 @@ final class IncomingNotice {
     required this.muted,
     required this.sentAt,
     this.mentionsMe = false,
+    this.locked = false,
   });
 
   final String conversationId;
@@ -60,6 +61,10 @@ final class IncomingNotice {
   /// The message mentions this account (a group chat's `mention_count`); a
   /// host may still alert for it in a muted chat.
   final bool mentionsMe;
+
+  /// The chat is locked: a host shows no name and no text for it, only that a
+  /// message arrived.
+  final bool locked;
 }
 
 /// Things that happen while the engine runs, for UI and notifications.
