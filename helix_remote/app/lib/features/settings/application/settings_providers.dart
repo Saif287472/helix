@@ -35,6 +35,9 @@ final settingsAvatarProvider = Provider<Uint8List?>(
 
 final readReceiptsProvider = settingProvider(EngineSettings.sendReadReceipts);
 final typingIndicatorsProvider = settingProvider(EngineSettings.sendTyping);
+final silenceUnknownCallersProvider = settingProvider(
+  EngineSettings.silenceUnknownCallers,
+);
 final defaultDisappearingProvider = settingProvider(
   EngineSettings.defaultDisappearingSeconds,
 );
@@ -138,6 +141,9 @@ final class SettingsActions {
 
   Future<void> setTypingIndicators(bool on) =>
       _store.set(EngineSettings.sendTyping, on);
+
+  Future<void> setSilenceUnknownCallers(bool on) =>
+      _store.set(EngineSettings.silenceUnknownCallers, on);
 
   Future<void> setDefaultDisappearing(int? seconds) =>
       _store.set(EngineSettings.defaultDisappearingSeconds, seconds);

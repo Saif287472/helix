@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 29 | see "Already built" |
+| Already built | 30 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 8 | A6, A9, A10, B8, C1, C5, C7, E4 |
+| M (about 10 files) | 7 | A6, A9, A10, B8, C5, C7, E4 |
 | L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -101,7 +101,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | ID | Feature | Status | Size | Probable files |
 |---|---|---|---|---|
-| C1 | Silence unknown callers | Not built | **M** (was S) | A setting (`app/core/security/app_settings.dart`, `settings_providers.dart`, `privacy_page.dart`, the `orbit_ui` privacy topic screen) plus a rule in the engine `calls_service.dart` beside `_isBlocked` (a caller not in the people list: no ring, still logged as missed) and its tests. Decide first whether this fits "anyone can call anyone". |
+| C1 | Silence unknown callers | **Built 2026-10-27** | done | Engine `EngineSettings.silenceUnknownCallers`, `calls_service.dart` (`_isSilenced`, `_logSilenced`, `peekPending`), `MessagesDao.hasOutgoing`; `orbit_ui` Privacy > Calls switch; app `privacy_page.dart`. Unknown = not in the contacts, no nickname, never written to. Logged as missed, no ring and no notice. |
 | C2 | Show your own "online" separately | **Already built** | n/a | `PrivacySettings.online` and the privacy page row. |
 | C3 | Chat lock (per-chat biometric lock, hidden list) | Not built | **L** | `conversations.locked` (schema 6); a Locked folder in the chats tab; biometric prompt (`app_lock.dart` generalised); redacted notification previews (`core/notifications/`); excluded from search and from `watchSharedAttachments`; a note that backup contains locked chats. |
 | C4 | Passkeys (WebAuthn) in place of SMS | Not built | **L** | New identity endpoints (server `identity` module, `proto/modules/identity.dart`, fixtures), a platform plugin, recovery-flow changes. A new auth mechanism: needs an ADR and crypto review note. Do not weaken the password-derived key rule. |

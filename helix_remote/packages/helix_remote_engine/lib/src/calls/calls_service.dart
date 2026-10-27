@@ -45,7 +45,8 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// caller that the callee blocked without telling it: the caller's call just
 /// rings until it times out, exactly as for an unanswered one. A call to
 /// someone this user blocked is refused locally; a blocked caller's offer is
-/// dropped without a row or a ring.
+/// dropped without a row or a ring. With `silenceUnknownCallers` on, an offer
+/// from someone unknown is logged as missed and does not ring.
 ///
 /// Every state change runs on one queue, so signals and user actions never
 /// interleave. User actions return when their own effect is done; signals
@@ -178,6 +179,8 @@ final class CallsService implements CallSignalSink {
       if (!p.expiresAt.isAfter(now)) continue;
       if (await _isKnown(p.callId)) continue;
       if (await _isBlocked(p.from.account)) continue;
+      // A silenced call must not ring a phone the app is not running on.
+      if (await _isSilenced(p.from.account)) continue;
       notices.add(
         PendingCallNotice(
           callId: p.callId,
@@ -297,6 +300,21 @@ final class CallsService implements CallSignalSink {
   Future<bool> _isBlocked(String account) async =>
       (await _db.peopleDao.byAccount(account))?.blocked ?? false;
 
+  /// An unknown caller while "silence unknown callers" is on. Someone is
+  /// known when they are in the phone's contacts, were renamed here, or were
+  /// ever written to from this account; a call from anyone else does not ring.
+  Future<bool> _isSilenced(String account) async {
+    if (!await _db.settingsDao.get(EngineSettings.silenceUnknownCallers)) {
+      return false;
+    }
+    final person = await _db.peopleDao.byAccount(account);
+    if ((person?.phonebookName ?? '').isNotEmpty ||
+        (person?.nickname ?? '').isNotEmpty) {
+      return false;
+    }
+    return !await _db.messagesDao.hasOutgoing(directConversationId(account));
+  }
+
   Future<bool> _isKnown(String callId) async =>
       _call?.callId == callId || await _db.callsDao.byId(callId) != null;
 
@@ -395,6 +413,14 @@ final class CallsService implements CallSignalSink {
     if (account == self || offer.sdp == null || offer.media == null) return;
     if (await _isKnown(offer.callId)) return;
     if (await _isBlocked(account)) return;
+    if (await _isSilenced(account)) {
+      await _logSilenced(
+        offer.callId,
+        account,
+        video: offer.media == CallMedia.video,
+      );
+      return;
+    }
     final now = _now();
     final existing = _call;
     if (existing != null) {
@@ -859,6 +885,31 @@ final class CallsService implements CallSignalSink {
       ),
     );
     await _emitMissedNotice(callId, peer, video: video);
+  }
+
+  /// A silenced call: a missed call in the log, with no notice and no answer,
+  /// so the caller's call goes unanswered exactly like any other.
+  Future<void> _logSilenced(
+    String callId,
+    String peer, {
+    required bool video,
+  }) async {
+    final now = _now();
+    await _db.peopleDao.upsertPerson(
+      PeopleCompanion.insert(accountId: peer, updatedAt: now),
+    );
+    await _db.callsDao.start(
+      CallLogCompanion.insert(
+        callId: callId,
+        peerAccountId: peer,
+        kind: 'direct',
+        direction: 'missed',
+        video: Value(video),
+        state: 'missed',
+        startedAt: now,
+        endedAt: Value(now),
+      ),
+    );
   }
 
   Future<void> _emitMissed(_Call call) =>

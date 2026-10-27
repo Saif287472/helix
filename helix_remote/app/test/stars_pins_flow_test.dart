@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote/features/conversation/presentation/starred_screen.dart';
-import 'package:helix_remote_db/helix_remote_db.dart';
 
 import 'support/chat_harness.dart';
 import 'support/orbit_theme.dart';

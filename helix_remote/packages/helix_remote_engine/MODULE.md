@@ -940,3 +940,13 @@ lacks and keeps what it has). `pinMessage` is shared: it sets `messages.pinned_a
 action (CONTENT_V2.md §3) that the other side's `_pin` applies. A chat keeps at most
 `ChatsService.maxPinnedMessages` (3) pinned: the sender's `pinMessage` throws `EngineStateException`
 for a 4th, a receiver applies what arrives. `test/pins_stars_test.dart` covers it.
+
+## Silence unknown callers
+
+With `EngineSettings.silenceUnknownCallers` on, `CallsService` treats an offer from an *unknown* caller
+(not in the phone's contacts, no nickname, and never written to from this account:
+`MessagesDao.hasOutgoing`) like a call nobody answers: it is logged as missed (`_logSilenced`), with no ring, no
+`IncomingCallEvent`, no missed-call notice and no `ringing` signal back, so the caller sees an ordinary
+unanswered call. `peekPending` (the push wake) skips such a call, so a phone the app is not running on does not
+ring; the call is logged when the app next opens the pending offer, if it has not expired. A blocked
+caller is still dropped without a row. `test/calls/silence_unknown_test.dart` covers it.

@@ -283,10 +283,14 @@ class PrivacyModel {
     this.blockedCount = 0,
     this.blockedAvatar,
     this.askNumber = false,
+    this.silenceUnknownCalls,
   });
 
   final String meName;
   final HelixAvatarModel meAvatar;
+
+  /// "Silence unknown callers" is on; null when the app does not offer it.
+  final bool? silenceUnknownCalls;
 
   /// "Who can see" and "Being found" are the server's: hidden until they
   /// come, with Try again when they could not be read.
@@ -380,6 +384,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     'byName': m.byName,
     'lock': m.lockOn,
     'lockAfter': m.lockAfter,
+    'silenceCalls': m.silenceUnknownCalls ?? false,
   };
 
   @override
@@ -682,6 +687,23 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                 OrbitIcons.at,
                 1,
                 server: true,
+              ),
+            ],
+          ),
+        if (m.silenceUnknownCalls != null)
+          OrbitSection(
+            title: 'Calls',
+            footer:
+                'A person is unknown when they are not in your phone\u2019s '
+                'contacts, you have not renamed them, and you have never '
+                'written to them.',
+            rows: [
+              sw(
+                'silenceCalls',
+                'Silence unknown callers',
+                'Their calls do not ring. They show in your call history.',
+                OrbitIcons.phoneX,
+                4,
               ),
             ],
           ),

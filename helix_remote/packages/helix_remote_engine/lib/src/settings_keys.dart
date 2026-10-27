@@ -11,6 +11,15 @@ abstract final class EngineSettings {
   /// Send typing indicators.
   static const sendTyping = Setting<bool>('privacy.typing_indicators', true);
 
+  /// Calls from someone this account does not know do not ring: they are
+  /// logged as missed and nothing else happens (the caller is not told). A
+  /// person is known when they are in the phone's contacts, were renamed here,
+  /// or were ever written to from this account.
+  static const silenceUnknownCallers = Setting<bool>(
+    'privacy.silence_unknown_callers',
+    false,
+  );
+
   /// New chats start with this disappearing-message timer (seconds), or off.
   static const defaultDisappearingSeconds = Setting<int?>(
     'chat.default_disappearing_seconds',

@@ -97,6 +97,8 @@ class PrivacyPage extends ConsumerWidget {
         groupsEveryone: prefs?.groupAdd != AudienceChoice.nobody,
         receipts: ref.watch(readReceiptsProvider).value ?? true,
         typing: ref.watch(typingIndicatorsProvider).value ?? true,
+        silenceUnknownCalls:
+            ref.watch(silenceUnknownCallersProvider).value ?? false,
         timerLabel: timerLabel(ref.watch(defaultDisappearingProvider).value),
         byNumber: prefs?.discoverableByPhone ?? true,
         byName: prefs?.discoverableByName ?? true,
@@ -129,6 +131,8 @@ class PrivacyPage extends ConsumerWidget {
               await actions.setReadReceipts(value as bool);
             case 'typing':
               await actions.setTypingIndicators(value as bool);
+            case 'silenceCalls':
+              await actions.setSilenceUnknownCallers(value as bool);
             case 'timer':
               await actions.setDefaultDisappearing(timers[value]);
             case 'byNumber':

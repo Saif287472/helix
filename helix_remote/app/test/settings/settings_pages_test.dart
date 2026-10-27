@@ -586,6 +586,20 @@ void main() {
       expect(settings.read(EngineSettings.sendTyping), isFalse);
     });
 
+    youTest('silencing unknown callers is a local switch, off at first', (
+      tester,
+    ) async {
+      final (_, settings, _) = await open(tester);
+      expect(settings.read(EngineSettings.silenceUnknownCallers), isFalse);
+      await tester.ensureVisible(find.text('Silence unknown callers'));
+      await tester.tap(find.text('Silence unknown callers'));
+      await settle(tester);
+      expect(settings.read(EngineSettings.silenceUnknownCallers), isTrue);
+      await tester.tap(find.text('Silence unknown callers'));
+      await settle(tester);
+      expect(settings.read(EngineSettings.silenceUnknownCallers), isFalse);
+    });
+
     youTest('the disappearing default can be set and turned off', (
       tester,
     ) async {

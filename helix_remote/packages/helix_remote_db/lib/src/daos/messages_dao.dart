@@ -637,6 +637,21 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     return found;
   });
 
+  /// Whether this account ever wrote in [conversationId] (a message of its own
+  /// is in it).
+  Future<bool> hasOutgoing(String conversationId) async {
+    final row =
+        await (select(messages)
+              ..where(
+                (m) =>
+                    m.conversationId.equals(conversationId) &
+                    m.outgoing.equals(true),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    return row != null;
+  }
+
   // ------------------------------------------------- stars and pins
 
   /// Stars the message at [at], or takes the star off with null. A deleted
