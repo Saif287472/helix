@@ -139,7 +139,7 @@ final class AdminSessionController extends ChangeNotifier {
     _authenticating = true;
     final bool ok;
     try {
-      ok = await services.deviceLock.authenticate('Unlock Orbit Admin');
+      ok = await services.deviceLock.authenticate('Unlock Orbit Console');
     } finally {
       _authenticating = false;
     }

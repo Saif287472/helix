@@ -71,13 +71,13 @@ class _HelixAdminAppState extends State<HelixAdminApp>
       controller: _session,
       child: MaterialApp(
         navigatorKey: _navigator,
-        title: 'Orbit Admin',
+        title: 'Orbit Console',
         debugShowCheckedModeBanner: false,
         theme: HelixThemes.console(),
         themeMode: ThemeMode.light,
         builder: (context, child) => Semantics(
           container: true,
-          label: 'Orbit Admin',
+          label: 'Orbit Console',
           child: FocusTraversalGroup(
             policy: OrderedTraversalPolicy(),
             child: child!,
@@ -118,7 +118,7 @@ class _Launching extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     body: Center(
       child: Semantics(
-        label: 'Starting Orbit Admin',
+        label: 'Starting Orbit Console',
         liveRegion: true,
         child: const Column(
           mainAxisSize: MainAxisSize.min,
@@ -130,7 +130,7 @@ class _Launching extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              'Orbit Admin',
+              'Orbit Console',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,

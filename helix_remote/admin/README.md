@@ -1,6 +1,6 @@
-# helix_admin (operator console)
+# Orbit Console (operator console)
 
-Helix Admin: the Flutter operator console for a Helix Remote **v2 server**
+Orbit Console: the Flutter operator console for a Helix Remote **v2 server**
 (`../server`), including Helix Global. It runs on the v2 admin API only
 (`helix_remote_api/v2.dart`: `HelixAdminApi`, `AdminClient`); there is no v1
 admin client and it cannot talk to a v1 server. Light theme only, English

@@ -1,6 +1,6 @@
 # The sign-in feature
 
-`features/sign_in/` is the way into Helix Remote. It exists because sign-in has
+`features/sign_in/` is the way into Orbit. It exists because sign-in has
 more rules than any other screen, and those rules have to live in one place
 rather than in a widget.
 

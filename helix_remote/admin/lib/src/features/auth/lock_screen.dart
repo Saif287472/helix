@@ -60,7 +60,7 @@ class _LockScreenState extends State<LockScreen> {
                     Semantics(
                       header: true,
                       child: const Text(
-                        'Orbit Admin is locked',
+                        'Orbit Console is locked',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 20,

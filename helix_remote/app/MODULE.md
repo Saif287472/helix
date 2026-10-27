@@ -1,6 +1,6 @@
-# helix_remote (app)
+# Orbit (app)
 
-The Helix Remote Flutter client, rebuilt on the v2 stack (ADR-027,
+The Orbit Flutter client, rebuilt on the v2 stack (ADR-027,
 `docs/architecture/ARCHITECTURE_V2_PLAN.md` §6.4). **Phase A1** replaced the
 v1 `lib/` with this one: the old composition root, `remote_rest_client.dart`,
 the onboarding notifier and every screen under `screens/` are gone from this

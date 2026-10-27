@@ -1,6 +1,6 @@
-# helix_remote (app)
+# Orbit (app)
 
-The Helix Remote client: an end-to-end encrypted messenger for Android and
+The Orbit client: an end-to-end encrypted messenger for Android and
 Windows that talks to a Helix Remote server (`../server`), either the Helix
 Global server or a self-hosted one. Accounts are phone-number based; an account
 can be signed in on several devices at once. The UI is English-only and
