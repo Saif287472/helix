@@ -12,6 +12,7 @@ import 'package:helix_remote_engine/src/backup/options.dart';
 import 'package:helix_remote_engine/src/calls/call_media.dart';
 import 'package:helix_remote_engine/src/calls/calls_service.dart';
 import 'package:helix_remote_engine/src/calls/engine_call_signaling.dart';
+import 'package:helix_remote_engine/src/calls/group_calls_service.dart';
 import 'package:helix_remote_engine/src/config.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/local_identity.dart';
@@ -192,6 +193,18 @@ final class Engine {
       config: config.calls,
       mediaFactory: callMedia,
     );
+    groupCalls = GroupCallsService(
+      db: ctx.db,
+      signaling: _callSignaling,
+      clock: ctx.clock,
+      ids: ctx.ids,
+      selfAccount: () => ctx.identity.accountId,
+      emit: ctx.emit,
+      oneToOneBusy: () => calls.current != null,
+      mediaFactory: () => calls.mediaFactory,
+      config: config.calls,
+    );
+    calls.groups = groupCalls;
     _callSignaling.sink = calls;
 
     final store = blobs ?? const NoBlobStore();
@@ -279,6 +292,10 @@ final class Engine {
   /// for a device woken by a call push. The media comes from the host
   /// (`calls.mediaFactory`).
   late final CallsService calls;
+
+  /// Group calls: rooms of up to four people made of pairwise calls
+  /// (ADR-034). Uses the media factory of [calls].
+  late final GroupCallsService groupCalls;
 
   /// Attachments: send media, per-attachment progress, retry, cancel,
   /// download on demand, forward. Needs a `blobs` store (see [Engine.new]).
@@ -416,6 +433,7 @@ final class Engine {
     _workersRunning = false;
     await _callWakes?.cancel();
     _callWakes = null;
+    await groupCalls.release();
     await calls.release();
     await backup.stop();
     await _inbound.stopRealtime();
@@ -438,6 +456,7 @@ final class Engine {
     await stop();
     await backup.close();
     await presence.close();
+    await groupCalls.close();
     await calls.close();
     await _statuses.close();
     await _ctx.close();

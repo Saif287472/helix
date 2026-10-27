@@ -101,11 +101,9 @@ void main() {
 
     await _eventually(() async {
       final page = await rig.db.messagesDao.pageOlder(chat, limit: 10);
-      expect(
-        page.messages.map((m) => m.messageId),
-        ['later'],
-        reason: 'the timer the failing pass re-armed swept the due message',
-      );
+      expect(page.messages.map((m) => m.messageId), [
+        'later',
+      ], reason: 'the timer the failing pass re-armed swept the due message');
     });
   });
 }

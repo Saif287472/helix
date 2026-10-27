@@ -105,19 +105,16 @@ void main() {
       expect(alice.current!.cameraOn, isTrue);
     });
 
-    test(
-      'a share is not shown before the call is live',
-      () async {
-        final alice = await net.add('alice');
-        final bob = await net.add('bob');
-        alice.startWatching();
-        bob.startWatching();
-        await alice.service.startCall(bob.account, video: true);
-        await bob.until(() => bob.current?.phase == CallPhase.ringing);
-        // Ringing, not live: a peer claiming to share changes nothing.
-        expect(bob.current!.peerScreenSharing, isFalse);
-      },
-    );
+    test('a share is not shown before the call is live', () async {
+      final alice = await net.add('alice');
+      final bob = await net.add('bob');
+      alice.startWatching();
+      bob.startWatching();
+      await alice.service.startCall(bob.account, video: true);
+      await bob.until(() => bob.current?.phase == CallPhase.ringing);
+      // Ringing, not live: a peer claiming to share changes nothing.
+      expect(bob.current!.peerScreenSharing, isFalse);
+    });
 
     test('a call that ends takes the share with it', () async {
       final (alice, bob) = await liveVideo();

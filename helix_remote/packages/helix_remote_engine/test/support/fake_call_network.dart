@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
+import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/util/ids.dart' show IdFactory;
 import 'package:helix_remote_engine/testing.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -65,7 +66,41 @@ final class FakeCallNetwork {
     return device;
   }
 
+  /// Makes the group [conversation] (`group:<id>`) known to every one of
+  /// [members] with all of them in it.
+  Future<void> makeGroup(String conversation, List<CallDevice> members) async {
+    final id = GroupIds.groupIdOf(conversation);
+    for (final device in members) {
+      await device.db.groupsDao.upsert(
+        GroupsCompanion.insert(
+          id: id,
+          title: 'Friends',
+          role: 'member',
+          createdAt: clock.now,
+        ),
+      );
+      for (final other in members) {
+        await device.db
+            .into(device.db.groupMembers)
+            .insertOnConflictUpdate(
+              GroupMembersCompanion.insert(
+                groupId: id,
+                accountId: other.account,
+                qualifiedId: other.account,
+                role: 'member',
+                devicesJson: '[]',
+                isSelf: Value(other == device),
+              ),
+            );
+      }
+    }
+  }
+
   Future<void> dispose() async {
+    // Signals still on their way must not reach a device that is closing.
+    for (final d in devices) {
+      d.disposed = true;
+    }
     for (final d in devices) {
       await d.dispose();
     }
@@ -96,6 +131,18 @@ final class CallDevice implements CallSignaling {
       config: config,
       mediaFactory: media,
     );
+    groupService = GroupCallsService(
+      db: db,
+      signaling: this,
+      clock: net.clock.call,
+      ids: IdFactory(net.clock.call, random),
+      selfAccount: () => account,
+      emit: events.add,
+      oneToOneBusy: () => service.current != null,
+      mediaFactory: () => media,
+      config: config,
+    );
+    service.groups = groupService;
   }
 
   final FakeCallNetwork net;
@@ -103,9 +150,13 @@ final class CallDevice implements CallSignaling {
   final String account;
   final String device;
   bool online;
+
+  /// The test is over: nothing more is delivered here.
+  bool disposed = false;
   final HelixDb db;
   final FakeCallMediaFactory? media;
   late final CallsService service;
+  late final GroupCallsService groupService;
 
   /// What the service emitted (`IncomingCallEvent`, `MissedCallEvent`).
   final List<EngineEvent> events = [];
@@ -129,12 +180,23 @@ final class CallDevice implements CallSignaling {
   /// The offers kept for this device while it is offline.
   final Map<String, (PendingCall, CallSignalPayload)> _pending = {};
 
+  /// Every state the UI stream showed for a group call, in order.
+  final List<GroupCallSnapshot?> groupShown = [];
+  StreamSubscription<GroupCallSnapshot?>? _watchGroup;
+
   void startWatching() {
     _watch = service.watchCurrent().listen(shown.add);
+    _watchGroup = groupService.watchCurrent().listen(groupShown.add);
   }
+
+  /// The room this device is in or invited to.
+  GroupCallSnapshot? get room => groupService.current;
 
   Future<void> dispose() async {
     await _watch?.cancel();
+    await _watchGroup?.cancel();
+    await groupService.release();
+    await groupService.close();
     await service.release();
     await service.close();
     await db.close();
@@ -175,9 +237,10 @@ final class CallDevice implements CallSignaling {
       if (target.online) {
         delivered.add(target.device);
         unawaited(
-          Future<void>(
-            () => target.service.onSignal(this.account, device, payload),
-          ),
+          Future<void>(() {
+            if (target.disposed) return null;
+            return target.service.onSignal(this.account, device, payload);
+          }),
         );
       } else if (payload.type == CallSignalType.offer) {
         pending.add(target.device);

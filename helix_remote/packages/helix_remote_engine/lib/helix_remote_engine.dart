@@ -22,6 +22,8 @@ export 'src/calls/call_media.dart';
 export 'src/calls/call_models.dart';
 export 'src/calls/call_signaling.dart';
 export 'src/calls/calls_service.dart' show CallsService;
+export 'src/calls/group_call_models.dart';
+export 'src/calls/group_calls_service.dart' show GroupCallsService;
 export 'src/config.dart' show EngineConfig;
 export 'src/engine.dart' show Engine, HardWipe;
 export 'src/errors.dart';

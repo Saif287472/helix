@@ -56,11 +56,9 @@ void main() {
     await holdingBack;
     expect(await confirming, isTrue);
 
-    expect(
-      await rig.trust.pending(groupId),
-      {'b': PendingReasons.unattributed},
-      reason: 'the confirm released A and nothing else',
-    );
+    expect(await rig.trust.pending(groupId), {
+      'b': PendingReasons.unattributed,
+    }, reason: 'the confirm released A and nothing else');
   });
 
   test('two explanations landing at once are both remembered', () async {

@@ -6,6 +6,7 @@ import 'package:helix_remote_engine/src/calls/call_config.dart';
 import 'package:helix_remote_engine/src/calls/call_media.dart';
 import 'package:helix_remote_engine/src/calls/call_models.dart';
 import 'package:helix_remote_engine/src/calls/call_signaling.dart';
+import 'package:helix_remote_engine/src/calls/group_calls_service.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
@@ -76,6 +77,11 @@ final class CallsService implements CallSignalSink {
   /// Makes the media session of a call. Without one calls cannot be placed
   /// or answered (incoming ones still ring, and can be declined).
   CallMediaFactory? mediaFactory;
+
+  /// Group calls (ADR-034): offers that name a room and every signal of a
+  /// room's links are handed to it, and each of the two answers `busy` while
+  /// the other holds the device. Set by the engine.
+  GroupCallsService? groups;
 
   final KeyedLock<String> _queue = KeyedLock();
   static const _queueKey = 'calls';
@@ -283,6 +289,10 @@ final class CallsService implements CallSignalSink {
         continue;
       }
       final offer = opened;
+      if (offer.room != null && groups != null) {
+        await groups!.onPendingOffer(p.from.account, p.from.device, offer);
+        continue;
+      }
       await _run(() => _onOffer(p.from.account, p.from.device, offer, p));
       if (_call?.callId == p.callId) rang++;
     }
@@ -296,7 +306,13 @@ final class CallsService implements CallSignalSink {
     String account,
     String device,
     CallSignalPayload payload,
-  ) => _run(() => _handleSignal(account, device, payload));
+  ) {
+    final rooms = groups;
+    if (rooms != null && rooms.claims(payload)) {
+      return rooms.onSignal(account, device, payload);
+    }
+    return _run(() => _handleSignal(account, device, payload));
+  }
 
   @override
   void onEndedElsewhere(String callId, CallState state) {
@@ -386,7 +402,9 @@ final class CallsService implements CallSignalSink {
   Future<CallSnapshot> _startCall(String peer, bool video) async {
     final self = _selfAccount();
     if (peer == self) throw ArgumentError.value(peer, 'peer', 'is this user');
-    if (_call != null) throw const CallFailedException(CallFailure.busy);
+    if (_call != null || (groups?.isBusy ?? false)) {
+      throw const CallFailedException(CallFailure.busy);
+    }
     if (await _isBlocked(peer)) {
       throw const CallFailedException(CallFailure.blocked);
     }
@@ -485,6 +503,24 @@ final class CallsService implements CallSignalSink {
       return;
     }
     final now = _now();
+    if (groups?.isBusy ?? false) {
+      await _send(
+        offer.callId,
+        CallSignalPayload(
+          type: CallSignalType.end,
+          callId: offer.callId,
+          reason: CallEndReason.busy,
+        ),
+        account: account,
+        devices: {device},
+      );
+      await _logMissed(
+        offer.callId,
+        account,
+        video: offer.media == CallMedia.video,
+      );
+      return;
+    }
     final existing = _call;
     if (existing != null) {
       final glare =

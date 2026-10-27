@@ -1,8 +1,8 @@
 # ADR 034: Group calls are a mesh of pairwise calls, up to four people
 
 Status: accepted (2026-10-28), after the user chose "mesh, up to 4" and
-"voice and video" when asked on 2026-10-28. Not built yet; section "Build
-order" is the plan.
+"voice and video" when asked on 2026-10-28. Steps 1 to 3 of "Build order" are built (2026-10-28); the app
+and the end-to-end checks are not.
 
 Plan of record: `docs/architecture/ARCHITECTURE_V2_PLAN.md` (§3 module list,
 `group_calls`; §12 change log). Un-defers the 2026-10-01 decision "group calls
@@ -75,12 +75,15 @@ The user chose the mesh, capped at four people, voice and video.
 8. **The group chat shows it.** A group call is announced in the group chat
    as a `call_log` entry (type exists), posted by the starter's device; each
    member's missed or answered state stays local, as for 1:1.
-9. **Ringing.** An invitation is a normal pairwise offer, so offline members
+9. **Late join is not in the first version.** The room is the set of people
+   invited when it starts (the offers carry the whole list), so everyone who may
+   be in it is known to every participant and nobody needs a roster. Someone not
+   invited cannot join later; to add a person, start a new room. (The roster
+   request sketched below under "Open points" is dropped for now.)
+10. **Ringing.** An invitation is a normal pairwise offer, so offline members
    get the existing pending-call row and push, and the app rings "Group call in
    <group name>" instead of a person's name. Joining late from the group chat
-   (a "Join" banner while a room is live) needs no new signal: the joiner reads
-   the room's participants from a `room_state` update that any participant
-   sends to a member who asks. See "Open points".
+   is decision 9: not in the first version.
 
 ## Consequences
 
@@ -133,8 +136,8 @@ The user chose the mesh, capped at four people, voice and video.
 
 ## Open points
 
-- The late-join `room_state` request: exact message and who answers (any
-  participant) is settled in step 1 and recorded here.
+- Late join from the group chat: needs a roster signal; not built, see
+  decision 9.
 - Whether a voice-only fifth to eighth person is worth a later version.
 - The Windows client's capture limits (one camera, one microphone is the
   same as today).

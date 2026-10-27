@@ -1,3 +1,4 @@
+import 'package:helix_remote_engine/src/calls/group_call_models.dart';
 import 'package:helix_remote_engine/src/calls/call_models.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:meta/meta.dart';
@@ -145,6 +146,14 @@ final class IncomingCallEvent extends EngineEvent {
   const IncomingCallEvent(this.call);
 
   final CallSnapshot call;
+}
+
+/// A group call is ringing on this device. The room follows through
+/// `GroupCallsService.watchCurrent`.
+final class IncomingGroupCallEvent extends EngineEvent {
+  const IncomingGroupCallEvent(this.call);
+
+  final GroupCallSnapshot call;
 }
 
 /// A call rang here and nobody answered it (or it was cancelled), so the
