@@ -129,10 +129,6 @@ final class ContentApplier {
       }
     }
 
-    if (!ContentCodec.isMessage(body) && body.isVisible) {
-      // Live location updates and stops: C4 (they have no row of their own).
-      return const ApplyResult.ignored('live_location_update');
-    }
     if (ContentCodec.isMessage(body)) {
       return _insertMessage(sender, content, chat, receivedAt);
     }
@@ -410,7 +406,7 @@ final class ContentApplier {
     ContentMessage content,
     DateTime now,
   ) async {
-    final target = _targetOf(content.body)!;
+    final target = _targetOf(content.body, sender.account)!;
     await _db.inboxDao.deferAction(
       DeferredActionsCompanion.insert(
         targetMessageId: target.id,
@@ -443,13 +439,16 @@ final class ContentApplier {
     );
   }
 
-  MessageRef? _targetOf(ContentBody body) => switch (body) {
+  MessageRef? _targetOf(ContentBody body, String sender) => switch (body) {
     ReactionBody() => body.target,
     EditBody() => body.target,
     DeleteBody() => body.target,
     PinBody() => body.target,
     PollVoteBody() => body.target,
     RsvpBody() => body.target,
+    // A share's updates and stop name its start message, which is the
+    // sender's own: nobody else's message can be moved.
+    LiveLocationBody() => MessageRef(id: body.sessionId, author: sender),
     _ => null,
   };
 
@@ -465,7 +464,7 @@ final class ContentApplier {
       await _receipt(senderAccount, body, content, chat, now);
       return _Action.done;
     }
-    final ref = _targetOf(body);
+    final ref = _targetOf(body, senderAccount);
     if (ref == null) return _Action.ignore;
     final target = await _db.messagesDao.find(ref.id, sender: ref.author);
     if (target == null) return _Action.defer;
@@ -490,6 +489,8 @@ final class ContentApplier {
         return _pollVote(target, senderAccount, body);
       case RsvpBody():
         return _rsvp(target, senderAccount, body);
+      case LiveLocationBody():
+        return _liveLocation(target, body, at, now);
       default:
         return _Action.ignore;
     }
@@ -614,6 +615,54 @@ final class ContentApplier {
     await _db.messagesDao.updatePayload(
       target.localRowid,
       jsonEncode({...payload, 'votes': votes}),
+    );
+    return _Action.done;
+  }
+
+  /// An update or stop of a live share: it moves the place in the start
+  /// message. An update older than the one held, one for a share that has
+  /// ended or whose time ran out (a minute of clock slack), or a `start`
+  /// arriving as an action changes nothing. A stop takes the place out.
+  Future<_Action> _liveLocation(
+    MessageRow target,
+    LiveLocationBody body,
+    DateTime at,
+    DateTime now,
+  ) async {
+    if (target.kind != LiveLocationBody.typeName ||
+        target.deletedAt != null ||
+        body.state == LiveLocationState.start) {
+      return _Action.ignore;
+    }
+    final payload = _payloadOf(target);
+    final expiresAt = payload['expires_at'];
+    if (payload['ended'] == true ||
+        payload['state'] == 'stop' ||
+        expiresAt is! int ||
+        now.millisecondsSinceEpoch >
+            expiresAt + const Duration(minutes: 1).inMilliseconds) {
+      return _Action.ignore;
+    }
+    if (body.state == LiveLocationState.stop) {
+      final ended = liveLocationEnd(
+        jsonEncode({...payload, 'state': 'stop'}),
+        now,
+      );
+      await _db.messagesDao.updatePayload(target.localRowid, ended);
+      return _Action.done;
+    }
+    final held = payload['updated_at'];
+    if (held is int && held >= at.millisecondsSinceEpoch) return _Action.ignore;
+    await _db.messagesDao.updatePayload(
+      target.localRowid,
+      jsonEncode({
+        ...payload,
+        'state': 'update',
+        'lat_e7': body.latE7,
+        'lng_e7': body.lngE7,
+        'accuracy_m': body.accuracyM,
+        'updated_at': at.millisecondsSinceEpoch,
+      }),
     );
     return _Action.done;
   }

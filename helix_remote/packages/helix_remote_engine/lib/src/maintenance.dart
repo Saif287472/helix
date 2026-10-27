@@ -12,7 +12,8 @@ import 'package:helix_remote_engine/src/settings_keys.dart';
 ///   the next poll.
 /// - **Housekeeping** (every `maintenanceInterval`, and [runOnce]): expired
 ///   deferred actions, processed-envelope ids past the replay window,
-///   expired messages, and, when due, prekey upkeep and a refresh of the
+///   expired messages, live locations whose time is up (their place is
+///   taken out), and, when due, prekey upkeep and a refresh of the
 ///   own device list. Whatever the other features pass in `_extraWork` runs at
 ///   the end of the same pass, each on its own guard.
 ///
@@ -67,6 +68,7 @@ final class MaintenanceService {
     try {
       final now = _ctx.now();
       await _guarded(() => _ctx.db.messagesDao.removeExpired(now));
+      await _guarded(() => _ctx.db.messagesDao.endLiveLocations(now));
       await _guarded(() => _ctx.db.inboxDao.purgeExpiredDeferred(now));
       await _guarded(
         () => _ctx.db.inboxDao.pruneProcessed(

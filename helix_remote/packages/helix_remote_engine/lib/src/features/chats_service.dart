@@ -272,9 +272,11 @@ final class ChatsService {
     MessageRef? reply,
     bool viewOnce = false,
     bool applyTimer = true,
+    String? id,
   }) async {
     final row = await _db.transaction(
-      () => _writeVisible(conversationId, body, reply, viewOnce, applyTimer),
+      () =>
+          _writeVisible(conversationId, body, reply, viewOnce, applyTimer, id),
     );
     // After the commit: the timer reads the table.
     if (row.expiresAt != null) _onExpiryChanged();
@@ -287,6 +289,7 @@ final class ChatsService {
     MessageRef? reply,
     bool viewOnce,
     bool applyTimer,
+    String? presetId,
   ) async {
     final route = await _routeOf(conversationId, sending: true);
     final chat = await _db.conversationsDao.byId(conversationId);
@@ -296,7 +299,7 @@ final class ChatsService {
     final expire = applyTimer ? chat.disappearingSeconds : null;
     final profileKey = (await _db.accountDao.current())?.profileKey;
     final content = ContentMessage(
-      id: _ctx.ids.next(),
+      id: presetId ?? _ctx.ids.next(),
       sentAt: now,
       conversation: route.conversation,
       body: body,
@@ -341,6 +344,123 @@ final class ChatsService {
     );
     return row;
   }
+
+  /// Longest a live location may be shared for.
+  static const maxLiveShare = Duration(hours: 8);
+
+  /// Starts sharing a live location in [conversationId] until now + [duration].
+  /// The message is the share's `start`; its id is the session id that every
+  /// update and the stop name. Throws [ArgumentError] for a duration that is
+  /// not positive or is over [maxLiveShare].
+  Future<MessageRow> startLiveLocation(
+    String conversationId, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+    required Duration duration,
+  }) {
+    if (duration <= Duration.zero || duration > maxLiveShare) {
+      throw ArgumentError.value(duration, 'duration');
+    }
+    final id = _ctx.ids.next();
+    return _sendVisible(
+      conversationId,
+      LiveLocationBody(
+        sessionId: id,
+        state: LiveLocationState.start,
+        latE7: latE7,
+        lngE7: lngE7,
+        accuracyM: accuracyM,
+        expiresAt: _ctx.now().add(duration),
+      ),
+      id: id,
+    );
+  }
+
+  /// Sends the next position of the share in message [rowid]. Returns `false`
+  /// (and sends nothing) when the share is not this account's, or has ended.
+  Future<bool> updateLiveLocation(
+    int rowid, {
+    required int latE7,
+    required int lngE7,
+    required int accuracyM,
+  }) => _db.transaction(() async {
+    final target = await _db.messagesDao.byRowid(rowid);
+    final now = _ctx.now();
+    if (target == null ||
+        !target.outgoing ||
+        target.kind != LiveLocationBody.typeName ||
+        !isLiveLocationActive(target.payload, now)) {
+      return false;
+    }
+    final payload = jsonDecode(target.payload!) as Map<String, Object?>;
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+      payload['expires_at']! as int,
+      isUtc: true,
+    );
+    await _db.messagesDao.updatePayload(
+      rowid,
+      jsonEncode({
+        ...payload,
+        'state': 'update',
+        'lat_e7': latE7,
+        'lng_e7': lngE7,
+        'accuracy_m': accuracyM,
+        'updated_at': now.millisecondsSinceEpoch,
+      }),
+    );
+    await _sendAction(
+      target,
+      LiveLocationBody(
+        sessionId: target.messageId,
+        state: LiveLocationState.update,
+        latE7: latE7,
+        lngE7: lngE7,
+        accuracyM: accuracyM,
+        expiresAt: expiresAt,
+      ),
+    );
+    return true;
+  });
+
+  /// Ends the share in message [rowid]: the place leaves this device's copy
+  /// and the people in the chat are told. Does nothing for a share that is not
+  /// this account's or has ended already.
+  Future<void> stopLiveLocation(int rowid) => _db.transaction(() async {
+    final target = await _db.messagesDao.byRowid(rowid);
+    final now = _ctx.now();
+    if (target == null ||
+        !target.outgoing ||
+        target.kind != LiveLocationBody.typeName ||
+        !isLiveLocationActive(target.payload, now)) {
+      return;
+    }
+    final payload = jsonDecode(target.payload!) as Map<String, Object?>;
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+      payload['expires_at']! as int,
+      isUtc: true,
+    );
+    await _db.messagesDao.updatePayload(
+      rowid,
+      liveLocationEnd(jsonEncode({...payload, 'state': 'stop'}), now),
+    );
+    await _sendAction(
+      target,
+      LiveLocationBody(
+        sessionId: target.messageId,
+        state: LiveLocationState.stop,
+        latE7: 0,
+        lngE7: 0,
+        accuracyM: 0,
+        expiresAt: expiresAt,
+      ),
+    );
+  });
+
+  /// The shares this account still has running, for resuming them after the
+  /// app restarts.
+  Future<List<MessageRow>> activeLiveShares() =>
+      _db.messagesDao.activeLiveShares(_ctx.now());
 
   /// Reacts to a message with [emoji]; `null` removes this account's
   /// reaction. One reaction per account per message.

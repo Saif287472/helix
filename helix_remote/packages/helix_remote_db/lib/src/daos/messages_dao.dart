@@ -204,6 +204,43 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
         MessagesCompanion(payload: Value(payload)),
       );
 
+  /// The live-location messages of this account that are still sharing at
+  /// [now]: not stopped and not past their end time.
+  Future<List<MessageRow>> activeLiveShares(DateTime now) async {
+    final rows =
+        await (select(messages)..where(
+              (m) =>
+                  m.kind.equals('live_location') &
+                  m.outgoing.equals(true) &
+                  m.deletedAt.isNull(),
+            ))
+            .get();
+    return [
+      for (final r in rows)
+        if (isLiveLocationActive(r.payload, now)) r,
+    ];
+  }
+
+  /// Takes the coordinates out of every live-location message that has ended
+  /// by [now] (its end time passed, or its sender stopped) and marks it
+  /// stopped, so a finished share leaves no precise place behind, in the chat
+  /// or in a backup. Returns how many rows changed.
+  Future<int> endLiveLocations(DateTime now) async {
+    final rows =
+        await (select(messages)..where(
+              (m) => m.kind.equals('live_location') & m.deletedAt.isNull(),
+            ))
+            .get();
+    var changed = 0;
+    for (final r in rows) {
+      final ended = liveLocationEnd(r.payload, now);
+      if (ended == null) continue;
+      await updatePayload(r.localRowid, ended);
+      changed++;
+    }
+    return changed;
+  }
+
   /// Delete for everyone: the row stays as "This message was deleted", its
   /// text, payload, reactions and media rows go. Returns the removed media
   /// rows so the caller can delete their local files.
@@ -983,4 +1020,38 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
 
   Future<ConversationRow> _conversation(String id) =>
       (select(conversations)..where((c) => c.id.equals(id))).getSingle();
+}
+
+Map<String, Object?>? _liveMap(String? payload) {
+  try {
+    return (jsonDecode(payload ?? '{}') as Map).cast<String, Object?>();
+  } on Object {
+    return null;
+  }
+}
+
+/// Whether a live-location payload is still sharing at [now].
+bool isLiveLocationActive(String? payload, DateTime now) {
+  final map = _liveMap(payload);
+  if (map == null || map['ended'] == true || map['state'] == 'stop') {
+    return false;
+  }
+  final expiresAt = map['expires_at'];
+  return expiresAt is int && expiresAt > now.millisecondsSinceEpoch;
+}
+
+/// The payload of a live-location message once it has ended, with no place in
+/// it; `null` while it is still sharing at [now] or already scrubbed.
+String? liveLocationEnd(String? payload, DateTime now) {
+  final map = _liveMap(payload);
+  if (map == null || map['ended'] == true) return null;
+  if (isLiveLocationActive(payload, now)) return null;
+  return jsonEncode({
+    ...map,
+    'state': 'stop',
+    'lat_e7': 0,
+    'lng_e7': 0,
+    'accuracy_m': 0,
+    'ended': true,
+  });
 }
