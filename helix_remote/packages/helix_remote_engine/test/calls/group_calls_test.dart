@@ -149,6 +149,13 @@ void main() {
         alice.groupShown.whereType<GroupCallSnapshot>().last.end,
         GroupCallEnd.everyoneLeft,
       );
+      // The starter's phone tells the group chat; the others post nothing.
+      final (conversation, body) = alice.groupPosted.single;
+      expect(conversation, chat);
+      expect(body.outcome, CallOutcome.answered);
+      expect(body.media, CallMedia.audio);
+      expect(bob.groupPosted, isEmpty);
+      expect(cara.groupPosted, isEmpty);
     });
 
     test('a declined invitation leaves the others in the room', () async {
@@ -376,6 +383,7 @@ void main() {
         alice.groupShown.whereType<GroupCallSnapshot>().last.end,
         GroupCallEnd.unanswered,
       );
+      expect(alice.groupPosted.single.$2.outcome, CallOutcome.missed);
       // The withdrawn invitation stops ringing for Bob.
       await bob.until(() => bob.room == null);
     });

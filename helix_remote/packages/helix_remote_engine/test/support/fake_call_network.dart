@@ -138,6 +138,8 @@ final class CallDevice implements CallSignaling {
       ids: IdFactory(net.clock.call, random),
       selfAccount: () => account,
       emit: events.add,
+      postLog: (conversation, body) async =>
+          groupPosted.add((conversation, body)),
       oneToOneBusy: () => service.current != null,
       mediaFactory: () => media,
       config: config,
@@ -160,6 +162,9 @@ final class CallDevice implements CallSignaling {
 
   /// What the service emitted (`IncomingCallEvent`, `MissedCallEvent`).
   final List<EngineEvent> events = [];
+
+  /// What the group service posted to its group chats.
+  final List<(String, CallLogBody)> groupPosted = [];
 
   /// What the service posted to the chat (`call_log` messages).
   final List<(String, CallLogBody)> posted = [];

@@ -25,6 +25,7 @@ final class CallMediaConfig {
     required this.video,
     this.iceServers = const [],
     this.room,
+    this.peer,
   });
 
   /// The call carries video (the camera starts on) as well as audio.
@@ -38,6 +39,10 @@ final class CallMediaConfig {
   /// 1:1 call. Sessions of one room share one microphone and camera, and send
   /// a smaller, capped picture.
   final String? room;
+
+  /// The account on the other end of this link, for a session of a room (the
+  /// host shows each person's picture where that person is).
+  final String? peer;
 }
 
 /// How the media connection is doing, as the platform's ICE/DTLS agent

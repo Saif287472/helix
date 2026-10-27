@@ -81,6 +81,7 @@ final class WebRtcCallMediaFactory implements CallMediaFactory {
       callId: _newId(),
       video: config.video,
       hub: hub,
+      peer: config.room == null ? null : config.peer,
     );
   }
 }
@@ -92,12 +93,17 @@ final class WebRtcCallMediaSession implements CallMediaSession {
     required this.callId,
     required this.video,
     required this.hub,
+    this.peer,
   }) : _engine = engine {
     _events = _engine.events.listen(_onEvent);
-    hub
-      ..publish(const CallMediaInfo())
-      ..bindCameraSwitch(() => _engine.switchCamera(callId));
+    // A link of a group call shows its pictures per person; a 1:1 call has
+    // the one info.
+    if (peer == null) hub.publish(const CallMediaInfo());
+    hub.bindCameraSwitch(() => _engine.switchCamera(callId));
   }
+
+  /// The person this link talks to, for a link of a group call.
+  final String? peer;
 
   final RemoteCallEngine _engine;
   final String callId;
@@ -147,6 +153,18 @@ final class WebRtcCallMediaSession implements CallMediaSession {
         };
         hub.update((info) => info.copyWith(state: state));
         _states.add(state);
+      case RemoteCallMediaEvent() when peer != null:
+        final local = event.localRenderer;
+        final remote = event.remoteRenderer;
+        hub.publishGroup(
+          peer!,
+          local: local == null
+              ? null
+              : _RendererSurface(RemoteVideoSource(local)),
+          remote: remote == null
+              ? null
+              : _RendererSurface(RemoteVideoSource(remote)),
+        );
       case RemoteCallMediaEvent():
         final local = event.localRenderer;
         final remote = event.remoteRenderer;
@@ -214,9 +232,12 @@ final class WebRtcCallMediaSession implements CallMediaSession {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    hub
-      ..bindCameraSwitch(null)
-      ..publish(null);
+    hub.bindCameraSwitch(null);
+    if (peer == null) {
+      hub.publish(null);
+    } else {
+      hub.dropGroupPeer(peer!);
+    }
     await _events.cancel();
     try {
       await _engine.endCall(callId);

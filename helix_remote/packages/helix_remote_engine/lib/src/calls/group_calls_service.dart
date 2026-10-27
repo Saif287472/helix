@@ -35,6 +35,7 @@ final class GroupCallsService {
     required this._ids,
     required this._selfAccount,
     required this._emit,
+    required this._postLog,
     required this._oneToOneBusy,
     required this._mediaFactory,
     this._config = const CallConfig(),
@@ -46,6 +47,9 @@ final class GroupCallsService {
   final IdFactory _ids;
   final String Function() _selfAccount;
   final void Function(EngineEvent event) _emit;
+
+  /// Posts the room's `call_log` entry to its group chat.
+  final Future<void> Function(String conversation, CallLogBody body) _postLog;
   final bool Function() _oneToOneBusy;
   final CallConfig _config;
 
@@ -290,6 +294,7 @@ final class GroupCallsService {
           video: room.video,
           iceServers: await _iceServers(),
           room: room.id,
+          peer: account,
         ),
       );
       link.media = media;
@@ -449,6 +454,7 @@ final class GroupCallsService {
           video: room.video,
           iceServers: await _iceServers(),
           room: room.id,
+          peer: link.account,
         ),
       );
       link.media = media;
@@ -797,6 +803,28 @@ final class GroupCallsService {
     final snapshot = room.snapshot(_selfAccount());
     _snapshots.add(snapshot);
     if (identical(_room, room)) _room = null;
+    // The starter's phone tells the group chat how the call went, as the
+    // caller's phone does for a 1:1 call.
+    if (!room.incoming) {
+      final answered = room.answeredAt;
+      await _best(
+        () => _postLog(
+          room.group,
+          CallLogBody(
+            callId: room.id,
+            media: room.video ? CallMedia.video : CallMedia.audio,
+            outcome: answered == null
+                ? (end == GroupCallEnd.failed
+                      ? CallOutcome.failed
+                      : CallOutcome.missed)
+                : CallOutcome.answered,
+            durationS: answered == null
+                ? null
+                : room.endedAt!.difference(answered).inSeconds,
+          ),
+        ),
+      );
+    }
     _snapshots.add(null);
   }
 

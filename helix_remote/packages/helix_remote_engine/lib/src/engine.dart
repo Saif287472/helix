@@ -200,6 +200,9 @@ final class Engine {
       ids: ctx.ids,
       selfAccount: () => ctx.identity.accountId,
       emit: ctx.emit,
+      postLog: (conversation, body) async {
+        await chats.sendBody(conversation, body);
+      },
       oneToOneBusy: () => calls.current != null,
       mediaFactory: () => calls.mediaFactory,
       config: config.calls,

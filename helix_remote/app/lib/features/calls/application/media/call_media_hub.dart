@@ -108,5 +108,44 @@ final class CallMediaHub {
 
   Future<void> switchCamera() async => _switchCamera?.call();
 
-  Future<void> dispose() => _changes.close();
+  // ------------------------------------------------------- group call
+
+  CallVideoSurface? _groupLocal;
+  final Map<String, CallVideoSurface> _groupRemotes = {};
+  final StreamController<void> _groupChanges =
+      StreamController<void>.broadcast();
+
+  /// Your own picture in a group call.
+  CallVideoSurface? get groupLocal => _groupLocal;
+
+  /// Each other person's picture in a group call, by account.
+  Map<String, CallVideoSurface> get groupRemotes =>
+      Map.unmodifiable(_groupRemotes);
+
+  /// Fires when any picture of the group call arrives or goes.
+  Stream<void> watchGroup() => _groupChanges.stream;
+
+  /// A link of the group call has its pictures: [local] is the shared camera
+  /// preview, [remote] is [peer]'s.
+  void publishGroup(
+    String peer, {
+    CallVideoSurface? local,
+    CallVideoSurface? remote,
+  }) {
+    if (local != null) _groupLocal = local;
+    if (remote != null) _groupRemotes[peer] = remote;
+    if (!_groupChanges.isClosed) _groupChanges.add(null);
+  }
+
+  /// The link to [peer] closed. With the last one gone, your own picture goes.
+  void dropGroupPeer(String peer) {
+    _groupRemotes.remove(peer);
+    if (_groupRemotes.isEmpty) _groupLocal = null;
+    if (!_groupChanges.isClosed) _groupChanges.add(null);
+  }
+
+  Future<void> dispose() async {
+    await _groupChanges.close();
+    await _changes.close();
+  }
 }
