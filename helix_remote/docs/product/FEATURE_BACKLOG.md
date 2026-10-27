@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 33 | see "Already built" |
+| Already built | 34 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 4 | A6, C5, C7, E4 |
+| M (about 10 files) | 3 | A6, C5, E4 |
 | L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -107,7 +107,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | C4 | Passkeys (WebAuthn) in place of SMS | Not built | **L** | New identity endpoints (server `identity` module, `proto/modules/identity.dart`, fixtures), a platform plugin, recovery-flow changes. A new auth mechanism: needs an ADR and crypto review note. Do not weaken the password-derived key rule. |
 | C5 | Biometric-protected backup key | Not built | **M** | Keystore wrapper in `app/core/security/`, backup page toggle; engine untouched. |
 | C6 | Usernames in place of numbers | Built (`~name`, share link, "find me by ~name") | n/a | Nothing to do. |
-| C7 | Data export (account report) | Partial (chat export exists; account report missing) | **M** | Server `compliance` module report route (new route: public-route snapshot and fixtures), api client method, engine, settings page. |
+| C7 | Data export (account report) | **Already built** | n/a | Server `GET /v1/account/export` (compliance module) and Settings > Account > Export; the backlog row was wrong. |
 | C8 | Contact share links with expiry and pre-approval | Contradicts a product rule | n/a | The app has no contact requests by design. The `/u/<name>` link exists; expiry only is M. |
 | C9 | Report with context hashes, admin moderation | Built (reports module, admin console) | n/a | Nothing to do. |
 
