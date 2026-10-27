@@ -35,6 +35,15 @@ abstract final class CallCopy {
     CallEnd.glare => 'Call ended',
   };
 
+  /// How a group call ended, from this device's point of view.
+  static String groupEnded(GroupCallEnd? end) => switch (end) {
+    GroupCallEnd.hungUp || null => 'Call ended',
+    GroupCallEnd.declinedByMe => 'Call declined',
+    GroupCallEnd.unanswered => 'No one joined',
+    GroupCallEnd.everyoneLeft => 'Everyone left',
+    GroupCallEnd.failed => 'Call failed',
+  };
+
   /// A longer line for an ended call whose cause deserves explaining; null
   /// when [ended] says it all.
   static String? endedDetail(CallEnd? end) => switch (end) {

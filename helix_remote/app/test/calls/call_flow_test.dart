@@ -63,7 +63,9 @@ void main() {
     // Keep the derived providers alive, as the call host does.
     container.listen(callScreenStateProvider, (_, _) {});
     container.listen(callElapsedProvider, (_, _) {});
-    container.read(callEffectsProvider);
+    // The call host watches the effects for as long as the app runs.
+    final effects = container.listen(callEffectsProvider, (_, _) {});
+    addTearDown(effects.close);
     container.listen(peopleDirectoryProvider, (_, _) {});
     await container.read(peopleDirectoryProvider.future);
   }

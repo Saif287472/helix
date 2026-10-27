@@ -6,6 +6,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
+import 'package:helix_remote/features/calls/application/group_call_state.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
 import 'package:helix_remote/features/calls/calls_routes.dart';
 
@@ -64,6 +65,7 @@ class _CallHostState extends ConsumerState<CallHost>
 
   /// The call the screen was last opened for.
   String? _openedFor;
+  String? _openedForRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +86,19 @@ class _CallHostState extends ConsumerState<CallHost>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || ref.read(callScreenOpenProvider)) return;
         unawaited(ref.read(appRouterProvider).push(CallRoutes.call));
+      });
+    }
+    // A group call is opened the same way, on its own screen.
+    final roomId = ref.watch(
+      groupCallScreenStateProvider.select((state) => state?.roomId),
+    );
+    if (roomId == null) {
+      _openedForRoom = null;
+    } else if (roomId != _openedForRoom) {
+      _openedForRoom = roomId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || ref.read(callScreenOpenProvider)) return;
+        unawaited(ref.read(appRouterProvider).push(CallRoutes.group));
       });
     }
     return widget.child;

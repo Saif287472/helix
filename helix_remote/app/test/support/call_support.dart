@@ -15,6 +15,8 @@ import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
 import 'package:helix_remote/features/calls/application/call_log.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
+import 'package:helix_remote/features/calls/application/group_call_state.dart';
+import 'package:helix_remote/features/calls/application/group_calls_port.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_providers.dart';
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
@@ -361,6 +363,7 @@ final class FakeSurface implements CallVideoSurface {
 /// The overrides that take a call off the platform and the runtime.
 List<Override> callOverrides({
   required CallsPort port,
+  FakeGroupCallsPort? groups,
   FakeCallPermissions? permissions,
   FakeCallPlatform? platform,
   FakeRinger? ringer,
@@ -374,6 +377,12 @@ List<Override> callOverrides({
   bool blocksMe = false,
 }) => [
   callsPortProvider.overrideWith((ref) async => port),
+  groupCallsPortProvider.overrideWith(
+    (ref) async => groups ?? FakeGroupCallsPort(),
+  ),
+  groupCallTitleProvider.overrideWith(
+    (ref, conversation) async => 'Friday crew',
+  ),
   callPermissionsProvider.overrideWithValue(
     permissions ?? FakeCallPermissions(),
   ),
@@ -392,6 +401,124 @@ List<Override> callOverrides({
   callPeerBlocksMeProvider.overrideWith((ref, peer) => Stream.value(blocksMe)),
   ?(clock == null ? null : clockProvider.overrideWithValue(clock)),
 ];
+
+/// A [GroupCallsPort] the test drives by hand: it records what the UI asked
+/// for and emits whatever rooms the test says.
+class FakeGroupCallsPort implements GroupCallsPort {
+  final StreamController<GroupCallSnapshot?> _current =
+      StreamController<GroupCallSnapshot?>.broadcast();
+  GroupCallSnapshot? _snapshot;
+  final List<String> calls = [];
+
+  /// Make the next action throw this.
+  Object? failWith;
+
+  void emit(GroupCallSnapshot? snapshot) {
+    _snapshot = snapshot;
+    _current.add(snapshot);
+  }
+
+  void _maybeFail() {
+    final failure = failWith;
+    if (failure != null) {
+      failWith = null;
+      throw failure;
+    }
+  }
+
+  @override
+  GroupCallSnapshot? get current => _snapshot;
+
+  @override
+  Stream<GroupCallSnapshot?> watchCurrent() async* {
+    yield _snapshot;
+    yield* _current.stream;
+  }
+
+  @override
+  Future<GroupCallSnapshot> start(
+    String group, {
+    required List<String> invite,
+    required bool video,
+  }) async {
+    calls.add('start $group ${invite.join(',')} video:$video');
+    _maybeFail();
+    final room = roomSnapshot(
+      group: group,
+      incoming: false,
+      video: video,
+      phase: GroupCallPhase.active,
+      people: {for (final a in invite) a: GroupParticipantState.invited},
+    );
+    emit(room);
+    return room;
+  }
+
+  @override
+  Future<void> accept() async {
+    calls.add('accept');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> decline() async {
+    calls.add('decline');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> hangUp() async {
+    calls.add('hangUp');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> setMuted({required bool muted}) async {
+    calls.add('muted:$muted');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> setCameraEnabled({required bool enabled}) async {
+    calls.add('camera:$enabled');
+    _maybeFail();
+  }
+}
+
+/// A room as the engine would report it.
+GroupCallSnapshot roomSnapshot({
+  String id = 'room-1',
+  String group = 'group:g1',
+  String starter = 'peer-1',
+  bool incoming = true,
+  bool video = false,
+  GroupCallPhase phase = GroupCallPhase.ringing,
+  Map<String, GroupParticipantState> people = const {
+    'peer-1': GroupParticipantState.invited,
+    'peer-2': GroupParticipantState.invited,
+  },
+  DateTime? answeredAt,
+  DateTime? endedAt,
+  GroupCallEnd? end,
+  bool muted = false,
+  bool cameraOn = false,
+}) => GroupCallSnapshot(
+  roomId: id,
+  group: group,
+  starter: starter,
+  isIncoming: incoming,
+  video: video,
+  phase: phase,
+  startedAt: DateTime.utc(2026, 10, 3, 9),
+  answeredAt: answeredAt,
+  endedAt: endedAt,
+  end: end,
+  muted: muted,
+  cameraOn: cameraOn,
+  participants: [
+    for (final e in people.entries) GroupCallParticipant(e.key, e.value),
+  ],
+);
 
 /// A [CallsPort] the test drives by hand: it records what the UI asked for and
 /// emits whatever snapshots and log rows the test says.

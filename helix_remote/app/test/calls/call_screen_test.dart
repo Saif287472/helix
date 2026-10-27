@@ -79,7 +79,9 @@ void main() {
     );
     final sub = container.listen(callScreenStateProvider, (_, _) {});
     addTearDown(sub.close);
-    container.read(callEffectsProvider);
+    // The call host watches the effects for as long as the app runs.
+    final effects = container.listen(callEffectsProvider, (_, _) {});
+    addTearDown(effects.close);
     await tester.pump();
     await tester.pump();
     expect(container.read(callScreenStateProvider), isNotNull);

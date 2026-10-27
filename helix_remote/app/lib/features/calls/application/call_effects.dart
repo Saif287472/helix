@@ -14,6 +14,7 @@ import 'package:helix_remote/features/calls/application/call_audio.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_screen_state.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
+import 'package:helix_remote/features/calls/application/group_call_state.dart';
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 import 'package:helix_remote/features/calls/application/platform/notification_call_ringer.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart'
@@ -169,7 +170,7 @@ final callEffectsProvider = Provider<CallEffects>((ref) {
     setLockBypass: ({required value}) => AppLock.callInProgress.value = value,
     onCallEnded: AppLock.onCallEnded,
   );
-  ref.listen<CallScreenState?>(callScreenStateProvider, (previous, next) {
+  ref.listen<CallScreenState?>(callEffectsStateProvider, (previous, next) {
     // Only the changes that decide an effect: not every tick of the notice.
     if (previous?.callId == next?.callId &&
         previous?.stage == next?.stage &&
@@ -230,6 +231,7 @@ final class CallNotificationHandler {
   StreamSubscription<Object?>? _missed;
   ProviderSubscription<AsyncValue<CallsPort>>? _ports;
   ProviderSubscription<CallScreenState?>? _calls;
+  ProviderSubscription<GroupCallScreenState?>? _rooms;
 
   void start() {
     _responses = _ref
@@ -242,6 +244,12 @@ final class CallNotificationHandler {
     );
     _calls = _ref.listen<CallScreenState?>(callScreenStateProvider, (_, next) {
       if (next != null) unawaited(_applyPending(next));
+    });
+    _rooms = _ref.listen<GroupCallScreenState?>(groupCallScreenStateProvider, (
+      _,
+      next,
+    ) {
+      if (next != null) unawaited(_applyPendingRoom(next));
     });
     _listenMissed();
   }
@@ -297,6 +305,7 @@ final class CallNotificationHandler {
     _missed?.cancel();
     _ports?.close();
     _calls?.close();
+    _rooms?.close();
   }
 
   /// A press on a call notification.
@@ -306,6 +315,27 @@ final class CallNotificationHandler {
     _pending = PendingCallDecision(response.callId, response.action, now);
     final state = _ref.read(callScreenStateProvider);
     if (state != null) unawaited(_applyPending(state));
+    final room = _ref.read(groupCallScreenStateProvider);
+    if (room != null) unawaited(_applyPendingRoom(room));
+  }
+
+  /// The same, for a group call that rings.
+  Future<void> _applyPendingRoom(GroupCallScreenState room) async {
+    final pending = _pending;
+    if (pending == null || pending.callId != room.roomId) return;
+    if (room.stage != CallStage.incoming) return;
+    final age = _ref.read(clockProvider)().difference(pending.at);
+    _pending = null;
+    if (age > CallNotifications.ringFor) return;
+    final actions = _ref.read(groupCallActionsProvider);
+    switch (pending.action) {
+      case CallNotificationAction.accept:
+        await actions.accept();
+      case CallNotificationAction.decline:
+        await actions.decline();
+      case CallNotificationAction.open:
+        break;
+    }
   }
 
   Future<void> _applyPending(CallScreenState state) async {
