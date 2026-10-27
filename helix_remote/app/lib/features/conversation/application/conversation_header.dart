@@ -127,6 +127,21 @@ final groupMembersProvider = StreamProvider.autoDispose
 String? groupIdOf(String conversationId) =>
     conversationId.startsWith('group:') ? conversationId.substring(6) : null;
 
+/// Whether this account may send to a group chat: an admin always, a member
+/// unless the group lets only admins send (true for a direct chat).
+final groupCanSendProvider = StreamProvider.autoDispose.family<bool, String>((
+  ref,
+  conversationId,
+) async* {
+  final group = groupIdOf(conversationId);
+  if (group == null) {
+    yield true;
+    return;
+  }
+  final gateway = await ref.watch(chatGatewayProvider.future);
+  yield* gateway.watchCanSendToGroup(group);
+});
+
 /// Whether the other person of a direct chat has blocked this account (the
 /// server tells the blocked person at once).
 final peerBlocksMeProvider = StreamProvider.autoDispose.family<bool, String>((
@@ -226,6 +241,7 @@ final conversationHeaderProvider = Provider.autoDispose
       }
 
       final members = ref.watch(groupMembersProvider(id)).value;
+      final canSend = ref.watch(groupCanSendProvider(id)).value ?? true;
       final self = ref.watch(chatGatewayProvider).value?.selfAccountId;
       final stillIn = members == null
           ? true
@@ -254,8 +270,10 @@ final conversationHeaderProvider = Provider.autoDispose
         typing: typing.isNotEmpty,
         muted: muted,
         disappearingSeconds: chat.disappearingSeconds,
-        composerDisabledReason: stillIn
-            ? null
-            : 'You can no longer send messages to this group.',
+        composerDisabledReason: !stillIn
+            ? 'You can no longer send messages to this group.'
+            : !canSend
+            ? 'Only admins can send messages to this group.'
+            : null,
       );
     });

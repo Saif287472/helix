@@ -158,6 +158,14 @@ class TestChatGateway extends ChatGateway {
     );
   }
 
+  /// Groups the test lets only admins send to (the engine reads this from the
+  /// group's encrypted state, which these tests do not build).
+  final Set<String> adminsOnlyGroups = {};
+
+  @override
+  Stream<bool> watchCanSendToGroup(String groupId) =>
+      Stream.value(!adminsOnlyGroups.contains(groupId));
+
   /// Pins are simulated like the other sends: the row changes the way the
   /// engine would change it, and a fourth is refused as the engine refuses it.
   @override

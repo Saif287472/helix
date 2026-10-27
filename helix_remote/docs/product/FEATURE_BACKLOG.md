@@ -31,9 +31,9 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 
 | Size | Count | Features |
 |---|---|---|
-| Already built | 30 | see "Already built" |
+| Already built | 31 | see "Already built" |
 | S (one file) | 1 | B2 |
-| M (about 10 files) | 7 | A6, A9, A10, B8, C5, C7, E4 |
+| M (about 10 files) | 6 | A6, A9, A10, C5, C7, E4 |
 | L (more than that) | 9 | A5, A7, A8, A13, B3, C3, C4, D1, D2 |
 | L+ (a project of its own) | 5 | D3, D4, D6, E1, E2 |
 | Not planned | 5 | see "Not planned" |
@@ -95,7 +95,7 @@ Path shorthand: `app/` = `helix_remote/app/lib`, `ui/` = `helix_remote/packages/
 | B5 | Clear chat history and purge media | **Already built** | n/a | `ConversationSettings.clear()` and `ChatGateway.clearChat`; the storage page frees media. |
 | B6 | Per-chat notification policy | Built (per-chat mute; overrides on the chat) | n/a | Nothing to do. |
 | B7 | Group search by mutual contact names | **Built 2026-10-26** | done | `chat_search.dart` (`memberNamed`), test `app/test/chat_search_members_test.dart`. Not done: the same match inside the People tab. |
-| B8 | Group admin controls (who can edit info, send, add) | Partial (roles and group settings exist) | **M** | Check `group_settings_screen.dart` and `groups` module for "announcement only" and "who can add"; each missing switch is a state field (protocol `modules/groups.dart`, server `groups`, engine, app). |
+| B8 | Group admin controls (who can edit info, send, add) | **Built** (2026-10-27 finished the last piece) | done | The three switches (protocol `GroupSettings`, `group_settings_screen.dart`) and the engine check already existed; a member of an admins-only group now sees "Only admins can send messages to this group." in the composer (`conversation_header.dart`, `ChatGateway.watchCanSendToGroup`). |
 
 ## C. Privacy and security
 

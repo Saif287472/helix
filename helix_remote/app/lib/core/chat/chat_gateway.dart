@@ -51,6 +51,15 @@ class ChatGateway {
   Stream<List<GroupMemberRow>> watchMembers(String groupId) =>
       _engine.groups.watchMembers(groupId);
 
+  /// Whether this account may send to the group now: an admin always, a member
+  /// unless the group lets only admins send. True while the group is unknown.
+  Stream<bool> watchCanSendToGroup(String groupId) => _engine.groups
+      .watchGroup(groupId)
+      .asyncMap(
+        (_) async => (await _engine.groups.details(groupId))?.canSend ?? true,
+      )
+      .distinct();
+
   Future<bool> isGroupAdmin(String groupId) async {
     final role = await _engine.groups.role(groupId);
     return role != null && (role.wire == 'owner' || role.wire == 'admin');

@@ -60,6 +60,9 @@ conversation_routes.dart    /chat/:id and its sub-routes
   told by the server at once), the header has no call buttons and the composer
   shows `ConversationHeader.composerDisabledReason` ("<Name> has blocked you.
   You can't message or call them.") instead of the text field.
+- **Admins-only groups:** when a group lets only admins send, a plain member's composer shows "Only
+  admins can send messages to this group." (`groupCanSendProvider`, from `GroupDetails.canSend`) instead of a
+  field whose send would fail; the engine refuses the send as well (`ChatsService._routeOf`).
 - **Info pages:** the header title and the menu open the contact info (direct chat,
   `PeoplePaths.person`) or the group info (`GroupPaths.info`); see
   `application/conversation_links.dart`. Your own note-to-self chat has no info
