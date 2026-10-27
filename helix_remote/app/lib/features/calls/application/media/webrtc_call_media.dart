@@ -32,6 +32,9 @@ final class WebRtcCallMediaFactory implements CallMediaFactory {
 
   final CallMediaHub hub;
 
+  /// The microphone and camera of each live room, shared by its links.
+  final Map<String, RemoteCallCapture> _captures = {};
+
   /// What runs around a screen capture (Android's foreground service).
   final RemoteScreenCaptureHost? screenCapture;
   final String Function() _newId;
@@ -59,8 +62,18 @@ final class WebRtcCallMediaFactory implements CallMediaFactory {
       hub.lastProblem = CallMediaProblem.noRelay;
       throw StateError('no relay');
     }
+    RemoteCallCapture? capture;
+    final room = config.room;
+    if (room != null) {
+      _captures.removeWhere((id, c) => id != room && c.holders == 0);
+      capture = _captures.putIfAbsent(
+        room,
+        () => RemoteCallCapture(video: config.video),
+      );
+    }
     return WebRtcCallMediaSession(
       engine: RemoteWebRtcCallEngine(
+        capture: capture,
         iceConfig: ice,
         qualitySampleInterval: _qualityInterval,
         screenCapture: screenCapture,

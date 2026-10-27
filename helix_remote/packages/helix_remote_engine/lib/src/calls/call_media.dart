@@ -21,7 +21,11 @@ final class IceServer {
 /// What a media session is created for.
 @immutable
 final class CallMediaConfig {
-  const CallMediaConfig({required this.video, this.iceServers = const []});
+  const CallMediaConfig({
+    required this.video,
+    this.iceServers = const [],
+    this.room,
+  });
 
   /// The call carries video (the camera starts on) as well as audio.
   final bool video;
@@ -29,6 +33,11 @@ final class CallMediaConfig {
   /// Relay servers from `GET /v1/calls/turn`; empty when the server has no
   /// relay (a direct connection may still work).
   final List<IceServer> iceServers;
+
+  /// The group-call room this session is one link of (ADR-034), or null for a
+  /// 1:1 call. Sessions of one room share one microphone and camera, and send
+  /// a smaller, capped picture.
+  final String? room;
 }
 
 /// How the media connection is doing, as the platform's ICE/DTLS agent

@@ -5,3 +5,4 @@ export 'src/call_engine.dart';
 export 'src/call_quality.dart';
 export 'src/call_video_view.dart';
 export 'src/web_rtc_call_engine.dart';
+export 'src/call_capture.dart';

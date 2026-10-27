@@ -10,6 +10,7 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     Future<RemoteIceConfig> Function()? iceConfigProvider,
     Duration qualitySampleInterval = const Duration(seconds: 5),
     this.screenCapture,
+    this.capture,
   }) : _iceConfig =
            iceConfig ??
            const RemoteIceConfig(
@@ -20,6 +21,11 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
        _qualityPollingInterval = qualitySampleInterval;
 
   static const int _maxCandidateLength = 4096;
+
+  /// The microphone and camera shared by the connections of a group call
+  /// (ADR-034). Null for a 1:1 call, which opens its own and may be the only
+  /// call holding the media.
+  final RemoteCallCapture? capture;
 
   /// What the host does around a screen capture (Android's service).
   final RemoteScreenCaptureHost? screenCapture;
@@ -53,7 +59,7 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
   }
 
   Future<webrtc.RTCPeerConnection> _createPeerConnection(String callId) async {
-    if (_calls.isNotEmpty && !_calls.containsKey(callId)) {
+    if (capture == null && _calls.isNotEmpty && !_calls.containsKey(callId)) {
       throw StateError('Only one remote call can own media at a time.');
     }
     final latestConfig =
@@ -138,7 +144,10 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     _endedCalls.remove(callId);
     final pc = await _createPeerConnection(callId);
     _diag(callId, 'local_media request video=$video');
-    final localStream = await _createLocalStream(video: video);
+    final shared = capture;
+    final localStream = shared != null
+        ? await shared.acquire()
+        : await _createLocalStream(video: video);
     _diag(
       callId,
       'local_media ready audio=${localStream.getAudioTracks().length} '
@@ -154,6 +163,7 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
       pc.addTrack(track, localStream);
     }
     _diag(callId, 'local_tracks added count=${localStream.getTracks().length}');
+    if (shared != null) await _applyVideoLimits(callId, pc, shared.limits);
     final state = _PeerConnectionState(
       pc: pc,
       localStream: localStream,
@@ -413,6 +423,31 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     _diag(callId, 'end_call cleanup_done');
   }
 
+  /// Caps what this link's video encoder may send, so a room of several
+  /// links fits the relay.
+  Future<void> _applyVideoLimits(
+    String callId,
+    webrtc.RTCPeerConnection pc,
+    RemoteVideoLimits limits,
+  ) async {
+    try {
+      for (final sender in await pc.getSenders()) {
+        if (sender.track?.kind != 'video') continue;
+        final parameters = sender.parameters;
+        final encodings = parameters.encodings;
+        if (encodings == null || encodings.isEmpty) continue;
+        for (final encoding in encodings) {
+          encoding.maxBitrate = limits.maxBitrateKbps * 1000;
+          encoding.maxFramerate = limits.frameRate;
+        }
+        await sender.setParameters(parameters);
+      }
+      _diag(callId, 'video_limits applied kbps=${limits.maxBitrateKbps}');
+    } on Object catch (error) {
+      _diag(callId, 'video_limits refused ${error.runtimeType}');
+    }
+  }
+
   Future<void> _releaseState(_PeerConnectionState state) async {
     state.qualityTimer?.cancel();
     final screen = state.screenStream;
@@ -427,12 +462,19 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     }
     await _ignoreCleanup(state.pc.close);
     await _ignoreCleanup(state.pc.dispose);
-    for (final track in state.localStream.getTracks()) {
-      await _ignoreCleanup(track.stop);
+    if (capture == null) {
+      for (final track in state.localStream.getTracks()) {
+        await _ignoreCleanup(track.stop);
+      }
     }
     await _ignoreCleanup(() => state.localRenderer.srcObject = null);
     await _ignoreCleanup(() => state.remoteRenderer.srcObject = null);
-    await _ignoreCleanup(state.localStream.dispose);
+    if (capture == null) {
+      await _ignoreCleanup(state.localStream.dispose);
+    } else {
+      // Shared with the other links: the tracks stop with the last of them.
+      await _ignoreCleanup(capture!.release);
+    }
     await _ignoreCleanup(() async {
       await state.remoteStream?.dispose();
     });
