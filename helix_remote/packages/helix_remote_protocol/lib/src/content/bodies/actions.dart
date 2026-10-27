@@ -95,6 +95,32 @@ final class DeleteBody extends ContentBody {
       DeleteBody(target: MessageRef.fromJson(json.object('target')));
 }
 
+/// Pins a message in its chat for everyone in it, or takes the pin off.
+final class PinBody extends ContentBody {
+  const PinBody({required this.target, this.remove = false});
+
+  static const typeName = 'pin';
+
+  final MessageRef target;
+
+  /// Takes the pin off.
+  final bool remove;
+
+  @override
+  String get type => typeName;
+
+  @override
+  bool get isVisible => false;
+
+  @override
+  JsonMap toJson() => {'target': target.toJson(), if (remove) 'remove': true};
+
+  factory PinBody.fromJson(JsonReader json) => PinBody(
+    target: MessageRef.fromJson(json.object('target')),
+    remove: json.flag('remove'),
+  );
+}
+
 final class PollVoteBody extends ContentBody {
   const PollVoteBody({required this.target, required this.optionIds});
 

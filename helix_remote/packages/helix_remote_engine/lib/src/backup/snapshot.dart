@@ -314,6 +314,7 @@ final class SnapshotExporter {
         'kind': c.kind.name,
         'title': ?c.title,
         'pinned': ?c.pinnedAt?.millisecondsSinceEpoch,
+        'fav': ?c.favouriteAt?.millisecondsSinceEpoch,
         'muted': ?c.mutedUntil?.millisecondsSinceEpoch,
         if (c.archived) 'archived': true,
         'draft': ?c.draft,
@@ -346,6 +347,8 @@ final class SnapshotExporter {
     if (m.mentionsMe) 'mention': true,
     'status': m.status.name,
     'edited': ?m.editedAt?.millisecondsSinceEpoch,
+    'starred': ?m.starredAt?.millisecondsSinceEpoch,
+    'pinned': ?m.pinnedAt?.millisecondsSinceEpoch,
     'deleted': ?m.deletedAt?.millisecondsSinceEpoch,
     'exp_s': ?m.expireSeconds,
     'exp_at': ?m.expiresAt?.millisecondsSinceEpoch,
@@ -666,6 +669,7 @@ final class ImportSession {
       createdAt: r.optTime('created') ?? _ctx.now(),
       title: r.optString('title'),
       pinnedAt: r.optTime('pinned'),
+      favouriteAt: r.optTime('fav'),
       mutedUntil: r.optTime('muted'),
       archived: r.flag('archived'),
       draft: r.optString('draft'),
@@ -768,6 +772,9 @@ final class ImportSession {
           mentionsMe: Value(r.flag('mention')),
           editedAt: Value(editedAt),
           deletedAt: Value(deletedAt),
+          // A message that is gone is no longer one to find again.
+          starredAt: Value(deletedAt == null ? r.optTime('starred') : null),
+          pinnedAt: Value(deletedAt == null ? r.optTime('pinned') : null),
           expireSeconds: Value(r.optInt('exp_s')),
           expiresAt: Value(expiresAt),
         ),
@@ -810,6 +817,16 @@ final class ImportSession {
         payload: payload,
         editedAt: editedAt,
       );
+    }
+    // Local wins, as for a chat's pin: a star or a pin this device lacks is
+    // filled in, one it has is kept.
+    final starred = r.optTime('starred');
+    if (starred != null && row.starredAt == null) {
+      await _db.messagesDao.setStarred(row.localRowid, starred);
+    }
+    final pinned = r.optTime('pinned');
+    if (pinned != null && row.pinnedAt == null) {
+      await _db.messagesDao.setPinned(row.localRowid, pinned);
     }
     await _reactions(row.localRowid, r);
     await _receipts(row.localRowid, r);

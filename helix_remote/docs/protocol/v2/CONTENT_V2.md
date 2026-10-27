@@ -109,6 +109,7 @@ delivery), for up to 7 days.
 | `reaction` | `target`, `emoji`, `remove?: bool` | one reaction per account per message; a new one replaces the old |
 | `edit` | `target`, `text` (or `caption` for media) | only the author; within 15 minutes of the target's `ts` (checked by receivers) |
 | `delete` | `target` | delete for everyone; only the author (or a group admin, for groups); within 2 days |
+| `pin` | `target`, `remove?: bool` | anyone in the chat may pin or unpin; every member's device shows it. A chat keeps at most 3 pinned messages: the sender's client refuses a 4th, a receiver applies whatever arrives. The pin is stamped with the action's `ts`: a pin no newer than the one held, or an unpin older than the pin it would remove, is ignored. A deleted message cannot be pinned, and deleting a message unpins it. Sent non-urgent |
 | `poll_vote` | `target` (the poll), `option_ids: [string]` | empty list withdraws the vote |
 | `rsvp` | `target` (the event), `state: going\|maybe\|declined`, `plus_one: bool` | |
 | `receipt` | `kind: delivered\|read\|viewed`, `ids: [message id]` | sent to the author's devices; also to the reader's own devices to sync "read" across devices; never sent when the user turned read receipts off (except to own devices) |

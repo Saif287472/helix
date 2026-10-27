@@ -127,6 +127,7 @@ sealed class ContentBody {
     ReactionBody.typeName: ReactionBody.fromJson,
     EditBody.typeName: EditBody.fromJson,
     DeleteBody.typeName: DeleteBody.fromJson,
+    PinBody.typeName: PinBody.fromJson,
     PollVoteBody.typeName: PollVoteBody.fromJson,
     RsvpBody.typeName: RsvpBody.fromJson,
     ReceiptBody.typeName: ReceiptBody.fromJson,

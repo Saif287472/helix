@@ -33,7 +33,7 @@ final class FailedAction {
   /// The local row of the message the action is about.
   final int targetRowid;
 
-  /// The content body type (`reaction`, `edit`, `delete`, `poll_vote`,
+  /// The content body type (`reaction`, `edit`, `delete`, `pin`, `poll_vote`,
   /// `rsvp`), for the chat's words.
   final String action;
 
@@ -363,6 +363,54 @@ final class ChatsService {
     );
   });
 
+  // ---------------------------------------------- stars, pins, favourites
+
+  /// Stars a message, or takes the star off. A star is a private bookmark:
+  /// nothing is sent, and a deleted message cannot be starred.
+  Future<void> setStarred(int rowid, {required bool starred}) async {
+    final row = await _requireMessage(rowid);
+    if (row.deletedAt != null) return;
+    await _db.messagesDao.setStarred(rowid, starred ? _ctx.now() : null);
+  }
+
+  /// The starred messages of every chat, the newest star first, live.
+  Stream<List<MessageRow>> watchStarred({int limit = 500}) =>
+      _db.messagesDao.watchStarred(limit: limit);
+
+  /// The most messages one chat keeps pinned at once.
+  static const maxPinnedMessages = 3;
+
+  /// The messages pinned in [conversationId], the newest pin first, live.
+  Stream<List<MessageRow>> watchPinned(String conversationId) =>
+      _db.messagesDao.watchPinned(conversationId);
+
+  /// Pins a message in its chat for everyone in it, or takes the pin off
+  /// (`pin` content, CONTENT_V2.md §3). A chat keeps at most
+  /// [maxPinnedMessages]: pinning one more throws [EngineStateException], and
+  /// the person unpins one first. A deleted message cannot be pinned.
+  Future<void> pinMessage(int rowid, {required bool pinned}) =>
+      _db.transaction(() async {
+        final target = await _requireMessage(rowid);
+        if (target.deletedAt != null) return;
+        if ((target.pinnedAt != null) == pinned) return;
+        if (pinned) {
+          final held = await _db.messagesDao.pinnedIn(target.conversationId);
+          if (held.length >= maxPinnedMessages) {
+            throw const EngineStateException(
+              'a chat keeps at most $maxPinnedMessages pinned messages',
+            );
+          }
+        }
+        await _db.messagesDao.setPinned(rowid, pinned ? _ctx.now() : null);
+        await _sendAction(
+          target,
+          PinBody(
+            target: MessageRef(id: target.messageId, author: target.sender),
+            remove: !pinned,
+          ),
+        );
+      });
+
   /// Votes in a poll ([optionIds] empty withdraws the vote). Only options of
   /// the poll are accepted.
   Future<void> vote(int rowid, List<String> optionIds) =>
@@ -598,6 +646,11 @@ final class ChatsService {
 
   Future<void> setPinned(String id, {required bool pinned}) =>
       _db.conversationsDao.setPinned(id, pinned ? _ctx.now() : null);
+
+  /// Makes the chat a favourite, or not one: a private filter on the chat
+  /// list, never sent.
+  Future<void> setFavourite(String id, {required bool favourite}) =>
+      _db.conversationsDao.setFavourite(id, favourite ? _ctx.now() : null);
 
   Future<void> setMutedUntil(String id, DateTime? until) =>
       _db.conversationsDao.setMutedUntil(id, until);

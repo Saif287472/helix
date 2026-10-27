@@ -123,6 +123,7 @@ final class HistoryStore {
     required DateTime createdAt,
     String? title,
     DateTime? pinnedAt,
+    DateTime? favouriteAt,
     DateTime? mutedUntil,
     bool archived = false,
     String? draft,
@@ -142,6 +143,7 @@ final class HistoryStore {
               kind: kind,
               title: Value(title),
               pinnedAt: Value(pinnedAt),
+              favouriteAt: Value(favouriteAt),
               mutedUntil: Value(mutedUntil),
               archived: Value(archived),
               draft: Value(draft),
@@ -161,6 +163,9 @@ final class HistoryStore {
               : const Value.absent(),
           pinnedAt: existing.pinnedAt == null && pinnedAt != null
               ? Value(pinnedAt)
+              : const Value.absent(),
+          favouriteAt: existing.favouriteAt == null && favouriteAt != null
+              ? Value(favouriteAt)
               : const Value.absent(),
           mutedUntil: existing.mutedUntil == null && mutedUntil != null
               ? Value(mutedUntil)

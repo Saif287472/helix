@@ -252,6 +252,57 @@ void main() {
       expect(bob.identityKey, Uint8List(32)..fillRange(0, 32, 5));
     });
 
+    test('stars, pins and a favourite chat come across', () async {
+      await addHistory(alice, bobId, 6, prefix: 'note');
+      final chat = directConversationId(bobId);
+      final page = await alice.db.messagesDao.pageOlder(chat, limit: 10);
+      final starred = page.messages[1];
+      final pinned = page.messages[3];
+      await alice.db.messagesDao.setStarred(
+        starred.localRowid,
+        DateTime.utc(2026, 5, 2),
+      );
+      await alice.db.messagesDao.setPinned(
+        pinned.localRowid,
+        DateTime.utc(2026, 5, 3),
+      );
+      await alice.db.conversationsDao.setFavourite(
+        chat,
+        DateTime.utc(2026, 5, 4),
+      );
+      await alice.backup.backUpNow();
+
+      final second = await world.link(alice, 'alice2');
+      await second.backup.restoreHistory();
+
+      final restored = await second.db.messagesDao.pageOlder(chat, limit: 10);
+      MessageRow same(MessageRow m) =>
+          restored.messages.firstWhere((r) => r.messageId == m.messageId);
+      expect(same(starred).starredAt, DateTime.utc(2026, 5, 2));
+      expect(same(starred).pinnedAt, isNull);
+      expect(same(pinned).pinnedAt, DateTime.utc(2026, 5, 3));
+      expect(same(pinned).starredAt, isNull);
+      expect(
+        restored.messages.where(
+          (m) => m.starredAt != null || m.pinnedAt != null,
+        ),
+        hasLength(2),
+      );
+      expect(
+        (await second.db.conversationsDao.byId(chat))!.favouriteAt,
+        DateTime.utc(2026, 5, 4),
+      );
+
+      // Restoring again onto a device that has them changes nothing.
+      await second.backup.restoreHistory();
+      expect(
+        (await second.db.messagesDao.byRowid(
+          same(starred).localRowid,
+        ))!.starredAt,
+        DateTime.utc(2026, 5, 2),
+      );
+    });
+
     test('restoring twice changes nothing', () async {
       await addHistory(alice, bobId, 12);
       await alice.backup.backUpNow();

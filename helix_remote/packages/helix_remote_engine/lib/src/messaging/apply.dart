@@ -447,6 +447,7 @@ final class ContentApplier {
     ReactionBody() => body.target,
     EditBody() => body.target,
     DeleteBody() => body.target,
+    PinBody() => body.target,
     PollVoteBody() => body.target,
     RsvpBody() => body.target,
     _ => null,
@@ -483,6 +484,8 @@ final class ContentApplier {
             group != null &&
             _isAdmin((await _db.groupsDao.member(group, senderAccount))?.role);
         return _delete(target, senderAccount, at, now, byAdmin: admin);
+      case PinBody():
+        return _pin(target, body, at);
       case PollVoteBody():
         return _pollVote(target, senderAccount, body);
       case RsvpBody():
@@ -565,6 +568,23 @@ final class ContentApplier {
       return _Action.ignore;
     }
     await _db.messagesDao.deleteForEveryone(target.localRowid, deletedAt: now);
+    return _Action.done;
+  }
+
+  /// Anyone in the chat may pin or unpin a message (CONTENT_V2.md §3). A pin
+  /// older than the one already held changes nothing, and an unpin older than
+  /// the pin it would take off is a late arrival and is dropped; so is a pin of
+  /// a message already gone. The chat's cap is the sender's to keep, not ours.
+  Future<_Action> _pin(MessageRow target, PinBody body, DateTime at) async {
+    if (target.deletedAt != null) return _Action.ignore;
+    final held = target.pinnedAt;
+    if (body.remove) {
+      if (held == null || held.isAfter(at)) return _Action.ignore;
+      await _db.messagesDao.setPinned(target.localRowid, null);
+    } else {
+      if (held != null && !at.isAfter(held)) return _Action.ignore;
+      await _db.messagesDao.setPinned(target.localRowid, at);
+    }
     return _Action.done;
   }
 

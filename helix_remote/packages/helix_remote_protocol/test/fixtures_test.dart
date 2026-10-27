@@ -407,6 +407,14 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
       id: '0192a4f0-0000-7000-8000-0000000000eb',
     ),
   ),
+  'content_pin': _content(
+    _message(
+      const PinBody(
+        target: MessageRef(id: messageM, author: accountA),
+      ),
+      id: '0192a4f0-0000-7000-8000-0000000000fa',
+    ),
+  ),
   'content_poll_vote': _content(
     _message(
       const PollVoteBody(

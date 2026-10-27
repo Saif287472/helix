@@ -95,6 +95,7 @@ final _bodies = <ContentBody>[
   const ReactionBody(target: _target, emoji: '❤️'),
   const EditBody(target: _target, text: 'fixed'),
   const DeleteBody(target: _target),
+  const PinBody(target: _target),
   const PollVoteBody(target: _target, optionIds: ['a']),
   const RsvpBody(target: _target, state: RsvpState.maybe, plusOne: true),
   const ReceiptBody(kind: ReceiptKind.read, ids: [messageM]),
@@ -167,6 +168,23 @@ void main() {
       ).isVisible,
       isTrue,
     );
+  });
+
+  test('a pin says whether it takes the pin off', () {
+    JsonMap wire(PinBody b) => b.toJson();
+    JsonReader body(JsonMap json) => JsonReader(json, path: 'body');
+    expect(wire(const PinBody(target: _target)).containsKey('remove'), isFalse);
+    final off = ContentBody.decode(
+      'pin',
+      body(wire(const PinBody(target: _target, remove: true))),
+    );
+    expect(off, isA<PinBody>().having((b) => b.remove, 'remove', isTrue));
+    final on = ContentBody.decode(
+      'pin',
+      body(wire(const PinBody(target: _target))),
+    );
+    expect(on, isA<PinBody>().having((b) => b.remove, 'remove', isFalse));
+    expect(const PinBody(target: _target).isVisible, isFalse);
   });
 
   test('unknown types are kept, not shown as JSON or dropped', () {

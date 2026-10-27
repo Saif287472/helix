@@ -104,7 +104,7 @@ or the REST mailbox (`fetchOnce`); both share one serial queue and
    not parse is quarantined.
 4. **Apply in ONE transaction** (`ContentApplier`): session records, the
    consumed one-time prekey, the message row (the DAO updates the chat
-   summary and FTS), reactions, receipts, edits, deletes, poll votes, RSVPs,
+   summary and FTS), reactions, receipts, edits, deletes, pins, poll votes, RSVPs,
    deferred actions that were waiting for this message, the queued
    `delivered` receipt, `processed_envelopes` and the cursor.
 5. **Ack** after the commit: over the socket when connected (returns window
@@ -125,7 +125,7 @@ Rules:
   (`messaging/quarantine_policy.dart`) so the direct and group pipelines cannot
   drift (AUD-12f-1). Shown: a placeholder row (`payload`: `{code, waiting,
   device}`) for what the user would have seen — the server's `urgent` flag;
-  receipts, reactions, edits, deletes and votes go out non-urgent and get no
+  receipts, reactions, edits, deletes, pins and votes go out non-urgent and get no
   row. Repaired: any curable failure, urgent or not — a lost or diverged
   session (no session, unknown prekey, used key, or an authentication failure,
   which after a restore looks the same as tampering) queues a `session_reset`
@@ -215,7 +215,7 @@ failing is re-asked `GroupLimits.rekeyDutyRetries` times and then left failed fo
 an admin, because a pass that re-asked forever would be its own unbounded cost.
 Asking by hand (`GroupsService.rotateKey`, a roster envelope) is never bounded.
 
-An **action** op (reaction, edit, delete, vote, RSVP) has a message it is
+An **action** op (reaction, edit, delete, pin, vote, RSVP) has a message it is
 about but delivers no message of its own, so `outbox_ops.message_rowid` stays
 null and the target rides the payload (`target_rowid`, never
 `message_rowid`, which would advance the message's own status). When one gives
@@ -930,3 +930,13 @@ reasoning and the open items):
   as a size mismatch.
 - A key change also writes the safety-number notice into the group chats of a
   contact known only from groups.
+
+## Stars, pins and favourites (schema 6)
+
+`ChatsService.setStarred` and `setFavourite` are private to this device: nothing is sent, and the
+other side and this account's other devices learn of them only through a backup (`starred`, `pinned`
+on a message record and `fav` on a chat record in the history archive; a restore fills what a device
+lacks and keeps what it has). `pinMessage` is shared: it sets `messages.pinned_at` and sends a `pin`
+action (CONTENT_V2.md §3) that the other side's `_pin` applies. A chat keeps at most
+`ChatsService.maxPinnedMessages` (3) pinned: the sender's `pinMessage` throws `EngineStateException`
+for a 4th, a receiver applies what arrives. `test/pins_stars_test.dart` covers it.
