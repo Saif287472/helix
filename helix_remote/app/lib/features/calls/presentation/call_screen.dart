@@ -47,6 +47,43 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     super.dispose();
   }
 
+  /// A switch the other side asked for becomes a question; one that did not
+  /// happen becomes a line (shown once: the next switch clears it).
+  void _onSwitch(CallScreenState? prev, CallScreenState? next) {
+    if (next == null || !mounted) return;
+    if (next.switchAsked && !(prev?.switchAsked ?? false)) {
+      final actions = ref.read(callActionsProvider);
+      unawaited(
+        orbit.showOrbitDialog(
+          context,
+          title: CallCopy.switchAskTitle,
+          text: CallCopy.switchAskText(next.title),
+          actions: [
+            orbit.OrbitDialogAction(
+              'Not now',
+              onPressed: () => unawaited(actions.answerSwitch(accept: false)),
+            ),
+            orbit.OrbitDialogAction(
+              'Switch to video',
+              kind: orbit.OrbitButtonKind.primary,
+              onPressed: () => unawaited(actions.answerSwitch(accept: true)),
+            ),
+          ],
+        ),
+      );
+    }
+    final failed = next.lastSwitch;
+    if (failed != null && failed != prev?.lastSwitch) {
+      // Not in the middle of the build that told us: the state reads it too.
+      Future.microtask(() {
+        if (!mounted) return;
+        ref
+            .read(callNoticeProvider.notifier)
+            .show(next.callId, CallCopy.switchFailed(failed));
+      });
+    }
+  }
+
   void _closeIfOver(CallScreenState? state) {
     if (state != null || _closing || !mounted) return;
     _closing = true;
@@ -121,13 +158,17 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       videoLayout: s.showsVideo && live,
       hasLocalVideo: s.cameraOn && s.local != null,
       hasRemoteVideo: s.stage == CallStage.active && s.remote != null,
+      canSwitch: s.canSwitch,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(callScreenStateProvider);
-    ref.listen(callScreenStateProvider, (_, next) => _closeIfOver(next));
+    ref.listen(callScreenStateProvider, (prev, next) {
+      _closeIfOver(next);
+      _onSwitch(prev, next);
+    });
     if (state == null) {
       _closeIfOver(null);
       final last = _last;
@@ -156,6 +197,8 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           selectAudioRoute: (route) =>
               unawaited(actions.selectRoute(_appRouteOf(route))),
           dismissNotice: actions.dismissNotice,
+          switchToVideo: () => unawaited(actions.switchMedia(video: true)),
+          switchToVoice: () => unawaited(actions.switchMedia(video: false)),
         ),
         // Their video once frames arrive; their picture until then (the
         // camera is off, or the first frame has not landed).

@@ -150,6 +150,16 @@ final class CallTimeService {
             message: 'That call belongs to someone else.',
           );
         }
+        // The caller of a one-to-one call asks for the other kind of media:
+        // the call switches between voice and video (ADR-036). What has been
+        // used is settled in the pool it was spent from, and the rest of the
+        // call is reserved from the other.
+        if (mapped.pool != pool &&
+            mapped.roomId == null &&
+            mapped.accountId == accountId &&
+            !mapped.finalized) {
+          return _switch(tx, callId, mapped, pool, now, metered);
+        }
         return _of(mapped, now);
       }
 
@@ -236,6 +246,60 @@ final class CallTimeService {
       );
       return CallGrant(metered: true, expiresAt: expires, pool: pool);
     });
+  }
+
+  /// Moves a one-to-one call to [pool]: settles the old reservation up to now
+  /// (each started minute, in the pool it came from) and reserves the rest of
+  /// the call from [pool]. Throws (so nothing changes) when the new pool is
+  /// empty.
+  Future<CallGrant> _switch(
+    Tx tx,
+    String callId,
+    ReservationRow old,
+    CallPool pool,
+    DateTime now,
+    bool metered,
+  ) async {
+    await store.lockAccount(tx, old.accountId);
+    await store.markEnded(tx, old.id, now);
+    final settled = await store.byId(tx, old.id);
+    if (settled != null) await _settle(tx, settled, now);
+    for (final done in await store.endedOpen(tx, old.accountId)) {
+      await _settle(tx, done, now);
+    }
+    final id = Uuid.v7();
+    var reserved = 0;
+    var parts = const <({String claim, int minutes})>[];
+    var expires = now.add(CallTimeLimits.unmeteredLifetime);
+    if (metered) {
+      final taken = await store.takeAll(tx, old.accountId, pool, now);
+      if (taken.total <= 0) {
+        throw ApiError(
+          ErrorCode.quotaExceeded,
+          message:
+              'You have no ${pool.wire} call time left. Claim today\'s '
+              'minutes or get Orbit Premium.',
+          details: {'reason': 'call_time', 'pool': pool.wire},
+        );
+      }
+      reserved = taken.total;
+      parts = taken.parts;
+      expires = now.add(Duration(minutes: taken.total));
+    }
+    await store.insertReservation(
+      tx,
+      id: id,
+      accountId: old.accountId,
+      pool: pool,
+      metered: metered,
+      reserved: reserved,
+      parts: parts,
+      now: now,
+      expiresAt: expires,
+    );
+    await store.markAnswered(tx, id, now);
+    await store.remapCall(tx, callId, id);
+    return CallGrant(metered: metered, expiresAt: expires, pool: pool);
   }
 
   // ----------------------------------------------------------------- settle

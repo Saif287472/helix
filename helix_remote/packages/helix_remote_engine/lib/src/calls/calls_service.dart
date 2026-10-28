@@ -212,6 +212,467 @@ final class CallsService implements CallSignalSink {
     return true;
   });
 
+  /// Asks to change the live call to video ([video] true) or back to voice
+  /// (ADR-036). The other person is asked first for video; going back to voice
+  /// needs no yes. The caller's call time pays for the new kind, so a Free
+  /// caller with none left in that pool is told (`lastSwitch`) and the call
+  /// goes on as it was. Follow it through [watchCurrent]
+  /// (`CallSnapshot.switchStage`). Does nothing unless a one-to-one call is
+  /// live and no switch is under way.
+  Future<void> switchMedia({required bool video}) => _run(() async {
+    final call = _call;
+    if (call == null ||
+        call.finished ||
+        call.phase != CallPhase.active ||
+        call.media == null ||
+        call.peerDevice == null ||
+        call.pending != null ||
+        call.video == video ||
+        mediaFactory == null) {
+      return;
+    }
+    call.lastSwitch = null;
+    final s = _Switch(video: video, stage: _SwitchStage.asking);
+    call.pending = s;
+    _armSwitch(call, s);
+    _publish(call);
+    await _send(
+      call.callId,
+      CallSignalPayload(
+        type: CallSignalType.switchAsk,
+        callId: call.callId,
+        media: video ? CallMedia.video : CallMedia.audio,
+      ),
+      account: call.peer,
+      devices: {call.peerDevice!},
+    );
+  });
+
+  /// Answers the other side's ask to switch ([CallSwitchStage.asked]).
+  Future<void> answerSwitch({required bool accept}) => _run(() async {
+    final call = _call;
+    final s = call?.pending;
+    if (call == null || s == null || s.stage != _SwitchStage.asked) return;
+    await _answerAsk(call, s, accept);
+  });
+
+  void _armSwitch(_Call call, _Switch s) {
+    s.timer?.cancel();
+    s.timer = Timer(
+      _config.connectTimeout,
+      () => unawaited(
+        _run(() async {
+          if (call.finished || !identical(call.pending, s)) return;
+          await _abortSwitch(
+            call,
+            s,
+            s.stage == _SwitchStage.working
+                ? CallSwitchOutcome.failed
+                : CallSwitchOutcome.declined,
+          );
+        }),
+      ),
+    );
+  }
+
+  bool _switchPeer(_Call call, String device) =>
+      call.phase == CallPhase.active &&
+      !call.finished &&
+      call.peerDevice == device;
+
+  Future<void> _answerAsk(_Call call, _Switch s, bool accept) async {
+    final device = call.peerDevice!;
+    if (!accept) {
+      call.pending = null;
+      s.timer?.cancel();
+      _publish(call);
+      await _send(
+        call.callId,
+        CallSignalPayload(
+          type: CallSignalType.switchDecline,
+          callId: call.callId,
+        ),
+        account: call.peer,
+        devices: {device},
+      );
+      return;
+    }
+    if (!call.isIncoming) {
+      // The caller pays, so the caller makes the new connection.
+      await _beginSwitch(call, s);
+      return;
+    }
+    s.stage = _SwitchStage.accepted;
+    _armSwitch(call, s);
+    _publish(call);
+    await _send(
+      call.callId,
+      CallSignalPayload(type: CallSignalType.switchAccept, callId: call.callId),
+      account: call.peer,
+      devices: {device},
+    );
+  }
+
+  Future<void> _onSwitchAsk(
+    _Call call,
+    String device,
+    CallSignalPayload p,
+  ) async {
+    if (!_switchPeer(call, device) || p.media == null) return;
+    final video = p.media == CallMedia.video;
+    if (video == call.video) return;
+    final mine = call.pending;
+    if (mine != null) {
+      if (mine.stage != _SwitchStage.asking) return;
+      if (!call.isIncoming && mine.video == video) {
+        // Both asked for the same thing at once: the caller goes ahead.
+        mine.stage = _SwitchStage.accepted;
+        await _beginSwitch(call, mine);
+        return;
+      }
+      mine.timer?.cancel(); // The other side's ask wins.
+    }
+    final s = _Switch(video: video, stage: _SwitchStage.asked);
+    call.pending = s;
+    call.lastSwitch = null;
+    _armSwitch(call, s);
+    _publish(call);
+    // Going back to voice costs less and needs no yes.
+    if (!video) await _answerAsk(call, s, true);
+  }
+
+  Future<void> _onSwitchAccept(_Call call, String device) async {
+    final s = call.pending;
+    if (s == null ||
+        call.isIncoming ||
+        s.stage != _SwitchStage.asking ||
+        !_switchPeer(call, device)) {
+      return;
+    }
+    await _beginSwitch(call, s);
+  }
+
+  void _onSwitchDecline(_Call call, String device) {
+    final s = call.pending;
+    if (s == null || !_switchPeer(call, device)) return;
+    unawaited(_abortSwitch(call, s, CallSwitchOutcome.declined, notify: false));
+  }
+
+  /// Caller: asks the server for the new kind of media (the call time moves to
+  /// the other pool), makes the new connection and offers it.
+  Future<void> _beginSwitch(_Call call, _Switch s) async {
+    final factory = mediaFactory;
+    final device = call.peerDevice;
+    if (factory == null || device == null) {
+      await _abortSwitch(call, s, CallSwitchOutcome.failed);
+      return;
+    }
+    s
+      ..stage = _SwitchStage.working
+      ..segment = call.segment + 1;
+    _armSwitch(call, s);
+    _publish(call);
+    final List<IceServer> servers;
+    try {
+      servers = await _relay(call, CallRole.caller, video: s.video);
+    } on CallFailedException {
+      await _abortSwitch(call, s, CallSwitchOutcome.noCallTime);
+      return;
+    }
+    try {
+      final media = await factory.create(
+        CallMediaConfig(video: s.video, iceServers: servers),
+      );
+      s.media = media;
+      _wireSwitch(call, s);
+      final sdp = await media.createOffer();
+      await _send(
+        call.callId,
+        CallSignalPayload(
+          type: CallSignalType.switchOffer,
+          callId: call.callId,
+          media: s.video ? CallMedia.video : CallMedia.audio,
+          sdp: sdp,
+          segment: s.segment,
+        ),
+        account: call.peer,
+        devices: {device},
+      );
+    } on Object {
+      await _abortSwitch(call, s, CallSwitchOutcome.failed, restore: true);
+    }
+  }
+
+  /// Callee: the caller's offer for the new connection.
+  Future<void> _onSwitchOffer(
+    _Call call,
+    String device,
+    CallSignalPayload p,
+  ) async {
+    final s = call.pending;
+    final factory = mediaFactory;
+    if (s == null ||
+        factory == null ||
+        !call.isIncoming ||
+        !_switchPeer(call, device) ||
+        (s.stage != _SwitchStage.asking && s.stage != _SwitchStage.accepted) ||
+        p.sdp == null ||
+        p.segment != call.segment + 1 ||
+        (p.media == CallMedia.video) != s.video) {
+      return;
+    }
+    s
+      ..stage = _SwitchStage.working
+      ..segment = p.segment!;
+    _armSwitch(call, s);
+    _publish(call);
+    try {
+      final servers = await _relay(call, CallRole.callee, video: s.video);
+      final media = await factory.create(
+        CallMediaConfig(video: s.video, iceServers: servers),
+      );
+      s.media = media;
+      _wireSwitch(call, s);
+      final answer = await media.acceptOffer(p.sdp!);
+      s.remoteReady = true;
+      await _send(
+        call.callId,
+        CallSignalPayload(
+          type: CallSignalType.switchAnswer,
+          callId: call.callId,
+          sdp: answer,
+          segment: s.segment,
+        ),
+        account: call.peer,
+        devices: {device},
+      );
+      await _drainSwitch(call);
+      await _flushSwitch(call, s);
+    } on Object {
+      await _abortSwitch(call, s, CallSwitchOutcome.failed);
+    }
+  }
+
+  /// Caller: the callee's answer for the new connection.
+  Future<void> _onSwitchAnswer(
+    _Call call,
+    String device,
+    CallSignalPayload p,
+  ) async {
+    final s = call.pending;
+    final media = s?.media;
+    if (s == null ||
+        media == null ||
+        call.isIncoming ||
+        s.stage != _SwitchStage.working ||
+        !_switchPeer(call, device) ||
+        p.segment != s.segment ||
+        p.sdp == null) {
+      return;
+    }
+    try {
+      await media.acceptAnswer(p.sdp!);
+      s.remoteReady = true;
+      await _drainSwitch(call);
+      await _flushSwitch(call, s);
+    } on Object {
+      await _abortSwitch(call, s, CallSwitchOutcome.failed, restore: true);
+    }
+  }
+
+  void _wireSwitch(_Call call, _Switch s) {
+    final media = s.media!;
+    s.candidates = media.localCandidates.listen((c) {
+      if (call.finished) return;
+      if (!identical(call.pending, s)) {
+        _onLocalCandidate(call, c); // The switch is done: this is the call's.
+        return;
+      }
+      s.outgoing.add(c);
+      if (!s.remoteReady) return;
+      s.iceTimer ??= Timer(_config.iceBatchDelay, () {
+        s.iceTimer = null;
+        unawaited(_run(() => _flushSwitch(call, s)));
+      });
+    });
+    s.states = media.states.listen(
+      (st) => unawaited(
+        _run(() async {
+          if (call.finished) return;
+          if (!identical(call.pending, s)) {
+            await _onMediaState(call, st);
+            return;
+          }
+          if (st == CallMediaState.connected) {
+            await _completeSwitch(call, s);
+          } else if (st == CallMediaState.failed) {
+            await _abortSwitch(
+              call,
+              s,
+              CallSwitchOutcome.failed,
+              restore: !call.isIncoming,
+            );
+          }
+        }),
+      ),
+    );
+  }
+
+  Future<void> _flushSwitch(_Call call, _Switch s) async {
+    final device = call.peerDevice;
+    if (call.finished || device == null || !s.remoteReady) return;
+    while (s.outgoing.isNotEmpty) {
+      final batch = s.outgoing.take(CallSignalPayload.maxCandidates).toList();
+      s.outgoing.removeRange(0, batch.length);
+      await _send(
+        call.callId,
+        CallSignalPayload(
+          type: CallSignalType.ice,
+          callId: call.callId,
+          candidates: batch,
+          segment: s.segment,
+        ),
+        account: call.peer,
+        devices: {device},
+      );
+      if (call.finished) return;
+    }
+  }
+
+  void _onSwitchCandidates(
+    _Call call,
+    String device,
+    int segment,
+    List<IceCandidatePayload> candidates,
+  ) {
+    final s = call.pending;
+    if (s == null || segment != s.segment || !_switchPeer(call, device)) {
+      return;
+    }
+    for (final c in candidates) {
+      if (s.queuedRemote.length >= _config.maxQueuedCandidates) return;
+      s.queuedRemote.add(c);
+    }
+  }
+
+  Future<void> _drainSwitch(_Call call) async {
+    final s = call.pending;
+    final media = s?.media;
+    if (s == null || media == null || !s.remoteReady) return;
+    final queued = List.of(s.queuedRemote);
+    s.queuedRemote.clear();
+    for (final c in queued) {
+      if (call.finished) return;
+      try {
+        await media.addRemoteCandidate(c);
+      } on Object {
+        // A candidate the agent refuses is skipped; the others may connect.
+      }
+    }
+  }
+
+  /// The new connection is up: it becomes the call's, the old one is closed.
+  Future<void> _completeSwitch(_Call call, _Switch s) async {
+    final media = s.media;
+    if (media == null) return;
+    s.timer?.cancel();
+    s.iceTimer?.cancel();
+    await call.candidates?.cancel();
+    await call.mediaStates?.cancel();
+    await call.screenEnded?.cancel();
+    call.screenEnded = null;
+    final old = call.media;
+    call
+      ..media = media
+      ..candidates = s.candidates
+      ..mediaStates = s.states
+      ..segment = s.segment
+      ..video = s.video
+      ..cameraOn = s.video
+      ..screenSharing = false
+      ..peerScreenSharing = false
+      ..remoteReady = true
+      ..pending = null
+      ..lastSwitch = null;
+    call.outgoingCandidates
+      ..clear()
+      ..addAll(s.outgoing);
+    call.queuedRemote.clear();
+    call.queuedTotal = 0;
+    if (call.muted) {
+      try {
+        await media.setMuted(muted: true);
+      } on Object {
+        // Stays unmuted at worst; the button shows it.
+        call.muted = false;
+      }
+    }
+    _publish(call);
+    try {
+      await old?.close();
+    } on Object {
+      // The old platform session is gone either way.
+    }
+    await _flush(call);
+  }
+
+  /// Drops a switch that did not happen: the new connection is closed and the
+  /// call goes on as it was. [restore]: this side had already moved the call
+  /// time to the new pool, so it asks for the old kind again (the failed
+  /// attempt costs the started minute).
+  Future<void> _abortSwitch(
+    _Call call,
+    _Switch s,
+    CallSwitchOutcome outcome, {
+    bool notify = true,
+    bool restore = false,
+  }) async {
+    if (!identical(call.pending, s)) return;
+    await _closeSwitch(s);
+    call.pending = null;
+    call.lastSwitch = outcome;
+    final device = call.peerDevice;
+    if (notify && device != null && !call.finished) {
+      await _send(
+        call.callId,
+        CallSignalPayload(
+          type: CallSignalType.switchDecline,
+          callId: call.callId,
+        ),
+        account: call.peer,
+        devices: {device},
+      );
+    }
+    if (restore && !call.finished) {
+      try {
+        await _relay(call, CallRole.caller);
+      } on Object {
+        // The call goes on under the credentials it has.
+      }
+    }
+    _publish(call);
+  }
+
+  Future<void> _closeSwitch(_Switch s) async {
+    s.timer?.cancel();
+    s.iceTimer?.cancel();
+    await s.candidates?.cancel();
+    await s.states?.cancel();
+    try {
+      await s.media?.close();
+    } on Object {
+      // The platform session is gone either way.
+    }
+    s.media = null;
+  }
+
+  Future<void> _dropSwitch(_Call call) async {
+    final s = call.pending;
+    if (s == null) return;
+    call.pending = null;
+    await _closeSwitch(s);
+  }
+
   Future<void> _screenEndedBySystem(_Call call) => _run(() async {
     if (call.finished || !call.screenSharing) return;
     await call.screenEnded?.cancel();
@@ -714,7 +1175,23 @@ final class CallsService implements CallSignalSink {
       case CallSignalType.answer:
         await _onAnswer(call, device, p);
       case CallSignalType.ice:
-        await _onCandidates(call, device, p.candidates);
+        final segment = p.segment ?? 0;
+        if (segment == call.segment) {
+          await _onCandidates(call, device, p.candidates);
+        } else {
+          _onSwitchCandidates(call, device, segment, p.candidates);
+          await _drainSwitch(call);
+        }
+      case CallSignalType.switchAsk:
+        await _onSwitchAsk(call, device, p);
+      case CallSignalType.switchAccept:
+        await _onSwitchAccept(call, device);
+      case CallSignalType.switchDecline:
+        _onSwitchDecline(call, device);
+      case CallSignalType.switchOffer:
+        await _onSwitchOffer(call, device, p);
+      case CallSignalType.switchAnswer:
+        await _onSwitchAnswer(call, device, p);
       case CallSignalType.end:
         await _onEnd(call, device, p.reason ?? CallEndReason.unknown);
       case CallSignalType.media:
@@ -862,6 +1339,7 @@ final class CallsService implements CallSignalSink {
           type: CallSignalType.ice,
           callId: call.callId,
           candidates: batch,
+          segment: call.segment == 0 ? null : call.segment,
         ),
         account: call.peer,
         devices: {device},
@@ -918,6 +1396,7 @@ final class CallsService implements CallSignalSink {
     call.iceTimer?.cancel();
     call.warnTimer?.cancel();
     call.endTimer?.cancel();
+    await _dropSwitch(call);
     await call.candidates?.cancel();
     await call.mediaStates?.cancel();
     await call.screenEnded?.cancel();
@@ -1124,14 +1603,22 @@ final class CallsService implements CallSignalSink {
   /// warning and cut-off timers: the relay stops carrying it when its call
   /// time ends, so the call ends there too, with a warning first. Only a
   /// caller with no call time left throws ([CallFailure.noCallTime]).
-  Future<List<IceServer>> _relay(_Call call, CallRole role) async {
+  Future<List<IceServer>> _relay(
+    _Call call,
+    CallRole role, {
+    bool? video,
+  }) async {
     try {
       final turn = await _signaling.turnCredentials(
         callId: call.callId,
         role: role,
-        video: call.video,
+        video: video ?? call.video,
       );
       if (turn == null) return const [];
+      call.warnTimer?.cancel();
+      call.endTimer?.cancel();
+      call.endsAt = null;
+      call.endingSoon = false;
       if (turn.metered) _meter(call, turn.expiresAt);
       return [
         IceServer(
@@ -1200,7 +1687,7 @@ final class _Call {
   final String callId;
   final String peer;
   final CallDirection direction;
-  final bool video;
+  bool video;
   final DateTime startedAt;
 
   CallPhase phase;
@@ -1244,6 +1731,12 @@ final class _Call {
   Timer? warnTimer;
   Timer? endTimer;
 
+  /// The media connection the call is on: 0 at the start, one more for each
+  /// voice/video switch. A switch in progress is [pending].
+  int segment = 0;
+  _Switch? pending;
+  CallSwitchOutcome? lastSwitch;
+
   /// Local candidates not sent yet.
   final List<IceCandidatePayload> outgoingCandidates = [];
 
@@ -1273,6 +1766,14 @@ final class _Call {
     peerScreenSharing: peerScreenSharing,
     endsAt: endsAt,
     endingSoon: endingSoon,
+    switchStage: switch (pending?.stage) {
+      null => CallSwitchStage.none,
+      _SwitchStage.asking => CallSwitchStage.asking,
+      _SwitchStage.asked => CallSwitchStage.asked,
+      _ => CallSwitchStage.working,
+    },
+    switchToVideo: pending?.video ?? false,
+    lastSwitch: lastSwitch,
   );
 
   /// The `call_log` direction and state for how this call ended.
@@ -1296,4 +1797,24 @@ final class _Call {
       CallEnd.glare => (base, 'cancelled'),
     };
   }
+}
+
+enum _SwitchStage { asking, asked, accepted, working }
+
+/// A voice/video switch in progress on one call (ADR-036): the new media
+/// connection is made beside the old one and replaces it once it connects.
+final class _Switch {
+  _Switch({required this.video, required this.stage});
+
+  final bool video;
+  _SwitchStage stage;
+  int segment = 0;
+  CallMediaSession? media;
+  StreamSubscription<IceCandidatePayload>? candidates;
+  StreamSubscription<CallMediaState>? states;
+  Timer? timer;
+  Timer? iceTimer;
+  bool remoteReady = false;
+  final List<IceCandidatePayload> outgoing = [];
+  final List<IceCandidatePayload> queuedRemote = [];
 }

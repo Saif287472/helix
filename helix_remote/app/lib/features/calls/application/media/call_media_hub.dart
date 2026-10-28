@@ -79,6 +79,12 @@ final class CallMediaHub {
       StreamController<CallMediaInfo?>.broadcast();
   Future<void> Function()? _switchCamera;
 
+  /// The one-to-one media session whose pictures and state the hub shows. A
+  /// voice/video switch makes a second session beside the first; the newest
+  /// owns the hub, and a session that closes while another owns it leaves the
+  /// hub alone.
+  Object? mediaOwner;
+
   /// Why the last media setup failed, or null.
   CallMediaProblem? lastProblem;
 

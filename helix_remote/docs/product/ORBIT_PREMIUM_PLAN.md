@@ -145,7 +145,7 @@ rows; account export gets a `billing` section (plan, dates, request status).
 
 ## 5. Call time (phase 3, built: ADR-036)
 
-Built as designed below, with these as-built notes: the daily amounts are code constants (`CallTimeLimits`), not console settings; the cut-off is the credential's expiry, enforced by coturn's `stale-nonce=30` and mirrored by the apps' own timers; credentials of unmetered calls last 8 hours; a voice call goes to the voice relay only when `HELIX_TURN_VOICE_URLS` is set; a call that turns from voice to video mid-call would stay on the capped relay; the console has no call-time screen. Not yet tried on real phones with a real coturn.
+Built as designed below, with these as-built notes: the daily amounts are code constants (`CallTimeLimits`), not console settings; the cut-off is the credential's expiry, enforced by coturn's `stale-nonce=30` and mirrored by the apps' own timers; credentials of unmetered calls last 8 hours; a voice call goes to the voice relay only when `HELIX_TURN_VOICE_URLS` is set; a call can switch between voice and video mid-call (ADR-036: either person asks, video needs a yes, each part is charged to its own pool; built on a second media connection, untested on phones); the console has no call-time screen. Not yet tried on real phones with a real coturn.
 
 Rules decided:
 - Free gets a **voice pool** and a **video pool**, separate. Screen sharing counts as video.

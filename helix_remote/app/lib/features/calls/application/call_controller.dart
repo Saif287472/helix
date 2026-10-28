@@ -71,7 +71,13 @@ final callScreenStateProvider = Provider<CallScreenState?>((ref) {
     audio: audio,
     notice: notice != null && notice.$1 == call.callId
         ? notice.$2
-        : (call.endingSoon ? CallCopy.callTimeEnding : null),
+        : (call.switchStage == CallSwitchStage.asking ||
+                  call.switchStage == CallSwitchStage.working
+              ? CallCopy.switching(
+                  call.switchStage,
+                  toVideo: call.switchToVideo,
+                )
+              : (call.endingSoon ? CallCopy.callTimeEnding : null)),
     busy: busy == call.callId,
   );
 });
@@ -196,6 +202,24 @@ final class CallActions {
     final call = _state;
     if (call == null || !call.video || !call.cameraOn) return;
     await _ref.read(callMediaHubProvider).switchCamera();
+  }
+
+  /// Asks to switch the live call to video, or back to voice.
+  Future<void> switchMedia({required bool video}) async {
+    final call = _state;
+    if (call == null || !call.canSwitch || call.video == video) return;
+    await _guard(call, (port) => port.switchMedia(video: video), busy: false);
+  }
+
+  /// Answers the other side's ask for video.
+  Future<void> answerSwitch({required bool accept}) async {
+    final call = _state;
+    if (call == null || call.switchStage != CallSwitchStage.asked) return;
+    await _guard(
+      call,
+      (port) => port.answerSwitch(accept: accept),
+      busy: false,
+    );
   }
 
   Future<void> selectRoute(CallAudioRoute route) =>

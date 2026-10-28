@@ -22,6 +22,33 @@ enum CallPhase {
   ended,
 }
 
+/// Where a voice/video switch of the live call stands (ADR-036).
+enum CallSwitchStage {
+  /// No switch.
+  none,
+
+  /// This side asked and waits for the answer.
+  asking,
+
+  /// The other side asked, and for video this side must say yes or no.
+  asked,
+
+  /// Agreed: the new media connection is being made.
+  working,
+}
+
+/// Why the last switch did not happen.
+enum CallSwitchOutcome {
+  /// The other person said no (or did not answer in time).
+  declined,
+
+  /// The caller has no minutes left for the other kind of call.
+  noCallTime,
+
+  /// The new connection could not be made; the call goes on as it was.
+  failed,
+}
+
 /// How a call ended, from this device's point of view.
 enum CallEnd {
   /// This user hung up an answered call.
@@ -87,6 +114,9 @@ final class CallSnapshot {
     this.peerScreenSharing = false,
     this.endsAt,
     this.endingSoon = false,
+    this.switchStage = CallSwitchStage.none,
+    this.switchToVideo = false,
+    this.lastSwitch,
   });
 
   final String callId;
@@ -121,6 +151,15 @@ final class CallSnapshot {
 
   /// [endsAt] is near: show the warning.
   final bool endingSoon;
+
+  /// A voice/video switch in progress, and the kind it is to ([switchToVideo]
+  /// true: to video, false: back to voice).
+  final CallSwitchStage switchStage;
+  final bool switchToVideo;
+
+  /// Why the last switch did not happen; null until one fails, and cleared by
+  /// the next.
+  final CallSwitchOutcome? lastSwitch;
 
   bool get isIncoming => direction == CallDirection.incoming;
 

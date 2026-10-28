@@ -37,6 +37,12 @@ abstract interface class CallsPort {
   /// false when it could not (declined, or no live video call).
   Future<bool> setScreenSharing({required bool enabled});
 
+  /// Asks to switch the live call to video, or back to voice (ADR-036).
+  Future<void> switchMedia({required bool video});
+
+  /// Answers the other side's ask to switch the call.
+  Future<void> answerSwitch({required bool accept});
+
   /// Opens the offers that waited for this device on the server and rings the
   /// newest. Run after a call push woke the app.
   Future<int> fetchPending();
@@ -71,6 +77,14 @@ final class EngineCallsPort implements CallsPort {
   @override
   Future<CallSnapshot> startCall(String peer, {required bool video}) =>
       _calls.startCall(peer, video: video);
+
+  @override
+  Future<void> switchMedia({required bool video}) =>
+      _calls.switchMedia(video: video);
+
+  @override
+  Future<void> answerSwitch({required bool accept}) =>
+      _calls.answerSwitch(accept: accept);
 
   @override
   Future<void> accept() => _calls.accept();

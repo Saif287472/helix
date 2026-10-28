@@ -631,6 +631,18 @@ class FakeCallsPort implements CallsPort {
     _maybeFail();
   }
 
+  @override
+  Future<void> switchMedia({required bool video}) async {
+    calls.add('switch:$video');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> answerSwitch({required bool accept}) async {
+    calls.add('answerSwitch:$accept');
+    _maybeFail();
+  }
+
   /// What the next screen share does: true goes through, false is refused.
   bool screenShareWorks = true;
 
@@ -705,6 +717,9 @@ CallSnapshot snapshot({
   bool screenSharing = false,
   bool peerScreenSharing = false,
   bool endingSoon = false,
+  CallSwitchStage switchStage = CallSwitchStage.none,
+  bool switchToVideo = false,
+  CallSwitchOutcome? lastSwitch,
 }) => CallSnapshot(
   callId: id,
   peer: peer,
@@ -720,4 +735,7 @@ CallSnapshot snapshot({
   screenSharing: screenSharing,
   peerScreenSharing: peerScreenSharing,
   endingSoon: endingSoon,
+  switchStage: switchStage,
+  switchToVideo: switchToVideo,
+  lastSwitch: lastSwitch,
 );

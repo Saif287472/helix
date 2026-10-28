@@ -877,6 +877,147 @@ void main() {
     });
   });
 
+  group('switching between voice and video', () {
+    const fast = CallConfig(
+      ringTimeout: Duration(seconds: 30),
+      connectTimeout: Duration(milliseconds: 600),
+      iceBatchDelay: Duration.zero,
+      signalTimeout: Duration(seconds: 2),
+    );
+
+    Future<(CallDevice, CallDevice)> live() async {
+      final alice = await net.add('alice', config: fast);
+      final bob = await net.add('bob', config: fast);
+      alice.startWatching();
+      bob.startWatching();
+      await connect(alice, bob);
+      return (alice, bob);
+    }
+
+    test(
+      'the caller asks, the callee says yes, both end up on video',
+      () async {
+        final (alice, bob) = await live();
+        expect(alice.current!.video, isFalse);
+        await alice.service.switchMedia(video: true);
+        expect(alice.current!.switchStage, CallSwitchStage.asking);
+        await bob.until(
+          () => bob.current?.switchStage == CallSwitchStage.asked,
+        );
+        expect(bob.current!.switchToVideo, isTrue);
+
+        await bob.service.answerSwitch(accept: true);
+        await alice.until(() => alice.current?.video == true);
+        await bob.until(() => bob.current?.video == true);
+        expect(alice.current!.switchStage, CallSwitchStage.none);
+        expect(bob.current!.switchStage, CallSwitchStage.none);
+        expect(alice.current!.cameraOn, isTrue);
+        // The first session is closed and a second, with video, took over.
+        expect(alice.media!.sessions, hasLength(2));
+        expect(alice.media!.sessions.first.closed, isTrue);
+        expect(alice.media!.last.config.video, isTrue);
+        expect(bob.media!.last.config.video, isTrue);
+        expect(alice.turnRequests.last.$1, alice.turnRequests.first.$1);
+        expect(alice.turnRequests.last.$3, isTrue);
+        expect(bob.turnRequests.last.$2, CallRole.callee);
+        expect(bob.turnRequests.last.$3, isTrue);
+      },
+    );
+
+    test('the callee asks and the caller says yes', () async {
+      final (alice, bob) = await live();
+      await bob.service.switchMedia(video: true);
+      await alice.until(
+        () => alice.current?.switchStage == CallSwitchStage.asked,
+      );
+      await alice.service.answerSwitch(accept: true);
+      await alice.until(() => alice.current?.video == true);
+      await bob.until(() => bob.current?.video == true);
+      // The caller made the new connection, so the caller asked for the relay.
+      expect(alice.turnRequests.last.$2, CallRole.caller);
+      expect(alice.turnRequests.last.$3, isTrue);
+    });
+
+    test('a no leaves the call as it was and says so', () async {
+      final (alice, bob) = await live();
+      await alice.service.switchMedia(video: true);
+      await bob.until(() => bob.current?.switchStage == CallSwitchStage.asked);
+      await bob.service.answerSwitch(accept: false);
+      await alice.until(
+        () => alice.current?.lastSwitch == CallSwitchOutcome.declined,
+      );
+      expect(alice.current!.video, isFalse);
+      expect(alice.current!.switchStage, CallSwitchStage.none);
+      expect(alice.media!.sessions, hasLength(1));
+      expect(alice.media!.last.closed, isFalse);
+    });
+
+    test(
+      'a caller with no video minutes is refused and the call goes on',
+      () async {
+        final (alice, bob) = await live();
+        alice.noCallTime = true;
+        await alice.service.switchMedia(video: true);
+        await bob.until(
+          () => bob.current?.switchStage == CallSwitchStage.asked,
+        );
+        await bob.service.answerSwitch(accept: true);
+        await alice.until(
+          () => alice.current?.lastSwitch == CallSwitchOutcome.noCallTime,
+        );
+        await bob.until(
+          () => bob.current?.lastSwitch == CallSwitchOutcome.declined,
+        );
+        expect(alice.current!.video, isFalse);
+        expect(alice.current!.phase, CallPhase.active);
+        expect(bob.current!.phase, CallPhase.active);
+      },
+    );
+
+    test('going back to voice needs no yes', () async {
+      final alice = await net.add('alice', config: fast);
+      final bob = await net.add('bob', config: fast);
+      alice.startWatching();
+      bob.startWatching();
+      final call = await alice.service.startCall(bob.account, video: true);
+      await bob.until(() => bob.current?.phase == CallPhase.ringing);
+      await bob.service.accept();
+      await alice.untilPhase(CallPhase.active);
+      await bob.untilPhase(CallPhase.active);
+      expect(call.video, isTrue);
+
+      await bob.service.switchMedia(video: false);
+      await alice.until(() => alice.current?.video == false);
+      await bob.until(() => bob.current?.video == false);
+      expect(alice.current!.cameraOn, isFalse);
+      expect(alice.media!.last.config.video, isFalse);
+    });
+
+    test('a new connection that never comes up is dropped', () async {
+      final (alice, bob) = await live();
+      alice.media!.autoConnect = false;
+      bob.media!.autoConnect = false;
+      await alice.service.switchMedia(video: true);
+      await bob.until(() => bob.current?.switchStage == CallSwitchStage.asked);
+      await bob.service.answerSwitch(accept: true);
+      await alice.until(
+        () => alice.current?.lastSwitch == CallSwitchOutcome.failed,
+      );
+      expect(alice.current!.video, isFalse);
+      expect(alice.current!.phase, CallPhase.active);
+      expect(alice.media!.sessions.first.closed, isFalse);
+      expect(alice.media!.last.closed, isTrue);
+    });
+
+    test('only a live call can switch, and only to the other kind', () async {
+      final (alice, _) = await live();
+      await alice.service.switchMedia(video: false);
+      expect(alice.current!.switchStage, CallSwitchStage.none);
+      await alice.service.answerSwitch(accept: true);
+      expect(alice.current!.switchStage, CallSwitchStage.none);
+    });
+  });
+
   group('the call log on other devices', () {
     Future<CallLogRow?> mirror(
       CallDevice d,

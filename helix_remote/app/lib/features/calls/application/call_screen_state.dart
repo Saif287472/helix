@@ -59,6 +59,9 @@ final class CallScreenState {
     this.remote,
     this.notice,
     this.busy = false,
+    this.switchStage = CallSwitchStage.none,
+    this.switchToVideo = false,
+    this.lastSwitch,
   });
 
   final String callId;
@@ -110,6 +113,19 @@ final class CallScreenState {
   /// An answer or hang-up is in flight: its button waits.
   final bool busy;
 
+  /// A voice/video switch (ADR-036): where it stands, which way, and why the
+  /// last one did not happen.
+  final CallSwitchStage switchStage;
+  final bool switchToVideo;
+  final CallSwitchOutcome? lastSwitch;
+
+  /// The other side asked for video and waits for this side's answer.
+  bool get switchAsked => switchStage == CallSwitchStage.asked;
+
+  /// The call can be switched now: live, one-to-one, nothing under way.
+  bool get canSwitch =>
+      stage == CallStage.active && switchStage == CallSwitchStage.none;
+
   bool get isLive => stage != CallStage.ended;
 
   /// Busy or failed: the reason is tinted as a problem.
@@ -129,6 +145,9 @@ final class CallScreenState {
       stage == CallStage.dialing;
 
   CallScreenState copyWith({String? notice, bool? busy}) => CallScreenState(
+    switchStage: switchStage,
+    switchToVideo: switchToVideo,
+    lastSwitch: lastSwitch,
     callId: callId,
     peer: peer,
     title: title,
@@ -212,6 +231,9 @@ final class CallScreenState {
       remote: media?.remote,
       notice: notice,
       busy: busy,
+      switchStage: call.switchStage,
+      switchToVideo: call.switchToVideo,
+      lastSwitch: call.lastSwitch,
     );
   }
 
@@ -237,7 +259,10 @@ final class CallScreenState {
       other.local == local &&
       other.remote == remote &&
       other.notice == notice &&
-      other.busy == busy;
+      other.busy == busy &&
+      other.switchStage == switchStage &&
+      other.switchToVideo == switchToVideo &&
+      other.lastSwitch == lastSwitch;
 
   @override
   int get hashCode => Object.hash(
@@ -251,5 +276,8 @@ final class CallScreenState {
     peerScreenSharing,
     notice,
     busy,
+    switchStage,
+    switchToVideo,
+    lastSwitch,
   );
 }

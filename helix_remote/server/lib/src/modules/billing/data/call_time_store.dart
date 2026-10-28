@@ -316,6 +316,15 @@ final class CallTimeStore {
     {'c': callId, 'r': reservationId, 'a': callerAccount, 'now': now},
   );
 
+  /// Points a call at another reservation (a one-to-one call that changed
+  /// between voice and video).
+  Future<void> remapCall(Tx tx, String callId, String reservationId) =>
+      tx.execute(
+        'UPDATE $s.call_reservation_calls SET reservation_id = @r:uuid '
+        'WHERE call_id = @c:text',
+        {'c': callId, 'r': reservationId},
+      );
+
   Future<void> markAnswered(Tx tx, String id, DateTime now) => tx.execute(
     'UPDATE $s.call_reservations SET answered_at = coalesce(answered_at, @now:timestamptz) '
     'WHERE id = @id:uuid',

@@ -69,6 +69,7 @@ class CallModel {
     this.screenSharing = false,
     this.peerScreenSharing = false,
     this.canShareScreen = false,
+    this.canSwitch = false,
   });
 
   final String callId;
@@ -115,6 +116,10 @@ class CallModel {
   /// The phone can share its screen (the Share button shows).
   final bool canShareScreen;
 
+  /// A live one-to-one call that may switch between voice and video now
+  /// (the voice call's Video button and the video call's Voice button work).
+  final bool canSwitch;
+
   bool get _live =>
       stage == CallStage.dialing ||
       stage == CallStage.connecting ||
@@ -133,6 +138,8 @@ class CallActions {
     this.setScreenSharing,
     this.selectAudioRoute,
     this.dismissNotice,
+    this.switchToVideo,
+    this.switchToVoice,
   });
 
   final VoidCallback? answer;
@@ -147,6 +154,10 @@ class CallActions {
   final ValueChanged<bool>? setScreenSharing;
   final ValueChanged<CallAudioRoute>? selectAudioRoute;
   final VoidCallback? dismissNotice;
+
+  /// Asks to turn the voice call into a video call, or back.
+  final VoidCallback? switchToVideo;
+  final VoidCallback? switchToVoice;
 }
 
 /// A picture from the platform: the other person's video or your camera.
@@ -683,13 +694,21 @@ class _CallScreenState extends State<CallScreen>
     );
     final controls = m.video
         ? [
-            b(
-              OrbitIcons.cameraRotate,
-              'Flip',
-              'Flip camera',
-              enabled: m.cameraOn,
-              onPressed: a.flipCamera,
-            ),
+            if (!m.cameraOn && m.canSwitch && a.switchToVoice != null)
+              b(
+                OrbitIcons.phone,
+                'Voice',
+                'Switch to a voice call',
+                onPressed: a.switchToVoice,
+              )
+            else
+              b(
+                OrbitIcons.cameraRotate,
+                'Flip',
+                'Flip camera',
+                enabled: m.cameraOn,
+                onPressed: a.flipCamera,
+              ),
             b(
               m.cameraOn ? OrbitIcons.videoCamera : OrbitIcons.videoCameraSlash,
               'Video',
@@ -717,12 +736,20 @@ class _CallScreenState extends State<CallScreen>
           ]
         : [
             ?speaker,
-            b(
-              OrbitIcons.videoCameraSlash,
-              'Video',
-              'Video is not available on a voice call',
-              enabled: false,
-            ),
+            if (m.canSwitch && a.switchToVideo != null)
+              b(
+                OrbitIcons.videoCamera,
+                'Video',
+                'Switch to a video call',
+                onPressed: a.switchToVideo,
+              )
+            else
+              b(
+                OrbitIcons.videoCameraSlash,
+                'Video',
+                'Video is not available on a voice call',
+                enabled: false,
+              ),
             mute,
           ];
     return CustomPaint(

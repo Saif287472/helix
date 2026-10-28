@@ -597,6 +597,11 @@ final class GroupCallsService {
       case CallSignalType.ringing ||
           CallSignalType.media ||
           CallSignalType.offer ||
+          CallSignalType.switchAsk ||
+          CallSignalType.switchAccept ||
+          CallSignalType.switchDecline ||
+          CallSignalType.switchOffer ||
+          CallSignalType.switchAnswer ||
           CallSignalType.unknown:
     }
   }

@@ -295,6 +295,26 @@ enum CallSignalType implements WireEnum {
   /// says whether it is a shared screen rather than the camera. Peers that do
   /// not know it decode it as [unknown] and ignore it.
   media('media'),
+
+  /// Mid-call, between voice and video (ADR-036): one side asks the other to
+  /// change the call to [CallSignalPayload.media]. Live only; a peer that does
+  /// not know it ignores it, and the ask times out.
+  switchAsk('switch_ask'),
+
+  /// The callee agrees to a switch the caller asked for. The caller then
+  /// makes the new media connection.
+  switchAccept('switch_accept'),
+
+  /// The other side declines a switch, or the caller could not make it
+  /// (no call time left).
+  switchDecline('switch_decline'),
+
+  /// The caller's session description for the new media connection of a
+  /// switch ([CallSignalPayload.segment]).
+  switchOffer('switch_offer'),
+
+  /// The callee's answer to [switchOffer].
+  switchAnswer('switch_answer'),
   unknown('unknown');
 
   const CallSignalType(this.wire);
@@ -428,6 +448,7 @@ final class CallSignalPayload {
     this.reason,
     this.screen,
     this.room,
+    this.segment,
     this.version = currentVersion,
   });
 
@@ -464,6 +485,11 @@ final class CallSignalPayload {
   /// not know it ring a plain call.
   final CallRoom? room;
 
+  /// Which media connection of the call a `switch_offer`, `switch_answer` or
+  /// `ice` belongs to: 0 (omitted) is the one the call started with, and each
+  /// switch makes the next number.
+  final int? segment;
+
   JsonMap toJson() => compact({
     'v': version,
     'type': type.wire,
@@ -476,6 +502,7 @@ final class CallSignalPayload {
     'reason': reason?.wire,
     'screen': screen,
     'room': room?.toJson(),
+    'segment': segment,
   });
 
   Uint8List encode() => Uint8List.fromList(utf8.encode(jsonEncode(toJson())));
@@ -513,6 +540,7 @@ final class CallSignalPayload {
       ),
       screen: json.has('screen') ? json.boolean('screen') : null,
       room: json.has('room') ? CallRoom.fromJson(json.object('room')) : null,
+      segment: json.has('segment') ? json.integer('segment') : null,
     );
   }
 

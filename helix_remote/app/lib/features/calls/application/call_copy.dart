@@ -80,6 +80,32 @@ abstract final class CallCopy {
       "today's minutes in You > Orbit Premium, or get Premium for calls "
       'without limits.';
 
+  /// The line while a voice/video switch is under way.
+  static String switching(CallSwitchStage stage, {required bool toVideo}) =>
+      switch (stage) {
+        CallSwitchStage.asking =>
+          toVideo
+              ? 'Waiting for them to agree to video…'
+              : 'Switching to voice…',
+        CallSwitchStage.working =>
+          toVideo ? 'Switching to video…' : 'Switching to voice…',
+        _ => '',
+      };
+
+  /// Why a switch did not happen.
+  static String switchFailed(CallSwitchOutcome outcome) => switch (outcome) {
+    CallSwitchOutcome.declined => 'They did not switch the call.',
+    CallSwitchOutcome.noCallTime =>
+      'No free video minutes left, so the call stays as it is.',
+    CallSwitchOutcome.failed =>
+      'The call could not be switched. It goes on as before.',
+  };
+
+  /// The question when the other person asks for video.
+  static const switchAskTitle = 'Switch to video?';
+  static String switchAskText(String name) =>
+      '$name would like to turn this call into a video call.';
+
   /// The warning on the call screen shortly before a Free caller's time ends.
   static const callTimeEnding =
       'Call time is almost up. This call will end in about two minutes.';

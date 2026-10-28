@@ -65,12 +65,38 @@ TURN allocation is valid.
    kept 7 days after they end). No content, no media. The records are in the
    account export and are deleted with the account.
 
+## Switching between voice and video (decided 2026-10-28)
+
+A live one-to-one call can change kind, either way, with the pools kept apart:
+
+- **A call is a list of segments**, each in one pool. A switch settles the
+  segment so far (each started minute, in the pool it came from, the unused
+  minutes go back) and reserves the rest of the call from the other pool, so a
+  caller who switches at 3:10 pays 4 voice minutes and then video minutes.
+  Rounding is per segment: the minute of the switch can be charged in both
+  pools, never more.
+- **The same endpoint does it.** The caller asks `POST /v1/calls/turn` for the
+  other `media`; if that pool is empty nothing changes and the call goes on.
+  The callee asks with the new media too and is given the caller's current
+  reservation.
+- **Who asks:** either person. Video needs the other person's yes; going back
+  to voice does not. The caller makes the new connection, because the caller's
+  call time pays.
+- **The media is a new connection**, made beside the old one (new relay
+  credentials, new offer and answer, `segment` numbers the connections) and
+  swapped in when it connects; the old one is then closed. A new connection
+  that does not come up in time is dropped and the call stays as it was (a
+  caller who had already moved the reservation moves it back, losing the
+  started minute).
+- **Not for group calls**, which keep one kind for their whole life.
+
 ## Known limits (stated, not hidden)
 
 - The cut-off is coarse: up to about `stale-nonce` seconds late, plus the
   charge is rounded up to started minutes.
-- A call that starts as voice and turns into video mid-call stays on the voice
-  relay and is starved; the app does not support the switch today.
+- The switch opens a second microphone (and camera) session while the first is
+  still open, then closes the first. Whether every phone allows two at once is
+  untested; if one does not, the switch fails and the call goes on as it was.
 - With no voice relay configured, voice calls still spend voice minutes but are
   not bandwidth-capped.
 - Group-call metering assumes the starter's device asks for credentials first;

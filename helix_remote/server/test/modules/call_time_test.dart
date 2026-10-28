@@ -492,6 +492,103 @@ void main() {
       );
     });
 
+    group('switching between voice and video', () {
+      Future<(int, int)> left(TestDevice d) async {
+        final t = await time(d);
+        return (
+          t.pool(CallPool.voice)!.minutes,
+          t.pool(CallPool.video)!.minutes,
+        );
+      }
+
+      Future<String> liveVoiceCall() async {
+        final id = newCall();
+        await turn(alice, id);
+        await signal(id, CallSignalKind.offer, alice, bob);
+        await turn(bob, id, role: CallRole.callee);
+        return id;
+      }
+
+      test('settles the voice used and reserves video for the rest', () async {
+        await plansOn();
+        await claim(alice);
+        final id = await liveVoiceCall();
+        clock.advance(const Duration(minutes: 3, seconds: 10));
+
+        final c = creds(await turn(alice, id, media: CallPool.video));
+        expect(c.metered, isTrue);
+        expect(c.urls, ['turn:main.example:3478']);
+        expect(c.credential, _hmac('main-secret', c.username));
+        expect(c.expiresAt, clock.now().add(const Duration(minutes: 30)));
+        // Four started voice minutes are gone; the rest of voice is back.
+        expect(await left(alice), (96, 0));
+
+        // The other person asks for the same media and gets the new relay.
+        final answer = creds(
+          await turn(bob, id, role: CallRole.callee, media: CallPool.video),
+        );
+        expect(answer.urls, c.urls);
+        expect(answer.expiresAt, c.expiresAt);
+
+        // Ending the call settles the video part.
+        clock.advance(const Duration(minutes: 2));
+        await signal(id, CallSignalKind.end, bob, alice);
+        expect(await left(alice), (96, 28));
+      });
+
+      test(
+        'is refused when the other pool is empty, and nothing changes',
+        () async {
+          await plansOn();
+          await claim(alice);
+          // Spend all the video minutes on another call first.
+          final other = newCall();
+          await turn(alice, other, media: CallPool.video);
+          final id = await liveVoiceCall();
+
+          final r = await turn(alice, id, media: CallPool.video);
+          expect(r.status, 422);
+          expect(r.body, contains('video'));
+          // The voice call is still on the voice relay and keeps its time.
+          final again = creds(await turn(alice, id));
+          expect(again.urls, ['turn:voice.example:3479']);
+        },
+      );
+
+      test('can go back to voice, and the video used is only the started '
+          'minutes', () async {
+        await plansOn();
+        await claim(alice);
+        final id = newCall();
+        await turn(alice, id, media: CallPool.video);
+        await signal(id, CallSignalKind.offer, alice, bob);
+        await turn(bob, id, role: CallRole.callee, media: CallPool.video);
+        clock.advance(const Duration(minutes: 5));
+
+        final c = creds(await turn(alice, id));
+        expect(c.urls, ['turn:voice.example:3479']);
+        expect(await left(alice), (0, 25));
+        clock.advance(const Duration(minutes: 1));
+        await signal(id, CallSignalKind.end, alice, bob);
+        expect(await left(alice), (99, 25));
+      });
+
+      test('a Premium caller switches freely and nothing is recorded as '
+          'spent', () async {
+        await plansOn();
+        await h.api.call(
+          Routes.adminGrantPlan,
+          params: {'account': alice.accountId},
+          bearer: admin,
+          body: const GrantPlanRequest(months: 1).toJson(),
+        );
+        final id = await liveVoiceCall();
+        final c = creds(await turn(alice, id, media: CallPool.video));
+        expect(c.metered, isFalse);
+        expect(c.urls, ['turn:main.example:3478']);
+      });
+    });
+
     group('a group call', () {
       test('is paid once by whoever made the room, whoever joins', () async {
         await plansOn();

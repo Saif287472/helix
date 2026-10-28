@@ -98,7 +98,10 @@ final class WebRtcCallMediaSession implements CallMediaSession {
     _events = _engine.events.listen(_onEvent);
     // A link of a group call shows its pictures per person; a 1:1 call has
     // the one info.
-    if (peer == null) hub.publish(const CallMediaInfo());
+    if (peer == null) {
+      hub.mediaOwner = this;
+      hub.publish(const CallMediaInfo());
+    }
     hub.bindCameraSwitch(() => _engine.switchCamera(callId));
   }
 
@@ -129,6 +132,8 @@ final class WebRtcCallMediaSession implements CallMediaSession {
 
   void _onEvent(RemoteCallEngineEvent event) {
     if (_closed || event.callId != callId) return;
+    // A session a switch replaced has nothing more to show.
+    if (peer == null && hub.mediaOwner != this) return;
     switch (event) {
       case RemoteIceCandidateEvent():
         // An empty candidate marks the end of gathering; the engine's wire
@@ -232,9 +237,13 @@ final class WebRtcCallMediaSession implements CallMediaSession {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    hub.bindCameraSwitch(null);
+    final replaced = peer == null && hub.mediaOwner != this;
+    if (!replaced) hub.bindCameraSwitch(null);
     if (peer == null) {
-      hub.publish(null);
+      if (!replaced) {
+        hub.mediaOwner = null;
+        hub.publish(null);
+      }
     } else {
       hub.dropGroupPeer(peer!);
     }

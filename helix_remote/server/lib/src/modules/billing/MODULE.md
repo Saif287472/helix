@@ -114,6 +114,11 @@ ends with the caller's reservation; the legs of a group call share the starter's
 clock minute. `callEnded` (on the `end` signal) settles the reservation: used whole minutes are kept
 (per started minute, with a one-minute grace to the end), the rest go back to their claims.
 
+A one-to-one call can **switch** between voice and video (ADR-036): when the caller asks `grantCall` for the other
+`pool` on a call that already has a reservation, the old one is settled up to now (each started minute) and a new one
+is reserved from the other pool and the call is re-pointed at it; an empty pool throws `quota_exceeded` and the whole
+transaction rolls back, so the call keeps its reservation. Group calls never switch.
+
 Jobs: `billing.settle_calls`, every minute (reservations whose time ran out or that never saw an end, so
 nothing stays reserved for ever); `billing.purge_calls`, every 6 hours (claims and reservations 7 days after they
 expire or settle). Account deletion and the export cover the three tables.

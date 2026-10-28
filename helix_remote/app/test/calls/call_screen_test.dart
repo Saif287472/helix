@@ -208,6 +208,47 @@ void main() {
       );
     }
 
+    testWidgets('a voice call can ask to become a video call', (tester) async {
+      await live(tester);
+      await tester.tap(find.byTooltip('Switch to a video call'));
+      await tester.pump();
+      expect(port.calls, contains('switch:true'));
+    });
+
+    testWidgets('the other side asking for video is a question', (
+      tester,
+    ) async {
+      await live(tester);
+      await emit(
+        tester,
+        snapshot(
+          phase: CallPhase.active,
+          answeredAt: answered,
+          switchStage: CallSwitchStage.asked,
+          switchToVideo: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Switch to video?'), findsOneWidget);
+      await tester.tap(find.text('Switch to video'));
+      await tester.pumpAndSettle();
+      expect(port.calls, contains('answerSwitch:true'));
+    });
+
+    testWidgets('a switch that did not happen says so once', (tester) async {
+      await live(tester);
+      await emit(
+        tester,
+        snapshot(
+          phase: CallPhase.active,
+          answeredAt: answered,
+          lastSwitch: CallSwitchOutcome.noCallTime,
+        ),
+      );
+      await tester.pump();
+      expect(find.textContaining('No free video minutes'), findsOneWidget);
+    });
+
     testWidgets('warns shortly before the free call time runs out', (
       tester,
     ) async {
@@ -254,14 +295,29 @@ void main() {
       expect(find.byTooltip('Unmute microphone'), findsOneWidget);
     });
 
-    testWidgets('video is honestly unavailable on a voice call', (
+    testWidgets('a live voice call offers to switch to video', (tester) async {
+      await live(tester);
+      expect(find.byTooltip('Switch to a video call'), findsOneWidget);
+    });
+
+    testWidgets('video is honestly unavailable while a switch is under way', (
       tester,
     ) async {
-      await live(tester);
+      await open(tester);
+      await emit(
+        tester,
+        snapshot(
+          phase: CallPhase.active,
+          answeredAt: answered,
+          switchStage: CallSwitchStage.asking,
+          switchToVideo: true,
+        ),
+      );
       expect(
         find.byTooltip('Video is not available on a voice call'),
         findsOneWidget,
       );
+      expect(find.textContaining('Waiting for them'), findsOneWidget);
     });
 
     testWidgets('with two outputs the speaker control toggles', (tester) async {
