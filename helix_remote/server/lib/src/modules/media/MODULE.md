@@ -9,6 +9,13 @@ Bytes live in `ObjectStorage` under `<kind>/<id>`.
 | `persistent` (avatars, group pictures) | 5 MiB | 50 MiB | 100,000 | until deleted |
 | `backup` | 100 MiB | 1 GiB | 100,000 | 90 days, refreshed by each full backup |
 
+With plans on (ADR-035, `billing` module) the attachment and backup rows follow
+the account's plan, read at `createUpload`: Orbit Premium gets a 16 GiB attachment
+quota, files of 4x `HELIX_MAX_ATTACHMENT_BYTES`, attachments kept 90 days, and
+backup media of 400 MiB each and 4 GiB in all. An object keeps the retention it was
+created with, so a lapsed Premium deletes nothing early. With the flag off the
+table above is exact.
+
 The object cap (`maxObjectsPerKind`) is independent of bytes: the smallest
 legal object is one byte, so without it a 4 GiB quota can become millions of
 rows that a sweep then deletes one blob at a time (AUD-5-3). Both the bytes

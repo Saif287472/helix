@@ -1,4 +1,5 @@
 import 'package:helix_admin/src/features/common/feature_controller.dart';
+import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// The paged, filtered account list. The server answers with the last four
@@ -106,6 +107,24 @@ final class AccountDetailController extends FeatureController {
         await ctx.api.admin.revokeDevice(accountId, deviceId);
         _detail = await ctx.api.admin.account(accountId);
       });
+
+  /// Gives Orbit Premium time without a payment (ADR-035).
+  Future<String?> grantPlan(int months) =>
+      _act('plan', () => ctx.api.admin.grantPlan(accountId, months));
+
+  /// Ends Orbit Premium now. A problem when the account had none.
+  Future<String?> revokePlan() async {
+    var hadNone = false;
+    final problem = await _act('plan', () async {
+      try {
+        await ctx.api.admin.revokePlan(accountId);
+      } on ApiException catch (e) {
+        if (e.code != ErrorCode.notFound) rethrow;
+        hadNone = true;
+      }
+    });
+    return hadNone ? 'This account has no Premium to end.' : problem;
+  }
 
   /// A single-use recovery code. It is returned to the caller to show once;
   /// this controller does not keep it.

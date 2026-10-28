@@ -18,6 +18,7 @@ const flagLabels = {
   'crash_reporting_upload': 'Accept crash reports from apps',
   'minimal_analytics': 'Minimal analytics',
   'group_calls': 'Group calls',
+  'billing_enabled': 'Plans and payments (Orbit Premium)',
 };
 
 /// Configuration: the server as one page - who it is, how it is doing, the

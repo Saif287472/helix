@@ -1,4 +1,5 @@
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/kernel/entitlements.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/media/api.dart';
 import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
@@ -13,7 +14,7 @@ import 'package:shelf/shelf.dart';
 /// Encrypted media objects (CRYPTO_V2.md §12). Random ids, no link to the
 /// messages that use them, expiry instead of reference counting.
 final class MediaModule extends ModuleBase implements ProvidesAccountExport {
-  MediaModule(super.context, {required this.identity}) {
+  MediaModule(super.context, {required this.identity, this._entitlements}) {
     api = _MediaFacade(this);
     identity.onAccountDeleted(
       (tx, accountId) =>
@@ -34,16 +35,20 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   /// never otherwise looks at identity (ADR-026).
   final IdentityApi identity;
 
+  /// What each account's plan allows (ADR-035); null means the standard
+  /// limits.
+  final EntitlementSource? _entitlements;
+
   static const purgeJob = 'media.purge_account';
 
   /// A blob with no row is deleted by the weekly sweep once it is this old,
   /// so an upload whose row is being written is never touched.
   static const orphanGrace = Duration(days: 1);
   static const persistentMaxBytes = 5 * 1024 * 1024;
-  static const backupMaxBytes = 100 * 1024 * 1024;
-  static const attachmentQuota = 4 * 1024 * 1024 * 1024;
+  static const backupMaxBytes = Entitlements.standardBackupMaxBytes;
+  static const attachmentQuota = Entitlements.standardAttachmentQuota;
   static const persistentQuota = 50 * 1024 * 1024;
-  static const backupQuota = 1024 * 1024 * 1024;
+  static const backupQuota = Entitlements.standardBackupQuota;
 
   /// The byte quota does not bound row count: the smallest legal object is
   /// one byte, so 4 GiB could be millions of rows that every sweep then has
@@ -217,10 +222,16 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
 
   Future<Response> _create(HelixRequest q) async {
     final req = q.json(CreateUploadRequest.fromJson);
+    // The limits of the account's plan (ADR-035), read where they decide.
+    final plan =
+        await _entitlements?.forAccount(q.device.accountId) ??
+        Entitlements.standard(
+          maxAttachmentBytes: context.config.maxAttachmentBytes,
+        );
     final max = switch (req.kind) {
-      MediaKind.attachment => context.config.maxAttachmentBytes,
+      MediaKind.attachment => plan.maxAttachmentBytes,
       MediaKind.persistent => persistentMaxBytes,
-      MediaKind.backup => backupMaxBytes,
+      MediaKind.backup => plan.backupMaxBytes,
     };
     if (req.size <= 0 || req.size > max) {
       throw ApiError(ErrorCode.payloadTooLarge, details: {'max_bytes': max});
@@ -228,12 +239,14 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
     // The server-wide budget first: per-account quotas add up on one disk.
     await context.storage.check();
     final quota = switch (req.kind) {
-      MediaKind.attachment => attachmentQuota,
+      MediaKind.attachment => plan.attachmentQuotaBytes,
       MediaKind.persistent => persistentQuota,
-      MediaKind.backup => backupQuota,
+      MediaKind.backup => plan.backupQuotaBytes,
     };
     final id = Uuid.v7();
-    final keep = retention(req.kind);
+    final keep = req.kind == MediaKind.attachment
+        ? plan.attachmentRetention
+        : retention(req.kind);
     await context.db.tx((tx) async {
       // Reserve bytes and the row atomically. A read-then-insert let two
       // concurrent creates both see the old sum and both insert (AUD-5-4);

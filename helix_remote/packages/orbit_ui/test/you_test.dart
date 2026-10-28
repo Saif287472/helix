@@ -49,7 +49,7 @@ void main() {
     fixLabel: key == 'lock' ? 'Turn on' : 'Fix',
   );
 
-  YouModel you({required bool good}) => YouModel(
+  YouModel you({required bool good, String? premium}) => YouModel(
     name: 'Hasan',
     avatar: const HelixAvatarModel(name: 'Hasan'),
     helixName: 'hasan',
@@ -67,6 +67,7 @@ void main() {
       ),
     ],
     share: const ShareCodeModel(link: 'helix.agiletechbd.com/u/hasan'),
+    premiumLabel: premium,
   );
 
   testWidgets('the checkup shows only what needs attention', (tester) async {
@@ -128,6 +129,34 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Change password'));
     expect(opened, [YouTopic.privacy, YouTopic.password]);
+  });
+
+  testWidgets('the Orbit Premium row is drawn only when plans are on', (
+    tester,
+  ) async {
+    final opened = <YouTopic>[];
+    await show(
+      tester,
+      YouScreen(
+        model: you(good: true),
+        actions: YouActions(openTopic: opened.add),
+      ),
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
+    await tester.pump();
+    expect(find.text('Orbit Premium'), findsNothing);
+
+    await show(
+      tester,
+      YouScreen(
+        model: you(good: true, premium: 'Premium until 1 Dec 2026'),
+        actions: YouActions(openTopic: opened.add),
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('Orbit Premium'), 200);
+    expect(find.text('Premium until 1 Dec 2026'), findsOneWidget);
+    await tester.tap(find.text('Orbit Premium'));
+    expect(opened, [YouTopic.premium]);
   });
 
   testWidgets('the share sheet shows the link', (tester) async {

@@ -22,7 +22,8 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
   newest 10,000 undelivered envelopes; older ones go earlier (since 2026-10-09). With
   `HELIX_DEVICE_INACTIVE_DAYS` set, a device unused for that long is revoked and its mailbox purged
   (never an account's most recently used device).
-- Attachments: 30 days from upload (backup media 90 days, refreshed by each full backup; avatars and
+- Attachments: 30 days from upload, or 90 days when the account had Orbit Premium at upload (ADR-035; the
+  length is fixed at upload, so a plan that ends deletes nothing early) (backup media 90 days, refreshed by each full backup; avatars and
   group pictures until deleted). Objects have random ids and no link to a message, so there is no
   reference counting: deleting a message does not delete its object, and expiry does. The bytes go
   before the row: a file that cannot be deleted (held open by an antivirus scan) keeps its row and is
@@ -37,6 +38,9 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
   (15 minutes) are not stored.
 - Idempotency records 24 hours, send records 7 days, rate-limit buckets 1 hour after last use, call
   metrics 90 days, pending calls 120 seconds.
+- Payment requests (ADR-035): a request nobody answers becomes `expired` after 7 days; every decided request is
+  deleted one year after it was sent (`billing.expire_requests`, hourly). The subscription row, and any request,
+  go with the account.
 - Audit records (operator actions): one year, deleted daily (`admin.purge_audit`); the account ids in
   them outlive a deleted account by at most that year. Reports: kept while open, as the moderation
   record (they survive account deletion); deleted 180 days after the operator resolves or dismisses

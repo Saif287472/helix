@@ -16,6 +16,7 @@ export 'src/json.dart';
 export 'src/legal.dart';
 export 'src/modules/admin.dart';
 export 'src/modules/backup.dart';
+export 'src/modules/billing.dart';
 export 'src/modules/calls.dart';
 export 'src/modules/federation.dart';
 export 'src/modules/groups.dart';

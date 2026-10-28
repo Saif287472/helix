@@ -35,7 +35,7 @@ before rendering.
 
 - `server_name` (default `HELIX_SERVER_NAME`), `maintenance`,
   `federation_enabled`, and `flag.<name>` for each allow-listed flag in
-  `OpsApi.knownFlags` (`crash_reporting_upload`, `minimal_analytics`,
+  `OpsApi.knownFlags` (`crash_reporting_upload`, `minimal_analytics`, `billing_enabled`,
   `group_calls`; all off by default). Unknown flags cannot be set.
 - Cached per node for 30 seconds, and dropped on every node when a change
   is published on the `ops.settings` bus topic after commit, or when the bus

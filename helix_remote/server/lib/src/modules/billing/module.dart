@@ -1,0 +1,389 @@
+import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/kernel/entitlements.dart';
+import 'package:helix_remote_server/src/modules/billing/api.dart';
+import 'package:helix_remote_server/src/modules/billing/data/billing_store.dart';
+import 'package:helix_remote_server/src/modules/identity/api.dart';
+import 'package:helix_remote_server/src/modules/ops/api.dart';
+import 'package:helix_remote_server/src/platform/db/db.dart';
+import 'package:helix_remote_server/src/platform/db/migrations.dart';
+import 'package:helix_remote_server/src/platform/http/request.dart';
+import 'package:helix_remote_server/src/platform/http/routes.dart';
+import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
+import 'package:helix_remote_server/src/platform/module.dart';
+import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
+import 'package:shelf/shelf.dart';
+
+/// Plans and manual payments (ADR-035). Schema `billing`.
+///
+/// Everything is off until the operator sets the flag `billing_enabled`:
+/// then every account's [Entitlements] are Free's or Premium's, and before
+/// that they are the limits the server always had.
+final class BillingModule extends ModuleBase
+    implements ProvidesAccountExport, BillingApi {
+  BillingModule(super.context, {required this.ops, required this.identity})
+    : _store = BillingStore(context.schema('billing'));
+
+  final OpsApi ops;
+
+  /// Identity is built after billing (it asks billing for device limits), so
+  /// the facade is read when the server starts, not when this is made.
+  final IdentityApi Function() identity;
+
+  final BillingStore _store;
+
+  static const flagName = 'billing_enabled';
+
+  /// A pending request nobody answers expires after this long.
+  static const requestLifetime = Duration(
+    days: BillingLimits.requestLifetimeDays,
+  );
+  static const grace = Duration(days: BillingLimits.graceDays);
+
+  /// Decided requests are kept a year.
+  static const requestRetention = Duration(days: 365);
+
+  static final _submitLimit = RateLimitPolicy.per(
+    'billing.requests',
+    10,
+    const Duration(hours: 1),
+  );
+
+  // The prices and numbers a fresh server starts with (taka).
+  static const _defaultPrices = {1: 20, 6: 100, 12: 180};
+
+  @override
+  String get name => 'billing';
+
+  @override
+  List<Migration> get migrations => billingMigrations;
+
+  @override
+  List<PeriodicJob> get periodic => [
+    PeriodicJob('billing.expire_requests', const Duration(hours: 1), () async {
+      final now = context.clock.now();
+      await _store.expirePending(context.db, now.subtract(requestLifetime));
+      await _store.purgeDecided(context.db, now.subtract(requestRetention));
+    }),
+  ];
+
+  @override
+  Future<void> start() async {
+    identity().onAccountDeleted(
+      (tx, accountId) => _store.deleteAccount(tx, accountId),
+    );
+  }
+
+  @override
+  void routes(RouteRegistry r) {
+    r
+      ..add(name, Routes.billingPlan, _plan, allowSuspended: true)
+      ..add(name, Routes.submitPaymentRequest, _submit, rateLimit: _submitLimit)
+      ..add(name, Routes.paymentRequests, _requests);
+  }
+
+  BillingApi get api => this;
+
+  // ---------------------------------------------------------- entitlements
+
+  @override
+  Future<bool> enabled() => ops.flag(flagName);
+
+  @override
+  Future<Entitlements> forAccount(String accountId) async {
+    final base = context.config.maxAttachmentBytes;
+    if (!await enabled()) {
+      return Entitlements.standard(maxAttachmentBytes: base);
+    }
+    final end = await _store.periodEnd(context.db, accountId);
+    if (end != null && context.clock.now().isBefore(end.add(grace))) {
+      return Entitlements.premium(maxAttachmentBytes: base);
+    }
+    return Entitlements.free(maxAttachmentBytes: base);
+  }
+
+  // ------------------------------------------------------------- settings
+
+  @override
+  Future<BillingSettings> settings(SqlSession s) async {
+    final stored = await _store.settings(s);
+    int price(int months) =>
+        int.tryParse(stored['price_$months'] ?? '') ?? _defaultPrices[months]!;
+    return BillingSettings(
+      priceOneMonth: price(1),
+      priceSixMonths: price(6),
+      priceTwelveMonths: price(12),
+      bkashNumber: stored['bkash_number'],
+      nagadNumber: stored['nagad_number'],
+    );
+  }
+
+  @override
+  Future<void> setSettings(Tx tx, BillingSettings settings) async {
+    await _store.putSetting(tx, 'price_1', '${settings.priceOneMonth}');
+    await _store.putSetting(tx, 'price_6', '${settings.priceSixMonths}');
+    await _store.putSetting(tx, 'price_12', '${settings.priceTwelveMonths}');
+    await _store.putSetting(tx, 'bkash_number', settings.bkashNumber);
+    await _store.putSetting(tx, 'nagad_number', settings.nagadNumber);
+  }
+
+  // ----------------------------------------------------------- the plan page
+
+  @override
+  Future<BillingPlan> planFor(String accountId) async {
+    final base = context.config.maxAttachmentBytes;
+    final on = await enabled();
+    final entitlements = await forAccount(accountId);
+    final current = await settings(context.db);
+    final prices = [
+      for (final months in BillingLimits.durations)
+        PlanPrice(
+          months: months,
+          price: current.priceFor(months),
+          listPrice: months * current.priceOneMonth,
+        ),
+    ];
+    final targets = [
+      if (current.bkashNumber != null)
+        PaymentTarget(
+          method: PaymentMethod.bkash,
+          number: current.bkashNumber!,
+        ),
+      if (current.nagadNumber != null)
+        PaymentTarget(
+          method: PaymentMethod.nagad,
+          number: current.nagadNumber!,
+        ),
+    ];
+    final end = await _store.periodEnd(context.db, accountId);
+    final premium = entitlements.plan == PlanId.premium;
+    final now = context.clock.now();
+    return BillingPlan(
+      enabled: on,
+      plan: entitlements.plan,
+      periodEnd: premium ? end : null,
+      inGrace: premium && end != null && !now.isBefore(end),
+      limits: on
+          ? entitlements.toLimits()
+          : Entitlements.standard(maxAttachmentBytes: base).toLimits(),
+      premiumLimits: Entitlements.premium(maxAttachmentBytes: base).toLimits(),
+      prices: prices,
+      paymentTargets: on ? targets : const [],
+      openRequest: await _store.openRequest(context.db, accountId),
+      lastRequest: await _store.lastDecided(context.db, accountId),
+    );
+  }
+
+  Future<Response> _plan(HelixRequest q) async =>
+      jsonResponse((await planFor(q.device.accountId)).toJson());
+
+  // -------------------------------------------------------------- requests
+
+  @override
+  Future<PaymentRequestInfo> submitRequest(
+    String accountId,
+    SubmitPaymentRequest request,
+  ) async {
+    if (!await enabled()) {
+      throw const ApiError(
+        ErrorCode.unavailable,
+        message: 'Plans are not available yet.',
+      );
+    }
+    if (!BillingLimits.durations.contains(request.months)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'months'},
+      );
+    }
+    if (request.method == PaymentMethod.unknown) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'method'},
+      );
+    }
+    final trx = BillingLimits.normalizeTrxId(request.trxId);
+    if (trx == null) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        message: 'That does not look like a transaction ID.',
+        details: {'field': 'trx_id'},
+      );
+    }
+    final current = await settings(context.db);
+    final number = switch (request.method) {
+      PaymentMethod.bkash => current.bkashNumber,
+      PaymentMethod.nagad => current.nagadNumber,
+      PaymentMethod.unknown => null,
+    };
+    if (number == null) {
+      throw const ApiError(
+        ErrorCode.unavailable,
+        message: 'That way of paying is not available.',
+      );
+    }
+    try {
+      return await context.db.tx(
+        (tx) => _store.insertRequest(
+          tx,
+          id: Uuid.v7(),
+          accountId: accountId,
+          months: request.months,
+          amount: current.priceFor(request.months),
+          method: request.method,
+          trxId: trx,
+          now: context.clock.now(),
+        ),
+      );
+    } on DbConstraintViolation catch (e) {
+      if (e.kind != DbConstraintKind.unique) rethrow;
+      final open = (e.constraint ?? '').contains('open');
+      throw ApiError(
+        ErrorCode.conflict,
+        message: open
+            ? 'You already have a request waiting for approval.'
+            : 'That transaction ID was already used.',
+        details: {'reason': open ? 'request_open' : 'trx_id_used'},
+      );
+    }
+  }
+
+  Future<Response> _submit(HelixRequest q) async {
+    final created = await submitRequest(
+      q.device.accountId,
+      q.json(SubmitPaymentRequest.fromJson),
+    );
+    log.info('payment_request_submitted', {
+      'account_id': q.device.accountId,
+      'months': created.months,
+      'method': created.method.wire,
+    });
+    return jsonResponse(created.toJson(), status: 201);
+  }
+
+  @override
+  Future<Page<PaymentRequestInfo>> requestsOf(
+    String accountId, {
+    required PageRequest page,
+  }) => _store.requestsOf(context.db, accountId, page: page);
+
+  Future<Response> _requests(HelixRequest q) async {
+    final page = await requestsOf(
+      q.device.accountId,
+      page: PageRequest.fromQuery(q.raw.url.queryParameters),
+    );
+    return jsonResponse(page.toJson((r) => r.toJson()));
+  }
+
+  // ------------------------------------------------------------------ admin
+
+  @override
+  Future<Page<PaymentRequestEntry>> requestsByStatus(
+    SqlSession s, {
+    required PaymentRequestStatus status,
+    required PageRequest page,
+  }) async {
+    final rows = await _store.requestsByStatus(s, status: status, page: page);
+    return Page(
+      items: [
+        for (final r in rows.items)
+          PaymentRequestEntry(accountId: r.accountId, info: r.info),
+      ],
+      nextCursor: rows.nextCursor,
+    );
+  }
+
+  @override
+  Future<PlanChange> approve(Tx tx, String requestId) async {
+    final row = await _store.requestForUpdate(tx, requestId);
+    if (row == null) throw const ApiError(ErrorCode.notFound);
+    if (row.info.status != PaymentRequestStatus.pending) {
+      throw const ApiError(
+        ErrorCode.conflict,
+        message: 'That request was already decided.',
+      );
+    }
+    final now = context.clock.now();
+    await _store.decide(
+      tx,
+      requestId,
+      status: PaymentRequestStatus.approved,
+      now: now,
+    );
+    final end = await _store.extend(
+      tx,
+      row.accountId,
+      months: row.info.months,
+      source: 'payment',
+      now: now,
+    );
+    return PlanChange(
+      accountId: row.accountId,
+      months: row.info.months,
+      periodEnd: end,
+    );
+  }
+
+  @override
+  Future<String> reject(Tx tx, String requestId, String reason) async {
+    final row = await _store.requestForUpdate(tx, requestId);
+    if (row == null) throw const ApiError(ErrorCode.notFound);
+    if (row.info.status != PaymentRequestStatus.pending) {
+      throw const ApiError(
+        ErrorCode.conflict,
+        message: 'That request was already decided.',
+      );
+    }
+    await _store.decide(
+      tx,
+      requestId,
+      status: PaymentRequestStatus.rejected,
+      now: context.clock.now(),
+      reason: reason.trim(),
+    );
+    return row.accountId;
+  }
+
+  @override
+  Future<PlanChange> grant(Tx tx, String accountId, int months) async {
+    final end = await _store.extend(
+      tx,
+      accountId,
+      months: months,
+      source: 'admin',
+      now: context.clock.now(),
+    );
+    return PlanChange(accountId: accountId, months: months, periodEnd: end);
+  }
+
+  @override
+  Future<bool> revoke(Tx tx, String accountId) => _store.endNow(tx, accountId);
+
+  // ----------------------------------------------------------------- export
+
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    final sub = await _store.subscription(s, accountId);
+    final requests = await _store.allRequestsOf(s, accountId);
+    return {
+      'subscription': sub == null
+          ? null
+          : {
+              'plan': sub.string('plan'),
+              'source': sub.string('source'),
+              'period_end': toWireTime(sub.time('period_end')),
+            },
+      'payment_requests': [
+        for (final r in requests)
+          {
+            'id': r.string('id'),
+            'months': r.integer('months'),
+            'amount': r.integer('amount'),
+            'method': r.string('method'),
+            'trx_id': r.string('trx_id'),
+            'status': r.string('status'),
+            'created_at': toWireTime(r.time('created_at')),
+          },
+      ],
+    };
+  }
+}

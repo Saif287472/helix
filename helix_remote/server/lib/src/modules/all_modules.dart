@@ -1,5 +1,6 @@
 import 'package:helix_remote_server/src/modules/admin/module.dart';
 import 'package:helix_remote_server/src/modules/backup/module.dart';
+import 'package:helix_remote_server/src/modules/billing/module.dart';
 import 'package:helix_remote_server/src/modules/calls/module.dart';
 import 'package:helix_remote_server/src/modules/compliance/module.dart';
 import 'package:helix_remote_server/src/modules/federation/module.dart';
@@ -32,6 +33,7 @@ List<ModuleFactory> allModules({
   Uptime? realtimeUptime,
 }) {
   late OpsModule ops;
+  late BillingModule billing;
   late IdentityModule identity;
   late KeysModule keys;
   late MessagingModule messaging;
@@ -42,7 +44,9 @@ List<ModuleFactory> allModules({
   final exporters = <ProvidesAccountExport>[];
   final factories = <ModuleFactory>[
     (c) => ops = OpsModule(c),
-    (c) => identity = IdentityModule(c, sms: sms),
+    (c) =>
+        billing = BillingModule(c, ops: ops.api, identity: () => identity.api),
+    (c) => identity = IdentityModule(c, sms: sms, entitlements: billing),
     (c) => keys = KeysModule(c, identity: identity.api),
     (c) =>
         messaging = MessagingModule(c, identity: identity.api, keys: keys.api),
@@ -58,7 +62,8 @@ List<ModuleFactory> allModules({
       identity: identity.api,
       messaging: messaging.api,
     ),
-    (c) => media = MediaModule(c, identity: identity.api),
+    (c) =>
+        media = MediaModule(c, identity: identity.api, entitlements: billing),
     (c) => BackupModule(c, identity: identity.api, media: media.api),
     (c) => groups = GroupsModule(
       c,
@@ -85,6 +90,7 @@ List<ModuleFactory> allModules({
       people: people.api,
       ops: ops.api,
       calls: calls.api,
+      billing: billing.api,
     ),
     (c) => ComplianceModule(c, identity: identity.api, exporters: exporters),
   ];

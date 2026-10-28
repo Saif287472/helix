@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/kernel/entitlements.dart';
 import 'package:helix_remote_server/src/modules/identity/application/hooks.dart';
 import 'package:helix_remote_server/src/modules/identity/application/sessions.dart';
 import 'package:helix_remote_server/src/modules/identity/config.dart';
@@ -67,6 +68,7 @@ final class IdentityContext {
     required this.hooks,
     required this.sessions,
     required this.log,
+    this.entitlements,
   });
 
   final Db db;
@@ -80,6 +82,10 @@ final class IdentityContext {
   final IdentityHooks hooks;
   final SessionIssuer sessions;
   final Log log;
+
+  /// What each account's plan allows (ADR-035); null means the standard
+  /// limits (a context built without the billing module).
+  final EntitlementSource? entitlements;
 
   /// Seals reported phone numbers (ADR-030); null when `HELIX_PHONE_KEY` is
   /// not set, and then no number is kept.
@@ -448,12 +454,15 @@ final class IdentityContext {
     bool notifyOthers = true,
   }) async {
     await store.lockAccount(tx, accountId);
-    if (await store.activeDeviceCount(tx, accountId) >= maxDevices) {
-      throw const ApiError(
+    final limit =
+        (await entitlements?.forAccount(accountId))?.maxDevices ?? maxDevices;
+    if (await store.activeDeviceCount(tx, accountId) >= limit) {
+      throw ApiError(
         ErrorCode.quotaExceeded,
         message:
             'This account has the most devices it can hold. '
             'Remove one in Devices first.',
+        details: {'max_devices': limit},
       );
     }
     await store.insertDevice(tx, accountId, device);

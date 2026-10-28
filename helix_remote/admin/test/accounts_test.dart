@@ -367,6 +367,31 @@ void main() {
       expect(find.text('account.recovery_code'), findsOneWidget);
     });
 
+    testWidgets('Premium can be given and then ended', (tester) async {
+      await openAlice(tester);
+      await tapText(tester, 'Give Premium');
+      await tapText(tester, '6 months');
+
+      expect(h.server.grantedMonths, {'acct-1': 6});
+      expect(find.text('6 months of Premium given.'), findsOneWidget);
+
+      await tapText(tester, 'End Premium');
+      expect(find.text('End Orbit Premium now?'), findsOneWidget);
+      await tapText(tester, 'End Premium');
+      expect(h.server.grantedMonths, isEmpty);
+      expect(find.text('Premium ended.'), findsOneWidget);
+    });
+
+    testWidgets('ending Premium on an account without it says so', (
+      tester,
+    ) async {
+      await openAlice(tester);
+      await tapText(tester, 'End Premium');
+      await tapText(tester, 'End Premium');
+
+      expect(find.text('This account has no Premium to end.'), findsOneWidget);
+    });
+
     testWidgets('a failed recovery code shows the problem', (tester) async {
       await openAlice(tester);
       h.server.fail(

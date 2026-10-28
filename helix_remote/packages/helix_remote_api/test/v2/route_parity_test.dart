@@ -97,6 +97,15 @@ void main() {
     Routes.account: (c) => c.identity.account(),
     Routes.setPassword: (c) =>
         c.identity.setPassword(SetPasswordRequest(password: password)),
+    Routes.billingPlan: (c) => c.billing.plan(),
+    Routes.submitPaymentRequest: (c) => c.billing.submitRequest(
+      const SubmitPaymentRequest(
+        months: 1,
+        method: PaymentMethod.bkash,
+        trxId: 'ABC123XYZ9',
+      ),
+    ),
+    Routes.paymentRequests: (c) => c.billing.requests(),
     Routes.setHelixName: (c) => c.identity.setHelixName('alice'),
     Routes.setPhoneNumber: (c) => c.identity.setPhoneNumber('+15550100'),
     Routes.clearHelixName: (c) => c.identity.clearHelixName(),
@@ -247,6 +256,20 @@ void main() {
     Routes.adminInvites: (c) => c.admin.invites(),
     Routes.adminCreateInvite: (c) => c.admin.createInvite(),
     Routes.adminCancelInvite: (c) => c.admin.cancelInvite(id),
+    Routes.adminPaymentRequests: (c) => c.admin.paymentRequests(),
+    Routes.adminApprovePaymentRequest: (c) => c.admin.approvePaymentRequest(id),
+    Routes.adminRejectPaymentRequest: (c) =>
+        c.admin.rejectPaymentRequest(id, 'no'),
+    Routes.adminGrantPlan: (c) => c.admin.grantPlan(id, 1),
+    Routes.adminRevokePlan: (c) => c.admin.revokePlan(id),
+    Routes.adminBillingSettings: (c) => c.admin.billingSettings(),
+    Routes.adminSetBillingSettings: (c) => c.admin.setBillingSettings(
+      const BillingSettings(
+        priceOneMonth: 20,
+        priceSixMonths: 100,
+        priceTwelveMonths: 180,
+      ),
+    ),
     Routes.adminReports: (c) => c.admin.reports(),
     Routes.adminResolveReport: (c) =>
         c.admin.resolveReport(id, ReportStatus.resolved),
@@ -376,6 +399,7 @@ final class Clients {
   late final people = PeopleClient(device);
   late final groups = GroupsClient(device);
   late final calls = CallsClient(device);
+  late final billing = BillingClient(device);
   late final media = MediaClient(device);
   late final backup = BackupClient(device);
   late final ops = OpsClient(device);

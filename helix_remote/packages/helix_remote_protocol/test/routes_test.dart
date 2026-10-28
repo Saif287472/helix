@@ -51,6 +51,7 @@ const knownModules = {
   'ops',
   'admin',
   'compliance',
+  'billing',
 };
 
 void main() {

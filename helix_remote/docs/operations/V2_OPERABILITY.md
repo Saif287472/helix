@@ -182,7 +182,8 @@ identifiers into a ticket or chat without checking it first.
 ## Feature flags
 
 - Flags are an allow list in `modules/ops/api.dart`: `crash_reporting_upload`,
-  `minimal_analytics`, `group_calls`. All default to off. Unknown names are
+  `minimal_analytics`, `group_calls`, `billing_enabled` (Orbit Premium plans and
+  payments, ADR-035). All default to off. Unknown names are
   rejected, so a typo cannot become a feature.
 - `GET /v1/admin/feature-flags` lists them. `PUT
   /v1/admin/feature-flags/{name}` with `{"enabled": true}` sets one (audited as

@@ -59,6 +59,7 @@ final serverFlagsProvider = Provider.autoDispose<List<(String, bool)>>((ref) {
     'crash_reporting_upload': 'Crash reports accepted',
     'minimal_analytics': 'Minimal usage counts',
     'group_calls': 'Group calls',
+    'billing_enabled': 'Plans and payments',
   };
   return [
     for (final entry in d.features.entries)

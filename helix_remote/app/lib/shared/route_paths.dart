@@ -35,6 +35,7 @@ abstract final class RoutePaths {
   static const restoreAfterSignIn = '/restore';
 
   // Settings pages
+  static const premium = '/settings/premium';
   static const appearance = '/settings/appearance';
   static const themePacks = '/settings/appearance/themes';
   static const account = '/settings/account';

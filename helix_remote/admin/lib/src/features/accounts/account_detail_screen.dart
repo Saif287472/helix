@@ -111,6 +111,41 @@ class _AccountDetailViewState extends State<AccountDetailView> {
     }
   }
 
+  Future<void> _givePremium() async {
+    final months = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Give Orbit Premium'),
+        children: [
+          for (final m in const [1, 6, 12])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, m),
+              child: Text(m == 1 ? '1 month' : '$m months'),
+            ),
+        ],
+      ),
+    );
+    if (months == null || !mounted) return;
+    _report(
+      await _controller.grantPlan(months),
+      '${months == 1 ? '1 month' : '$months months'} of Premium given.',
+    );
+  }
+
+  Future<void> _endPremium() async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'End Orbit Premium now?',
+      message:
+          'The account returns to the Free plan at once, with no grace '
+          'period. Nothing it holds is deleted.',
+      action: 'End Premium',
+    );
+    if (!confirmed || !mounted) return;
+    final problem = await _controller.revokePlan();
+    _report(problem, 'Premium ended.');
+  }
+
   Future<void> _recoveryCode() async {
     final confirmed = await showConfirmDialog(
       context,
@@ -326,6 +361,32 @@ class _AccountDetailViewState extends State<AccountDetailView> {
                           style: ConsoleButtons.outlined,
                           icon: const Icon(Icons.copy, size: 18),
                           label: const Text('Copy user ID'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _controller.isBusy('plan')
+                              ? null
+                              : _givePremium,
+                          style: ConsoleButtons.outlined,
+                          icon: const Icon(Icons.workspace_premium, size: 18),
+                          label: const Text('Give Premium'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _controller.isBusy('plan')
+                              ? null
+                              : _endPremium,
+                          style: ConsoleButtons.outlined,
+                          icon: const Icon(Icons.block, size: 18),
+                          label: const Text('End Premium'),
                         ),
                       ),
                     ],

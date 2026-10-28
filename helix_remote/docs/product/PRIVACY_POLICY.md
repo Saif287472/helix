@@ -45,6 +45,15 @@ jurisdiction-specific legal review before public launch.
   derived from your identity key; the server cannot read it. Media is not
   included. The optional recovery backup (`full_backups`) is encrypted under a
   secret only you hold.
+- Plans and payments (only when the operator has switched plans on): your
+  plan (Free or Orbit Premium) with its end date and where it came from, and
+  each payment request you send - the months, the amount, bKash or Nagad, the
+  transaction ID you typed, its state and the operator's short reason if it
+  was rejected. A transaction ID is not a phone number, and the app never sees
+  or stores your wallet details: you pay in the bKash or Nagad app. The
+  operator reads the request in the console, with your name and number, to
+  match it to the payment. Requests are kept one year after they are decided,
+  and everything is removed with the account.
 - Device identifiers: device ID, device name, platform, public device keys and
   certificate, active/revoked state, push token when configured, and the date
   (not the time) the device was last seen.

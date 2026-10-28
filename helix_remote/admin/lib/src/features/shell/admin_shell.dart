@@ -3,6 +3,7 @@ import 'package:helix_admin/src/features/accounts/accounts_screen.dart';
 import 'package:helix_admin/src/features/dashboard/dashboard_screen.dart';
 import 'package:helix_admin/src/features/dashboard/server_controller.dart';
 import 'package:helix_admin/src/features/invites/invites_screen.dart';
+import 'package:helix_admin/src/features/payments/payments_screen.dart';
 import 'package:helix_admin/src/features/reports/reports_screen.dart';
 import 'package:helix_admin/src/features/settings/settings_screen.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
@@ -23,6 +24,7 @@ enum AdminPlace {
     Icons.local_activity_outlined,
     Icons.local_activity,
   ),
+  payments('Payments', 'Payments', Icons.payments_outlined, Icons.payments),
   reports('Reports', 'Reports', Icons.shield_outlined, Icons.shield),
   config('Configuration', 'Config', Icons.settings_outlined, Icons.settings);
 
@@ -112,6 +114,7 @@ class _AdminShellState extends State<AdminShell> {
       AdminPlace.overview => DashboardScreen(server: _server),
       AdminPlace.accounts => AccountsScreen(adminContext: ctx),
       AdminPlace.invites => InvitesScreen(adminContext: ctx),
+      AdminPlace.payments => PaymentsScreen(adminContext: ctx),
       AdminPlace.reports => ReportsScreen(
         adminContext: ctx,
         onOpenCount: _server.reportOpenReports,

@@ -1338,3 +1338,15 @@ identical at 1x).
   pack downloaded or deleted on the themes page refreshes the library before the
   row settles - which is why Appearance needs no rule of its own about what is
   choosable.
+
+## Orbit Premium (2026-10-28)
+
+The Orbit Premium page (You > Orbit Premium), its price rows and its payment
+fields are not in the prototype. The owner chose to build them as plain screens
+from the kit's existing components with no prototype step (ADR-035, release 1 of
+`helix_remote/docs/product/ORBIT_PREMIUM_PLAN.md`): `OrbitYouPage`, `OrbitHeroCard`,
+`OrbitInlineNotice`, `OrbitSection`, `OrbitListRow`, `OrbitTextField` and
+`OrbitButton`, in `helix_remote/app/lib/features/plans/presentation/premium_page.dart`.
+The only change in `orbit_ui` is one You row, `YouTopic.premium`, drawn when
+`YouModel.premiumLabel` is not null. The compare page has no entry for either.
+

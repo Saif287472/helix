@@ -47,6 +47,9 @@ enum YouTopic {
   password,
   blocked,
   starred,
+
+  /// Orbit Premium: the plan page (only when plans are on).
+  premium,
 }
 
 // ------------------------------------------------------------ the profile
@@ -587,6 +590,7 @@ class YouModel {
     this.serverHost = '',
     this.unlockWhat = 'your fingerprint, face or phone PIN',
     this.share,
+    this.premiumLabel,
   });
 
   final String name;
@@ -607,6 +611,10 @@ class YouModel {
   /// "Windows Hello" on a window; the phone's own lock otherwise.
   final String unlockWhat;
   final ShareCodeModel? share;
+
+  /// The Orbit Premium row's second line ("Free plan", "Premium until 1 Dec").
+  /// Null while the operator has not switched plans on: the row is not drawn.
+  final String? premiumLabel;
 }
 
 class YouActions {
@@ -687,6 +695,14 @@ class _YouScreenState extends State<YouScreen> {
   }
 
   List<(YouTopic, OrbitGlyph, int, String, String)> get _rows => [
+    if (_m.premiumLabel != null)
+      (
+        YouTopic.premium,
+        OrbitIcons.crownSimple,
+        3,
+        'Orbit Premium',
+        _m.premiumLabel!,
+      ),
     (
       YouTopic.starred,
       OrbitIcons.star,

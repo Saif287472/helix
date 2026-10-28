@@ -679,6 +679,27 @@ abstract final class Routes {
   );
 
   // -------------------------------------------------------------- compliance
+  // ---------------------------------------------------------------- billing
+
+  static const billingPlan = ApiRoute(
+    _get,
+    '/v1/billing/plan',
+    module: 'billing',
+    access: _dev,
+  );
+  static const submitPaymentRequest = ApiRoute(
+    _post,
+    '/v1/billing/requests',
+    module: 'billing',
+    access: _dev,
+  );
+  static const paymentRequests = ApiRoute(
+    _get,
+    '/v1/billing/requests',
+    module: 'billing',
+    access: _dev,
+  );
+
   static const exportData = ApiRoute(
     _get,
     '/v1/account/export',
@@ -924,6 +945,48 @@ abstract final class Routes {
     module: 'admin',
     access: _adm,
   );
+  static const adminPaymentRequests = ApiRoute(
+    _get,
+    '/v1/admin/payment-requests',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminApprovePaymentRequest = ApiRoute(
+    _post,
+    '/v1/admin/payment-requests/{request_id}/approve',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminRejectPaymentRequest = ApiRoute(
+    _post,
+    '/v1/admin/payment-requests/{request_id}/reject',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminGrantPlan = ApiRoute(
+    _put,
+    '/v1/admin/accounts/{account}/plan',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminRevokePlan = ApiRoute(
+    _delete,
+    '/v1/admin/accounts/{account}/plan',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminBillingSettings = ApiRoute(
+    _get,
+    '/v1/admin/billing/settings',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminSetBillingSettings = ApiRoute(
+    _put,
+    '/v1/admin/billing/settings',
+    module: 'admin',
+    access: _adm,
+  );
   static const adminFeatureFlags = ApiRoute(
     _get,
     '/v1/admin/feature-flags',
@@ -983,6 +1046,7 @@ abstract final class Routes {
     live, ready, serverInfo, legal, crashReport, anomalies, metrics, assetLinks,
     openLink, shareLink, //
     packs, packManifest, packFile, //
+    billingPlan, submitPaymentRequest, paymentRequests, //
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,
     s2sGroupActions, s2sGroupSync, s2sCallSignals, //
@@ -992,6 +1056,9 @@ abstract final class Routes {
     adminRevokeDevice, adminRecoveryCode, adminInvites, adminCreateInvite,
     adminCancelInvite, adminReports, adminResolveReport, adminAudit,
     adminConfig, adminSetConfig, adminFeatureFlags, adminSetFeatureFlag,
+    adminPaymentRequests, adminApprovePaymentRequest,
+    adminRejectPaymentRequest, adminGrantPlan, adminRevokePlan,
+    adminBillingSettings, adminSetBillingSettings, //
     adminLogs, adminLogStream, adminPurge,
   ];
 }

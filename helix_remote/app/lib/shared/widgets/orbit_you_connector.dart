@@ -13,6 +13,7 @@ import 'package:helix_remote/core/platform/share_adapter.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/features/backup/application/backup_providers.dart';
 import 'package:helix_remote/features/devices/application/devices_providers.dart';
+import 'package:helix_remote/features/plans/application/plans_providers.dart';
 import 'package:helix_remote/features/profile/application/profile_providers.dart';
 import 'package:helix_remote/features/settings/application/about_providers.dart';
 import 'package:helix_remote/features/settings/application/account_providers.dart';
@@ -50,6 +51,7 @@ class OrbitYouConnector extends ConsumerWidget {
     orbit.YouTopic.password => RoutePaths.changePassword,
     orbit.YouTopic.blocked => RoutePaths.blocked,
     orbit.YouTopic.starred => RoutePaths.starred,
+    orbit.YouTopic.premium => RoutePaths.premium,
   };
 
   static orbit.CheckupItem _item(YouCheck c) => switch (c.key) {
@@ -206,6 +208,7 @@ class OrbitYouConnector extends ConsumerWidget {
         serverHost: header?.serverHost ?? '',
         unlockWhat: unlockWhat(),
         share: share,
+        premiumLabel: ref.watch(premiumLabelProvider),
       ),
       actions: orbit.YouActions(
         openProfile: () => context.push(RoutePaths.profile),

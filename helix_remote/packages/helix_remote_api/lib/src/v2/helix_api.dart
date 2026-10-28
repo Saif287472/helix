@@ -1,5 +1,6 @@
 import 'package:helix_remote_api/src/v2/clients/admin_client.dart';
 import 'package:helix_remote_api/src/v2/clients/backup_client.dart';
+import 'package:helix_remote_api/src/v2/clients/billing_client.dart';
 import 'package:helix_remote_api/src/v2/clients/calls_client.dart';
 import 'package:helix_remote_api/src/v2/clients/compliance_client.dart';
 import 'package:helix_remote_api/src/v2/clients/federation_client.dart';
@@ -69,6 +70,7 @@ final class HelixApi {
   late final PeopleClient people = PeopleClient(transport);
   late final GroupsClient groups = GroupsClient(transport);
   late final CallsClient calls = CallsClient(transport);
+  late final BillingClient billing = BillingClient(transport);
   late final MediaClient media = MediaClient(transport);
   late final BackupClient backup = BackupClient(transport);
   late final OpsClient ops = OpsClient(transport);

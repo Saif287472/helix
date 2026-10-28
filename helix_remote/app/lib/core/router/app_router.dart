@@ -9,6 +9,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/features/backup/backup_routes.dart';
 import 'package:helix_remote/features/devices/devices_routes.dart';
+import 'package:helix_remote/features/plans/plans_routes.dart';
 import 'package:helix_remote/features/calls/calls_routes.dart';
 import 'package:helix_remote/features/groups/groups_routes.dart';
 import 'package:helix_remote/features/chats/chats_routes.dart';
@@ -121,6 +122,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ...settingsRoutes,
       ...profileRoutes,
       ...devicesRoutes,
+      ...plansRoutes,
       ...backupRoutes,
       GoRoute(
         path: AppRoutes.reset,

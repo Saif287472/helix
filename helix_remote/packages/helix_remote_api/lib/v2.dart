@@ -7,6 +7,7 @@ library;
 
 export 'package:helix_remote_api/src/v2/clients/admin_client.dart';
 export 'package:helix_remote_api/src/v2/clients/backup_client.dart';
+export 'package:helix_remote_api/src/v2/clients/billing_client.dart';
 export 'package:helix_remote_api/src/v2/clients/calls_client.dart';
 export 'package:helix_remote_api/src/v2/clients/compliance_client.dart';
 export 'package:helix_remote_api/src/v2/clients/federation_client.dart';

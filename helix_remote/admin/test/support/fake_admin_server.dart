@@ -41,6 +41,16 @@ final class FakeAdminServer {
   final Map<String, List<AdminDevice>> devices = {};
   List<AdminInvite> invites = [];
   List<AdminReport> reports = [];
+  List<AdminPaymentRequest> paymentRequests = [];
+
+  /// Premium months the operator gave, by account.
+  final Map<String, int> grantedMonths = {};
+  BillingSettings billingSettings = const BillingSettings(
+    priceOneMonth: 20,
+    priceSixMonths: 100,
+    priceTwelveMonths: 180,
+    bkashNumber: '01700000000',
+  );
   final List<AuditEntry> audit = [];
   List<String> logLines = [];
   int deadJobs = 0;
@@ -63,6 +73,7 @@ final class FakeAdminServer {
     'crash_reporting_upload': false,
     'minimal_analytics': true,
     'group_calls': false,
+    'billing_enabled': false,
   };
   ReadyResponse ready = const ReadyResponse(
     ready: true,
@@ -276,6 +287,21 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
       _record('device.revoke', target: deviceId);
       return http.Response('', 204);
     }
+    found = match(r'/v1/admin/accounts/([^/]+)/plan');
+    if (found != null) {
+      final id = found.group(1)!;
+      if (m == 'PUT') {
+        grantedMonths[id] =
+            (grantedMonths[id] ?? 0) + (_body(request)['months'] as int);
+        _record('plan.grant', target: id);
+        return http.Response('', 204);
+      }
+      if (m == 'DELETE') {
+        if (grantedMonths.remove(id) == null) return _error(ErrorCode.notFound);
+        _record('plan.revoke', target: id);
+        return http.Response('', 204);
+      }
+    }
     found = match(r'/v1/admin/accounts/([^/]+)/recovery-codes');
     if (found != null && m == 'POST') {
       final id = found.group(1)!;
@@ -366,6 +392,64 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
       return http.Response('', 204);
     }
 
+    if (m == 'GET' && path == '/v1/admin/payment-requests') {
+      final status = query['status'] ?? 'pending';
+      final list = paymentRequests
+          .where((r) => r.request.status.wire == status)
+          .toList();
+      return _paged(list, query, (r) => r.toJson());
+    }
+    found = match(r'/v1/admin/payment-requests/([^/]+)/(approve|reject)');
+    if (found != null && m == 'POST') {
+      final id = found.group(1)!;
+      final approve = found.group(2) == 'approve';
+      final index = paymentRequests.indexWhere(
+        (r) => r.request.requestId == id,
+      );
+      if (index < 0) return _error(ErrorCode.notFound);
+      final old = paymentRequests[index];
+      if (old.request.status != PaymentRequestStatus.pending) {
+        return _error(ErrorCode.conflict);
+      }
+      final r = old.request;
+      paymentRequests = [
+        for (final p in paymentRequests)
+          if (p.request.requestId == id)
+            AdminPaymentRequest(
+              request: PaymentRequestInfo(
+                requestId: r.requestId,
+                months: r.months,
+                amount: r.amount,
+                method: r.method,
+                trxId: r.trxId,
+                status: approve
+                    ? PaymentRequestStatus.approved
+                    : PaymentRequestStatus.rejected,
+                reason: approve ? null : _body(request)['reason'] as String?,
+                createdAt: r.createdAt,
+                decidedAt: _now(),
+              ),
+              accountId: old.accountId,
+              accountName: old.accountName,
+              accountPhone: old.accountPhone,
+            )
+          else
+            p,
+      ];
+      _record(
+        approve ? 'payment_request.approve' : 'payment_request.reject',
+        target: id,
+      );
+      return http.Response('', 204);
+    }
+    if (m == 'GET' && path == '/v1/admin/billing/settings') {
+      return _json(billingSettings.toJson());
+    }
+    if (m == 'PUT' && path == '/v1/admin/billing/settings') {
+      billingSettings = BillingSettings.fromJson(JsonReader.of(_body(request)));
+      _record('billing.settings');
+      return _json(billingSettings.toJson());
+    }
     if (m == 'GET' && path == '/v1/admin/audit') {
       return _paged(audit.reversed.toList(), query, (e) => e.toJson());
     }

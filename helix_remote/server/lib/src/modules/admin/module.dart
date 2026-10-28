@@ -7,6 +7,7 @@ import 'package:helix_remote_server/src/kernel/jwt.dart';
 import 'package:helix_remote_server/src/modules/admin/data/admin_store.dart';
 import 'package:helix_remote_server/src/modules/admin/domain/local_address.dart';
 import 'package:helix_remote_server/src/modules/admin/domain/password_hash.dart';
+import 'package:helix_remote_server/src/modules/billing/api.dart';
 import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
@@ -36,6 +37,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     required this.people,
     required this.ops,
     required this.calls,
+    required this.billing,
   }) {
     _store = AdminStore(schema);
     _jwt = HmacJwt(
@@ -50,6 +52,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   final PeopleApi people;
   final OpsApi ops;
   final CallsApi calls;
+  final BillingApi billing;
   late final AdminStore _store;
   late final HmacJwt _jwt;
   late final Argon2Params _kdf;
@@ -169,6 +172,13 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       ..add(name, Routes.adminAudit, _auditLog)
       ..add(name, Routes.adminConfig, _config)
       ..add(name, Routes.adminSetConfig, _setConfig)
+      ..add(name, Routes.adminPaymentRequests, _paymentRequests)
+      ..add(name, Routes.adminApprovePaymentRequest, _approvePayment)
+      ..add(name, Routes.adminRejectPaymentRequest, _rejectPayment)
+      ..add(name, Routes.adminGrantPlan, _grantPlan)
+      ..add(name, Routes.adminRevokePlan, _revokePlan)
+      ..add(name, Routes.adminBillingSettings, _billingSettings)
+      ..add(name, Routes.adminSetBillingSettings, _setBillingSettings)
       ..add(name, Routes.adminFeatureFlags, _flags)
       ..add(name, Routes.adminSetFeatureFlag, _setFlag)
       ..add(name, Routes.adminLogs, _logs)
@@ -590,6 +600,125 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     });
     if (!cancelled) throw const ApiError(ErrorCode.notFound);
     return noContent();
+  }
+
+  // ----------------------------------------------------------------- billing
+
+  Future<Response> _paymentRequests(HelixRequest q) async {
+    final wire = q.query('status') ?? PaymentRequestStatus.pending.wire;
+    final status = PaymentRequestStatus.values.firstWhere(
+      (s) => s.wire == wire && s != PaymentRequestStatus.unknown,
+      orElse: () => throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'status'},
+      ),
+    );
+    final page = await billing.requestsByStatus(
+      context.db,
+      status: status,
+      page: _page(q),
+    );
+    // The operator reads the person the way the accounts list shows them
+    // (ADR-030), which is what lets them match a bKash sender to an account.
+    final ids = {for (final r in page.items) r.accountId};
+    final display = await people.displayNames(context.db, ids);
+    final helix = await identity.admin.helixNames(context.db, ids);
+    final numbers = await identity.admin.phoneNumbers(context.db, ids);
+    return jsonResponse(
+      page.toJson((r) {
+        final shown = (display[r.accountId] ?? '').trim();
+        return AdminPaymentRequest(
+          request: r.info,
+          accountId: r.accountId,
+          accountName: shown.isEmpty ? helix[r.accountId] : shown,
+          accountPhone: numbers[r.accountId],
+        ).toJson();
+      }),
+    );
+  }
+
+  Future<Response> _approvePayment(HelixRequest q) async {
+    final id = q.uuidParam('request_id');
+    await context.db.tx((tx) async {
+      final change = await billing.approve(tx, id);
+      await _audit(
+        tx,
+        q,
+        'payment_request.approve',
+        target: id,
+        details: {'account': change.accountId, 'months': '${change.months}'},
+      );
+    });
+    return noContent();
+  }
+
+  Future<Response> _rejectPayment(HelixRequest q) async {
+    final id = q.uuidParam('request_id');
+    final req = q.json(RejectPaymentRequest.fromJson);
+    await context.db.tx((tx) async {
+      final account = await billing.reject(tx, id, req.reason);
+      await _audit(
+        tx,
+        q,
+        'payment_request.reject',
+        target: id,
+        details: {'account': account},
+      );
+    });
+    return noContent();
+  }
+
+  Future<Response> _grantPlan(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    final req = q.json(GrantPlanRequest.fromJson);
+    await context.db.tx((tx) async {
+      if (await identity.admin.accountDetail(tx, id) == null) {
+        throw const ApiError(ErrorCode.notFound);
+      }
+      await billing.grant(tx, id, req.months);
+      await _audit(
+        tx,
+        q,
+        'plan.grant',
+        target: id,
+        details: {'months': '${req.months}'},
+      );
+    });
+    return noContent();
+  }
+
+  Future<Response> _revokePlan(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    await context.db.tx((tx) async {
+      if (!await billing.revoke(tx, id)) {
+        throw const ApiError(ErrorCode.notFound);
+      }
+      await _audit(tx, q, 'plan.revoke', target: id);
+    });
+    return noContent();
+  }
+
+  Future<Response> _billingSettings(HelixRequest q) async =>
+      jsonResponse((await billing.settings(context.db)).toJson());
+
+  Future<Response> _setBillingSettings(HelixRequest q) async {
+    final next = q.json(BillingSettings.fromJson);
+    await context.db.tx((tx) async {
+      await billing.setSettings(tx, next);
+      // The numbers people pay to are not written to the audit row.
+      await _audit(
+        tx,
+        q,
+        'billing.settings',
+        details: {
+          'prices':
+              '${next.priceOneMonth}/${next.priceSixMonths}/${next.priceTwelveMonths}',
+          'bkash': next.bkashNumber == null ? 'off' : 'set',
+          'nagad': next.nagadNumber == null ? 'off' : 'set',
+        },
+      );
+    });
+    return jsonResponse(next.toJson());
   }
 
   // ----------------------------------------------------------------- reports

@@ -154,6 +154,54 @@ final class AdminClient {
   Future<void> cancelInvite(String inviteId) =>
       _t.empty(Routes.adminCancelInvite, params: {'invite_id': inviteId});
 
+  // ----------------------------------------------------------------- billing
+
+  /// Payment requests with [status] (the server's default is pending), newest
+  /// first.
+  Future<Page<AdminPaymentRequest>> paymentRequests({
+    PaymentRequestStatus? status,
+    PageRequest page = const PageRequest(),
+  }) => _t.call(
+    Routes.adminPaymentRequests,
+    (json) => Page.fromJson(json, AdminPaymentRequest.fromJson),
+    query: {...page.toQuery(), 'status': ?status?.wire},
+  );
+
+  /// Adds the request's months to the account's Premium.
+  Future<void> approvePaymentRequest(String requestId) => _t.empty(
+    Routes.adminApprovePaymentRequest,
+    params: {'request_id': requestId},
+  );
+
+  /// The short [reason] is shown to the person.
+  Future<void> rejectPaymentRequest(String requestId, String reason) =>
+      _t.empty(
+        Routes.adminRejectPaymentRequest,
+        params: {'request_id': requestId},
+        json: RejectPaymentRequest(reason: reason).toJson(),
+      );
+
+  /// Gives Premium time without a payment.
+  Future<void> grantPlan(String accountId, int months) => _t.empty(
+    Routes.adminGrantPlan,
+    params: {'account': accountId},
+    json: GrantPlanRequest(months: months).toJson(),
+  );
+
+  /// Ends the account's Premium now.
+  Future<void> revokePlan(String accountId) =>
+      _t.empty(Routes.adminRevokePlan, params: {'account': accountId});
+
+  Future<BillingSettings> billingSettings() =>
+      _t.call(Routes.adminBillingSettings, BillingSettings.fromJson);
+
+  Future<BillingSettings> setBillingSettings(BillingSettings settings) =>
+      _t.call(
+        Routes.adminSetBillingSettings,
+        BillingSettings.fromJson,
+        json: settings.toJson(),
+      );
+
   // ----------------------------------------------------------------- reports
 
   Future<Page<AdminReport>> reports({

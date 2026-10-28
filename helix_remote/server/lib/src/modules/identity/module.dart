@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/kernel/entitlements.dart';
 
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/application/accounts.dart';
@@ -29,7 +30,11 @@ import 'package:helix_remote_server/src/platform/module.dart';
 /// Accounts, devices, sessions and every way of signing in (ADR-026).
 final class IdentityModule extends ModuleBase
     implements ProvidesAuthentication, ProvidesAccountExport {
-  IdentityModule(super.context, {SmsProvider? sms}) {
+  IdentityModule(
+    super.context, {
+    SmsProvider? sms,
+    EntitlementSource? entitlements,
+  }) {
     final config = IdentityConfig.from(context.config, sms: sms);
     _store = IdentityStore(schema);
     _credentials = CredentialStore(schema);
@@ -52,6 +57,7 @@ final class IdentityModule extends ModuleBase
       hooks: _hooks,
       sessions: sessions,
       log: log,
+      entitlements: entitlements,
     );
     signUp = SignUp(_ctx);
     inactiveDevices = InactiveDevices(_ctx);

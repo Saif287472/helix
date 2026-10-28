@@ -227,6 +227,20 @@ download. Nothing is cached by the pipeline (`cache-control: no-store` goes on
 every response, pack routes included): the device's own pack cache, not an
 intermediary's, is what keeps a person from downloading a theme twice.
 
+## billing
+
+DTOs in `modules/billing.dart` (ADR-035). Plans are off until the operator sets
+the flag `billing_enabled`; with it off every account keeps the limits the
+server has always had, and `GET /v1/billing/plan` says `enabled: false`. A
+payment is made outside the app (bKash or Nagad); the app sends only the
+transaction ID, and the operator approves in Orbit Console.
+
+| Route | Body → response | Rules |
+|---|---|---|
+| `GET /v1/billing/plan` | — → `BillingPlan` | The plan, its limits (`limits` now, `premium_limits` for Orbit Premium), the price list (`list_price` is the monthly price times the months), the numbers to pay to, the one open request and the newest decided one. Also while suspended. |
+| `POST /v1/billing/requests` | `SubmitPaymentRequest` → 201 `PaymentRequestInfo` | `months` 1, 6 or 12; `method` `bkash` or `nagad` (one the operator has set a number for); a transaction ID of 6 to 20 letters and digits, stored upper case. `conflict` when the account already has a pending request or the ID is already pending or approved; `unavailable` when plans are off or no number is set. 10 per hour per account. |
+| `GET /v1/billing/requests` | — → `Page<PaymentRequestInfo>` | The account's own requests, newest first. |
+
 ## compliance
 
 | Route | Body → response | Rules |
@@ -300,6 +314,13 @@ tokens never open each other's routes.
 | `GET /v1/admin/audit` | — → `Page<AuditEntry>` | Newest first. |
 | `GET /v1/admin/config` | — → `AdminConfig` | No secrets. `integrations` (optional) says whether push, SMS and TURN are set up: `configured`, plus `provider` (`fcm`, `bulksmsbd`) or `count` (TURN addresses). |
 | `PATCH /v1/admin/config` | `AdminConfigPatch` → `AdminConfig` | Server name, maintenance mode, federation switch. |
+| `GET /v1/admin/payment-requests` | — → `Page<AdminPaymentRequest>` | `status` (default `pending`). Each row carries the account id, `account_name` (the name the person keeps, else their `~Helix name`) and `account_phone` (the number their app reported, with `HELIX_PHONE_KEY`), as the accounts list does (ADR-030), so the operator can match the payment's sender. |
+| `POST /v1/admin/payment-requests/{request_id}/approve` | — → 204 | Pending requests only (`conflict` otherwise). Adds the months after the end of the current paid time (or from now when none is running). |
+| `POST /v1/admin/payment-requests/{request_id}/reject` | `RejectPaymentRequest` → 204 | Pending only; the short reason is shown to the person. |
+| `PUT /v1/admin/accounts/{account}/plan` | `GrantPlanRequest` → 204 | Gives Premium time without a payment (1 to 36 months), stacked the same way. |
+| `DELETE /v1/admin/accounts/{account}/plan` | — → 204 | Ends the account's Premium at once (no grace). |
+| `GET /v1/admin/billing/settings` | — → `BillingSettings` | Prices in taka for 1, 6 and 12 months, and the bKash and Nagad numbers. |
+| `PUT /v1/admin/billing/settings` | `BillingSettings` → `BillingSettings` | Takes effect at once. Audited (the numbers are not written to the audit row). |
 | `GET /v1/admin/feature-flags` | — → `FeatureFlags` | |
 | `PUT /v1/admin/feature-flags/{name}` | `SetFeatureFlagRequest` → 204 | Allow-listed names only (`not_found`). |
 | `GET /v1/admin/logs` | — → `AdminLogLines` | `limit` 1–500. This node, redacted. |

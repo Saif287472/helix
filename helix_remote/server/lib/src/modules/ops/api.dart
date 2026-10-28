@@ -26,6 +26,7 @@ abstract interface class OpsApi {
     'crash_reporting_upload': false,
     'minimal_analytics': false,
     'group_calls': false,
+    'billing_enabled': false,
   };
 
   /// The current settings (cached; every node refreshes on change).
