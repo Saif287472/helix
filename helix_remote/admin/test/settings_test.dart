@@ -78,9 +78,7 @@ void main() {
       }
     });
 
-    testWidgets('copies a value the operator pastes elsewhere', (
-      tester,
-    ) async {
+    testWidgets('copies a value the operator pastes elsewhere', (tester) async {
       final copied = recordClipboard(tester);
       await openSettings(tester);
 

@@ -6,6 +6,7 @@ import 'package:helix_remote/core/format/labels.dart' show formatBytes;
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/sounds/orbit_ringtones.dart';
 import 'package:helix_remote/core/sounds/orbit_sounds.dart';
+import 'package:helix_remote/core/theme/packs_locked.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart'
     show deviceSettingsStoreProvider;
 import 'package:helix_remote/core/theme/orbit_packs.dart';
@@ -65,8 +66,23 @@ final ringtoneChoiceProvider = AsyncNotifierProvider<RingtoneChoice, String?>(
 
 final class RingtoneChoice extends AsyncNotifier<String?> {
   @override
-  Future<String?> build() =>
-      ref.read(deviceSettingsStoreProvider).readRingtone();
+  Future<String?> build() async {
+    final locked = ref.watch(packsLockedProvider);
+    final store = ref.read(deviceSettingsStoreProvider);
+    final chosen = await store.readRingtone();
+    // A downloaded ringtone does not ring while packs are locked for the
+    // account (ADR-035): the choice is cleared and the phone's own sound comes
+    // back, the same way a deleted pack's does. The ones the app carries stay.
+    if (locked &&
+        chosen != null &&
+        chosen != phoneRingtoneId &&
+        BuiltInRingtones.byId(chosen) == null) {
+      await store.writeRingtone(null);
+      await Ringtones.forget();
+      return null;
+    }
+    return chosen;
+  }
 
   /// Rings with [id] from now on, or with the phone's own ringtone for
   /// [phoneRingtoneId]. A pack this device cannot ring with is refused the
@@ -191,9 +207,20 @@ final class RingtonePage {
 
   final Ref _ref;
 
-  Future<String?> get(String id) => _busy(id, () => _install(id));
+  Future<String?> get(String id) async =>
+      _locked(id) ?? await _busy(id, () => _install(id));
 
-  Future<String?> update(String id) => _busy(id, () => _install(id));
+  Future<String?> update(String id) async =>
+      _locked(id) ?? await _busy(id, () => _install(id));
+
+  /// A downloaded ringtone is part of Orbit Premium while packs are locked
+  /// (ADR-035); the phone's own and the ones the app carries are not.
+  String? _locked(String id) =>
+      _ref.read(packsLockedProvider) &&
+          id != phoneRingtoneId &&
+          BuiltInRingtones.byId(id) == null
+      ? packsLockedSounds
+      : null;
 
   Future<String?> delete(String id) =>
       _busy(id, () => _ref.read(soundPackActionsProvider).remove(id));
@@ -202,6 +229,8 @@ final class RingtonePage {
   /// from now on. Only a sound this device holds (a built-in, or a downloaded
   /// pack) gets there; the page lists what it holds.
   Future<String?> use(String id) async {
+    final locked = _locked(id);
+    if (locked != null) return locked;
     final choice = _ref.read(ringtoneChoiceProvider.notifier);
     if (id == phoneRingtoneId) {
       await choice.choose(id);
@@ -253,6 +282,7 @@ final ringtoneGalleryProvider = Provider.autoDispose<RingtoneGalleryModel>((
       ref.watch(installedSoundsProvider).value ?? const <InstalledSound>[];
   final hosted = ref.watch(hostedSoundsProvider);
   final chosen = ref.watch(ringtoneChoiceProvider).value;
+  final premium = ref.watch(packsLockedProvider) ? 'Orbit Premium · ' : '';
 
   final offers = <String, PackOffer>{
     for (final offer in hosted.value?.rows ?? const <PackOffer>[])
@@ -295,7 +325,7 @@ final ringtoneGalleryProvider = Provider.autoDispose<RingtoneGalleryModel>((
           id: sound.id,
           name: sound.id,
           place: ThemePackPlace.onThisPhone,
-          detail: formatBytes(sound.bytes),
+          detail: '$premium${formatBytes(sound.bytes)}',
           inUse: ringing == sound.id,
           updateAvailable:
               (offers[sound.id]?.revision ?? sound.revision) > sound.revision,
@@ -308,7 +338,8 @@ final ringtoneGalleryProvider = Provider.autoDispose<RingtoneGalleryModel>((
         RingtoneGalleryItem(
           id: id,
           name: id,
-          detail: '${formatBytes(offers[id]!.entry.totalBytes)} to download',
+          detail:
+              '$premium${formatBytes(offers[id]!.entry.totalBytes)} to download',
           busy: busy == id,
         ),
   ];

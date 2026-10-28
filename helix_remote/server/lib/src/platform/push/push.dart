@@ -19,7 +19,11 @@ enum PushReason {
   call('call'),
 
   /// A call this device was ringing for ended.
-  callEnded('call_ended');
+  callEnded('call_ended'),
+
+  /// A plan request was decided or the plan changed (ADR-035). The device
+  /// reads the plan itself; the wake-up says nothing about it.
+  plan('plan');
 
   const PushReason(this.wire);
 
@@ -201,11 +205,18 @@ final class FcmPushProvider implements PushProvider {
     String? callId,
   }) async {
     if (kind != 'fcm') return; // APNs arrives with iOS (ADR-023).
-    final call = reason != PushReason.message;
+    final call = reason == PushReason.call || reason == PushReason.callEnded;
+    // A plan update is not urgent: normal priority, and worth a day on the
+    // provider's queue for a phone that is off.
+    final plan = reason == PushReason.plan;
     final body = jsonEncode({
       'message': {
         'token': token,
-        'android': {'priority': 'HIGH', if (call) 'ttl': '45s'},
+        'android': {
+          'priority': plan ? 'NORMAL' : 'HIGH',
+          if (call) 'ttl': '45s',
+          if (plan) 'ttl': '86400s',
+        },
         'data': {'t': reason.wire, 'call_id': ?callId},
       },
     });

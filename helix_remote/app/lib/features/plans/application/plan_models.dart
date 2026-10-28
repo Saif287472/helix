@@ -88,6 +88,7 @@ final class PlanView {
     required this.enabled,
     required this.isPremium,
     required this.inGrace,
+    required this.onTrial,
     required this.limits,
     required this.premiumLimits,
     required this.prices,
@@ -102,6 +103,9 @@ final class PlanView {
 
   /// After the end date, while the grace period keeps Premium on.
   final bool inGrace;
+
+  /// The Premium running is the free first week.
+  final bool onTrial;
   final DateTime? periodEnd;
 
   /// What the account may do now, and what Premium allows.
@@ -141,6 +145,7 @@ final class PlanView {
       enabled: p.enabled,
       isPremium: p.isPremium,
       inGrace: p.inGrace,
+      onTrial: p.onTrial,
       periodEnd: p.periodEnd,
       limits: PlanLimitsView.from(p.limits),
       premiumLimits: PlanLimitsView.from(p.premiumLimits),

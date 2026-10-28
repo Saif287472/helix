@@ -8,12 +8,26 @@ final class PaymentsController extends PagedController<AdminPaymentRequest> {
   PaymentsController(super.ctx, {super.pageSize});
 
   PaymentRequestStatus _status = PaymentRequestStatus.pending;
+  BillingSummary? _summary;
   final Set<String> _deciding = {};
 
   /// The status filter (pending first: that is the queue).
   PaymentRequestStatus get status => _status;
 
   bool isDeciding(String requestId) => _deciding.contains(requestId);
+
+  /// Counts for the top of the page; null until read, or when it failed.
+  BillingSummary? get summary => _summary;
+
+  /// Reads the counts. A failure leaves the old ones: the queue still works.
+  Future<void> loadSummary() async {
+    try {
+      _summary = await ctx.api.admin.billingSummary();
+    } on Object {
+      // The queue below is what the operator came for.
+    }
+    notifyListeners();
+  }
 
   @override
   Future<Page<AdminPaymentRequest>> fetch(PageRequest page) =>
@@ -48,6 +62,7 @@ final class PaymentsController extends PagedController<AdminPaymentRequest> {
     } else {
       notifyListeners();
     }
+    if (problem == null) await loadSummary();
     return problem;
   }
 

@@ -315,10 +315,14 @@ tokens never open each other's routes.
 | `GET /v1/admin/config` | — → `AdminConfig` | No secrets. `integrations` (optional) says whether push, SMS and TURN are set up: `configured`, plus `provider` (`fcm`, `bulksmsbd`) or `count` (TURN addresses). |
 | `PATCH /v1/admin/config` | `AdminConfigPatch` → `AdminConfig` | Server name, maintenance mode, federation switch. |
 | `GET /v1/admin/payment-requests` | — → `Page<AdminPaymentRequest>` | `status` (default `pending`). Each row carries the account id, `account_name` (the name the person keeps, else their `~Helix name`) and `account_phone` (the number their app reported, with `HELIX_PHONE_KEY`), as the accounts list does (ADR-030), so the operator can match the payment's sender. |
-| `POST /v1/admin/payment-requests/{request_id}/approve` | — → 204 | Pending requests only (`conflict` otherwise). Adds the months after the end of the current paid time (or from now when none is running). |
+| `POST /v1/admin/payment-requests/{request_id}/approve` | — → 204 | Pending requests only (`conflict` otherwise). Adds the months after the end of the current paid time (or from now when none is running), and sends the person's devices a `plan` wake-up (data only, no content). |
 | `POST /v1/admin/payment-requests/{request_id}/reject` | `RejectPaymentRequest` → 204 | Pending only; the short reason is shown to the person. |
-| `PUT /v1/admin/accounts/{account}/plan` | `GrantPlanRequest` → 204 | Gives Premium time without a payment (1 to 36 months), stacked the same way. |
+| `PUT /v1/admin/accounts/{account}/plan` | `GrantPlanRequest` → 204 | Gives Premium time without a payment (1 to 36 months), stacked the same way. A device wake-up (`plan`, no content) tells the person's phones to refresh. |
 | `DELETE /v1/admin/accounts/{account}/plan` | — → 204 | Ends the account's Premium at once (no grace). |
+| `GET /v1/admin/accounts/{account}/plan` | — → `AdminAccountPlan` | The plan, its source (`payment`, `admin`, `trial`), the end date, the limits in force (overrides applied) and the overrides. |
+| `PUT /v1/admin/accounts/{account}/plan/overrides/{key}` | `SetPlanOverrideRequest` → 204 | Changes one limit for one account (`key` is a `PlanLimitKey` wire name, the value inside its bounds), for `days` days or until removed. For support cases; the person is not told. Audited. |
+| `DELETE /v1/admin/accounts/{account}/plan/overrides/{key}` | — → 204 | `not_found` when there is none. |
+| `GET /v1/admin/billing/summary` | — → `BillingSummary` | Premium, grace and trial accounts, pending requests, and the approved requests and taka of the last 30 days. |
 | `GET /v1/admin/billing/settings` | — → `BillingSettings` | Prices in taka for 1, 6 and 12 months, and the bKash and Nagad numbers. |
 | `PUT /v1/admin/billing/settings` | `BillingSettings` → `BillingSettings` | Takes effect at once. Audited (the numbers are not written to the audit row). |
 | `GET /v1/admin/feature-flags` | — → `FeatureFlags` | |

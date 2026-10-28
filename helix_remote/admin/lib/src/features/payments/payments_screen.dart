@@ -27,10 +27,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = PaymentsController(
-      widget.adminContext,
-      pageSize: widget.pageSize ?? PageRequest.defaultLimit,
-    )..refresh();
+    _controller =
+        PaymentsController(
+            widget.adminContext,
+            pageSize: widget.pageSize ?? PageRequest.defaultLimit,
+          )
+          ..refresh()
+          ..loadSummary();
   }
 
   @override
@@ -80,6 +83,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const ConsoleHeading('Orbit Premium payments'),
+            if (_controller.summary case final summary?) ...[
+              const SizedBox(height: 12),
+              _SummaryCard(summary: summary),
+            ],
             const SizedBox(height: 14),
             ConsoleChipRow(
               children: [
@@ -463,5 +470,47 @@ class _SettingsDialogState extends State<_SettingsDialog> {
         child: const Text('Save'),
       ),
     ],
+  );
+}
+
+/// How many accounts are on what, and what came in lately.
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.summary});
+
+  final BillingSummary summary;
+
+  @override
+  Widget build(BuildContext context) => ConsoleCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConsoleProperty(
+          label: 'Premium now',
+          value: '${summary.premium}',
+          mono: false,
+        ),
+        ConsoleProperty(
+          label: 'On the free trial',
+          value: '${summary.onTrial}',
+          mono: false,
+        ),
+        ConsoleProperty(
+          label: 'In the grace period',
+          value: '${summary.inGrace}',
+          mono: false,
+        ),
+        ConsoleProperty(
+          label: 'Waiting for you',
+          value: '${summary.pendingRequests}',
+          mono: false,
+        ),
+        ConsoleProperty(
+          label: 'Last 30 days',
+          value:
+              '${summary.approvedLast30Days} approved, BDT ${summary.takenLast30Days}',
+          mono: false,
+        ),
+      ],
+    ),
   );
 }

@@ -68,6 +68,15 @@ void main() {
       expect(find.textContaining('DONE000001'), findsNothing);
     });
 
+    testWidgets('the counts say how many accounts are on what', (tester) async {
+      await openPayments(tester);
+
+      expect(find.text('PREMIUM NOW'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      expect(find.text('ON THE FREE TRIAL'), findsOneWidget);
+      expect(find.text('4 approved, BDT 480'), findsOneWidget);
+    });
+
     testWidgets('the filters show what was decided', (tester) async {
       await openPayments(tester);
 

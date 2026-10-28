@@ -4,31 +4,20 @@ Status: **plan agreed in discussion, nothing built** (2026-10-27). Implementatio
 about a month. Scope: Helix Remote (Orbit) on Helix Global. Never `helix_local/`.
 Anything marked **verify** was not checked against the code and must be before work starts.
 
-## 0. Release 1 and what is deferred (decided 2026-10-28)
+## 0. The three phases (decided 2026-10-28)
 
-Income is not a fact yet, so the first release is the smallest one that can charge money: about **8 working
-days**. Everything else in this document stays as the design for later and is marked *(deferred)*.
+Income is not a fact yet, so the plan was cut into three phases that each ship on their own, with the plans
+flag (`billing_enabled`) off until the operator switches it on.
 
-Release 1 (build now)
-- Plans Free and Orbit Premium; one subscription per account.
-- Limits by plan: linked devices (2 / 10), attachment quota, max file size, attachment retention, backup media
-  per file and total.
-- Manual payment: the person sends a TrxID, the operator approves or rejects in Orbit Console, time stacks,
-  grace period of 3 days, admin grant and revoke.
-- The plan page in the app (plan comparison, price list, pay instructions, TrxID entry, request status shown
-  when the page is opened). Prices and payment numbers are console settings.
-- Only the privacy and legal docs that must change to stay true.
+| Phase | What | State |
+|---|---|---|
+| 1 | Plans Free and Orbit Premium; limits by plan (devices, attachment quota, file size, retention, backup media); manual bKash/Nagad payment confirmed in Orbit Console; time stacks; 3-day grace; admin grant and revoke; the plan page; console settings for prices and numbers | **built** (`b979998`) |
+| 2 | The 7-day trial (once per phone number); downloadable packs are Premium's (soft lock); a `plan` wake-up and quiet notification when a request is decided; per-account limit overrides; plan counts in the console; the wider docs pass | **built** |
+| 3 | **Call time**: daily Claim, the voice and video pools, per-call relay credentials, the second coturn relay, group-call charging, the call UI. Free calls stay unlimited until it ships | **not built, left for later** |
 
-Deferred (later releases, in this order of value)
-1. **Call time** (all of step 2): daily Claim, voice and video pools, per-call relay credentials, group-call
-   charging, the second coturn relay, port widening, call UI. Free calls stay **unlimited** until it ships.
-2. The 7-day **trial**.
-3. **Pack locks**: downloadable packs stay unlocked for everyone until then (the Premium table row below is
-   the target, not release 1).
-4. The push when a request is decided, the cross-device refresh signal, per-limit admin overrides and the
-   plan-count summary.
-5. The wider docs pass (threat model, metadata inventory rows for call durations).
-
+Notes on phase 2 as built: the trial starts with an account's first device and is remembered by the keyed phone
+hash, so it survives account deletion; the pack lock is an app rule (a locked theme is not drawn and a locked
+ringtone choice is cleared, but the choice of a theme is kept); the wake-up is account-less and content-free.
 
 ## 1. What we are doing and what we are not
 
@@ -61,7 +50,7 @@ Not doing
 | Backup media, total | 1 GiB | 4 GiB |
 | Voice call time *(deferred)* | 100 min a day (see 5) | unlimited |
 | Video call time *(deferred)* | 30 min a day (see 5) | unlimited |
-| Packs *(deferred)* | Orbit and Orbit Night (built in) | every downloadable pack |
+| Packs | Orbit and Orbit Night (built in) | every downloadable pack |
 
 Today every account may link 10 devices (`IdentityContext.maxDevices`), so Free dropping to 2 is a real
 change in code. The Free values for storage, file size and retention are today's values.
@@ -86,7 +75,7 @@ Bought time adds after the current end date (a lapsed plan starts at approval). 
 6x and 12x the monthly price, so the discount is real. The page shows each option as price, crossed-out price and
 "Save N%", with N worked out from the 6x and 12x prices, so it stays true when prices change in the console.
 
-### Trial *(deferred)*
+### Trial
 Each new account gets 7 days of Premium, once per phone number. The server already keeps a keyed hash of
 the number, so a deleted and re-created account does not get a second trial. There are no real users yet,
 so nothing special is needed for existing accounts (they are the owner's test numbers).
@@ -154,7 +143,7 @@ Privacy and security: the server never trusts a client claim of Premium; plan ch
 approval, trial or admin grant. Admin routes are limited to the operator. Account deletion purges billing
 rows; account export gets a `billing` section (plan, dates, request status).
 
-## 5. Call time (step 2)
+## 5. Call time (phase 3, not built)
 
 Rules decided:
 - Free gets a **voice pool** and a **video pool**, separate. Screen sharing counts as video.
@@ -267,22 +256,16 @@ signalled in the dark and relay-only.
 
 ## 9. Order of work
 
-Release 1 (about 8 working days; estimates are rough, plus or minus 50%)
+Phases 1 and 2 are built (see section 0). Phase 3 is the call-time work below; nothing in it has been started.
 
-| Step | Content | Migration | Days |
-|---|---|---|---|
-| 0 | ADR-035 and your change-log entry; a short doc pass | none | 1 |
-| 1a | `billing` foundation: plans in code, `subscriptions`, entitlements, flag; device, media and backup-media limits read them; everyone Free | billing 1 | 3 |
-| 1b | Payment requests, TrxID checks, admin queue, grant and revoke, console price and number settings | billing 2 | 2-3 |
-| 1c | App plan page: comparison, prices, pay instructions, TrxID entry, status on open | none | 2 |
+| Step | Content | Migration |
+|---|---|---|
+| 3a | Call-time ledger, Claim, balance | billing 3 |
+| 3b | Per-call reserved relay credentials, group room id, second coturn (voice cap) with its start script and `.env` lines, warning and end at zero | calls or billing |
+| 3c | Call UI: balance, Claim button, low-minutes warning | none |
 
-Deferred, in order of value: **2a-2c call time** (ledger and Claim, per-call relay credentials with the second
-coturn, call UI; about 11-16 days), the trial, pack locks, the decision push and refresh signal, overrides and
-summary counts, and the wider docs pass. Each keeps the design written above, and ADR-036 is written only
-when call time starts.
-
-After each step I will report what changed, tests with real numbers, whether a new APK is needed, whether the
-server must restart and migrate, and any `.env` line to add.
+Before 3b is committed to, the two coturn behaviours in section 11 must be tested for real. Phase 3 also needs
+its own ADR (ADR-036) and the metadata note about call durations.
 
 ## 10. Risks
 

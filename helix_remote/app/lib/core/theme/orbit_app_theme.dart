@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/theme/orbit_packs.dart';
+import 'package:helix_remote/core/theme/packs_locked.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
 /// The themes the app ships with (`orbit/contracts/you.md`, Appearance):
@@ -86,9 +87,17 @@ final class ThemeChoice extends Notifier<String> {
 }
 
 /// The tokens every screen draws with: the chosen theme's, else Orbit's.
+///
+/// A downloaded theme is not drawn while packs are locked for the account
+/// (ADR-035): Orbit is. The choice is kept, so it comes back with Premium.
 final orbitTokensProvider = Provider<OrbitTokens>((ref) {
   final themes = ref.watch(themeLibraryProvider);
-  return themes[ref.watch(themeChoiceProvider)] ?? themes[defaultThemeId]!;
+  final chosen = ref.watch(themeChoiceProvider);
+  final usable =
+      ref.watch(packsLockedProvider) && !builtInThemeIds.contains(chosen)
+      ? defaultThemeId
+      : chosen;
+  return themes[usable] ?? themes[defaultThemeId]!;
 });
 
 /// Reads a built-in theme from `orbit_ui`'s assets.

@@ -218,3 +218,26 @@ metadata). The cryptography has **not been externally reviewed**
 - **Residual risk**: App lock is off by default (the owner's ruling, 2026-10-25), so a phone with a
   short keyguard delay, or one somebody has just unlocked, still shows the chat that was open. The
   gate is a choice in Privacy, not a default.
+
+### T-15: Plans and manual payments (ADR-035)
+- **Description**: Orbit Premium is sold by hand: a person pays to the operator's bKash or Nagad number
+  outside the app and sends the transaction ID, and the operator approves it. The ways it can go wrong are a
+  made-up or reused ID, a flood of requests, an operator approving the wrong one, a client claiming Premium it
+  does not have, and the plan records becoming a new place that links people to a payment.
+- **Mitigation**: The server never trusts a client's claim: Premium comes only from an operator approval, an
+  operator grant or the once-per-number trial, and every limit is read from the server at the moment it is
+  enforced (`identity`, `media`). A transaction ID can be pending or approved only once, an account has one
+  open request, submissions are limited to 10 an hour, an unanswered request expires in 7 days, and the
+  operator sees the person's name and number next to the ID so the sender can be matched in the wallet's own
+  history. Every approval, rejection, grant, revoke and limit change writes an audit row. A request holds the
+  months, the amount, the method and the ID, never a wallet number, a balance or a card; it is kept a year
+  after it is decided and removed with the account. The trial is tied to the keyed phone hash, so deleting
+  and re-creating an account does not give a second one.
+- **Residual risk**: Approval depends on the operator's care, because the app cannot check a payment. A
+  person can still pay and not be approved for a day or two. The trial can be repeated with another phone
+  number, which already costs a verified SIM. The keyed hashes in `billing.trials_used` outlive an account by
+  design (the same property as banned numbers); without the pepper they cannot be turned back into numbers.
+- **The wake-up**: approving or rejecting a request sends the person's phones a data-only `plan` wake-up
+  (the kind and nothing else). The notification the app then shows says only that a request was updated, and
+  names no account, no amount and no ID.
+

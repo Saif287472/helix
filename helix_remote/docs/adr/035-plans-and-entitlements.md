@@ -53,12 +53,20 @@ the quota, file size and retention). A plan changes those numbers per account.
    purged with the account. Request rows are kept one year (like audit rows),
    then purged.
 
-## What is deferred (same plan, later releases)
+## Added in phase 2 (same decision, built later)
 
-Call time (daily minutes, per-call relay credentials, a second relay), the
-7-day trial, locked downloadable packs, a push when a request is decided,
-per-limit overrides and plan counts. None of them changes this decision; call
-time will need its own ADR.
+- **A once-per-number trial** of 7 days, started with an account's first device, remembered as the keyed phone
+  hash in `billing.trials_used` (kept after the account is deleted, no account id).
+- **Downloadable packs are Premium's**, a soft gate in the app: the built-in themes and ringtones stay free,
+  and nothing is locked while plans are off or the plan cannot be read.
+- **A data-only `plan` wake-up** when a request is decided or the plan changes (`PushReason.plan`); the
+  notification says only that a plan request was updated.
+- **Per-account limit overrides** and **plan counts** for the operator, audited.
+
+## What is deferred
+
+Call time (daily minutes, per-call relay credentials, a second relay). It changes none of this and will need
+its own ADR.
 
 ## Consequences
 

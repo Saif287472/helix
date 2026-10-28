@@ -4,6 +4,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/format/labels.dart' show formatBytes;
 import 'package:helix_remote/core/theme/orbit_app_theme.dart';
 import 'package:helix_remote/core/theme/orbit_packs.dart';
+import 'package:helix_remote/core/theme/packs_locked.dart';
 import 'package:helix_remote/features/settings/application/about_providers.dart'
     show serverTitleProvider;
 import 'package:helix_remote/features/settings/application/appearance.dart'
@@ -191,9 +192,18 @@ final class ThemePackPage {
 
   /// Downloads [id] - the newest revision on offer, and the same call whether
   /// this device had nothing of it or an older one.
-  Future<String?> get(String id) => _busy(id, () => _install(id));
+  Future<String?> get(String id) async =>
+      _locked(id) ?? await _busy(id, () => _install(id));
 
-  Future<String?> update(String id) => _busy(id, () => _install(id));
+  Future<String?> update(String id) async =>
+      _locked(id) ?? await _busy(id, () => _install(id));
+
+  /// A downloadable theme is part of Orbit Premium while packs are locked for
+  /// the account (ADR-035); the two built in are not.
+  String? _locked(String id) =>
+      _ref.read(packsLockedProvider) && !builtInThemeIds.contains(id)
+      ? packsLockedThemes
+      : null;
 
   Future<String?> delete(String id) =>
       _busy(id, () => _ref.read(themePackActionsProvider).remove(id));
@@ -202,6 +212,8 @@ final class ThemePackPage {
   /// gets there: the page lists what it holds, and a pack deleted from under a
   /// chosen theme falls back to Orbit on its own.
   Future<String?> use(String id) async {
+    final locked = _locked(id);
+    if (locked != null) return locked;
     final name = _ref.read(themeLibraryProvider)[id]?.meta.name;
     if (name == null) return 'That theme is not on this device.';
     await _ref.read(chooseThemeProvider)(id);
@@ -242,7 +254,13 @@ final themeGalleryProvider = Provider.autoDispose<ThemeGalleryModel>((ref) {
   // The theme actually on screen: the chosen one, or Orbit when the choice
   // names a pack this device no longer holds (deleting one keeps the choice,
   // so a re-download brings it back, but today it draws with the default).
-  final inUse = library.containsKey(chosen) ? chosen : defaultThemeId;
+  final locked = ref.watch(packsLockedProvider);
+  final inUse =
+      library.containsKey(chosen) &&
+          !(locked && !builtInThemeIds.contains(chosen))
+      ? chosen
+      : defaultThemeId;
+  final premium = locked ? 'Orbit Premium · ' : '';
 
   final items = <ThemePackItem>[
     for (final id in builtInThemeIds)
@@ -261,7 +279,8 @@ final themeGalleryProvider = Provider.autoDispose<ThemeGalleryModel>((ref) {
           id: pack.id,
           name: pack.name,
           place: ThemePackPlace.onThisPhone,
-          detail: '${pack.tokens.meta.vibe} · ${formatBytes(pack.bytes)}',
+          detail:
+              '$premium${pack.tokens.meta.vibe} · ${formatBytes(pack.bytes)}',
           inUse: inUse == pack.id,
           updateAvailable:
               (newest[pack.id]?.revision ?? pack.revision) > pack.revision,
@@ -275,7 +294,7 @@ final themeGalleryProvider = Provider.autoDispose<ThemeGalleryModel>((ref) {
         ThemePackItem(
           id: entry.id,
           name: entry.id,
-          detail: '${formatBytes(entry.totalBytes)} to download',
+          detail: '$premium${formatBytes(entry.totalBytes)} to download',
           busy: busy == entry.id,
         ),
   ];

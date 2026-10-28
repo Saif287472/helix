@@ -177,6 +177,10 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       ..add(name, Routes.adminRejectPaymentRequest, _rejectPayment)
       ..add(name, Routes.adminGrantPlan, _grantPlan)
       ..add(name, Routes.adminRevokePlan, _revokePlan)
+      ..add(name, Routes.adminAccountPlan, _accountPlan)
+      ..add(name, Routes.adminSetPlanOverride, _setPlanOverride)
+      ..add(name, Routes.adminClearPlanOverride, _clearPlanOverride)
+      ..add(name, Routes.adminBillingSummary, _billingSummary)
       ..add(name, Routes.adminBillingSettings, _billingSettings)
       ..add(name, Routes.adminSetBillingSettings, _setBillingSettings)
       ..add(name, Routes.adminFeatureFlags, _flags)
@@ -697,6 +701,81 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     });
     return noContent();
   }
+
+  Future<Response> _accountPlan(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    if (await identity.admin.accountDetail(context.db, id) == null) {
+      throw const ApiError(ErrorCode.notFound);
+    }
+    return jsonResponse((await billing.accountPlan(context.db, id)).toJson());
+  }
+
+  PlanLimitKey _limitKey(HelixRequest q) => PlanLimitKey.values.firstWhere(
+    (k) => k.wire == q.param('key') && k != PlanLimitKey.unknown,
+    orElse: () => throw const ApiError(ErrorCode.notFound),
+  );
+
+  Future<Response> _setPlanOverride(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    final key = _limitKey(q);
+    final req = q.json(SetPlanOverrideRequest.fromJson);
+    if (req.value < key.min || req.value > key.max) {
+      throw ApiError(
+        ErrorCode.invalidField,
+        message: '${key.wire} must be between ${key.min} and ${key.max}',
+        details: const {'field': 'value'},
+      );
+    }
+    final days = req.days;
+    await context.db.tx((tx) async {
+      if (await identity.admin.accountDetail(tx, id) == null) {
+        throw const ApiError(ErrorCode.notFound);
+      }
+      await billing.setOverride(
+        tx,
+        id,
+        key: key,
+        value: req.value,
+        reason: req.reason,
+        expiresAt: days == null
+            ? null
+            : context.clock.now().add(Duration(days: days)),
+      );
+      await _audit(
+        tx,
+        q,
+        'plan.override',
+        target: id,
+        details: {
+          'key': key.wire,
+          'value': '${req.value}',
+          'days': days == null ? 'until removed' : '$days',
+        },
+      );
+    });
+    return noContent();
+  }
+
+  Future<Response> _clearPlanOverride(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    final key = _limitKey(q);
+    await context.db.tx((tx) async {
+      if (!await billing.clearOverride(tx, id, key)) {
+        throw const ApiError(ErrorCode.notFound);
+      }
+      await _audit(
+        tx,
+        q,
+        'plan.override_clear',
+        target: id,
+        details: {'key': key.wire},
+      );
+    });
+    return noContent();
+  }
+
+  Future<Response> _billingSummary(HelixRequest q) async =>
+      jsonResponse((await billing.summary(context.db)).toJson());
 
   Future<Response> _billingSettings(HelixRequest q) async =>
       jsonResponse((await billing.settings(context.db)).toJson());

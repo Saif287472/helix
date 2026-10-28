@@ -81,6 +81,8 @@ deleted account by at most a year.
 | Reports | list (`status`), resolve or dismiss | The record holds two account ids; each row is answered with both people named (their own name, else their `~Helix name`) and numbered the way Accounts does, joined at read time from people and identity (ADR-030). |
 | Payment requests | list (`status`, default `pending`), approve, reject (with a short reason) | billing's queue (ADR-035). Each row is answered with the person's name and number as Accounts does (ADR-030), so the operator can match a bKash or Nagad sender. Approve adds the months after the current end. |
 | Plan | `PUT` / `DELETE …/accounts/{id}/plan` | Gives Premium time without a payment (1 to 36 months), or ends it now. |
+| Plan details | `GET …/accounts/{id}/plan`, `PUT` / `DELETE …/plan/overrides/{key}` | The plan, its source and end date, the limits in force, and the operator's per-account limit overrides (a support tool; audited, the reason stays in billing). |
+| Billing counts | `GET /v1/admin/billing/summary` | Premium, trial and grace accounts, waiting requests, the last 30 days' approvals and taka. |
 | Billing settings | get, put | Prices (taka) and the bKash and Nagad numbers. The audit row says only whether a number is set. |
 | Audit | list, newest first | |
 | Config | get, patch `server_name`, `maintenance`, `federation_enabled` | `get` also says which outside services are set up (`integrations`: push, SMS, TURN), as a yes/no with the provider name or an address count. Never a key, address or secret; it cannot say whether a provider accepts its key. |

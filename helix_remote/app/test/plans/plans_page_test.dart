@@ -41,6 +41,7 @@ BillingPlan aPlan({
   PlanId plan = PlanId.free,
   DateTime? end,
   bool grace = false,
+  bool trial = false,
   List<PaymentTarget> targets = const [
     PaymentTarget(method: PaymentMethod.bkash, number: '01700000000'),
     PaymentTarget(method: PaymentMethod.nagad, number: '01800000000'),
@@ -52,6 +53,7 @@ BillingPlan aPlan({
   plan: plan,
   periodEnd: end,
   inGrace: grace,
+  onTrial: trial,
   limits: plan == PlanId.premium ? _premium : _free,
   premiumLimits: _premium,
   prices: _prices,
@@ -305,6 +307,27 @@ void main() {
       expect(find.textContaining('Now:'), findsNothing);
     });
 
+    youTest('says it is the free trial, with the day it ends', (tester) async {
+      useTallWindow(tester);
+      final gateway = FakePlansGateway(
+        aPlan(
+          plan: PlanId.premium,
+          trial: true,
+          end: DateTime.utc(2026, 11, 8, 12),
+        ),
+      );
+      await pumpPage(
+        tester,
+        const PremiumPage(),
+        overrides: _overrides(gateway),
+      );
+      await settle(tester);
+
+      expect(find.text('You are on the free trial'), findsOneWidget);
+      expect(find.textContaining('until 8 Nov 2026'), findsOneWidget);
+      expect(find.text('You have Orbit Premium'), findsNothing);
+    });
+
     youTest('says so when the plan cannot be read, and tries again', (
       tester,
     ) async {
@@ -379,6 +402,16 @@ void main() {
           aPlan(plan: PlanId.premium, end: DateTime.utc(2026, 12, 15, 12)),
         ),
         'Premium until 15 Dec 2026',
+      );
+      expect(
+        await label(
+          aPlan(
+            plan: PlanId.premium,
+            end: DateTime.utc(2026, 11, 8, 12),
+            trial: true,
+          ),
+        ),
+        'Free trial until 8 Nov 2026',
       );
       expect(
         await label(

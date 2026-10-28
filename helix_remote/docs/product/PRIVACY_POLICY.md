@@ -49,7 +49,9 @@ jurisdiction-specific legal review before public launch.
   plan (Free or Orbit Premium) with its end date and where it came from, and
   each payment request you send - the months, the amount, bKash or Nagad, the
   transaction ID you typed, its state and the operator's short reason if it
-  was rejected. A transaction ID is not a phone number, and the app never sees
+  was rejected, a first-week trial marker (a keyed hash of your number, so the trial is once per number; it stays
+  after the account is deleted and cannot be turned back into the number), and any limit the operator changed
+  for your account. A transaction ID is not a phone number, and the app never sees
   or stores your wallet details: you pay in the bKash or Nagad app. The
   operator reads the request in the console, with your name and number, to
   match it to the payment. Requests are kept one year after they are decided,

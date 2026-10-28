@@ -57,6 +57,9 @@ abstract final class BillingLimits {
   /// Premium keeps working this many days after its end date.
   static const graceDays = 3;
 
+  /// A new account's free Premium, once per phone number.
+  static const trialDays = 7;
+
   /// A transaction ID: letters and digits, 6 to 20 of them (bKash IDs are
   /// ten characters, Nagad's are shorter or longer; the operator checks the
   /// real one).
@@ -237,6 +240,7 @@ final class BillingPlan {
     required this.paymentTargets,
     this.periodEnd,
     this.inGrace = false,
+    this.onTrial = false,
     this.openRequest,
     this.lastRequest,
   });
@@ -251,6 +255,9 @@ final class BillingPlan {
 
   /// True after [periodEnd] while the grace period keeps Premium running.
   final bool inGrace;
+
+  /// The Premium running now is the free first-week trial.
+  final bool onTrial;
 
   /// What this account may do now.
   final PlanLimits limits;
@@ -275,6 +282,7 @@ final class BillingPlan {
     'plan': plan.wire,
     'period_end': periodEnd == null ? null : toWireTime(periodEnd!),
     'in_grace': inGrace,
+    'on_trial': onTrial,
     'limits': limits.toJson(),
     'premium_limits': premiumLimits.toJson(),
     'prices': [for (final p in prices) p.toJson()],
@@ -288,6 +296,7 @@ final class BillingPlan {
     plan: json.enumValue('plan', PlanId.values, orElse: PlanId.unknown),
     periodEnd: json.optTime('period_end'),
     inGrace: json.flag('in_grace'),
+    onTrial: json.flag('on_trial'),
     limits: PlanLimits.fromJson(json.object('limits')),
     premiumLimits: PlanLimits.fromJson(json.object('premium_limits')),
     prices: json.objects('prices', PlanPrice.fromJson),
@@ -452,4 +461,172 @@ final class BillingSettings {
     final value = json.optString(key, maxLength: maxNumberLength)?.trim();
     return value == null || value.isEmpty ? null : value;
   }
+}
+
+/// A limit an operator may change for one account (support cases, ADR-035).
+/// The wire names are the ones in [PlanLimits].
+enum PlanLimitKey implements WireEnum {
+  maxDevices('max_devices', 1, 100),
+  attachmentQuotaBytes('attachment_quota_bytes', 0, _tebibytes * 16),
+  maxAttachmentBytes('max_attachment_bytes', 1, _tebibytes),
+  attachmentRetentionDays('attachment_retention_days', 1, 3650),
+  backupMaxBytes('backup_max_bytes', 1, _tebibytes),
+  backupQuotaBytes('backup_quota_bytes', 0, _tebibytes * 16),
+  unknown('unknown', 0, 0);
+
+  const PlanLimitKey(this.wire, this.min, this.max);
+
+  @override
+  final String wire;
+
+  /// The smallest and largest value an override may set.
+  final int min;
+  final int max;
+
+  static const _tebibytes = 1024 * 1024 * 1024 * 1024;
+}
+
+/// One limit an operator changed for an account.
+final class PlanOverride {
+  const PlanOverride({
+    required this.key,
+    required this.value,
+    required this.reason,
+    this.expiresAt,
+  });
+
+  final PlanLimitKey key;
+  final int value;
+
+  /// Why, for the next operator. Never shown to the person.
+  final String reason;
+
+  /// Null: until an operator removes it.
+  final DateTime? expiresAt;
+
+  JsonMap toJson() => compact({
+    'key': key.wire,
+    'value': value,
+    'reason': reason,
+    'expires_at': expiresAt == null ? null : toWireTime(expiresAt!),
+  });
+
+  factory PlanOverride.fromJson(JsonReader json) => PlanOverride(
+    key: json.enumValue(
+      'key',
+      PlanLimitKey.values,
+      orElse: PlanLimitKey.unknown,
+    ),
+    value: json.integer('value'),
+    reason: json.string('reason'),
+    expiresAt: json.optTime('expires_at'),
+  );
+}
+
+/// `GET /v1/admin/accounts/{account}/plan`: what the account has, what it may
+/// do now (with overrides applied) and the overrides.
+final class AdminAccountPlan {
+  const AdminAccountPlan({
+    required this.plan,
+    required this.limits,
+    required this.overrides,
+    this.periodEnd,
+    this.source,
+    this.inGrace = false,
+  });
+
+  final PlanId plan;
+  final DateTime? periodEnd;
+
+  /// `payment`, `admin` or `trial`; null without a subscription.
+  final String? source;
+  final bool inGrace;
+  final PlanLimits limits;
+  final List<PlanOverride> overrides;
+
+  JsonMap toJson() => compact({
+    'plan': plan.wire,
+    'period_end': periodEnd == null ? null : toWireTime(periodEnd!),
+    'source': source,
+    'in_grace': inGrace,
+    'limits': limits.toJson(),
+    'overrides': [for (final o in overrides) o.toJson()],
+  });
+
+  factory AdminAccountPlan.fromJson(JsonReader json) => AdminAccountPlan(
+    plan: json.enumValue('plan', PlanId.values, orElse: PlanId.unknown),
+    periodEnd: json.optTime('period_end'),
+    source: json.optString('source'),
+    inGrace: json.flag('in_grace'),
+    limits: PlanLimits.fromJson(json.object('limits')),
+    overrides: json.objects('overrides', PlanOverride.fromJson),
+  );
+}
+
+/// `PUT /v1/admin/accounts/{account}/plan/overrides/{key}`.
+final class SetPlanOverrideRequest {
+  const SetPlanOverrideRequest({
+    required this.value,
+    required this.reason,
+    this.days,
+  });
+
+  final int value;
+  final String reason;
+
+  /// Days the override lasts; null keeps it until it is removed.
+  final int? days;
+
+  static const maxReasonLength = 200;
+
+  JsonMap toJson() => compact({'value': value, 'reason': reason, 'days': days});
+
+  factory SetPlanOverrideRequest.fromJson(JsonReader json) =>
+      SetPlanOverrideRequest(
+        value: json.integer('value'),
+        reason: json.nonEmpty('reason', maxLength: maxReasonLength),
+        days: json.optIntIn('days', 1, 366),
+      );
+}
+
+/// `GET /v1/admin/billing/summary`: counts for the Payments page.
+final class BillingSummary {
+  const BillingSummary({
+    required this.premium,
+    required this.inGrace,
+    required this.onTrial,
+    required this.pendingRequests,
+    required this.approvedLast30Days,
+    required this.takenLast30Days,
+  });
+
+  /// Accounts with Premium running (trials included).
+  final int premium;
+
+  /// Premium accounts past their end date, inside the grace period.
+  final int inGrace;
+  final int onTrial;
+  final int pendingRequests;
+
+  /// Requests approved in the last 30 days and the taka they were for.
+  final int approvedLast30Days;
+  final int takenLast30Days;
+
+  JsonMap toJson() => {
+    'premium': premium,
+    'in_grace': inGrace,
+    'on_trial': onTrial,
+    'pending_requests': pendingRequests,
+    'approved_last_30_days': approvedLast30Days,
+    'taken_last_30_days': takenLast30Days,
+  };
+
+  factory BillingSummary.fromJson(JsonReader json) => BillingSummary(
+    premium: json.integer('premium'),
+    inGrace: json.integer('in_grace'),
+    onTrial: json.integer('on_trial'),
+    pendingRequests: json.integer('pending_requests'),
+    approvedLast30Days: json.integer('approved_last_30_days'),
+    takenLast30Days: json.integer('taken_last_30_days'),
+  );
 }

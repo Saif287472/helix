@@ -192,6 +192,39 @@ final class AdminClient {
   Future<void> revokePlan(String accountId) =>
       _t.empty(Routes.adminRevokePlan, params: {'account': accountId});
 
+  /// What the account has and may do now, with the operator's overrides.
+  Future<AdminAccountPlan> accountPlan(String accountId) => _t.call(
+    Routes.adminAccountPlan,
+    AdminAccountPlan.fromJson,
+    params: {'account': accountId},
+  );
+
+  /// Changes one limit for one account for [days] days, or until removed.
+  Future<void> setPlanOverride(
+    String accountId,
+    PlanLimitKey key, {
+    required int value,
+    required String reason,
+    int? days,
+  }) => _t.empty(
+    Routes.adminSetPlanOverride,
+    params: {'account': accountId, 'key': key.wire},
+    json: SetPlanOverrideRequest(
+      value: value,
+      reason: reason,
+      days: days,
+    ).toJson(),
+  );
+
+  Future<void> clearPlanOverride(String accountId, PlanLimitKey key) =>
+      _t.empty(
+        Routes.adminClearPlanOverride,
+        params: {'account': accountId, 'key': key.wire},
+      );
+
+  Future<BillingSummary> billingSummary() =>
+      _t.call(Routes.adminBillingSummary, BillingSummary.fromJson);
+
   Future<BillingSettings> billingSettings() =>
       _t.call(Routes.adminBillingSettings, BillingSettings.fromJson);
 

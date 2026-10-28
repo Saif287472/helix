@@ -111,6 +111,27 @@ class _AccountDetailViewState extends State<AccountDetailView> {
     }
   }
 
+  Future<void> _changeLimit() async {
+    final change = await showDialog<_LimitChange>(
+      context: context,
+      builder: (_) => const _LimitDialog(),
+    );
+    if (change == null || !mounted) return;
+    _report(
+      await _controller.setOverride(
+        change.key,
+        value: change.value,
+        reason: change.reason,
+        days: change.days,
+      ),
+      'Limit changed for this account.',
+    );
+  }
+
+  Future<void> _clearLimit(PlanLimitKey key) async {
+    _report(await _controller.clearOverride(key), 'Limit back to the plan.');
+  }
+
   Future<void> _givePremium() async {
     final months = await showDialog<int>(
       context: context,
@@ -460,6 +481,15 @@ class _AccountDetailViewState extends State<AccountDetailView> {
               ),
             ),
             const SizedBox(height: 24),
+            if (_controller.plan case final plan?) ...[
+              const SizedBox(height: 14),
+              _PlanCard(
+                plan: plan,
+                busy: _controller.isBusy('plan'),
+                onChange: _changeLimit,
+                onClear: _clearLimit,
+              ),
+            ],
           ],
         );
       },
@@ -598,4 +628,222 @@ class _DeviceTile extends StatelessWidget {
     DevicePlatform.cli => Icons.terminal,
     DevicePlatform.other => Icons.devices_other,
   };
+}
+
+String _limitLabel(PlanLimitKey k) => switch (k) {
+  PlanLimitKey.maxDevices => 'Linked devices',
+  PlanLimitKey.attachmentQuotaBytes => 'Attachment storage',
+  PlanLimitKey.maxAttachmentBytes => 'Largest file',
+  PlanLimitKey.attachmentRetentionDays => 'Files kept (days)',
+  PlanLimitKey.backupMaxBytes => 'Backup file size',
+  PlanLimitKey.backupQuotaBytes => 'Backup room',
+  PlanLimitKey.unknown => 'Unknown limit',
+};
+
+bool _isBytes(PlanLimitKey k) =>
+    k == PlanLimitKey.attachmentQuotaBytes ||
+    k == PlanLimitKey.maxAttachmentBytes ||
+    k == PlanLimitKey.backupMaxBytes ||
+    k == PlanLimitKey.backupQuotaBytes;
+
+String _limitValue(PlanLimitKey k, int v) =>
+    _isBytes(k) ? formatBytes(v) : '$v';
+
+/// What the account has under Orbit Premium (ADR-035), the limits in force and
+/// the operator's overrides, each removable.
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.plan,
+    required this.busy,
+    required this.onChange,
+    required this.onClear,
+  });
+
+  final AdminAccountPlan plan;
+  final bool busy;
+  final VoidCallback onChange;
+  final void Function(PlanLimitKey key) onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final end = plan.periodEnd;
+    final premium = plan.plan == PlanId.premium;
+    final l = plan.limits;
+    return ConsoleCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const ConsoleCardLabel('Orbit Premium'),
+          const SizedBox(height: 12),
+          ConsoleProperty(
+            label: 'Plan',
+            value: premium
+                ? (plan.source == 'trial' ? 'Premium (trial)' : 'Premium')
+                : 'Free',
+            mono: false,
+          ),
+          if (end != null)
+            ConsoleProperty(
+              label: plan.inGrace ? 'Ended (in grace)' : 'Until',
+              value: formatDay(end),
+              mono: false,
+            ),
+          ConsoleProperty(label: 'Device limit', value: '${l.maxDevices}'),
+          ConsoleProperty(
+            label: 'Attachment storage',
+            value: formatBytes(l.attachmentQuotaBytes),
+          ),
+          ConsoleProperty(
+            label: 'Largest file',
+            value: formatBytes(l.maxAttachmentBytes),
+          ),
+          ConsoleProperty(
+            label: 'Files kept',
+            value: '${l.attachmentRetentionDays} days',
+            mono: false,
+          ),
+          if (plan.overrides.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const ConsoleCardLabel('Changed for this account'),
+            const SizedBox(height: 6),
+            for (final o in plan.overrides)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_limitLabel(o.key)}: ${_limitValue(o.key, o.value)}'
+                        '${o.expiresAt == null ? '' : ' until ${formatDay(o.expiresAt!)}'}'
+                        ' (${o.reason})',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: HelixConsoleColors.textBody,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: busy ? null : () => onClear(o.key),
+                      child: const Text('Remove'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: busy ? null : onChange,
+            style: ConsoleButtons.outlined,
+            icon: const Icon(Icons.tune, size: 18),
+            label: const Text('Change a limit'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One limit change as the operator typed it, in the units the server keeps.
+class _LimitChange {
+  const _LimitChange(this.key, this.value, this.reason, this.days);
+
+  final PlanLimitKey key;
+  final int value;
+  final String reason;
+  final int? days;
+}
+
+/// Picks a limit, a value (in MiB for sizes), a reason and how long.
+class _LimitDialog extends StatefulWidget {
+  const _LimitDialog();
+
+  @override
+  State<_LimitDialog> createState() => _LimitDialogState();
+}
+
+class _LimitDialogState extends State<_LimitDialog> {
+  PlanLimitKey _key = PlanLimitKey.maxDevices;
+  final _value = TextEditingController();
+  final _reason = TextEditingController();
+  final _days = TextEditingController();
+
+  @override
+  void dispose() {
+    _value.dispose();
+    _reason.dispose();
+    _days.dispose();
+    super.dispose();
+  }
+
+  _LimitChange? _read() {
+    final typed = int.tryParse(_value.text.trim());
+    if (typed == null || _reason.text.trim().isEmpty) return null;
+    final value = _isBytes(_key) ? typed * 1024 * 1024 : typed;
+    if (value < _key.min || value > _key.max) return null;
+    final days = _days.text.trim().isEmpty
+        ? null
+        : int.tryParse(_days.text.trim());
+    if (_days.text.trim().isNotEmpty &&
+        (days == null || days < 1 || days > 366)) {
+      return null;
+    }
+    return _LimitChange(_key, value, _reason.text.trim(), days);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Change a limit'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DropdownButtonFormField<PlanLimitKey>(
+            initialValue: _key,
+            items: [
+              for (final k in PlanLimitKey.values)
+                if (k != PlanLimitKey.unknown)
+                  DropdownMenuItem(value: k, child: Text(_limitLabel(k))),
+            ],
+            onChanged: (k) => setState(() => _key = k ?? _key),
+          ),
+          TextField(
+            controller: _value,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: _isBytes(_key) ? 'New value (MiB)' : 'New value',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          TextField(
+            controller: _reason,
+            maxLength: SetPlanOverrideRequest.maxReasonLength,
+            decoration: const InputDecoration(
+              labelText: 'Why (for the next operator)',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          TextField(
+            controller: _days,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Days (blank: until removed)',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _read() == null
+            ? null
+            : () => Navigator.pop(context, _read()),
+        child: const Text('Save'),
+      ),
+    ],
+  );
 }

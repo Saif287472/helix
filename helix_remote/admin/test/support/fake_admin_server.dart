@@ -45,6 +45,18 @@ final class FakeAdminServer {
 
   /// Premium months the operator gave, by account.
   final Map<String, int> grantedMonths = {};
+
+  /// Limits the operator changed, by account and wire key.
+  final Map<String, Map<String, PlanOverride>> planOverrides = {};
+
+  BillingSummary billingSummary = const BillingSummary(
+    premium: 3,
+    inGrace: 1,
+    onTrial: 2,
+    pendingRequests: 1,
+    approvedLast30Days: 4,
+    takenLast30Days: 480,
+  );
   BillingSettings billingSettings = const BillingSettings(
     priceOneMonth: 20,
     priceSixMonths: 100,
@@ -286,6 +298,61 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
       ];
       _record('device.revoke', target: deviceId);
       return http.Response('', 204);
+    }
+    found = match(r'/v1/admin/accounts/([^/]+)/plan/overrides/([^/]+)');
+    if (found != null) {
+      final id = found.group(1)!;
+      final key = found.group(2)!;
+      if (m == 'PUT') {
+        final body = _body(request);
+        planOverrides.putIfAbsent(id, () => {})[key] = PlanOverride(
+          key: PlanLimitKey.values.firstWhere((k) => k.wire == key),
+          value: body['value'] as int,
+          reason: body['reason'] as String,
+          expiresAt: body['days'] == null
+              ? null
+              : _now().add(Duration(days: body['days'] as int)),
+        );
+        _record('plan.override', target: id);
+        return http.Response('', 204);
+      }
+      if (m == 'DELETE') {
+        if (planOverrides[id]?.remove(key) == null) {
+          return _error(ErrorCode.notFound);
+        }
+        _record('plan.override_clear', target: id);
+        return http.Response('', 204);
+      }
+    }
+    if (m == 'GET' && path == '/v1/admin/billing/summary') {
+      return _json(billingSummary.toJson());
+    }
+    found = match(r'/v1/admin/accounts/([^/]+)/plan');
+    if (found != null && m == 'GET') {
+      final id = found.group(1)!;
+      final premium = (grantedMonths[id] ?? 0) > 0;
+      final overrides = planOverrides[id]?.values.toList() ?? const [];
+      int pick(PlanLimitKey k, int fallback) =>
+          overrides.where((o) => o.key == k).firstOrNull?.value ?? fallback;
+      return _json(
+        AdminAccountPlan(
+          plan: premium ? PlanId.premium : PlanId.free,
+          periodEnd: premium ? DateTime.utc(2026, 12, 1) : null,
+          source: premium ? 'admin' : null,
+          limits: PlanLimits(
+            maxDevices: pick(PlanLimitKey.maxDevices, premium ? 10 : 2),
+            attachmentQuotaBytes: 4 * 1024 * 1024 * 1024,
+            maxAttachmentBytes: pick(
+              PlanLimitKey.maxAttachmentBytes,
+              100 * 1024 * 1024,
+            ),
+            attachmentRetentionDays: 30,
+            backupMaxBytes: 100 * 1024 * 1024,
+            backupQuotaBytes: 1024 * 1024 * 1024,
+          ),
+          overrides: overrides,
+        ).toJson(),
+      );
     }
     found = match(r'/v1/admin/accounts/([^/]+)/plan');
     if (found != null) {

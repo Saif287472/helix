@@ -7,6 +7,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/push/account_badges.dart';
 import 'package:helix_remote/core/push/push_background.dart';
+import 'package:helix_remote/core/push/push_wake_tick.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/theme/orbit_app_theme.dart'
     show FileDeviceSettingsStore;
@@ -237,7 +238,10 @@ final pushRegistrationProvider = Provider<PushRegistration>((ref) {
     enabled: ref.watch(pushWakeupsReaderProvider),
     current: ref.watch(currentPushRegistrarProvider),
     onToken: (token) => wakes.wake(pushToken: token),
-    onWake: () => unawaited(wakes.wake()),
+    onWake: () {
+      ref.read(pushWakeTickProvider.notifier).bump();
+      unawaited(wakes.wake());
+    },
   );
   ref.onDispose(registration.dispose);
   ref.listen<AsyncValue<AppAuthState>>(authStateProvider, (_, next) {

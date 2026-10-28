@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
+import 'package:helix_remote/core/push/push_wake_tick.dart';
+import 'package:helix_remote/core/theme/packs_locked.dart';
 import 'package:helix_remote/features/plans/application/plan_models.dart';
 import 'package:helix_remote/features/plans/application/plans_gateway.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException;
@@ -10,9 +12,15 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 
 /// The account's plan, prices and open request. Dropped when the page closes,
 /// so it is read again the next time it opens.
-final billingPlanProvider = FutureProvider.autoDispose<PlanView>(
-  (ref) async => PlanView.from(await ref.watch(plansGatewayProvider).plan()),
-);
+final billingPlanProvider = FutureProvider.autoDispose<PlanView>((ref) async {
+  // A wake-up while the app is in front may be a decided request.
+  ref.watch(pushWakeTickProvider);
+  final plan = PlanView.from(await ref.watch(plansGatewayProvider).plan());
+  // Downloadable packs are Orbit Premium's while plans are on (ADR-035). Read
+  // here, so the You page's row, the plan page and a wake-up all keep it true.
+  ref.read(packsLockedProvider.notifier).set(plan.enabled && !plan.isPremium);
+  return plan;
+});
 
 const _months = [
   'Jan',
@@ -44,8 +52,9 @@ final premiumLabelProvider = Provider.autoDispose<String?>((ref) {
   if (!plan.isPremium || end == null) {
     return plan.open == null ? 'Free plan' : 'Waiting for approval';
   }
-  return plan.inGrace
-      ? 'Ended ${planDate(end)}, still on for a few days'
+  if (plan.inGrace) return 'Ended ${planDate(end)}, still on for a few days';
+  return plan.onTrial
+      ? 'Free trial until ${planDate(end)}'
       : 'Premium until ${planDate(end)}';
 });
 

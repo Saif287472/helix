@@ -53,6 +53,18 @@ abstract final class LocalNotifications {
     playSound: false,
   );
 
+  /// Orbit Premium: a plan request was decided. One quiet channel, and the
+  /// notification says only that something changed (the wake-up carries
+  /// nothing more, and the page has the answer).
+  static const _plan = AndroidNotificationChannel(
+    'helix_plan',
+    'Orbit Premium',
+    description: 'A plan request was updated.',
+  );
+
+  /// The notification's id: one, so a newer answer replaces an older one.
+  static const _planId = 7001;
+
   /// The message channels from before the 2026-10-25 importance change. Removed
   /// at start so Android's own settings show one Messages group, not two.
   static const _retiredChannels = [
@@ -99,6 +111,7 @@ abstract final class LocalNotifications {
       _messagesSilent,
       _messagesSoundOnly,
       _messagesVibrateOnly,
+      _plan,
     ]) {
       await android?.createNotificationChannel(channel);
     }
@@ -106,6 +119,26 @@ abstract final class LocalNotifications {
       await android?.deleteNotificationChannel(channelId: retired);
     }
     _plugin = plugin;
+  }
+
+  /// "Your plan request was updated." The wake-up that causes it names no
+  /// account, so neither does this; opening the app shows the answer.
+  static Future<void> showPlanUpdate() async {
+    final plugin = _plugin;
+    if (plugin == null) return;
+    await plugin.show(
+      id: _planId,
+      title: 'Orbit Premium',
+      body: 'Your plan request was updated.',
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _plan.id,
+          _plan.name,
+          channelDescription: _plan.description,
+          category: AndroidNotificationCategory.status,
+        ),
+      ),
+    );
   }
 
   /// Whether the person allows notifications. False is a normal answer, not an

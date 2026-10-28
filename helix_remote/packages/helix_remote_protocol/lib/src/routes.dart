@@ -987,6 +987,30 @@ abstract final class Routes {
     module: 'admin',
     access: _adm,
   );
+  static const adminAccountPlan = ApiRoute(
+    _get,
+    '/v1/admin/accounts/{account}/plan',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminSetPlanOverride = ApiRoute(
+    _put,
+    '/v1/admin/accounts/{account}/plan/overrides/{key}',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminClearPlanOverride = ApiRoute(
+    _delete,
+    '/v1/admin/accounts/{account}/plan/overrides/{key}',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminBillingSummary = ApiRoute(
+    _get,
+    '/v1/admin/billing/summary',
+    module: 'admin',
+    access: _adm,
+  );
   static const adminFeatureFlags = ApiRoute(
     _get,
     '/v1/admin/feature-flags',
@@ -1058,7 +1082,8 @@ abstract final class Routes {
     adminConfig, adminSetConfig, adminFeatureFlags, adminSetFeatureFlag,
     adminPaymentRequests, adminApprovePaymentRequest,
     adminRejectPaymentRequest, adminGrantPlan, adminRevokePlan,
-    adminBillingSettings, adminSetBillingSettings, //
+    adminBillingSettings, adminSetBillingSettings, adminAccountPlan,
+    adminSetPlanOverride, adminClearPlanOverride, adminBillingSummary, //
     adminLogs, adminLogStream, adminPurge,
   ];
 }

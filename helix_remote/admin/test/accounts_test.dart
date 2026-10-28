@@ -7,6 +7,18 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'support/fake_admin_server.dart';
 import 'support/harness.dart';
 
+/// Scrolls the account sheet until the plan card's button is fully on screen
+/// (the card is the last thing in it).
+Future<void> revealLimitButton(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.text('Change a limit'),
+    300,
+    scrollable: find.byType(Scrollable).last,
+  );
+  await tester.drag(find.byType(Scrollable).last, const Offset(0, -200));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   late AdminHarness h;
 
@@ -380,6 +392,75 @@ void main() {
       await tapText(tester, 'End Premium');
       expect(h.server.grantedMonths, isEmpty);
       expect(find.text('Premium ended.'), findsOneWidget);
+    });
+
+    testWidgets('the plan card shows the limits in force', (tester) async {
+      await openAlice(tester);
+      await revealLimitButton(tester);
+
+      expect(find.text('ORBIT PREMIUM'), findsOneWidget);
+      expect(find.text('Free'), findsWidgets);
+      expect(find.text('Change a limit'), findsOneWidget);
+    });
+
+    testWidgets('a limit can be changed for one account, then removed', (
+      tester,
+    ) async {
+      await openAlice(tester);
+      await revealLimitButton(tester);
+      await tapText(tester, 'Change a limit');
+      await tester.enterText(find.widgetWithText(TextField, 'New value'), '5');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Why (for the next operator)'),
+        'ticket 7',
+      );
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(
+        h
+            .server
+            .bodies['PUT /v1/admin/accounts/acct-1/plan/overrides/max_devices'],
+        [
+          {'value': 5, 'reason': 'ticket 7'},
+        ],
+      );
+      expect(find.text('Limit changed for this account.'), findsOneWidget);
+      expect(
+        find.textContaining('Linked devices: 5 (ticket 7)'),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Remove'),
+        300,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.drag(find.byType(Scrollable).last, const Offset(0, -200));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'Remove');
+      expect(h.server.planOverrides['acct-1'], isEmpty);
+      expect(find.textContaining('ticket 7'), findsNothing);
+    });
+
+    testWidgets('a limit change needs a number inside the bounds', (
+      tester,
+    ) async {
+      await openAlice(tester);
+      await revealLimitButton(tester);
+      await tapText(tester, 'Change a limit');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'New value'),
+        '500',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Why (for the next operator)'),
+        'x',
+      );
+      await tester.pump();
+      final save = find.widgetWithText(FilledButton, 'Save');
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
     });
 
     testWidgets('ending Premium on an account without it says so', (

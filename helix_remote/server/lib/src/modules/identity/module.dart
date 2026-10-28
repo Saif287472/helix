@@ -197,6 +197,10 @@ final class _IdentityFacade implements IdentityApi {
       _store.lockActiveDevices(tx, deviceIds.toSet().toList());
 
   @override
+  Future<Uint8List?> phoneHash(SqlSession s, String accountId) =>
+      _store.phoneHashOf(s, accountId);
+
+  @override
   Future<PushTarget?> pushTarget(SqlSession s, String deviceId) =>
       _store.pushTarget(s, deviceId);
 

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
@@ -5,7 +7,38 @@ import 'package:helix_remote_server/src/platform/db/paging.dart';
 
 /// Schema `billing`: subscriptions, payment requests and the operator's
 /// settings (ADR-035).
-const billingMigrations = [Migration(1, 'billing_baseline', _baseline)];
+const billingMigrations = [
+  Migration(1, 'billing_baseline', _baseline),
+  Migration(2, 'trial_and_overrides', _trialAndOverrides),
+];
+
+String _trialAndOverrides(String s) =>
+    '''
+ALTER TABLE $s.subscriptions DROP CONSTRAINT IF EXISTS subscriptions_source_check;
+ALTER TABLE $s.subscriptions ADD CONSTRAINT subscriptions_source_check
+  CHECK (source IN ('payment', 'admin', 'trial'));
+
+-- One free trial per phone number, kept even after the account is deleted so
+-- a new account on the same number does not get another. It holds only the
+-- keyed hash identity already keeps, never the number.
+CREATE TABLE $s.trials_used (
+  phone_key bytea PRIMARY KEY,
+  used_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- A limit an operator changed for one account (support cases).
+CREATE TABLE $s.entitlement_overrides (
+  account_id uuid NOT NULL,
+  key text NOT NULL CHECK (key IN (
+    'max_devices', 'attachment_quota_bytes', 'max_attachment_bytes',
+    'attachment_retention_days', 'backup_max_bytes', 'backup_quota_bytes')),
+  value bigint NOT NULL CHECK (value >= 0),
+  reason text NOT NULL,
+  expires_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, key)
+);
+''';
 
 String _baseline(String s) =>
     '''
@@ -78,7 +111,8 @@ final class BillingStore {
   Future<DateTime> extend(
     Tx tx,
     String accountId, {
-    required int months,
+    int months = 0,
+    int days = 0,
     required String source,
     required DateTime now,
   }) async {
@@ -86,12 +120,14 @@ final class BillingStore {
       'INSERT INTO $s.subscriptions AS sub '
       '(account_id, plan, source, period_end, created_at, updated_at) '
       "VALUES (@a:uuid, 'premium', @src:text, "
-      '@now:timestamptz + make_interval(months => @m:int4), @now:timestamptz, @now:timestamptz) '
+      '@now:timestamptz + make_interval(months => @m:int4, days => @d:int4), '
+      '@now:timestamptz, @now:timestamptz) '
       'ON CONFLICT (account_id) DO UPDATE SET source = @src:text, '
       'period_end = GREATEST(sub.period_end, @now:timestamptz) '
-      '+ make_interval(months => @m:int4), updated_at = @now:timestamptz '
+      '+ make_interval(months => @m:int4, days => @d:int4), '
+      'updated_at = @now:timestamptz '
       'RETURNING period_end',
-      {'a': accountId, 'src': source, 'm': months, 'now': now},
+      {'a': accountId, 'src': source, 'm': months, 'd': days, 'now': now},
     );
     return row!.time('period_end');
   }
@@ -275,6 +311,10 @@ final class BillingStore {
       {'a': accountId},
     );
     await tx.execute(
+      'DELETE FROM $s.entitlement_overrides WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
+    await tx.execute(
       'DELETE FROM $s.payment_requests WHERE account_id = @a:uuid',
       {'a': accountId},
     );
@@ -304,6 +344,116 @@ final class BillingStore {
       'INSERT INTO $s.settings (key, value) VALUES (@k:text, @v:text) '
       'ON CONFLICT (key) DO UPDATE SET value = excluded.value',
       {'k': key, 'v': value},
+    );
+  }
+
+  // ------------------------------------------------------------------ trial
+
+  /// Marks a phone number as having had its trial. False when it already had
+  /// one (nothing changes then).
+  Future<bool> recordTrial(Tx tx, Uint8List phoneKey, DateTime now) async =>
+      await tx.execute(
+        'INSERT INTO $s.trials_used (phone_key, used_at) '
+        'VALUES (@k:bytea, @now:timestamptz) ON CONFLICT DO NOTHING',
+        {'k': phoneKey, 'now': now},
+      ) >
+      0;
+
+  // -------------------------------------------------------------- overrides
+
+  /// The overrides in force at [now], by wire key.
+  Future<Map<String, int>> activeOverrides(
+    SqlSession db,
+    String accountId,
+    DateTime now,
+  ) async => {
+    for (final r in await db.query(
+      'SELECT key, value FROM $s.entitlement_overrides '
+      'WHERE account_id = @a:uuid AND (expires_at IS NULL OR expires_at > @now:timestamptz)',
+      {'a': accountId, 'now': now},
+    ))
+      r.string('key'): r.integer('value'),
+  };
+
+  Future<List<PlanOverride>> overridesOf(
+    SqlSession db,
+    String accountId,
+    DateTime now,
+  ) async => [
+    for (final r in await db.query(
+      'SELECT key, value, reason, expires_at FROM $s.entitlement_overrides '
+      'WHERE account_id = @a:uuid AND (expires_at IS NULL OR expires_at > @now:timestamptz) '
+      'ORDER BY key',
+      {'a': accountId, 'now': now},
+    ))
+      PlanOverride(
+        key: PlanLimitKey.values.firstWhere(
+          (k) => k.wire == r.string('key'),
+          orElse: () => PlanLimitKey.unknown,
+        ),
+        value: r.integer('value'),
+        reason: r.string('reason'),
+        expiresAt: r.optTime('expires_at'),
+      ),
+  ];
+
+  Future<void> putOverride(
+    Tx tx,
+    String accountId, {
+    required PlanLimitKey key,
+    required int value,
+    required String reason,
+    DateTime? expiresAt,
+  }) => tx.execute(
+    'INSERT INTO $s.entitlement_overrides (account_id, key, value, reason, expires_at) '
+    'VALUES (@a:uuid, @k:text, @v:int8, @r:text, @e:timestamptz) '
+    'ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value, '
+    'reason = excluded.reason, expires_at = excluded.expires_at, created_at = now()',
+    {'a': accountId, 'k': key.wire, 'v': value, 'r': reason, 'e': expiresAt},
+  );
+
+  Future<bool> clearOverride(Tx tx, String accountId, PlanLimitKey key) async =>
+      await tx.execute(
+        'DELETE FROM $s.entitlement_overrides WHERE account_id = @a:uuid AND key = @k:text',
+        {'a': accountId, 'k': key.wire},
+      ) >
+      0;
+
+  Future<int> purgeExpiredOverrides(SqlSession db, DateTime now) => db.execute(
+    'DELETE FROM $s.entitlement_overrides WHERE expires_at IS NOT NULL AND expires_at <= @now:timestamptz',
+    {'now': now},
+  );
+
+  // ---------------------------------------------------------------- summary
+
+  Future<BillingSummary> summary(
+    SqlSession db, {
+    required DateTime now,
+    required Duration grace,
+  }) async {
+    final subs = (await db.queryOne(
+      'SELECT '
+      '(count(*) FILTER (WHERE period_end > @now:timestamptz))::int4 AS running, '
+      '(count(*) FILTER (WHERE period_end <= @now:timestamptz AND period_end + make_interval(secs => @grace:int8) > @now:timestamptz))::int4 AS grace, '
+      "(count(*) FILTER (WHERE source = 'trial' AND period_end > @now:timestamptz))::int4 AS trial "
+      'FROM $s.subscriptions',
+      {'now': now, 'grace': grace.inSeconds},
+    ))!;
+    final reqs = (await db.queryOne(
+      'SELECT '
+      "(count(*) FILTER (WHERE status = 'pending'))::int4 AS pending, "
+      "(count(*) FILTER (WHERE status = 'approved' AND decided_at > @since:timestamptz))::int4 AS approved, "
+      "coalesce(sum(amount) FILTER (WHERE status = 'approved' AND decided_at > @since:timestamptz), 0)::int8 AS taken "
+      'FROM $s.payment_requests',
+      {'since': now.subtract(const Duration(days: 30))},
+    ))!;
+    return BillingSummary(
+      premium: subs.integer('running'),
+      inGrace: subs.integer('grace'),
+      onTrial: subs.integer('trial'),
+      pendingRequests: reqs.integer('pending'),
+      approvedLast30Days: reqs.integer('approved'),
+      takenLast30Days: reqs.integer('taken'),
     );
   }
 }

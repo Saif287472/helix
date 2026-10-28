@@ -165,6 +165,12 @@ abstract interface class IdentityApi {
   /// a device revoked mid-send gets nothing, not even storage.
   Future<Set<String>> lockActiveDevices(Tx tx, Iterable<String> deviceIds);
 
+  /// The keyed hash of the account's phone number (the same value the
+  /// account row keeps), for a module that must remember a number without
+  /// holding it, such as billing's once-per-number trial. Null if there is no
+  /// such account.
+  Future<Uint8List?> phoneHash(SqlSession s, String accountId);
+
   Future<PushTarget?> pushTarget(SqlSession s, String deviceId);
 
   /// Removes a push token the provider reported as unknown.

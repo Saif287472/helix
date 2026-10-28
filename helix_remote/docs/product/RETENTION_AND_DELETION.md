@@ -38,6 +38,9 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
   (15 minutes) are not stored.
 - Idempotency records 24 hours, send records 7 days, rate-limit buckets 1 hour after last use, call
   metrics 90 days, pending calls 120 seconds.
+- Trial marker (ADR-035): the keyed phone hash `billing.trials_used` keeps so a number gets one trial stays
+  after the account is deleted (like a banned number's hash); it holds no account id and no number. Per-account
+  limit overrides expire on their date (`billing.expire_requests` removes them) and go with the account.
 - Payment requests (ADR-035): a request nobody answers becomes `expired` after 7 days; every decided request is
   deleted one year after it was sent (`billing.expire_requests`, hourly). The subscription row, and any request,
   go with the account.

@@ -29,7 +29,20 @@ a rejection, or Premium until a date. Nothing is deleted when Premium ends.
 - No prototype screen exists for this page; it is built from existing kit
   components (recorded in `orbit/DEVIATIONS.md`).
 
+## Also here (Phase 2)
+
+- **The trial.** A new account's first week reads "You are on the free trial" with its end date; the You row
+  says "Free trial until …".
+- **Pack locks.** While plans are on and the account is Free, `billingPlanProvider` sets
+  `packsLockedProvider` (core). A downloadable theme or ringtone cannot be fetched, updated or chosen (its
+  row reads "Orbit Premium · …", and the action answers with that sentence); a downloaded theme is not drawn
+  (`orbitTokensProvider` falls back to Orbit and keeps the choice); a downloaded ringtone choice is cleared and
+  the phone's own sound returns. The two built-in themes and the built-in ringtones are never locked, and
+  nothing is locked while plans are off or the plan cannot be read.
+- **The wake-up.** A `plan` push wakes the phone; the background handler shows one quiet notification ("Your
+  plan request was updated.", no account, amount or ID) and stops. In front, `pushWakeTickProvider` makes the
+  plan page and the You row read the plan again.
+
 ## Not built yet (see `docs/product/ORBIT_PREMIUM_PLAN.md`)
 
-The 7-day trial, locked downloadable packs, a push when a request is decided
-(the status is read when the page opens), call time.
+Call time (Phase 3).

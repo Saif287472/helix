@@ -68,6 +68,24 @@ abstract interface class BillingApi implements EntitlementSource {
   /// Ends Premium now (no grace). False when the account had none.
   Future<bool> revoke(Tx tx, String accountId);
 
+  /// The account's plan as the operator sees it, with overrides.
+  Future<AdminAccountPlan> accountPlan(SqlSession s, String accountId);
+
+  /// Changes one limit for one account until [expiresAt] (or until cleared).
+  Future<void> setOverride(
+    Tx tx,
+    String accountId, {
+    required PlanLimitKey key,
+    required int value,
+    required String reason,
+    DateTime? expiresAt,
+  });
+
+  /// False when the account had no such override.
+  Future<bool> clearOverride(Tx tx, String accountId, PlanLimitKey key);
+
+  Future<BillingSummary> summary(SqlSession s);
+
   Future<BillingSettings> settings(SqlSession s);
 
   Future<void> setSettings(Tx tx, BillingSettings settings);

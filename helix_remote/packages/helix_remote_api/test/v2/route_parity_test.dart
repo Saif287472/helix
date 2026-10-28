@@ -262,6 +262,16 @@ void main() {
         c.admin.rejectPaymentRequest(id, 'no'),
     Routes.adminGrantPlan: (c) => c.admin.grantPlan(id, 1),
     Routes.adminRevokePlan: (c) => c.admin.revokePlan(id),
+    Routes.adminAccountPlan: (c) => c.admin.accountPlan(id),
+    Routes.adminSetPlanOverride: (c) => c.admin.setPlanOverride(
+      id,
+      PlanLimitKey.maxDevices,
+      value: 3,
+      reason: 'ticket',
+    ),
+    Routes.adminClearPlanOverride: (c) =>
+        c.admin.clearPlanOverride(id, PlanLimitKey.maxDevices),
+    Routes.adminBillingSummary: (c) => c.admin.billingSummary(),
     Routes.adminBillingSettings: (c) => c.admin.billingSettings(),
     Routes.adminSetBillingSettings: (c) => c.admin.setBillingSettings(
       const BillingSettings(

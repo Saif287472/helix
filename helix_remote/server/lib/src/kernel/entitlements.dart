@@ -89,6 +89,33 @@ final class Entitlements {
         backupQuotaBytes: premiumBackupQuota,
       );
 
+  /// These limits with the operator's overrides on top, by [PlanLimitKey]
+  /// wire name (support cases, ADR-035). Unknown names are ignored.
+  Entitlements withOverrides(Map<String, int> overrides) {
+    if (overrides.isEmpty) return this;
+    int pick(PlanLimitKey key, int current) => overrides[key.wire] ?? current;
+    return Entitlements(
+      plan: plan,
+      maxDevices: pick(PlanLimitKey.maxDevices, maxDevices),
+      attachmentQuotaBytes: pick(
+        PlanLimitKey.attachmentQuotaBytes,
+        attachmentQuotaBytes,
+      ),
+      maxAttachmentBytes: pick(
+        PlanLimitKey.maxAttachmentBytes,
+        maxAttachmentBytes,
+      ),
+      attachmentRetention: Duration(
+        days: pick(
+          PlanLimitKey.attachmentRetentionDays,
+          attachmentRetention.inDays,
+        ),
+      ),
+      backupMaxBytes: pick(PlanLimitKey.backupMaxBytes, backupMaxBytes),
+      backupQuotaBytes: pick(PlanLimitKey.backupQuotaBytes, backupQuotaBytes),
+    );
+  }
+
   PlanLimits toLimits() => PlanLimits(
     maxDevices: maxDevices,
     attachmentQuotaBytes: attachmentQuotaBytes,

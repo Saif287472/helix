@@ -9,6 +9,7 @@ import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
+import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:shelf/shelf.dart';
@@ -21,7 +22,9 @@ import 'package:shelf/shelf.dart';
 final class BillingModule extends ModuleBase
     implements ProvidesAccountExport, BillingApi {
   BillingModule(super.context, {required this.ops, required this.identity})
-    : _store = BillingStore(context.schema('billing'));
+    : _store = BillingStore(context.schema('billing')) {
+    _wakes = PushTrail(log, context.metrics);
+  }
 
   final OpsApi ops;
 
@@ -30,6 +33,10 @@ final class BillingModule extends ModuleBase
   final IdentityApi Function() identity;
 
   final BillingStore _store;
+  late final PushTrail _wakes;
+
+  /// The outbox job that wakes one device after its plan changed.
+  static const pushJob = 'billing.push';
 
   static const flagName = 'billing_enabled';
 
@@ -58,19 +65,23 @@ final class BillingModule extends ModuleBase
   List<Migration> get migrations => billingMigrations;
 
   @override
+  Map<String, JobHandler> get jobs => {pushJob: _push};
+
+  @override
   List<PeriodicJob> get periodic => [
     PeriodicJob('billing.expire_requests', const Duration(hours: 1), () async {
       final now = context.clock.now();
       await _store.expirePending(context.db, now.subtract(requestLifetime));
       await _store.purgeDecided(context.db, now.subtract(requestRetention));
+      await _store.purgeExpiredOverrides(context.db, now);
     }),
   ];
 
   @override
   Future<void> start() async {
-    identity().onAccountDeleted(
-      (tx, accountId) => _store.deleteAccount(tx, accountId),
-    );
+    identity()
+      ..onAccountDeleted((tx, accountId) => _store.deleteAccount(tx, accountId))
+      ..onDeviceAdded((tx, device, _) => _startTrial(tx, device));
   }
 
   @override
@@ -94,11 +105,37 @@ final class BillingModule extends ModuleBase
     if (!await enabled()) {
       return Entitlements.standard(maxAttachmentBytes: base);
     }
-    final end = await _store.periodEnd(context.db, accountId);
-    if (end != null && context.clock.now().isBefore(end.add(grace))) {
-      return Entitlements.premium(maxAttachmentBytes: base);
-    }
-    return Entitlements.free(maxAttachmentBytes: base);
+    final now = context.clock.now();
+    final sub = await _store.subscription(context.db, accountId);
+    final plan = sub != null && now.isBefore(sub.time('period_end').add(grace))
+        ? Entitlements.premium(maxAttachmentBytes: base)
+        : Entitlements.free(maxAttachmentBytes: base);
+    return plan.withOverrides(
+      await _store.activeOverrides(context.db, accountId, now),
+    );
+  }
+
+  /// A new account's first week of Premium, once per phone number (and never
+  /// for an account that already has Premium time). Runs inside the
+  /// transaction that adds the account's first device.
+  Future<void> _startTrial(Tx tx, DeviceRecord device) async {
+    final accountId = device.accountId;
+    if (!await enabled()) return;
+    if (await _store.subscription(tx, accountId) != null) return;
+    // New accounts only: the trial starts with an account's first device. An
+    // account that already has one (or had Premium) adding another is not new.
+    if ((await identity().activeDevices(tx, accountId)).length != 1) return;
+    final number = await identity().phoneHash(tx, accountId);
+    if (number == null) return;
+    final now = context.clock.now();
+    if (!await _store.recordTrial(tx, number, now)) return;
+    await _store.extend(
+      tx,
+      accountId,
+      days: BillingLimits.trialDays,
+      source: 'trial',
+      now: now,
+    );
   }
 
   // ------------------------------------------------------------- settings
@@ -154,7 +191,8 @@ final class BillingModule extends ModuleBase
           number: current.nagadNumber!,
         ),
     ];
-    final end = await _store.periodEnd(context.db, accountId);
+    final sub = await _store.subscription(context.db, accountId);
+    final end = sub?.time('period_end');
     final premium = entitlements.plan == PlanId.premium;
     final now = context.clock.now();
     return BillingPlan(
@@ -162,6 +200,8 @@ final class BillingModule extends ModuleBase
       plan: entitlements.plan,
       periodEnd: premium ? end : null,
       inGrace: premium && end != null && !now.isBefore(end),
+      onTrial:
+          premium && sub?.string('source') == 'trial' && !now.isAfter(end!),
       limits: on
           ? entitlements.toLimits()
           : Entitlements.standard(maxAttachmentBytes: base).toLimits(),
@@ -316,6 +356,7 @@ final class BillingModule extends ModuleBase
       source: 'payment',
       now: now,
     );
+    await _wake(tx, row.accountId);
     return PlanChange(
       accountId: row.accountId,
       months: row.info.months,
@@ -340,6 +381,7 @@ final class BillingModule extends ModuleBase
       now: context.clock.now(),
       reason: reason.trim(),
     );
+    await _wake(tx, row.accountId);
     return row.accountId;
   }
 
@@ -352,11 +394,113 @@ final class BillingModule extends ModuleBase
       source: 'admin',
       now: context.clock.now(),
     );
+    await _wake(tx, accountId);
     return PlanChange(accountId: accountId, months: months, periodEnd: end);
   }
 
   @override
-  Future<bool> revoke(Tx tx, String accountId) => _store.endNow(tx, accountId);
+  Future<bool> revoke(Tx tx, String accountId) async {
+    final ended = await _store.endNow(tx, accountId);
+    if (ended) await _wake(tx, accountId);
+    return ended;
+  }
+
+  // ------------------------------------------------------- operator's views
+
+  @override
+  Future<AdminAccountPlan> accountPlan(SqlSession s, String accountId) async {
+    final now = context.clock.now();
+    final entitlements = await forAccount(accountId);
+    final sub = await _store.subscription(s, accountId);
+    final end = sub?.time('period_end');
+    final premium = entitlements.plan == PlanId.premium;
+    return AdminAccountPlan(
+      plan: entitlements.plan,
+      periodEnd: end,
+      source: sub?.string('source'),
+      inGrace: premium && end != null && !now.isBefore(end),
+      limits: entitlements.toLimits(),
+      overrides: await _store.overridesOf(s, accountId, now),
+    );
+  }
+
+  @override
+  Future<void> setOverride(
+    Tx tx,
+    String accountId, {
+    required PlanLimitKey key,
+    required int value,
+    required String reason,
+    DateTime? expiresAt,
+  }) async {
+    await _store.putOverride(
+      tx,
+      accountId,
+      key: key,
+      value: value,
+      reason: reason.trim(),
+      expiresAt: expiresAt,
+    );
+    await _wake(tx, accountId);
+  }
+
+  @override
+  Future<bool> clearOverride(Tx tx, String accountId, PlanLimitKey key) async {
+    final cleared = await _store.clearOverride(tx, accountId, key);
+    if (cleared) await _wake(tx, accountId);
+    return cleared;
+  }
+
+  @override
+  Future<BillingSummary> summary(SqlSession s) =>
+      _store.summary(s, now: context.clock.now(), grace: grace);
+
+  // ------------------------------------------------------------------- wake
+
+  /// Wakes the account's devices so they read the plan again (and, for a
+  /// decided request, tell the person). The wake-up says nothing about what
+  /// changed. Queued in [tx], so a rolled-back decision wakes nobody.
+  Future<void> _wake(Tx tx, String accountId) async {
+    final devices = await identity().activeDevices(tx, accountId);
+    if (devices.isEmpty) return;
+    await context.outbox.enqueueMany(tx, [
+      for (final d in devices)
+        QueuedJob(
+          pushJob,
+          {'device': d.id},
+          maxAttempts: 3,
+          dedupeKey: 'plan:$accountId:${d.id}',
+        ),
+    ]);
+  }
+
+  Future<void> _push(Map<String, Object?> payload) async {
+    final device = payload['device']! as String;
+    const reason = PushReason.plan;
+    final target = await identity().pushTarget(context.db, device);
+    if (target == null) {
+      _wakes.record(PushOutcome.noToken, reason, device);
+      return;
+    }
+    if (!context.push.isConfigured) {
+      _wakes.record(PushOutcome.providerOff, reason, device);
+      return;
+    }
+    try {
+      await context.push.send(
+        token: target.token,
+        kind: target.kind.wire,
+        reason: reason,
+      );
+      _wakes.record(PushOutcome.sent, reason, device);
+    } on PushTokenGone {
+      await identity().dropPushToken(context.db, device);
+      _wakes.record(PushOutcome.tokenGone, reason, device);
+    } on PushFailed catch (failure) {
+      _wakes.record(PushOutcome.failed, reason, device, error: failure.reason);
+      rethrow;
+    }
+  }
 
   // ----------------------------------------------------------------- export
 

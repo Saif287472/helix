@@ -100,6 +100,16 @@ class _PremiumPageState extends ConsumerState<PremiumPage> {
 
   Widget _hero(PlanView plan) {
     final end = plan.periodEnd;
+    if (plan.isPremium && plan.onTrial && end != null) {
+      return orbit.OrbitHeroCard(
+        icon: orbit.OrbitIcons.crownSimple,
+        tone: orbit.OrbitHeroTone.ok,
+        title: 'You are on the free trial',
+        sub:
+            'Premium is yours until ${planDate(end)}. Add time before then '
+            'to keep it.',
+      );
+    }
     if (plan.isPremium && end != null) {
       return orbit.OrbitHeroCard(
         icon: orbit.OrbitIcons.crownSimple,

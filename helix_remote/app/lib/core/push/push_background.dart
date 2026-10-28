@@ -46,6 +46,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // isolate; without it the keystore and the database are unreachable.
   DartPluginRegistrant.ensureInitialized();
   try {
+    // A plan update (ADR-035) is not a message: say so and stop. It names no
+    // account and carries nothing but its kind, so there is no mailbox to read.
+    if (message.data['t'] == 'plan') {
+      await LocalNotifications.init();
+      await LocalNotifications.showPlanUpdate();
+      return;
+    }
     await Firebase.initializeApp();
     await wakeSignedInAccounts();
   } on Object catch (error) {

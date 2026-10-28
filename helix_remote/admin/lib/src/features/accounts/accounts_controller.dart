@@ -43,12 +43,17 @@ final class AccountDetailController extends FeatureController {
   final String accountId;
 
   AdminAccountDetail? _detail;
+  AdminAccountPlan? _plan;
   bool _loading = false;
   String? _error;
   bool _removed = false;
   final Set<String> _busy = {};
 
   AdminAccountDetail? get detail => _detail;
+
+  /// The account's Orbit Premium state and overrides; null until read, or
+  /// when this server has no plans to show.
+  AdminAccountPlan? get plan => _plan;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -68,6 +73,18 @@ final class AccountDetailController extends FeatureController {
     });
     _error = problem;
     _loading = false;
+    notifyListeners();
+    if (problem == null) await _loadPlan();
+  }
+
+  /// Best effort: a failure leaves the plan card out, it is not an error of
+  /// the page.
+  Future<void> _loadPlan() async {
+    try {
+      _plan = await ctx.api.admin.accountPlan(accountId);
+    } on Object {
+      _plan = null;
+    }
     notifyListeners();
   }
 
@@ -109,8 +126,32 @@ final class AccountDetailController extends FeatureController {
       });
 
   /// Gives Orbit Premium time without a payment (ADR-035).
-  Future<String?> grantPlan(int months) =>
-      _act('plan', () => ctx.api.admin.grantPlan(accountId, months));
+  Future<String?> grantPlan(int months) => _act('plan', () async {
+    await ctx.api.admin.grantPlan(accountId, months);
+    await _loadPlan();
+  });
+
+  /// Changes one limit for this account (a support case).
+  Future<String?> setOverride(
+    PlanLimitKey key, {
+    required int value,
+    required String reason,
+    int? days,
+  }) => _act('plan', () async {
+    await ctx.api.admin.setPlanOverride(
+      accountId,
+      key,
+      value: value,
+      reason: reason,
+      days: days,
+    );
+    await _loadPlan();
+  });
+
+  Future<String?> clearOverride(PlanLimitKey key) => _act('plan', () async {
+    await ctx.api.admin.clearPlanOverride(accountId, key);
+    await _loadPlan();
+  });
 
   /// Ends Orbit Premium now. A problem when the account had none.
   Future<String?> revokePlan() async {
@@ -122,6 +163,7 @@ final class AccountDetailController extends FeatureController {
         if (e.code != ErrorCode.notFound) rethrow;
         hadNone = true;
       }
+      await _loadPlan();
     });
     return hadNone ? 'This account has no Premium to end.' : problem;
   }
