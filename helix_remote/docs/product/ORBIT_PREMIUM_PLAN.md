@@ -57,7 +57,8 @@ admin per-account override for support cases.
 | 12 months | 180 | 240 |
 
 Bought time adds after the current end date (a lapsed plan starts at approval). The crossed-out prices are
-6x and 12x the monthly price, so the discount is real.
+6x and 12x the monthly price, so the discount is real. The page shows each option as price, crossed-out price and
+"Save N%", with N worked out from the 6x and 12x prices, so it stays true when prices change in the console.
 
 ### Trial
 Each new account gets 7 days of Premium, once per phone number. The server already keeps a keyed hash of
@@ -162,7 +163,7 @@ Chosen design, as strict as possible (decided 2026-10-28):
   and the relay lapses, so the cut-off lands within the refresh interval (coturn's default allocation
   lifetime is 10 minutes; **verify** how fast a lapsed credential actually ends media). The warning two
   minutes before the end is therefore a client countdown against the reserved time; the app does not
-  guess. The reserved time is in whole minutes.
+  guess. Call time is charged **per started minute** (decided), which matches the whole-minute reservation.
 - **Group calls.** The starter's reservation has a random id, and every leg of the room shows that id when it
   asks for credentials. All legs share the starter's expiry and the starter is charged once per clock
   minute. The server learns which legs belong to one call, which is a small new piece of metadata.
@@ -171,7 +172,9 @@ Chosen design, as strict as possible (decided 2026-10-28):
   (coturn's per-session bps option; **verify** the exact option and that a capped session still carries
   voice). Voice credentials work only on the voice relay, so mislabelled video is starved. Video credentials
   work on the video relay. The credential's relay URL set tells the app which to use. Costs: a second
-  config and port to run, and the UDP range 49160-49400 split between the two.
+  config and port to run. The relay UDP range is **widened** (decided) instead of split: both relays get a large
+  range (for example 49160-49800, exact numbers to be set when building), which is a router and Windows
+  Firewall change for you to make by hand, and an update to `deploy/coturn` and `V2_SERVER_HANDOFF.md`.
 - **Calls with another server.** The caller's own server meters (decided). A Helix Global account answering a
   call from a personal server is not metered, and uses your relay for it; those calls are rare (personal
   servers are a hidden advanced feature). Premium and Free Helix Global callers are metered as normal.
@@ -205,8 +208,9 @@ signalled in the dark and relay-only.
   by rule (built-in free, downloaded Premium), so no manifest change is needed. This is a soft gate that a
   modified build could bypass, which is fine for cosmetics; anything that costs server resources is enforced
   on the server.
-- `orbit_ui`: the plan, payment and claim screens are **not in the Orbit prototype**. By the Orbit rules I
-  need your designs or your approval of a proposal first.
+- `orbit_ui`: the plan, payment, claim and low-minutes screens are not in the Orbit prototype. Decided: build
+  them as plain screens from existing components, with no prototype step. That departs from the rule that
+  the prototype is the specification, so it is recorded in `orbit/DEVIATIONS.md` when built.
 - `admin`: a Payment requests queue, plan grants and overrides, plan counts.
 
 ## 7. Docs, legal and decisions on record
@@ -266,7 +270,6 @@ a new APK is needed, whether the server must restart and migrate, and any `.env`
 
 ## 11. Still to decide
 
-1. Whether call time is charged per started minute or per second (the reservation is in whole minutes).
-2. The two coturn options to verify (per-session bandwidth cap, behaviour at credential expiry), and the
-   split of the UDP range between the two relays.
-3. Designs for the plan, payment and claim screens, and the exact wording of the crossed-out price display.
+Nothing is open for the plan itself. Before step 2 is committed to, two coturn behaviours must be tested for
+real: the per-session bandwidth cap on the voice relay, and how quickly media ends after a credential
+expires. Their results can change the call-time design.
