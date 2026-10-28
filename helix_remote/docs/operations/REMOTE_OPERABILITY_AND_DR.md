@@ -112,7 +112,7 @@ variables win. Never commit or paste real values.
 
 Helix Global runs on the user's Windows PC: Caddy terminates TLS and proxies to
 `127.0.0.1:8080`, the backend runs from this working copy, and coturn runs in
-WSL1 (see `helix-remote-server-handoff.md` at the repo root and
+WSL1 (see `docs/history/helix-remote-v1-server-handoff.md` and
 `deploy/coturn/README.md`). That process is live production; deploying a change
 means restarting it.
 

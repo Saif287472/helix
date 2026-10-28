@@ -5,7 +5,7 @@ its environment table re-checked against the code at Phase X. The v2 server
 replaces the v1 backend (`helix_remote/backend`, SQLite, deleted from the
 repository) on the cutover day, which **the user performs** (checklist below).
 Until that day Helix Global still runs v1; the v1 handoff
-(`helix-remote-server-handoff.md` at the repo root, now historical for the
+(`docs/history/helix-remote-v1-server-handoff.md`, now historical for the
 backend, still accurate for Caddy, the router and WSL1 coturn) describes the
 PC. After the cutover, this file describes production.
 
