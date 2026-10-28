@@ -5,5 +5,5 @@ rendered config (which holds the shared secret).
 #>
 param([string]$Distro = 'Ubuntu')
 
-& wsl.exe -d $Distro -u root -- sh -c 'pkill -x turnserver; rm -f /run/helix-turn/turnserver.rendered.conf; true'
+& wsl.exe -d $Distro -u root -- sh -c 'pkill -x turnserver; rm -f /run/helix-turn/turnserver.rendered.conf /run/helix-turn/turnserver.voice.rendered.conf; true'
 Write-Host 'TURN relay stopped.'

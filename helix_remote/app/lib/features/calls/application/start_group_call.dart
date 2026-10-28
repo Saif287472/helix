@@ -76,9 +76,15 @@ final startGroupCallProvider = Provider<PlaceGroupCall>((ref) {
         CallFailure.blocked => PlaceCallStatus.blocked,
         CallFailure.blockedByPeer => PlaceCallStatus.blockedByPeer,
         CallFailure.rateLimited => PlaceCallStatus.rateLimited,
+        CallFailure.noCallTime => PlaceCallStatus.noCallTime,
         _ => PlaceCallStatus.unavailable,
       };
-      return PlaceCallOutcome(status, CallCopy.failure(e.reason));
+      return PlaceCallOutcome(
+        status,
+        e.reason == CallFailure.noCallTime
+            ? CallCopy.noCallTime(video: video)
+            : CallCopy.failure(e.reason),
+      );
     }
   };
 });

@@ -8,9 +8,15 @@ final class CallsClient {
 
   final HelixTransport _t;
 
-  /// One-hour TURN REST credentials (10 per hour per device).
-  Future<TurnCredentials> turnCredentials() =>
-      _t.call(Routes.turnCredentials, TurnCredentials.fromJson);
+  /// Relay credentials for one call (60 per hour per device). `quota_exceeded`
+  /// (`details.reason: call_time`) when a Free caller has no call time left;
+  /// `not_found` when the call was not offered to this account; `conflict`
+  /// when the caller has not started it.
+  Future<TurnCredentials> turnCredentials(TurnRequest request) => _t.call(
+    Routes.turnCredentials,
+    TurnCredentials.fromJson,
+    json: request.toJson(),
+  );
 
   Future<CallSignalResponse> sendSignal(
     String callId,

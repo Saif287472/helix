@@ -22,6 +22,48 @@ final billingPlanProvider = FutureProvider.autoDispose<PlanView>((ref) async {
   return plan;
 });
 
+/// The Free plan's call minutes. Dropped when the page closes; read again on
+/// a wake-up (a plan change moves the meter).
+final callTimeProvider = FutureProvider.autoDispose<CallTimeView>((ref) async {
+  ref.watch(pushWakeTickProvider);
+  return CallTimeView.from(await ref.watch(plansGatewayProvider).callTime());
+});
+
+/// Taking today's minutes: one tap, the answer in plain words.
+final claimCallTimeProvider =
+    NotifierProvider.autoDispose<ClaimCallTimeNotifier, PlanPurchaseState>(
+      ClaimCallTimeNotifier.new,
+    );
+
+final class ClaimCallTimeNotifier extends Notifier<PlanPurchaseState> {
+  @override
+  PlanPurchaseState build() => const PlanPurchaseState();
+
+  /// True when the minutes were added.
+  Future<bool> claim() async {
+    if (state.busy) return false;
+    state = const PlanPurchaseState(busy: true);
+    try {
+      await ref.read(plansGatewayProvider).claimCallTime();
+      ref.invalidate(callTimeProvider);
+      state = const PlanPurchaseState();
+      return true;
+    } on Object catch (error) {
+      if (error is ApiException && error.code == ErrorCode.conflict) {
+        ref.invalidate(callTimeProvider);
+        state = const PlanPurchaseState(
+          error: 'Today\'s minutes are already claimed. Come back tomorrow.',
+        );
+      } else {
+        state = PlanPurchaseState(
+          error: describeFailure(error, now: ref.read(clockProvider)()).message,
+        );
+      }
+      return false;
+    }
+  }
+}
+
 const _months = [
   'Jan',
   'Feb',

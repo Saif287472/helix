@@ -215,6 +215,20 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
     });
 
+    testWidgets('a caller with no free minutes is told how to get more', (
+      tester,
+    ) async {
+      final port = await pump(tester, 'c1');
+      port.failWith = const CallFailedException(CallFailure.noCallTime);
+
+      await tester.tap(find.text('Video call'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('no free video minutes left'), findsOneWidget);
+      expect(find.textContaining('Orbit Premium'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
     testWidgets('someone who blocked you offers no call buttons, and says '
         'why', (tester) async {
       await pump(tester, 'c1', blocksMe: true);

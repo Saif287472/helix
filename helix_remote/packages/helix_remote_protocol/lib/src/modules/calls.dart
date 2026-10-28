@@ -6,25 +6,112 @@ import 'package:helix_remote_protocol/src/envelope.dart';
 import 'package:helix_remote_protocol/src/json.dart';
 import 'package:helix_remote_protocol/src/modules/messaging.dart';
 
-/// `GET /v1/calls/turn`. Time-limited TURN REST credentials.
+/// What a call carries, and which pool of call time it spends (ADR-036). A
+/// voice call spends voice minutes on the voice relay, whose bandwidth is
+/// capped at voice quality; a video call (and a shared screen) spends video
+/// minutes.
+enum CallPool implements WireEnum {
+  voice('voice'),
+  video('video'),
+  unknown('unknown');
+
+  const CallPool(this.wire);
+
+  @override
+  final String wire;
+}
+
+/// Which end of a call asks for relay credentials.
+enum CallRole implements WireEnum {
+  /// The person who starts the call, or in a group call the one who joins and
+  /// offers to the others. The starter's call time pays.
+  caller('caller'),
+
+  /// The person who answers.
+  callee('callee'),
+  unknown('unknown');
+
+  const CallRole(this.wire);
+
+  @override
+  final String wire;
+}
+
+/// `POST /v1/calls/turn`: relay credentials for one call (ADR-036). A device
+/// gets credentials only for a call, so no one can use the relay without one.
+final class TurnRequest {
+  const TurnRequest({
+    required this.callId,
+    required this.role,
+    required this.media,
+    this.roomId,
+  });
+
+  final String callId;
+  final CallRole role;
+  final CallPool media;
+
+  /// A group call's room: the legs of one room share one reservation, paid by
+  /// whoever made it first. A client-made random id that only the people in
+  /// the room know (it travels in the sealed call signal).
+  final String? roomId;
+
+  /// A call id and a room id are 8 to 128 characters of `A-Za-z0-9._:-`.
+  static final RegExp idPattern = RegExp(r'^[A-Za-z0-9._:-]{8,128}$');
+
+  JsonMap toJson() => compact({
+    'call_id': callId,
+    'role': role.wire,
+    'media': media.wire,
+    'room_id': roomId,
+  });
+
+  factory TurnRequest.fromJson(JsonReader json) {
+    final callId = json.nonEmpty('call_id', maxLength: 128);
+    final roomId = json.optString('room_id', maxLength: 128);
+    if (!idPattern.hasMatch(callId) ||
+        (roomId != null && !idPattern.hasMatch(roomId))) {
+      throw ProtocolFormatException(
+        'a call or room id is 8 to 128 letters, digits and . _ : -',
+      );
+    }
+    return TurnRequest(
+      callId: callId,
+      role: json.enumValue('role', CallRole.values, orElse: CallRole.unknown),
+      media: json.enumValue('media', CallPool.values, orElse: CallPool.unknown),
+      roomId: roomId,
+    );
+  }
+}
+
+/// `POST /v1/calls/turn`. Time-limited TURN REST credentials for one call.
 final class TurnCredentials {
   const TurnCredentials({
     required this.urls,
     required this.username,
     required this.credential,
     required this.expiresAt,
+    this.metered = false,
   });
 
   final List<String> urls;
   final String username;
   final String credential;
+
+  /// When the relay stops carrying this call. For a [metered] call this is the
+  /// end of the call time reserved for it: the call ends then, so the apps warn
+  /// shortly before.
   final DateTime expiresAt;
+
+  /// The call spends call time (the starter is on the Free plan).
+  final bool metered;
 
   JsonMap toJson() => {
     'urls': urls,
     'username': username,
     'credential': credential,
     'expires_at': toWireTime(expiresAt),
+    if (metered) 'metered': true,
   };
 
   factory TurnCredentials.fromJson(JsonReader json) => TurnCredentials(
@@ -32,6 +119,7 @@ final class TurnCredentials {
     username: json.nonEmpty('username'),
     credential: json.nonEmpty('credential'),
     expiresAt: json.time('expires_at'),
+    metered: json.flag('metered'),
   );
 
   @override

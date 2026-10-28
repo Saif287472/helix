@@ -41,6 +41,9 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
 - Trial marker (ADR-035): the keyed phone hash `billing.trials_used` keeps so a number gets one trial stays
   after the account is deleted (like a banned number's hash); it holds no account id and no number. Per-account
   limit overrides expire on their date (`billing.expire_requests` removes them) and go with the account.
+- Call time (ADR-036): `calls.call_legs` 12 hours; `billing.call_claims` and `call_reservations` 7 days after
+  they expire or settle (`billing.purge_calls`, every 6 hours); all of it goes with the account and is in
+  the account export.
 - Payment requests (ADR-035): a request nobody answers becomes `expired` after 7 days; every decided request is
   deleted one year after it was sent (`billing.expire_requests`, hourly). The subscription row, and any request,
   go with the account.

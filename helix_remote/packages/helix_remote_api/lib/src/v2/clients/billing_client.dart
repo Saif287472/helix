@@ -20,6 +20,13 @@ final class BillingClient {
         json: request.toJson(),
       );
 
+  /// The account's call time: its voice and video pools, or unlimited.
+  Future<CallTime> callTime() => _t.call(Routes.callTime, CallTime.fromJson);
+
+  /// Takes today's minutes. `conflict` when they were already taken.
+  Future<CallTime> claimCallTime() =>
+      _t.call(Routes.claimCallTime, CallTime.fromJson);
+
   /// This account's own requests, newest first.
   Future<Page<PaymentRequestInfo>> requests({
     PageRequest page = const PageRequest(),

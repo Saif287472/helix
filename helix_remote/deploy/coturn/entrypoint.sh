@@ -20,6 +20,15 @@ if [ -z "${HELIX_TURN_SECRET:-}" ]; then
     exit 1
 fi
 
+# One template, two relays (ADR-036). The main relay is the default; the voice
+# relay is the same script with its own secret, ports and bandwidth cap (see
+# windows/start-turn.ps1). HELIX_TURN_SECRET is always this instance's secret.
+TURN_PORT=${TURN_PORT:-3478}
+TURN_TLS_PORT=${TURN_TLS_PORT:-5349}
+TURN_MIN_PORT=${TURN_MIN_PORT:-49160}
+TURN_MAX_PORT=${TURN_MAX_PORT:-49600}
+TURN_MAX_BPS=${TURN_MAX_BPS:-}
+
 if [ -z "${TURN_REALM:-}" ]; then
     echo "FATAL: TURN_REALM is not set (e.g. helix.agiletechbd.com)." >&2
     exit 1
@@ -77,6 +86,26 @@ while IFS= read -r line || [ -n "$line" ]; do
             ;;
         *'${TURN_EXTERNAL_IP}'*)
             value=$TURN_EXTERNAL_IP
+            key=${line%%=*}
+            ;;
+        *'${TURN_PORT}'*)
+            value=$TURN_PORT
+            key=${line%%=*}
+            ;;
+        *'${TURN_TLS_PORT}'*)
+            value=$TURN_TLS_PORT
+            key=${line%%=*}
+            ;;
+        *'${TURN_MIN_PORT}'*)
+            value=$TURN_MIN_PORT
+            key=${line%%=*}
+            ;;
+        *'${TURN_MAX_PORT}'*)
+            value=$TURN_MAX_PORT
+            key=${line%%=*}
+            ;;
+        *'${TURN_MAX_BPS}'*)
+            value=$TURN_MAX_BPS
             key=${line%%=*}
             ;;
         *'${TURN_LISTEN_IP}'*)

@@ -205,10 +205,23 @@ final class GroupCallsService {
         null;
   }
 
-  Future<List<IceServer>> _iceServers() async {
+  /// Relay credentials for the pairwise call [callId] of [room] as [role]; a
+  /// metered one sets the room's warning and cut-off (the earliest wins).
+  /// Throws only [CallFailure.noCallTime].
+  Future<List<IceServer>> _relay(
+    _Room room,
+    String callId,
+    CallRole role,
+  ) async {
     try {
-      final turn = await _signaling.turnCredentials();
+      final turn = await _signaling.turnCredentials(
+        callId: callId,
+        role: role,
+        video: room.video,
+        roomId: room.id,
+      );
       if (turn == null) return const [];
+      if (turn.metered) _meter(room, turn.expiresAt);
       return [
         IceServer(
           urls: turn.urls,
@@ -216,9 +229,47 @@ final class GroupCallsService {
           credential: turn.credential,
         ),
       ];
+    } on CallFailedException {
+      rethrow;
     } on Object {
       return const [];
     }
+  }
+
+  void _meter(_Room room, DateTime endsAt) {
+    final current = room.endsAt;
+    if (current != null && !endsAt.isBefore(current)) return;
+    room.warnTimer?.cancel();
+    room.endTimer?.cancel();
+    room.endsAt = endsAt;
+    final left = endsAt.difference(_now());
+    final warnIn = left - _config.callTimeWarning;
+    if (warnIn <= Duration.zero) {
+      room.endingSoon = true;
+    } else {
+      room.warnTimer = Timer(
+        warnIn,
+        () => unawaited(
+          _run(() async {
+            if (room.finished) return;
+            room.endingSoon = true;
+            _publish(room);
+          }),
+        ),
+      );
+    }
+    room.endTimer = Timer(
+      left > Duration.zero ? left : Duration.zero,
+      () => unawaited(_run(() => _callTimeOver(room))),
+    );
+  }
+
+  Future<void> _callTimeOver(_Room room) async {
+    if (room.finished) return;
+    for (final link in room.links.values) {
+      await _signalEnd(link, CallEndReason.hangup);
+    }
+    await _finish(room, GroupCallEnd.callTimeOver);
   }
 
   // ----------------------------------------------------------- outgoing
@@ -264,7 +315,13 @@ final class GroupCallsService {
     _publish(room);
     var sent = 0;
     for (final account in invite) {
-      if (await _offerTo(room, account, factory)) sent++;
+      try {
+        if (await _offerTo(room, account, factory)) sent++;
+      } on CallFailedException {
+        // No call time left: the room never starts.
+        await _finish(room, GroupCallEnd.failed);
+        rethrow;
+      }
     }
     if (sent == 0) {
       await _finish(room, GroupCallEnd.failed);
@@ -292,7 +349,7 @@ final class GroupCallsService {
       final media = await factory.create(
         CallMediaConfig(
           video: room.video,
-          iceServers: await _iceServers(),
+          iceServers: await _relay(room, link.callId, CallRole.caller),
           room: room.id,
           peer: account,
         ),
@@ -318,6 +375,10 @@ final class GroupCallsService {
       );
       _publish(room);
       return true;
+    } on CallFailedException catch (e) {
+      await _dropLink(room, link, GroupParticipantState.failed);
+      if (e.reason == CallFailure.noCallTime) rethrow;
+      return false;
     } on Object {
       await _dropLink(room, link, GroupParticipantState.failed);
       return false;
@@ -437,7 +498,13 @@ final class GroupCallsService {
     for (final other in room.invited) {
       if (other == self || other == room.starter) continue;
       if (room.links.containsKey(other)) continue;
-      if (self.compareTo(other) < 0) await _offerTo(room, other, factory);
+      if (self.compareTo(other) < 0) {
+        try {
+          await _offerTo(room, other, factory);
+        } on CallFailedException {
+          // This link is dropped; the call goes on with the others.
+        }
+      }
     }
     _publish(room);
   }
@@ -452,7 +519,7 @@ final class GroupCallsService {
       final media = await factory.create(
         CallMediaConfig(
           video: room.video,
-          iceServers: await _iceServers(),
+          iceServers: await _relay(room, link.callId, CallRole.callee),
           room: room.id,
           peer: link.account,
         ),
@@ -796,6 +863,8 @@ final class GroupCallsService {
       ..end = end
       ..endedAt = _now();
     room.ringTimer?.cancel();
+    room.warnTimer?.cancel();
+    room.endTimer?.cancel();
     _closed.add(room.id);
     for (final link in room.links.values) {
       await _dropLink(room, link, link.state);
@@ -862,6 +931,12 @@ final class _Room {
   bool cameraOn = false;
   Timer? ringTimer;
 
+  /// A metered room: when its call time ends, and the timers for it.
+  DateTime? endsAt;
+  bool endingSoon = false;
+  Timer? warnTimer;
+  Timer? endTimer;
+
   _Link? byCall(String callId) {
     for (final link in links.values) {
       if (link.callId == callId) return link;
@@ -882,6 +957,8 @@ final class _Room {
     end: end,
     muted: muted,
     cameraOn: cameraOn,
+    endsAt: endsAt,
+    endingSoon: endingSoon,
     participants: [
       for (final account in invited)
         if (account != self)

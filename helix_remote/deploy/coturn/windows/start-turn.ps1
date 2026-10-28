@@ -13,6 +13,11 @@ variable wins, otherwise server/.env - so coturn and the server are always
 handed the same shared secret:
 
   HELIX_TURN_SECRET  required; must match what the server uses
+  HELIX_TURN_VOICE_SECRET
+                     optional; when set, a second relay for voice calls
+                     starts beside the main one (ADR-036): UDP/TCP 3479,
+                     relay ports 49601-49800, every session capped at voice
+                     bandwidth. Must differ from HELIX_TURN_SECRET.
   TURN_REALM         optional; defaults to the host of the first entry in
                      HELIX_TURN_URLS (then the host of HELIX_PUBLIC_BASE_URL)
 
@@ -24,8 +29,8 @@ The secret is never put on a command line. It reaches WSL through WSLENV
 under /run inside WSL.
 
 Prerequisites (one-time, see deploy/coturn/README.md "Windows home PC"):
-router port forwards and Windows Firewall rules for UDP/TCP 3478 and UDP
-49160-49400, and `apt install coturn` in the WSL distro.
+router port forwards and Windows Firewall rules for UDP/TCP 3478 and 3479
+and UDP 49160-49800, and `apt install coturn` in the WSL distro.
 
 .PARAMETER PublicIp
 The router's public IPv4. Detected automatically when omitted.
@@ -74,6 +79,11 @@ if (-not $secret) {
     throw "HELIX_TURN_SECRET is not set in the environment or in $EnvFile."
 }
 
+$voiceSecret = Get-Setting 'HELIX_TURN_VOICE_SECRET'
+if ($voiceSecret -and $voiceSecret -eq $secret) {
+    throw 'HELIX_TURN_VOICE_SECRET must differ from HELIX_TURN_SECRET.'
+}
+
 $realm = Get-Setting 'TURN_REALM'
 if (-not $realm) {
     $turnUrls = Get-Setting 'HELIX_TURN_URLS'
@@ -120,12 +130,34 @@ $env:TURN_TEMPLATE = "$stage/turnserver.conf"
 $env:TURN_RENDERED = "$stage/turnserver.rendered.conf"
 # No certificate directory: plain turn: on 3478 only (see entrypoint.sh).
 $env:TURN_CERT_DIR = "$stage/certs"
-$env:WSLENV = 'HELIX_TURN_SECRET/u:TURN_REALM/u:TURN_EXTERNAL_IP/u:TURN_LOCAL_IP/u:TURN_TEMPLATE/u:TURN_RENDERED/u:TURN_CERT_DIR/u'
+$env:TURN_PORT = '3478'
+$env:TURN_TLS_PORT = '5349'
+$env:TURN_MIN_PORT = '49160'
+$env:TURN_MAX_PORT = '49600'
+$env:TURN_MAX_BPS = ''
+$env:WSLENV = 'HELIX_TURN_SECRET/u:TURN_REALM/u:TURN_EXTERNAL_IP/u:TURN_LOCAL_IP/u:TURN_TEMPLATE/u:TURN_RENDERED/u:TURN_CERT_DIR/u:TURN_PORT/u:TURN_TLS_PORT/u:TURN_MIN_PORT/u:TURN_MAX_PORT/u:TURN_MAX_BPS/u'
 
-Start-Process -FilePath 'wsl.exe' -WindowStyle Hidden -ArgumentList @(
-    '-d', $Distro, '-u', 'root', '--',
-    'sh', '-c', "`"exec sh $stage/entrypoint.sh >> /var/log/helix-turn.log 2>&1`""
-)
+function Start-Relay([string]$Log) {
+    Start-Process -FilePath 'wsl.exe' -WindowStyle Hidden -ArgumentList @(
+        '-d', $Distro, '-u', 'root', '--',
+        'sh', '-c', "`"exec sh $stage/entrypoint.sh >> $Log 2>&1`""
+    )
+}
+
+Start-Relay '/var/log/helix-turn.log'
+
+# The voice relay: the same script, its own secret, ports and a bandwidth cap
+# (12000 bytes a second per session: a voice call, never video).
+if ($voiceSecret) {
+    $env:HELIX_TURN_SECRET = $voiceSecret
+    $env:TURN_RENDERED = "$stage/turnserver.voice.rendered.conf"
+    $env:TURN_PORT = '3479'
+    $env:TURN_TLS_PORT = '5350'
+    $env:TURN_MIN_PORT = '49601'
+    $env:TURN_MAX_PORT = '49800'
+    $env:TURN_MAX_BPS = '12000'
+    Start-Relay '/var/log/helix-turn-voice.log'
+}
 
 Start-Sleep -Seconds 3
 $running = (& wsl.exe -d $Distro -u root -- sh -c 'pgrep -x turnserver >/dev/null && echo yes || echo no').Trim()
@@ -135,5 +167,16 @@ if ($running -ne 'yes') {
     exit 1
 }
 
+if ($voiceSecret) {
+    $count = [int](& wsl.exe -d $Distro -u root -- sh -c 'pgrep -x turnserver | wc -l').Trim()
+    if ($count -lt 2) {
+        Write-Host 'The voice relay did not start. Last log lines:' -ForegroundColor Red
+        & wsl.exe -d $Distro -u root -- tail -n 20 /var/log/helix-turn-voice.log
+        exit 1
+    }
+    Write-Host 'Voice relay running on 3479 (capped), relay ports 49601-49800.' -ForegroundColor Green
+} else {
+    Write-Host 'No HELIX_TURN_VOICE_SECRET: only the main relay is running.' -ForegroundColor Yellow
+}
 Write-Host "TURN relay running: realm $realm, public $PublicIp -> LAN $LanIp" -ForegroundColor Green
 Write-Host 'Log: wsl -d Ubuntu -u root -- tail -f /var/log/helix-turn.log'

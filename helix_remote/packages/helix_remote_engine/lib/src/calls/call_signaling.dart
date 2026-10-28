@@ -9,10 +9,17 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// Nothing here may log or keep a signal's content: SDP and ICE are as
 /// private as a message.
 abstract interface class CallSignaling {
-  /// Short-lived TURN credentials, or null when the server has no relay
-  /// (`unavailable`) or refuses (rate limit): the call then tries a direct
-  /// connection.
-  Future<TurnCredentials?> turnCredentials();
+  /// Relay credentials for one call (`POST /v1/calls/turn`), or null when the
+  /// server has no relay (`unavailable`) or refuses (rate limit): the call
+  /// then tries a direct connection. A metered call's credentials end when
+  /// its reserved call time does. Throws `CallFailedException(noCallTime)`
+  /// when the caller has no call time left (ADR-036).
+  Future<TurnCredentials?> turnCredentials({
+    required String callId,
+    required CallRole role,
+    required bool video,
+    String? roomId,
+  });
 
   /// Seals [payload] for the devices of [account] and posts it
   /// (`POST /v1/calls/{id}/signals`, routed as `payload.type.routedAs`).

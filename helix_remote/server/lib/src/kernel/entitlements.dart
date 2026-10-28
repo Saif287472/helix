@@ -14,6 +14,7 @@ final class Entitlements {
     required this.attachmentRetention,
     required this.backupMaxBytes,
     required this.backupQuotaBytes,
+    this.unlimitedCalls = true,
   });
 
   final PlanId plan;
@@ -33,6 +34,10 @@ final class Entitlements {
   /// The largest single backup media object, and all of them together.
   final int backupMaxBytes;
   final int backupQuotaBytes;
+
+  /// Calls spend no call time (Orbit Premium, and every server without plans).
+  /// False on the Free plan while plans are on (ADR-036).
+  final bool unlimitedCalls;
 
   // The limits the server has always had. Free keeps them, except the device
   // count, which is the one limit that tightens when plans are on.
@@ -74,6 +79,7 @@ final class Entitlements {
     attachmentRetention: standardAttachmentRetention,
     backupMaxBytes: standardBackupMaxBytes,
     backupQuotaBytes: standardBackupQuota,
+    unlimitedCalls: false,
   );
 
   /// Orbit Premium. [maxAttachmentBytes] is the Free file size
@@ -113,6 +119,7 @@ final class Entitlements {
       ),
       backupMaxBytes: pick(PlanLimitKey.backupMaxBytes, backupMaxBytes),
       backupQuotaBytes: pick(PlanLimitKey.backupQuotaBytes, backupQuotaBytes),
+      unlimitedCalls: unlimitedCalls,
     );
   }
 

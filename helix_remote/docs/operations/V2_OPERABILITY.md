@@ -741,7 +741,7 @@ reported. An entry whose device and account are both missing entirely, with no
 `push` line at all, means the send was never queued: the recipient had no
 active device, or the job coalesced into one already run.
 
-**Calls cannot connect.** `GET /v1/calls/turn` answering 503 `unavailable`
+**Calls cannot connect.** `POST /v1/calls/turn` answering 503 `unavailable`
 means `HELIX_TURN_URLS`/`HELIX_TURN_SECRET` are not set. If credentials are
 issued but media fails: coturn is not running, its secret differs, or the
 router forwards and firewall rules are missing (`deploy/coturn/README.md`).

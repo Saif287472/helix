@@ -426,10 +426,17 @@ final class CallsService implements CallSignalSink {
     );
     await _writeLog(call, 'outgoing', 'ringing');
     _publish(call);
+    final List<IceServer> iceServers;
+    try {
+      iceServers = await _relay(call, CallRole.caller);
+    } on CallFailedException {
+      await _finish(call, CallEnd.failed, post: false);
+      rethrow;
+    }
     final String sdp;
     try {
       final media = await factory.create(
-        CallMediaConfig(video: video, iceServers: await _iceServers()),
+        CallMediaConfig(video: video, iceServers: iceServers),
       );
       call.media = media;
       call.cameraOn = video;
@@ -612,10 +619,18 @@ final class CallsService implements CallSignalSink {
     }
     call.answeringHere = true;
     final device = call.peerDevice!;
+    final List<IceServer> iceServers;
+    try {
+      iceServers = await _relay(call, CallRole.callee);
+    } on CallFailedException {
+      await _signalEnd(call, CallEndReason.failed);
+      await _finish(call, CallEnd.failed);
+      rethrow;
+    }
     final String answer;
     try {
       final media = await factory.create(
-        CallMediaConfig(video: call.video, iceServers: await _iceServers()),
+        CallMediaConfig(video: call.video, iceServers: iceServers),
       );
       call.media = media;
       call.cameraOn = call.video;
@@ -901,6 +916,8 @@ final class CallsService implements CallSignalSink {
     call.ringTimer?.cancel();
     call.connectTimer?.cancel();
     call.iceTimer?.cancel();
+    call.warnTimer?.cancel();
+    call.endTimer?.cancel();
     await call.candidates?.cancel();
     await call.mediaStates?.cancel();
     await call.screenEnded?.cancel();
@@ -1103,10 +1120,19 @@ final class CallsService implements CallSignalSink {
     }
   }
 
-  Future<List<IceServer>> _iceServers() async {
+  /// Relay credentials for [call] as [role]. A metered call also gets its
+  /// warning and cut-off timers: the relay stops carrying it when its call
+  /// time ends, so the call ends there too, with a warning first. Only a
+  /// caller with no call time left throws ([CallFailure.noCallTime]).
+  Future<List<IceServer>> _relay(_Call call, CallRole role) async {
     try {
-      final turn = await _signaling.turnCredentials();
+      final turn = await _signaling.turnCredentials(
+        callId: call.callId,
+        role: role,
+        video: call.video,
+      );
       if (turn == null) return const [];
+      if (turn.metered) _meter(call, turn.expiresAt);
       return [
         IceServer(
           urls: turn.urls,
@@ -1114,9 +1140,41 @@ final class CallsService implements CallSignalSink {
           credential: turn.credential,
         ),
       ];
+    } on CallFailedException {
+      rethrow;
     } on Object {
       return const []; // A direct connection may still work.
     }
+  }
+
+  void _meter(_Call call, DateTime endsAt) {
+    final left = endsAt.difference(_now());
+    call.endsAt = endsAt;
+    final warnIn = left - _config.callTimeWarning;
+    if (warnIn <= Duration.zero) {
+      call.endingSoon = true;
+    } else {
+      call.warnTimer = Timer(
+        warnIn,
+        () => unawaited(_run(() => _callTimeWarning(call))),
+      );
+    }
+    call.endTimer = Timer(
+      left > Duration.zero ? left : Duration.zero,
+      () => unawaited(_run(() => _callTimeOver(call))),
+    );
+  }
+
+  Future<void> _callTimeWarning(_Call call) async {
+    if (call.finished) return;
+    call.endingSoon = true;
+    _publish(call);
+  }
+
+  Future<void> _callTimeOver(_Call call) async {
+    if (call.finished) return;
+    await _signalEnd(call, CallEndReason.hangup);
+    await _finish(call, CallEnd.callTimeOver);
   }
 
   CallFailure _classify(Object error) => switch (error) {
@@ -1179,6 +1237,13 @@ final class _Call {
   Timer? connectTimer;
   Timer? iceTimer;
 
+  /// Metered call: when its call time ends, whether the warning has shown,
+  /// and the timers for both.
+  DateTime? endsAt;
+  bool endingSoon = false;
+  Timer? warnTimer;
+  Timer? endTimer;
+
   /// Local candidates not sent yet.
   final List<IceCandidatePayload> outgoingCandidates = [];
 
@@ -1206,13 +1271,17 @@ final class _Call {
     cameraOn: cameraOn,
     screenSharing: screenSharing,
     peerScreenSharing: peerScreenSharing,
+    endsAt: endsAt,
+    endingSoon: endingSoon,
   );
 
   /// The `call_log` direction and state for how this call ended.
   (String, String) logFacts() {
     final base = isIncoming ? 'incoming' : 'outgoing';
     return switch (end!) {
-      CallEnd.hungUp || CallEnd.remoteHungUp => (base, 'ended'),
+      CallEnd.hungUp ||
+      CallEnd.remoteHungUp ||
+      CallEnd.callTimeOver => (base, 'ended'),
       CallEnd.declinedByMe => ('incoming', 'declined'),
       CallEnd.declinedByPeer => ('outgoing', 'declined'),
       CallEnd.cancelledByMe => ('outgoing', 'cancelled'),

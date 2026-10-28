@@ -176,6 +176,12 @@ final class CallDevice implements CallSignaling {
   /// TURN credentials this device is given; null means no relay.
   TurnCredentials? turn;
 
+  /// Refuse relay credentials the way a caller with no call time is refused.
+  bool noCallTime = false;
+
+  /// Every relay request this device made, as `(call id, role, video, room)`.
+  final List<(String, CallRole, bool, String?)> turnRequests = [];
+
   /// Make the next [send] calls throw.
   Object? failSends;
 
@@ -213,7 +219,18 @@ final class CallDevice implements CallSignaling {
   // ------------------------------------------------------- CallSignaling
 
   @override
-  Future<TurnCredentials?> turnCredentials() async => turn;
+  Future<TurnCredentials?> turnCredentials({
+    required String callId,
+    required CallRole role,
+    required bool video,
+    String? roomId,
+  }) async {
+    turnRequests.add((callId, role, video, roomId));
+    if (noCallTime && role == CallRole.caller) {
+      throw const CallFailedException(CallFailure.noCallTime);
+    }
+    return turn;
+  }
 
   @override
   Future<CallSignalResponse> send(

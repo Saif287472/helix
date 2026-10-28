@@ -28,6 +28,9 @@ enum GroupCallEnd {
 
   /// Media could not be set up.
   failed,
+
+  /// The call time of whoever pays ran out (Free plan, ADR-036).
+  callTimeOver,
 }
 
 /// Where one other person is in a room.
@@ -74,6 +77,8 @@ final class GroupCallSnapshot {
     this.end,
     this.muted = false,
     this.cameraOn = false,
+    this.endsAt,
+    this.endingSoon = false,
   });
 
   final String roomId;
@@ -99,6 +104,11 @@ final class GroupCallSnapshot {
   final List<GroupCallParticipant> participants;
   final bool muted;
   final bool cameraOn;
+
+  /// When the call is cut off for want of call time, or null if it spends
+  /// none; [endingSoon] says that moment is near.
+  final DateTime? endsAt;
+  final bool endingSoon;
 
   bool get isLive => phase != GroupCallPhase.ended;
 

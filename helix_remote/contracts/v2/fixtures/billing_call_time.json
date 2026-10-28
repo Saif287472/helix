@@ -1,0 +1,20 @@
+{
+  "unlimited": false,
+  "pools": [
+    {
+      "media": "voice",
+      "minutes": 140,
+      "daily_minutes": 100,
+      "cap_minutes": 300,
+      "expires_at": 1791028800000
+    },
+    {
+      "media": "video",
+      "minutes": 30,
+      "daily_minutes": 30,
+      "cap_minutes": 90
+    }
+  ],
+  "can_claim": false,
+  "next_claim_at": 1790874000000
+}

@@ -783,6 +783,100 @@ void main() {
     );
   });
 
+  group('call time', () {
+    const fast = CallConfig(
+      ringTimeout: Duration(seconds: 30),
+      connectTimeout: Duration(seconds: 30),
+      iceBatchDelay: Duration.zero,
+      signalTimeout: Duration(seconds: 2),
+      callTimeWarning: Duration(milliseconds: 600),
+    );
+
+    TurnCredentials metered(Duration left) => TurnCredentials(
+      urls: const ['turn:turn.example:3478'],
+      username: '1:acct',
+      credential: 'c',
+      expiresAt: clock.now.add(left),
+      metered: true,
+    );
+
+    test('a caller with none left is told before anything rings', () async {
+      final alice = await net.add('alice', config: fast);
+      final bob = await net.add('bob', config: fast);
+      alice.startWatching();
+      alice.noCallTime = true;
+      await expectLater(
+        alice.service.startCall(bob.account),
+        throwsA(
+          isA<CallFailedException>().having(
+            (e) => e.reason,
+            'reason',
+            CallFailure.noCallTime,
+          ),
+        ),
+      );
+      expect(alice.current, isNull);
+      expect(net.received(bob, CallSignalType.offer), isEmpty);
+    });
+
+    test('asks for credentials as caller and as callee, by media', () async {
+      final alice = await net.add('alice', config: fast);
+      final bob = await net.add('bob', config: fast);
+      alice.startWatching();
+      bob.startWatching();
+      final call = await alice.service.startCall(bob.account, video: true);
+      await bob.until(() => bob.current?.phase == CallPhase.ringing);
+      await bob.service.accept();
+      expect(alice.turnRequests.single, (
+        call.callId,
+        CallRole.caller,
+        true,
+        null,
+      ));
+      expect(bob.turnRequests.single, (
+        call.callId,
+        CallRole.callee,
+        true,
+        null,
+      ));
+    });
+
+    test('warns, then ends both sides when the time is up', () async {
+      final alice = await net.add('alice', config: fast);
+      final bob = await net.add('bob', config: fast);
+      alice.startWatching();
+      bob.startWatching();
+      alice.turn = metered(const Duration(milliseconds: 1200));
+      bob.turn = metered(const Duration(milliseconds: 1200));
+      await connect(alice, bob);
+      expect(alice.current!.endsAt, isNotNull);
+      expect(alice.current!.endingSoon, isFalse);
+      await alice.until(() => alice.current?.endingSoon == true);
+      await alice.until(() => alice.current == null);
+      expect(
+        alice.shown.whereType<CallSnapshot>().last.end,
+        CallEnd.callTimeOver,
+      );
+      await bob.until(() => bob.current == null);
+    });
+
+    test('a call that spends none has no end', () async {
+      final alice = await net.add('alice', config: fast);
+      final bob = await net.add('bob', config: fast);
+      alice.startWatching();
+      bob.startWatching();
+      alice.turn = TurnCredentials(
+        urls: const ['turn:turn.example:3478'],
+        username: '1:acct',
+        credential: 'c',
+        expiresAt: clock.now.add(const Duration(hours: 8)),
+      );
+      await connect(alice, bob);
+      expect(alice.current!.endsAt, isNull);
+      expect(alice.current!.endingSoon, isFalse);
+    });
+  });
+
   group('the call log on other devices', () {
     Future<CallLogRow?> mirror(
       CallDevice d,

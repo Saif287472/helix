@@ -60,7 +60,7 @@ than that.
 ## Diagnostics
 
 Readiness (`GET /v1/health/ready`) checks only the database and object storage. It does
-not check TURN: a missing TURN setting shows up as `GET /v1/calls/turn` answering 503
+not check TURN: a missing TURN setting shows up as `POST /v1/calls/turn` answering 503
 `unavailable`, and a Coturn that is down shows up only when a relayed call fails. Check the
 relay itself with `turnutils_uclient` (see `deploy/coturn/README.md`, "Verifying it
 actually relays").

@@ -62,6 +62,32 @@ BillingPlan aPlan({
   lastRequest: last,
 );
 
+CallTime aCallTime({
+  int voice = 0,
+  int video = 0,
+  bool canClaim = true,
+  bool unlimited = false,
+}) => CallTime(
+  unlimited: unlimited,
+  canClaim: canClaim,
+  pools: unlimited
+      ? const []
+      : [
+          CallPoolBalance(
+            media: CallPool.voice,
+            minutes: voice,
+            dailyMinutes: 100,
+            capMinutes: 300,
+          ),
+          CallPoolBalance(
+            media: CallPool.video,
+            minutes: video,
+            dailyMinutes: 30,
+            capMinutes: 90,
+          ),
+        ],
+);
+
 PaymentRequestInfo req(
   PaymentRequestStatus status, {
   String? reason,
@@ -85,6 +111,21 @@ final class FakePlansGateway implements PlansGateway {
   Object? planError;
   Object? submitError;
   final List<({int months, PaymentMethod method, String trxId})> submitted = [];
+
+  CallTime time = aCallTime();
+  Object? claimError;
+  int claims = 0;
+
+  @override
+  Future<CallTime> callTime() async => time;
+
+  @override
+  Future<CallTime> claimCallTime() async {
+    if (claimError != null) throw claimError!;
+    claims++;
+    time = aCallTime(voice: 100, video: 30, canClaim: false);
+    return time;
+  }
 
   @override
   Future<BillingPlan> plan() async {
@@ -157,6 +198,67 @@ void main() {
       expect(find.text('bKash'), findsOneWidget);
       expect(find.text('01700000000'), findsOneWidget);
       expect(find.text('Nagad'), findsOneWidget);
+    });
+
+    youTest('shows the free call minutes and takes the daily claim', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      final gateway = FakePlansGateway(aPlan())
+        ..time = aCallTime(voice: 40, video: 5);
+      await pumpPage(
+        tester,
+        const PremiumPage(),
+        overrides: _overrides(gateway),
+      );
+      await settle(tester);
+
+      expect(find.text('Voice minutes'), findsOneWidget);
+      expect(find.text('40'), findsOneWidget);
+      expect(find.text('Up to 300 kept'), findsOneWidget);
+      await tester.tap(find.text("Claim today's minutes"));
+      await settle(tester);
+
+      expect(gateway.claims, 1);
+      expect(find.text('100'), findsOneWidget);
+      expect(find.text('Claimed for today'), findsOneWidget);
+    });
+
+    youTest('has no call meter for Premium or an unlimited account', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      final gateway = FakePlansGateway(aPlan(plan: PlanId.premium))
+        ..time = aCallTime(unlimited: true);
+      await pumpPage(
+        tester,
+        const PremiumPage(),
+        overrides: _overrides(gateway),
+      );
+      await settle(tester);
+
+      expect(find.text('Voice minutes'), findsNothing);
+      expect(find.text("Claim today's minutes"), findsNothing);
+    });
+
+    youTest('says so when the claim was taken on another device', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      final gateway = FakePlansGateway(
+        aPlan(),
+      )..claimError = const ApiException(status: 409, code: ErrorCode.conflict);
+      await pumpPage(
+        tester,
+        const PremiumPage(),
+        overrides: _overrides(gateway),
+      );
+      await settle(tester);
+
+      await tester.tap(find.text("Claim today's minutes"));
+      await settle(tester);
+
+      expect(find.textContaining('already claimed'), findsOneWidget);
     });
 
     youTest('sends the transaction ID with the chosen time and method', (

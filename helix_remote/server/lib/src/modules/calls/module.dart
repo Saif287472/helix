@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/crypto.dart';
+import 'package:helix_remote_server/src/modules/billing/api.dart';
 import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
@@ -21,42 +22,82 @@ import 'package:shelf/shelf.dart';
 /// may be `turn:` (port 3478, credentials in the clear) or `turns:` (TLS,
 /// port 5349); anything else is a startup error.
 final class TurnConfig {
-  const TurnConfig({required this.urls, required this.secret});
+  const TurnConfig({
+    required this.urls,
+    required this.secret,
+    this.voiceUrls = const [],
+    this.voiceSecret = '',
+  });
 
   final List<String> urls;
   final String secret;
 
-  bool get isConfigured => urls.isNotEmpty && secret.isNotEmpty;
+  /// The voice relay (`HELIX_TURN_VOICE_URLS`, `HELIX_TURN_VOICE_SECRET`): a
+  /// second coturn whose sessions are capped at voice bandwidth, with **its own
+  /// secret**, so a credential for it is no good on the main relay and one for
+  /// the main relay is no good on it (ADR-036). Optional: without it voice
+  /// calls use the main relay, and a Free caller's voice minutes are charged
+  /// but not capped.
+  final List<String> voiceUrls;
+  final String voiceSecret;
 
-  factory TurnConfig.from(ServerConfig config) {
-    final urls = (config.env['HELIX_TURN_URLS'] ?? '')
+  bool get isConfigured => urls.isNotEmpty && secret.isNotEmpty;
+  bool get hasVoiceRelay => voiceUrls.isNotEmpty && voiceSecret.isNotEmpty;
+
+  static List<String> _urls(String? raw, String name) {
+    final urls = (raw ?? '')
         .split(',')
         .map((u) => u.trim())
         .where((u) => u.isNotEmpty)
         .toList();
-    final secret = config.env['HELIX_TURN_SECRET']?.trim() ?? '';
-    final bad = urls.where(
-      (u) => !u.startsWith('turn:') && !u.startsWith('turns:'),
-    );
-    if (bad.isNotEmpty) {
-      throw ConfigError([
-        'HELIX_TURN_URLS entries must start with turn: or turns:',
-      ]);
+    if (urls.any((u) => !u.startsWith('turn:') && !u.startsWith('turns:'))) {
+      throw ConfigError(['$name entries must start with turn: or turns:']);
     }
+    return urls;
+  }
+
+  factory TurnConfig.from(ServerConfig config) {
+    final urls = _urls(config.env['HELIX_TURN_URLS'], 'HELIX_TURN_URLS');
+    final secret = config.env['HELIX_TURN_SECRET']?.trim() ?? '';
     if (urls.isNotEmpty != secret.isNotEmpty) {
       throw ConfigError([
         'HELIX_TURN_URLS and HELIX_TURN_SECRET must be set together',
       ]);
     }
-    return TurnConfig(urls: urls, secret: secret);
+    final voiceUrls = _urls(
+      config.env['HELIX_TURN_VOICE_URLS'],
+      'HELIX_TURN_VOICE_URLS',
+    );
+    final voiceSecret = config.env['HELIX_TURN_VOICE_SECRET']?.trim() ?? '';
+    if (voiceUrls.isNotEmpty != voiceSecret.isNotEmpty) {
+      throw ConfigError([
+        'HELIX_TURN_VOICE_URLS and HELIX_TURN_VOICE_SECRET must be set together',
+      ]);
+    }
+    if (voiceSecret.isNotEmpty && voiceSecret == secret) {
+      throw ConfigError([
+        'HELIX_TURN_VOICE_SECRET must differ from HELIX_TURN_SECRET: a shared '
+            'secret would let a voice credential open the uncapped relay',
+      ]);
+    }
+    return TurnConfig(
+      urls: urls,
+      secret: secret,
+      voiceUrls: voiceUrls,
+      voiceSecret: voiceSecret,
+    );
   }
 }
 
 /// 1:1 call signalling (REST_V2.md "calls"). Signals are sealed pairwise;
 /// the server sees the call id, the parties and the signal kind only.
 final class CallsModule extends ModuleBase {
-  CallsModule(super.context, {required this.identity, required this.messaging})
-    : turn = TurnConfig.from(context.config) {
+  CallsModule(
+    super.context, {
+    required this.identity,
+    required this.messaging,
+    required this.billing,
+  }) : turn = TurnConfig.from(context.config) {
     _wakes = PushTrail(log, context.metrics);
     identity.onDeviceRevoked(
       (tx, device) => tx.execute(
@@ -68,20 +109,28 @@ final class CallsModule extends ModuleBase {
 
   final IdentityApi identity;
   final MessagingApi messaging;
+  final BillingApi billing;
   final TurnConfig turn;
   late final CallsApi api = _CallsFacade(this);
   late final PushTrail _wakes;
   CallRelay? _relay;
 
   static const pushJob = 'calls.push';
-  static const credentialLifetime = Duration(hours: 1);
+
+  /// How long the relay credential of a call that spends no call time lasts
+  /// (`CallTimeLimits.unmeteredLifetime`).
   static const maxTtl = Duration(seconds: 120);
   static final RegExp _callId = RegExp(r'^[A-Za-z0-9._:-]{8,128}$');
+  // One credential per call, and one per leg of a group call, and again for a
+  // retry: generous for people, small for a script.
   static final _turnLimit = RateLimitPolicy.per(
     'calls.turn',
-    10,
+    60,
     const Duration(hours: 1),
   );
+
+  /// A call's record (who it was offered to) is kept this long.
+  static const legRetention = Duration(hours: 12);
   static final _offers = RateLimitPolicy.per(
     'calls.offers',
     30,
@@ -104,7 +153,23 @@ final class CallsModule extends ModuleBase {
     Migration(1, 'calls_baseline', _baseline),
     Migration(2, 'federated_callers', _federatedCallers),
     Migration(3, 'drop_call_metrics', _dropCallMetrics),
+    Migration(4, 'call_legs', _callLegs),
   ];
+
+  /// Who a call was offered to, so the answering side can be told from anyone
+  /// else asking for relay credentials (ADR-036). The server already sees this
+  /// while it routes the offer; it now keeps it for a few hours.
+  static String _callLegs(String s) =>
+      '''
+CREATE TABLE $s.call_legs (
+  call_id text NOT NULL,
+  callee_account text NOT NULL,
+  caller_account text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (call_id, callee_account)
+);
+CREATE INDEX call_legs_age ON $s.call_legs (created_at);
+''';
 
   /// Nothing ever sent a quality sample, so the table (and its unbounded
   /// `outcome` column) goes rather than gets bounded (Q9, AUD-6-1, AUD-12l-3).
@@ -153,6 +218,10 @@ CREATE TABLE $s.call_metrics (
       await context.db.execute(
         'DELETE FROM $schema.pending_calls WHERE expires_at < now()',
       );
+      await context.db.execute(
+        'DELETE FROM $schema.call_legs WHERE created_at < @c:timestamptz',
+        {'c': context.clock.now().subtract(legRetention)},
+      );
     }),
   ];
 
@@ -173,10 +242,17 @@ CREATE TABLE $s.call_metrics (
   }
 
   /// coturn's REST credential scheme: `username = <expiry>:<random id>`,
-  /// `credential = base64(HMAC-SHA1(secret, username))`. coturn checks only
-  /// the expiry and the HMAC, and a `turn:` handshake is unencrypted, so the
-  /// name carries nothing about the account: an on-path observer cannot link
-  /// an address to a person.
+  /// `credential = base64(HMAC-SHA1(secret, username))`. A `turn:` handshake is
+  /// unencrypted, so the name carries nothing about the account: an on-path
+  /// observer cannot link an address to a person.
+  ///
+  /// A credential is for one call (ADR-036). The billing module decides what
+  /// it may carry: a Free caller's call time is set aside and the credential
+  /// ends with it (coturn re-checks the expiry every `stale-nonce` seconds, so
+  /// the relay stops then); an answering side runs under the caller's
+  /// reservation; a call nobody metered gets a long lifetime. Voice goes to the
+  /// voice relay when there is one, whose own secret keeps its credentials off
+  /// the uncapped relay.
   Future<Response> _turn(HelixRequest q) async {
     if (!turn.isConfigured) {
       throw const ApiError(
@@ -184,22 +260,56 @@ CREATE TABLE $s.call_metrics (
         message: 'this server has no relay for calls',
       );
     }
+    final req = q.json(TurnRequest.fromJson);
+    if (req.role == CallRole.unknown || req.media == CallPool.unknown) {
+      throw const ApiError(ErrorCode.invalidField);
+    }
     await _limit(_turnLimit, q.device.deviceId);
-    final expires = context.clock.now().add(credentialLifetime);
+    final accountId = q.device.accountId;
+
+    var callerIsRemote = false;
+    if (req.role == CallRole.callee && await billing.enabled()) {
+      // Only the person the offer was addressed to may answer it.
+      final leg = await context.db.queryOne(
+        'SELECT caller_account FROM $schema.call_legs '
+        'WHERE call_id = @c:text AND callee_account = @a:text',
+        {'c': req.callId, 'a': accountId},
+      );
+      if (leg == null) {
+        throw const ApiError(
+          ErrorCode.notFound,
+          message: 'no call is ringing for you under that id',
+        );
+      }
+      callerIsRemote = leg.string('caller_account').contains('@');
+    }
+
+    final grant = await billing.grantCall(
+      accountId: accountId,
+      callId: req.callId,
+      role: req.role,
+      pool: req.media,
+      roomId: req.roomId,
+      callerIsRemote: callerIsRemote,
+    );
+
+    final voice = grant.pool == CallPool.voice && turn.hasVoiceRelay;
+    final secret = voice ? turn.voiceSecret : turn.secret;
     final username =
-        '${expires.millisecondsSinceEpoch ~/ 1000}:${encodeBytes(randomBytes(12))}';
+        '${grant.expiresAt.millisecondsSinceEpoch ~/ 1000}:${encodeBytes(randomBytes(12))}';
     final credential = base64.encode(
       crypto.Hmac(
         crypto.sha1,
-        utf8.encode(turn.secret),
+        utf8.encode(secret),
       ).convert(utf8.encode(username)).bytes,
     );
     return jsonResponse(
       TurnCredentials(
-        urls: turn.urls,
+        urls: voice ? turn.voiceUrls : turn.urls,
         username: username,
         credential: credential,
-        expiresAt: expires,
+        expiresAt: grant.expiresAt,
+        metered: grant.metered,
       ).toJson(),
     );
   }
@@ -358,6 +468,20 @@ CREATE TABLE $s.call_metrics (
       addressed[account]!.forEach(payloads.remove);
     }
 
+    if (kind == CallSignalKind.offer) {
+      // Who the call was offered to (not the people who blocked the caller):
+      // only they may ask for the answering side's relay credentials.
+      for (final account in addressed.keys.where(
+        (a) => !blockers.contains(a),
+      )) {
+        await context.db.execute(
+          'INSERT INTO $schema.call_legs (call_id, callee_account, caller_account) '
+          'VALUES (@c:text, @a:text, @s:text) ON CONFLICT DO NOTHING',
+          {'c': callId, 'a': account, 's': senderAccount},
+        );
+      }
+    }
+
     final delivery = Delivery(
       kind: EnvelopeKind.callSignal,
       callId: callId,
@@ -410,6 +534,8 @@ CREATE TABLE $s.call_metrics (
         }
       });
     } else if (kind == CallSignalKind.end) {
+      // The call is over for whoever pays for it.
+      await billing.callEnded(callId);
       await _endPending(
         callId,
         notifyEnded: true,

@@ -1208,6 +1208,51 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
     (v) => v.toJson(),
     TurnCredentials.fromJson,
   ),
+  'calls_turn_credentials_metered': _dto(
+    TurnCredentials(
+      urls: const ['turn:turn.helix.example:3479?transport=udp'],
+      username: '1759280600:0192a4f1',
+      credential: 'turn-credential-voice',
+      expiresAt: t0.add(const Duration(minutes: 10)),
+      metered: true,
+    ),
+    (v) => v.toJson(),
+    TurnCredentials.fromJson,
+  ),
+  'calls_turn_request': _dto(
+    const TurnRequest(
+      callId: '0192a4f0-0000-7000-8000-000000000001',
+      role: CallRole.caller,
+      media: CallPool.video,
+      roomId: '0192a4f0-0000-7000-8000-000000000002',
+    ),
+    (v) => v.toJson(),
+    TurnRequest.fromJson,
+  ),
+  'billing_call_time': _dto(
+    CallTime(
+      unlimited: false,
+      canClaim: false,
+      nextClaimAt: t0.add(const Duration(hours: 5)),
+      pools: [
+        CallPoolBalance(
+          media: CallPool.voice,
+          minutes: 140,
+          dailyMinutes: 100,
+          capMinutes: 300,
+          expiresAt: t0.add(const Duration(days: 2)),
+        ),
+        const CallPoolBalance(
+          media: CallPool.video,
+          minutes: 30,
+          dailyMinutes: 30,
+          capMinutes: 90,
+        ),
+      ],
+    ),
+    (v) => v.toJson(),
+    CallTime.fromJson,
+  ),
   'calls_call_signal_request': _dto(
     CallSignalRequest(
       kind: CallSignalKind.offer,
@@ -1810,6 +1855,8 @@ JsonMap _encode(Object value) => switch (value) {
   final JoinRequestList v => v.toJson(),
   final ResolveJoinRequest v => v.toJson(),
   final TurnCredentials v => v.toJson(),
+  final TurnRequest v => v.toJson(),
+  final CallTime v => v.toJson(),
   final CallSignalRequest v => v.toJson(),
   final CallSignalResponse v => v.toJson(),
   final CallStateRequest v => v.toJson(),

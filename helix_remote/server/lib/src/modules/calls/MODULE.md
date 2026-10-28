@@ -1,6 +1,6 @@
 # calls module
 
-1:1 call signalling (REST_V2.md "calls"). Schema `calls` (`pending_calls`;
+1:1 call signalling (REST_V2.md "calls"). Schema `calls` (`pending_calls`, `call_legs` from migration 4;
 `call_metrics` was dropped by migration 3). Group calls are deferred (plan §13).
 
 - **Signals** (`POST /v1/calls/{call_id}/signals`) carry sealed pairwise
@@ -25,16 +25,26 @@
   pushes for pending ones). Only rows the account is in are cleared.
 - **`GET /v1/calls/pending`:** offers this device missed while asleep,
   fetched after a push wake.
-- **TURN** (`HELIX_TURN_URLS`, `HELIX_TURN_SECRET`): coturn REST
-  credentials. `username = <expiry>:<random id>` (12 random bytes,
-  base64url, new on every request) and
-  `credential = base64(HMAC-SHA1(secret, username))`, valid one hour.
+- **TURN** (`HELIX_TURN_URLS`, `HELIX_TURN_SECRET`, and for the voice relay
+  `HELIX_TURN_VOICE_URLS`, `HELIX_TURN_VOICE_SECRET`; ADR-036): coturn REST
+  credentials, one request per call (`POST /v1/calls/turn`: `call_id`, `role`,
+  `media`, `room_id` for a group call). `username = <expiry>:<random id>`
+  (12 random bytes, base64url, new on every request) and
+  `credential = base64(HMAC-SHA1(secret, username))`. The expiry is set by
+  `BillingApi.grantCall`: the end of a Free caller's reserved call time
+  (`metered: true`), or 8 hours. A voice call is signed with the voice secret
+  and given the voice URLs when there is a voice relay (the main relay does not
+  accept the voice secret, so a voice credential cannot reach the uncapped relay). A callee's request
+  needs a row in `call_legs` (written when the offer is routed, kept 12 hours)
+  naming them as the callee, else `not_found` (checked when plans are on).
   coturn checks only the expiry and the HMAC, so the name carries nothing
   about the account or device: the username crosses the network in the clear
   on `turn:` (port 3478), and an on-path observer must not be able to tie
   an address to a person. `HELIX_TURN_URLS` entries must start with `turn:`
   or `turns:` (TLS, port 5349); list both and clients try them in order.
-  Limited to 10 per device per hour; 503 `unavailable` if not configured.
+  Limited to 60 per device per hour; 503 `unavailable` if not configured;
+  `quota_exceeded` (`details.reason: call_time`) when a Free caller has no
+  minutes left. The two secrets must differ (a startup error otherwise).
 - **Push (`calls.push` job):** every attempt at a `call` or `call_ended`
   wake-up leaves one `push` log line and one `helix_push_total` count, by
   reason and outcome (`sent`, `no_token`, `provider_off`, `failed`,

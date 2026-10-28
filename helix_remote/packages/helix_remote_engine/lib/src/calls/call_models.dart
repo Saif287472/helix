@@ -62,6 +62,10 @@ enum CallEnd {
 
   /// Both sides called each other at once and this call lost.
   glare,
+
+  /// The caller's call time ran out (Free plan, ADR-036); the relay stops
+  /// carrying the call then.
+  callTimeOver,
 }
 
 /// A call as the UI sees it: immutable, replaced on every change.
@@ -81,6 +85,8 @@ final class CallSnapshot {
     this.cameraOn = false,
     this.screenSharing = false,
     this.peerScreenSharing = false,
+    this.endsAt,
+    this.endingSoon = false,
   });
 
   final String callId;
@@ -109,6 +115,13 @@ final class CallSnapshot {
   /// The other side is sharing theirs (their video is a screen, not a face).
   final bool peerScreenSharing;
 
+  /// When the call is cut off because its call time runs out, or null for a
+  /// call that spends none (Premium, plans off, no relay).
+  final DateTime? endsAt;
+
+  /// [endsAt] is near: show the warning.
+  final bool endingSoon;
+
   bool get isIncoming => direction == CallDirection.incoming;
 
   /// Still going (not [CallPhase.ended]).
@@ -123,6 +136,8 @@ final class CallSnapshot {
     bool? cameraOn,
     bool? screenSharing,
     bool? peerScreenSharing,
+    DateTime? endsAt,
+    bool? endingSoon,
   }) => CallSnapshot(
     callId: callId,
     peer: peer,
@@ -137,6 +152,8 @@ final class CallSnapshot {
     cameraOn: cameraOn ?? this.cameraOn,
     screenSharing: screenSharing ?? this.screenSharing,
     peerScreenSharing: peerScreenSharing ?? this.peerScreenSharing,
+    endsAt: endsAt ?? this.endsAt,
+    endingSoon: endingSoon ?? this.endingSoon,
   );
 
   @override

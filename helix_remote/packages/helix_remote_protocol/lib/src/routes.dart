@@ -531,7 +531,7 @@ abstract final class Routes {
 
   // ------------------------------------------------------------------- calls
   static const turnCredentials = ApiRoute(
-    _get,
+    _post,
     '/v1/calls/turn',
     module: 'calls',
     access: _dev,
@@ -684,6 +684,18 @@ abstract final class Routes {
   static const billingPlan = ApiRoute(
     _get,
     '/v1/billing/plan',
+    module: 'billing',
+    access: _dev,
+  );
+  static const callTime = ApiRoute(
+    _get,
+    '/v1/billing/call-time',
+    module: 'billing',
+    access: _dev,
+  );
+  static const claimCallTime = ApiRoute(
+    _post,
+    '/v1/billing/call-time/claim',
     module: 'billing',
     access: _dev,
   );
@@ -1070,7 +1082,11 @@ abstract final class Routes {
     live, ready, serverInfo, legal, crashReport, anomalies, metrics, assetLinks,
     openLink, shareLink, //
     packs, packManifest, packFile, //
-    billingPlan, submitPaymentRequest, paymentRequests, //
+    billingPlan,
+    submitPaymentRequest,
+    paymentRequests,
+    callTime,
+    claimCallTime, //
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,
     s2sGroupActions, s2sGroupSync, s2sCallSignals, //

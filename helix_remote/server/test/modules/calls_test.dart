@@ -61,10 +61,20 @@ void main() {
       ).toJson(),
     );
 
+    // Relay credentials are for a call (ADR-036); on a server without plans
+    // nothing is metered, so any call id will do.
+    Future<TestResponse> turn(TestDevice d, {String? callId}) => h.api.call(
+      Routes.turnCredentials,
+      bearer: d.bearer,
+      body: TurnRequest(
+        callId: callId ?? 'call-${Uuid.v7()}',
+        role: CallRole.caller,
+        media: CallPool.voice,
+      ).toJson(),
+    );
+
     test('TURN credentials follow the coturn REST scheme', () async {
-      final creds = TurnCredentials.fromJson(
-        (await h.api.call(Routes.turnCredentials, bearer: alice.bearer)).json,
-      );
+      final creds = TurnCredentials.fromJson((await turn(alice)).json);
       expect(creds.urls, hasLength(2));
       expect(creds.urls.last, startsWith('turns:'));
       final parts = creds.username.split(':');
@@ -89,12 +99,8 @@ void main() {
     });
 
     test('every TURN request gets a fresh unlinkable username', () async {
-      final a = TurnCredentials.fromJson(
-        (await h.api.call(Routes.turnCredentials, bearer: alice.bearer)).json,
-      );
-      final b = TurnCredentials.fromJson(
-        (await h.api.call(Routes.turnCredentials, bearer: alice.bearer)).json,
-      );
+      final a = TurnCredentials.fromJson((await turn(alice)).json);
+      final b = TurnCredentials.fromJson((await turn(alice)).json);
       expect(a.username.split(':').last, isNot(b.username.split(':').last));
       expect(a.credential, isNot(b.credential));
     });

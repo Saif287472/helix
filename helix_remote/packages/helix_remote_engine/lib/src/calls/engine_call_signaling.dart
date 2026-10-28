@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:helix_remote_api/v2.dart' show HelixApiException;
+import 'package:helix_remote_api/v2.dart' show ApiException, HelixApiException;
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/calls/call_signaling.dart';
@@ -33,11 +33,29 @@ final class EngineCallSignaling implements CallSignaling {
   CallSignalSink? sink;
 
   @override
-  Future<TurnCredentials?> turnCredentials() async {
+  Future<TurnCredentials?> turnCredentials({
+    required String callId,
+    required CallRole role,
+    required bool video,
+    String? roomId,
+  }) async {
     try {
-      return await _ctx.api.calls.turnCredentials();
-    } on HelixApiException {
+      return await _ctx.api.calls.turnCredentials(
+        TurnRequest(
+          callId: callId,
+          role: role,
+          media: video ? CallPool.video : CallPool.voice,
+          roomId: roomId,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (e.code == ErrorCode.quotaExceeded &&
+          e.details?['reason'] == 'call_time') {
+        throw const CallFailedException(CallFailure.noCallTime);
+      }
       return null; // No relay on this server, or the limit: go direct.
+    } on HelixApiException {
+      return null;
     }
   }
 

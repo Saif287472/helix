@@ -1,4 +1,5 @@
 import 'package:helix_remote_protocol/src/json.dart';
+import 'package:helix_remote_protocol/src/modules/calls.dart' show CallPool;
 
 // Plans and payments (`/v1/billing/*`, `/v1/admin/payment-requests`,
 // `/v1/admin/billing/*`; ADR-035). A payment is made outside the app (bKash
@@ -628,5 +629,115 @@ final class BillingSummary {
     pendingRequests: json.integer('pending_requests'),
     approvedLast30Days: json.integer('approved_last_30_days'),
     takenLast30Days: json.integer('taken_last_30_days'),
+  );
+}
+
+// -------------------------------------------------------------- call time
+
+/// The call time a Free account gets (ADR-036): minutes claimed once a day,
+/// kept for three days. Orbit Premium is unlimited.
+abstract final class CallTimeLimits {
+  /// Voice and video minutes one Claim gives.
+  static const voiceDaily = 100;
+  static const videoDaily = 30;
+
+  /// Claims expire at the end of their third day, so at most three are held.
+  static const claimDays = 3;
+  static const voiceCap = voiceDaily * claimDays;
+  static const videoCap = videoDaily * claimDays;
+
+  /// The days start and end at midnight in Dhaka (UTC+6, no daylight time).
+  static const dayOffset = Duration(hours: 6);
+
+  /// The apps warn this long before a Free caller's time runs out.
+  static const warnBefore = Duration(minutes: 2);
+
+  /// Relay credentials of a call that spends no call time last this long.
+  static const unmeteredLifetime = Duration(hours: 8);
+
+  /// The calendar day of [instant] in Dhaka, as `(year, month, day)`.
+  static DateTime dhakaDay(DateTime instant) {
+    final local = instant.toUtc().add(dayOffset);
+    return DateTime.utc(local.year, local.month, local.day);
+  }
+
+  /// The instant a Dhaka [day] (from [dhakaDay]) begins.
+  static DateTime startOf(DateTime day) => day.subtract(dayOffset);
+}
+
+/// One pool of call time.
+final class CallPoolBalance {
+  const CallPoolBalance({
+    required this.media,
+    required this.minutes,
+    required this.dailyMinutes,
+    required this.capMinutes,
+    this.expiresAt,
+  });
+
+  /// `voice` or `video`.
+  final CallPool media;
+
+  /// Minutes the account can spend now.
+  final int minutes;
+
+  /// What one Claim gives and the most that can be held.
+  final int dailyMinutes;
+  final int capMinutes;
+
+  /// When the oldest minutes held run out, if any are held.
+  final DateTime? expiresAt;
+
+  JsonMap toJson() => compact({
+    'media': media.wire,
+    'minutes': minutes,
+    'daily_minutes': dailyMinutes,
+    'cap_minutes': capMinutes,
+    'expires_at': expiresAt == null ? null : toWireTime(expiresAt!),
+  });
+
+  factory CallPoolBalance.fromJson(JsonReader json) => CallPoolBalance(
+    media: json.enumValue('media', CallPool.values, orElse: CallPool.unknown),
+    minutes: json.integer('minutes'),
+    dailyMinutes: json.integer('daily_minutes'),
+    capMinutes: json.integer('cap_minutes'),
+    expiresAt: json.optTime('expires_at'),
+  );
+}
+
+/// `GET /v1/billing/call-time` and the answer of `POST …/claim`.
+final class CallTime {
+  const CallTime({
+    required this.unlimited,
+    required this.pools,
+    this.canClaim = false,
+    this.nextClaimAt,
+  });
+
+  /// Orbit Premium (or a server without plans): no meter, no pools.
+  final bool unlimited;
+  final List<CallPoolBalance> pools;
+
+  /// Today's Claim is still there to take.
+  final bool canClaim;
+
+  /// When the next Claim opens (midnight in Dhaka), once today's is taken.
+  final DateTime? nextClaimAt;
+
+  CallPoolBalance? pool(CallPool media) =>
+      pools.where((p) => p.media == media).firstOrNull;
+
+  JsonMap toJson() => compact({
+    'unlimited': unlimited,
+    'pools': [for (final p in pools) p.toJson()],
+    'can_claim': canClaim,
+    'next_claim_at': nextClaimAt == null ? null : toWireTime(nextClaimAt!),
+  });
+
+  factory CallTime.fromJson(JsonReader json) => CallTime(
+    unlimited: json.boolean('unlimited'),
+    pools: json.objects('pools', CallPoolBalance.fromJson),
+    canClaim: json.flag('can_claim'),
+    nextClaimAt: json.optTime('next_claim_at'),
   );
 }

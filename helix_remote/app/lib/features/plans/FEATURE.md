@@ -43,6 +43,11 @@ a rejection, or Premium until a date. Nothing is deleted when Premium ends.
   plan request was updated.", no account, amount or ID) and stops. In front, `pushWakeTickProvider` makes the
   plan page and the You row read the plan again.
 
-## Not built yet (see `docs/product/ORBIT_PREMIUM_PLAN.md`)
+## Call time (ADR-036)
 
-Call time (Phase 3).
+While plans are on and the account is Free, the page shows a **Call time** section: the voice and video minutes held
+(`callTimeProvider`, `GET /v1/billing/call-time`) and a "Claim today's minutes" button (`claimCallTimeProvider`,
+`POST …/claim`, once a day; it reads "Claimed for today" afterwards). Premium and an unlimited account see none of
+it, and the "What Premium adds" list gains a Calls row. The call screens (feature `calls`) say "You have no free
+voice (or video) minutes left" before anything rings, and show the warning "Call time is almost up" two minutes
+before the end (`CallSnapshot.endingSoon`).

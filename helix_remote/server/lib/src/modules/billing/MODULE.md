@@ -91,6 +91,29 @@ than a year and expired overrides are deleted. `billing.push`: the wake-up above
 - No log line carries a TrxID, a number or an amount: `payment_request_submitted`
   has the account id, months and method.
 
-## Deferred (see the plan)
+## Call time (ADR-036)
 
-Call time (Phase 3 of `docs/product/ORBIT_PREMIUM_PLAN.md`).
+Applies to an account only when plans are on and it is not Premium (`isMetered`: `Entitlements.unlimitedCalls`
+is false). Everyone else is unmetered and nothing is recorded.
+
+| Table | Holds |
+|---|---|
+| `call_claims` | one row per account and Dhaka day (`day`, unique with the account): `voice_left`, `video_left`, `expires_at` (end of the third day) |
+| `call_reservations` | minutes set aside for one call or one group-call room (`room_id`, unique): pool, `reserved`, `parts` (which claims they came from), `expires_at`, `answered_at`, `last_end_at`, `finalized_at`, `used` |
+| `call_reservation_calls` | the call ids under a reservation and their caller |
+
+| Route | Notes |
+|---|---|
+| `GET /v1/billing/call-time` | pools (`minutes`, `daily_minutes`, `cap_minutes`, oldest `expires_at`), `can_claim`, `next_claim_at`; `unlimited: true` when unmetered. Also while suspended. |
+| `POST /v1/billing/call-time/claim` | today's 100 voice and 30 video minutes; `conflict` (`already_claimed`) the second time. 20 per day per account. |
+
+`BillingApi.grantCall` is what the calls module asks when relay credentials are requested: a metered caller's
+minutes are taken (oldest claim first, under a per-account advisory lock) and the grant expires when they end; a
+`quota_exceeded` with `details.reason: call_time` and `details.pool` refuses an empty pool; a callee's grant
+ends with the caller's reservation; the legs of a group call share the starter's reservation, charged once per
+clock minute. `callEnded` (on the `end` signal) settles the reservation: used whole minutes are kept
+(per started minute, with a one-minute grace to the end), the rest go back to their claims.
+
+Jobs: `billing.settle_calls`, every minute (reservations whose time ran out or that never saw an end, so
+nothing stays reserved for ever); `billing.purge_calls`, every 6 hours (claims and reservations 7 days after they
+expire or settle). Account deletion and the export cover the three tables.

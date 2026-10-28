@@ -20,6 +20,9 @@ enum PlaceCallStatus {
   blockedByPeer,
   rateLimited,
 
+  /// The caller has no free minutes left for this kind of call.
+  noCallTime,
+
   /// The server has no call relay, so no call can connect.
   noRelay,
 
@@ -95,12 +98,26 @@ final startCallProvider = Provider<PlaceCall>((ref) {
       await port.startCall(peerAccountId, video: video);
       return const PlaceCallOutcome(PlaceCallStatus.started);
     } on CallFailedException catch (e) {
-      return _outcomeOf(e.reason, ref.read(callMediaHubProvider).lastProblem);
+      return _outcomeOf(
+        e.reason,
+        ref.read(callMediaHubProvider).lastProblem,
+        video: video,
+      );
     }
   };
 });
 
-PlaceCallOutcome _outcomeOf(CallFailure reason, CallMediaProblem? problem) {
+PlaceCallOutcome _outcomeOf(
+  CallFailure reason,
+  CallMediaProblem? problem, {
+  required bool video,
+}) {
+  if (reason == CallFailure.noCallTime) {
+    return PlaceCallOutcome(
+      PlaceCallStatus.noCallTime,
+      CallCopy.noCallTime(video: video),
+    );
+  }
   if (reason == CallFailure.noMedia && problem == CallMediaProblem.noRelay) {
     return const PlaceCallOutcome(PlaceCallStatus.noRelay, CallCopy.noRelay);
   }
@@ -109,6 +126,7 @@ PlaceCallOutcome _outcomeOf(CallFailure reason, CallMediaProblem? problem) {
     CallFailure.blocked => PlaceCallStatus.blocked,
     CallFailure.blockedByPeer => PlaceCallStatus.blockedByPeer,
     CallFailure.rateLimited => PlaceCallStatus.rateLimited,
+    CallFailure.noCallTime => PlaceCallStatus.noCallTime,
     CallFailure.noMedia ||
     CallFailure.unavailable ||
     CallFailure.noCall => PlaceCallStatus.unavailable,

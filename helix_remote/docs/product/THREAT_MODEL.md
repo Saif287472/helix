@@ -237,6 +237,14 @@ metadata). The cryptography has **not been externally reviewed**
   person can still pay and not be approved for a day or two. The trial can be repeated with another phone
   number, which already costs a verified SIM. The keyed hashes in `billing.trials_used` outlive an account by
   design (the same property as banned numbers); without the pepper they cannot be turned back into numbers.
+- **Call time (ADR-036)**: the risks are a modified app that spends no minutes, one that calls video "voice",
+  a second account farming daily claims, and the call records becoming a log of who talks to whom for how
+  long. Mitigation: a relay credential is issued only for a call, with the minutes reserved first, and expires
+  when they end (coturn re-checks every 30 seconds); voice credentials are signed with a second secret that
+  works only on a bandwidth-capped relay; claims need a verified phone number; reservations are kept 7 days
+  and call legs 12 hours, and never hold content. Residual risk: the cut-off is up to about half a minute late,
+  and the duration of a Free caller's calls is a new thing the server knows. This has not been tried on real
+  phones against a real coturn.
 - **The wake-up**: approving or rejecting a request sends the person's phones a data-only `plan` wake-up
   (the kind and nothing else). The notification the app then shows says only that a request was updated, and
   names no account, no amount and no ID.

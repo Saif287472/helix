@@ -13,7 +13,7 @@ flag (`billing_enabled`) off until the operator switches it on.
 |---|---|---|
 | 1 | Plans Free and Orbit Premium; limits by plan (devices, attachment quota, file size, retention, backup media); manual bKash/Nagad payment confirmed in Orbit Console; time stacks; 3-day grace; admin grant and revoke; the plan page; console settings for prices and numbers | **built** (`b979998`) |
 | 2 | The 7-day trial (once per phone number); downloadable packs are Premium's (soft lock); a `plan` wake-up and quiet notification when a request is decided; per-account limit overrides; plan counts in the console; the wider docs pass | **built** |
-| 3 | **Call time**: daily Claim, the voice and video pools, per-call relay credentials, the second coturn relay, group-call charging, the call UI. Free calls stay unlimited until it ships | **not built, left for later** |
+| 3 | **Call time**: daily Claim, the voice and video pools, per-call relay credentials, the second coturn relay, group-call charging, the call UI (ADR-036) | **built**; Free calls are metered once the operator turns plans on |
 
 Notes on phase 2 as built: the trial starts with an account's first device and is remembered by the keyed phone
 hash, so it survives account deletion; the pack lock is an app rule (a locked theme is not drawn and a locked
@@ -143,7 +143,9 @@ Privacy and security: the server never trusts a client claim of Premium; plan ch
 approval, trial or admin grant. Admin routes are limited to the operator. Account deletion purges billing
 rows; account export gets a `billing` section (plan, dates, request status).
 
-## 5. Call time (phase 3, not built)
+## 5. Call time (phase 3, built: ADR-036)
+
+Built as designed below, with these as-built notes: the daily amounts are code constants (`CallTimeLimits`), not console settings; the cut-off is the credential's expiry, enforced by coturn's `stale-nonce=30` and mirrored by the apps' own timers; credentials of unmetered calls last 8 hours; a voice call goes to the voice relay only when `HELIX_TURN_VOICE_URLS` is set; a call that turns from voice to video mid-call would stay on the capped relay; the console has no call-time screen. Not yet tried on real phones with a real coturn.
 
 Rules decided:
 - Free gets a **voice pool** and a **video pool**, separate. Screen sharing counts as video.

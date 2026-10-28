@@ -407,4 +407,33 @@ void main() {
       );
     });
   });
+
+  test('a starter with no call time left never starts the room', () async {
+    final (alice, bob, cara) = await three();
+    alice.noCallTime = true;
+    await expectLater(
+      alice.groupService.start(chat, invite: [bob.account, cara.account]),
+      throwsA(
+        isA<CallFailedException>().having(
+          (e) => e.reason,
+          'reason',
+          CallFailure.noCallTime,
+        ),
+      ),
+    );
+    expect(alice.room, isNull);
+    expect(net.received(bob, CallSignalType.offer), isEmpty);
+  });
+
+  test('every leg asks for credentials with the room id', () async {
+    final (alice, bob, cara) = await three();
+    await alice.groupService.start(chat, invite: [bob.account, cara.account]);
+    await bothJoin(bob, cara);
+    await everyoneConnected([alice, bob, cara]);
+    final room = alice.room!.roomId;
+    expect(alice.turnRequests, hasLength(2));
+    expect(alice.turnRequests.every((r) => r.$4 == room), isTrue);
+    expect(alice.turnRequests.every((r) => r.$2 == CallRole.caller), isTrue);
+    expect(bob.turnRequests.first.$2, CallRole.callee);
+  });
 }

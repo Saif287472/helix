@@ -159,7 +159,12 @@ final class CallDevice implements CallSignaling {
       net.devices.where((d) => d.account == account);
 
   @override
-  Future<TurnCredentials?> turnCredentials() async => turn;
+  Future<TurnCredentials?> turnCredentials({
+    required String callId,
+    required CallRole role,
+    required bool video,
+    String? roomId,
+  }) async => turn;
 
   @override
   Future<CallSignalResponse> send(
@@ -699,6 +704,7 @@ CallSnapshot snapshot({
   bool cameraOn = false,
   bool screenSharing = false,
   bool peerScreenSharing = false,
+  bool endingSoon = false,
 }) => CallSnapshot(
   callId: id,
   peer: peer,
@@ -713,4 +719,5 @@ CallSnapshot snapshot({
   cameraOn: cameraOn,
   screenSharing: screenSharing,
   peerScreenSharing: peerScreenSharing,
+  endingSoon: endingSoon,
 );

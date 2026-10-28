@@ -1,7 +1,9 @@
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/entitlements.dart';
 import 'package:helix_remote_server/src/modules/billing/api.dart';
+import 'package:helix_remote_server/src/modules/billing/application/call_time_service.dart';
 import 'package:helix_remote_server/src/modules/billing/data/billing_store.dart';
+import 'package:helix_remote_server/src/modules/billing/data/call_time_store.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
@@ -24,6 +26,13 @@ final class BillingModule extends ModuleBase
   BillingModule(super.context, {required this.ops, required this.identity})
     : _store = BillingStore(context.schema('billing')) {
     _wakes = PushTrail(log, context.metrics);
+    _calls = CallTimeService(
+      db: context.db,
+      store: CallTimeStore(context.schema('billing')),
+      clock: context.clock,
+      isMetered: (accountId) async =>
+          await enabled() && !(await forAccount(accountId)).unlimitedCalls,
+    );
   }
 
   final OpsApi ops;
@@ -34,6 +43,7 @@ final class BillingModule extends ModuleBase
 
   final BillingStore _store;
   late final PushTrail _wakes;
+  late final CallTimeService _calls;
 
   /// The outbox job that wakes one device after its plan changed.
   static const pushJob = 'billing.push';
@@ -48,6 +58,12 @@ final class BillingModule extends ModuleBase
 
   /// Decided requests are kept a year.
   static const requestRetention = Duration(days: 365);
+
+  static final _claimLimit = RateLimitPolicy.per(
+    'billing.call_claims',
+    20,
+    const Duration(days: 1),
+  );
 
   static final _submitLimit = RateLimitPolicy.per(
     'billing.requests',
@@ -75,12 +91,23 @@ final class BillingModule extends ModuleBase
       await _store.purgeDecided(context.db, now.subtract(requestRetention));
       await _store.purgeExpiredOverrides(context.db, now);
     }),
+    PeriodicJob('billing.settle_calls', const Duration(minutes: 1), () async {
+      await _calls.settleDue();
+    }),
+    PeriodicJob('billing.purge_calls', const Duration(hours: 6), () async {
+      final cutoff = context.clock.now().subtract(const Duration(days: 7));
+      await _calls.store.purgeClaims(context.db, cutoff);
+      await _calls.store.purgeReservations(context.db, cutoff);
+    }),
   ];
 
   @override
   Future<void> start() async {
     identity()
-      ..onAccountDeleted((tx, accountId) => _store.deleteAccount(tx, accountId))
+      ..onAccountDeleted((tx, accountId) async {
+        await _store.deleteAccount(tx, accountId);
+        await _calls.store.deleteAccount(tx, accountId);
+      })
       ..onDeviceAdded((tx, device, _) => _startTrial(tx, device));
   }
 
@@ -89,7 +116,9 @@ final class BillingModule extends ModuleBase
     r
       ..add(name, Routes.billingPlan, _plan, allowSuspended: true)
       ..add(name, Routes.submitPaymentRequest, _submit, rateLimit: _submitLimit)
-      ..add(name, Routes.paymentRequests, _requests);
+      ..add(name, Routes.paymentRequests, _requests)
+      ..add(name, Routes.callTime, _callTimeRoute, allowSuspended: true)
+      ..add(name, Routes.claimCallTime, _claimRoute, rateLimit: _claimLimit);
   }
 
   BillingApi get api => this;
@@ -215,6 +244,55 @@ final class BillingModule extends ModuleBase
 
   Future<Response> _plan(HelixRequest q) async =>
       jsonResponse((await planFor(q.device.accountId)).toJson());
+
+  // -------------------------------------------------------------- call time
+
+  @override
+  Future<CallTime> callTime(String accountId) => _calls.balance(accountId);
+
+  @override
+  Future<CallTime> claimCallTime(String accountId) => _calls.claim(accountId);
+
+  @override
+  Future<CallGrant> grantCall({
+    required String accountId,
+    required String callId,
+    required CallRole role,
+    required CallPool pool,
+    String? roomId,
+    bool callerIsRemote = false,
+  }) async {
+    // A server without plans does not meter, and keeps no record of calls.
+    if (!await enabled()) {
+      return CallGrant(
+        metered: false,
+        expiresAt: context.clock.now().add(CallTimeLimits.unmeteredLifetime),
+        pool: pool,
+      );
+    }
+    return _calls.grant(
+      accountId: accountId,
+      callId: callId,
+      role: role,
+      pool: pool,
+      roomId: roomId,
+      callerIsRemote: callerIsRemote,
+    );
+  }
+
+  @override
+  Future<void> callEnded(String callId) async {
+    if (await enabled()) await _calls.callEnded(callId);
+  }
+
+  Future<Response> _callTimeRoute(HelixRequest q) async =>
+      jsonResponse((await callTime(q.device.accountId)).toJson());
+
+  Future<Response> _claimRoute(HelixRequest q) async {
+    final result = await claimCallTime(q.device.accountId);
+    log.info('call_time_claimed', {'account_id': q.device.accountId});
+    return jsonResponse(result.toJson());
+  }
 
   // -------------------------------------------------------------- requests
 
@@ -508,7 +586,17 @@ final class BillingModule extends ModuleBase
   Future<Object?> exportAccount(SqlSession s, String accountId) async {
     final sub = await _store.subscription(s, accountId);
     final requests = await _store.allRequestsOf(s, accountId);
+    final claims = await _calls.store.claimsOf(s, accountId);
     return {
+      'call_claims': [
+        for (final c in claims)
+          {
+            'day': c.string('day'),
+            'voice_minutes_left': c.integer('voice_left'),
+            'video_minutes_left': c.integer('video_left'),
+            'expires_at': toWireTime(c.time('expires_at')),
+          },
+      ],
       'subscription': sub == null
           ? null
           : {

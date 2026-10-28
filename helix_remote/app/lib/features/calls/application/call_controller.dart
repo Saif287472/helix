@@ -69,7 +69,9 @@ final callScreenStateProvider = Provider<CallScreenState?>((ref) {
     names: people.nameOf(call.peer).tileNames,
     media: media,
     audio: audio,
-    notice: notice != null && notice.$1 == call.callId ? notice.$2 : null,
+    notice: notice != null && notice.$1 == call.callId
+        ? notice.$2
+        : (call.endingSoon ? CallCopy.callTimeEnding : null),
     busy: busy == call.callId,
   );
 });

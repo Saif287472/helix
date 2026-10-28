@@ -33,6 +33,7 @@ abstract final class CallCopy {
     CallEnd.declinedElsewhere => 'Declined on another device',
     CallEnd.failed => 'Call failed',
     CallEnd.glare => 'Call ended',
+    CallEnd.callTimeOver => 'Call time ran out',
   };
 
   /// How a group call ended, from this device's point of view.
@@ -42,6 +43,7 @@ abstract final class CallCopy {
     GroupCallEnd.unanswered => 'No one joined',
     GroupCallEnd.everyoneLeft => 'Everyone left',
     GroupCallEnd.failed => 'Call failed',
+    GroupCallEnd.callTimeOver => 'Call time ran out',
   };
 
   /// A longer line for an ended call whose cause deserves explaining; null
@@ -68,7 +70,19 @@ abstract final class CallCopy {
     CallFailure.noCall => 'There is no call to answer any more.',
     CallFailure.noMedia =>
       'The microphone or camera could not be started for this call.',
+    CallFailure.noCallTime => noCallTime(video: false),
   };
+
+  /// A Free caller whose minutes for this kind of call are used up: said
+  /// before anything rings, with the two ways out (ADR-036).
+  static String noCallTime({required bool video}) =>
+      'You have no free ${video ? 'video' : 'voice'} minutes left. Claim '
+      "today's minutes in You > Orbit Premium, or get Premium for calls "
+      'without limits.';
+
+  /// The warning on the call screen shortly before a Free caller's time ends.
+  static const callTimeEnding =
+      'Call time is almost up. This call will end in about two minutes.';
 
   /// On the call details of someone who blocked this account, in place of
   /// the call buttons (the conversation header's sentence).

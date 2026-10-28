@@ -215,6 +215,8 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 |---|---|---|---|---|---|
 | `HELIX_TURN_URLS` | with the secret | none | no | no | Comma-separated TURN URLs handed to apps, each starting with `turn:` or `turns:` (TLS, port 5349; see "coturn and TURN"), for example `turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp`. Set together with `HELIX_TURN_SECRET` or not at all (one without the other is a startup error). If unset, `GET` TURN credentials answer 503 `unavailable`. |
 | `HELIX_TURN_SECRET` | with the URLs | none | no | **yes** | Shared secret; the same value as coturn's `static-auth-secret`. |
+| `HELIX_TURN_VOICE_URLS` | with the voice secret | none | no | no | The voice relay's URLs (ADR-036), same form as `HELIX_TURN_URLS`, port 3479 by default. Optional: with none, voice calls use the main relay and are charged but not bandwidth-capped. Set together with `HELIX_TURN_VOICE_SECRET` or not at all. |
+| `HELIX_TURN_VOICE_SECRET` | with the voice URLs | none | no | **yes** | The voice relay's own secret; must differ from `HELIX_TURN_SECRET` (a startup error if equal). |
 
 ### admin (`modules/admin/module.dart`)
 
@@ -335,18 +337,24 @@ local Caddy 2.11 on 2026-10-09.
 ## coturn and TURN
 
 - The server never relays media. It mints time-limited credentials
-  (`GET /v1/calls/turn`, calls module): `username =
-  <expiry>:<random id>` (new on every request, never an account or device
-  id), `credential = base64(HMAC-SHA1(secret, username))`, valid one hour,
-  limited to 10 per device per hour. coturn checks only the expiry and the
-  HMAC, so it needs no account in the name. This matters because on `turn:`
+  (`POST /v1/calls/turn`, calls module, one request per call or group-call
+  leg, ADR-036): `username = <expiry>:<random id>` (new on every request,
+  never an account or device id), `credential = base64(HMAC-SHA1(secret,
+  username))`, limited to 60 per device per hour. A Free caller's credential
+  expires when the call time reserved for the call ends (the cut-off); any
+  other call's after eight hours. coturn checks only the expiry and the HMAC, so it needs no account in the name. This matters because on `turn:`
   (port 3478) the username crosses the network unencrypted: anyone on the
   path sees it next to the client's address, and it must not identify a
   person.
-- The server settings are `HELIX_TURN_URLS` and `HELIX_TURN_SECRET`.
+- The server settings are `HELIX_TURN_URLS` and `HELIX_TURN_SECRET`. For the
+  voice relay (ADR-036) add `HELIX_TURN_VOICE_URLS` and
+  `HELIX_TURN_VOICE_SECRET` (a second, different secret). coturn runs with
+  `stale-nonce=30`: it re-checks a credential's expiry only when a nonce goes
+  stale, so that is how soon a lapsed credential loses its relay.
   coturn's `static-auth-secret` must be the same value, and `use-auth-secret`
   must be on (`deploy/coturn/turnserver.conf` already does this).
-- TCP 3478, UDP 3478 and UDP 49160-49400 (widened for group calls; it was
+- TCP 3478 and 3479, UDP 3478 and 3479 and UDP 49160-49800 (main relay
+  49160-49600, voice relay 49601-49800; it was 49160-49400 before ADR-036 and
   49160-49200 in v1) on the
   router and in Windows Firewall (`deploy/coturn/README.md`, "Windows home
   PC").

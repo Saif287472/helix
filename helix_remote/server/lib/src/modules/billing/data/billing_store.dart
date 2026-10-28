@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/billing/data/call_time_store.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/db/paging.dart';
@@ -10,6 +11,7 @@ import 'package:helix_remote_server/src/platform/db/paging.dart';
 const billingMigrations = [
   Migration(1, 'billing_baseline', _baseline),
   Migration(2, 'trial_and_overrides', _trialAndOverrides),
+  callTimeMigration,
 ];
 
 String _trialAndOverrides(String s) =>

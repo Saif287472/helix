@@ -146,6 +146,10 @@ enum CallFailure {
   /// The platform could not provide media (no media factory, microphone or
   /// camera refused).
   noMedia,
+
+  /// The caller's Free call time for this kind of call is used up (ADR-036):
+  /// claim today's minutes or get Orbit Premium.
+  noCallTime,
 }
 
 /// A group operation could not be done (not a member, no group key, a link

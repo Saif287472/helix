@@ -208,6 +208,26 @@ void main() {
       );
     }
 
+    testWidgets('warns shortly before the free call time runs out', (
+      tester,
+    ) async {
+      await open(tester);
+      await emit(
+        tester,
+        snapshot(phase: CallPhase.active, answeredAt: answered),
+      );
+      expect(find.textContaining('Call time is almost up'), findsNothing);
+      await emit(
+        tester,
+        snapshot(
+          phase: CallPhase.active,
+          answeredAt: answered,
+          endingSoon: true,
+        ),
+      );
+      expect(find.textContaining('Call time is almost up'), findsOneWidget);
+    });
+
     testWidgets('runs a timer from the moment it connected', (tester) async {
       await live(tester);
       expect(find.text('05:00'), findsOneWidget);

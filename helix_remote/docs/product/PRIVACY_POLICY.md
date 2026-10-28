@@ -51,7 +51,10 @@ jurisdiction-specific legal review before public launch.
   transaction ID you typed, its state and the operator's short reason if it
   was rejected, a first-week trial marker (a keyed hash of your number, so the trial is once per number; it stays
   after the account is deleted and cannot be turned back into the number), and any limit the operator changed
-  for your account. A transaction ID is not a phone number, and the app never sees
+  for your account. If you are on the Free plan, it also keeps your daily call-time claims and, for each call you
+  start, whether it was voice or video and how many minutes it used, for a week after it ends, and who a call
+  was offered to for 12 hours (what the server needs to ring them anyway). It never sees what you say or show.
+  A transaction ID is not a phone number, and the app never sees
   or stores your wallet details: you pay in the bKash or Nagad app. The
   operator reads the request in the console, with your name and number, to
   match it to the payment. Requests are kept one year after they are decided,

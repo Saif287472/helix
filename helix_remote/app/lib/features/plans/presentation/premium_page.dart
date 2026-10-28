@@ -92,6 +92,7 @@ class _PremiumPageState extends ConsumerState<PremiumPage> {
                 'Your last request (${last.trxId}) was not answered in time. '
                 'Send it again.',
           ),
+        ..._callTime(plan),
         orbit.OrbitSection(title: 'What Premium adds', rows: _perks(plan)),
         if (open == null) ..._buy(plan, targets, method, purchase),
       ],
@@ -130,6 +131,78 @@ class _PremiumPageState extends ConsumerState<PremiumPage> {
     );
   }
 
+  /// The Free plan's call minutes and the daily Claim. Nothing for Premium
+  /// (calls are unlimited) or while the minutes cannot be read.
+  List<Widget> _callTime(PlanView plan) {
+    if (plan.isPremium) return const [];
+    final time = ref.watch(callTimeProvider).value;
+    if (time == null || time.unlimited) return const [];
+    final claim = ref.watch(claimCallTimeProvider);
+    final voice = time.voice;
+    final video = time.video;
+    return [
+      orbit.OrbitSection(
+        title: 'Call time',
+        footer:
+            'Claim your free minutes once a day. They are kept for three '
+            'days. Calls use the minutes of the person who starts them.',
+        rows: [
+          if (voice != null)
+            orbit.OrbitListRow(
+              icon: orbit.OrbitIcons.phone,
+              iconColor: 2,
+              title: 'Voice minutes',
+              sub: 'Up to ${voice.capMinutes} kept',
+              value: '${voice.minutes}',
+            ),
+          if (video != null)
+            orbit.OrbitListRow(
+              icon: orbit.OrbitIcons.video,
+              iconColor: 6,
+              title: 'Video minutes',
+              sub: 'Up to ${video.capMinutes} kept',
+              value: '${video.minutes}',
+            ),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          orbit.OrbitSpace.gutter,
+          12,
+          orbit.OrbitSpace.gutter,
+          0,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            orbit.OrbitButton(
+              label: time.canClaim
+                  ? "Claim today's minutes"
+                  : 'Claimed for today',
+              block: true,
+              busy: claim.busy,
+              onPressed: claim.busy || !time.canClaim
+                  ? null
+                  : () async {
+                      final added = await ref
+                          .read(claimCallTimeProvider.notifier)
+                          .claim();
+                      if (added && mounted) {
+                        orbit.showOrbitToast(context, 'Minutes added');
+                      }
+                    },
+            ),
+            if (claim.error != null)
+              orbit.OrbitInlineNotice(
+                kind: orbit.OrbitNoticeKind.error,
+                text: claim.error!,
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
   List<Widget> _perks(PlanView plan) {
     final free = plan.limits;
     final pro = plan.premiumLimits;
@@ -147,6 +220,15 @@ class _PremiumPageState extends ConsumerState<PremiumPage> {
       value: premium,
     );
     return [
+      perk(
+        orbit.OrbitIcons.phone,
+        3,
+        'Calls',
+        'No limit',
+        now:
+            '${FreeCallTime.voiceDaily} voice and '
+            '${FreeCallTime.videoDaily} video minutes a day',
+      ),
       perk(
         orbit.OrbitIcons.devices,
         2,

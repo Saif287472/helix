@@ -52,7 +52,7 @@ It asks for the microphone (and the camera for video), then
 follows the engine's call state), so a caller does nothing more. A2a (the
 conversation header) and A2b (contact info) bind their buttons to this;
 `PlaceCallStatus` says why not (`microphoneDenied`, `cameraDenied`, `busy`,
-`blocked`, `rateLimited`, `noRelay`, `unavailable`). Tests override
+`blocked`, `rateLimited`, `noCallTime`, `noRelay`, `unavailable`; `noCallTime` is a Free caller with no minutes left, ADR-036). Tests override
 `placeCallProvider`.
 
 ## Calls tab and the people-search seam

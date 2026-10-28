@@ -227,7 +227,9 @@ final groupCallScreenStateProvider = Provider<GroupCallScreenState?>((ref) {
     local: hub.groupLocal,
     remotes: hub.groupRemotes,
     audio: audio,
-    notice: notice != null && notice.$1 == room.roomId ? notice.$2 : null,
+    notice: notice != null && notice.$1 == room.roomId
+        ? notice.$2
+        : (room.endingSoon ? CallCopy.callTimeEnding : null),
     busy: busy == room.roomId,
     tiles: [
       for (final p in room.participants)

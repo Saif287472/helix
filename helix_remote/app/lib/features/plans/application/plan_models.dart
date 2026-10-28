@@ -176,3 +176,63 @@ final class PlanView {
     PayMethod.nagad => proto.PaymentMethod.nagad,
   };
 }
+
+/// One pool of free call minutes, as the page shows it.
+@immutable
+final class CallPoolView {
+  const CallPoolView({
+    required this.minutes,
+    required this.dailyMinutes,
+    required this.capMinutes,
+  });
+
+  final int minutes;
+  final int dailyMinutes;
+  final int capMinutes;
+}
+
+/// The Free plan's call time (ADR-036). Null pools mean the server did not
+/// send them (an unlimited account).
+@immutable
+final class CallTimeView {
+  const CallTimeView({
+    required this.unlimited,
+    required this.canClaim,
+    this.voice,
+    this.video,
+    this.nextClaimAt,
+  });
+
+  final bool unlimited;
+  final bool canClaim;
+  final CallPoolView? voice;
+  final CallPoolView? video;
+  final DateTime? nextClaimAt;
+
+  factory CallTimeView.from(proto.CallTime t) {
+    CallPoolView? pool(proto.CallPool media) {
+      final p = t.pool(media);
+      return p == null
+          ? null
+          : CallPoolView(
+              minutes: p.minutes,
+              dailyMinutes: p.dailyMinutes,
+              capMinutes: p.capMinutes,
+            );
+    }
+
+    return CallTimeView(
+      unlimited: t.unlimited,
+      canClaim: t.canClaim,
+      voice: pool(proto.CallPool.voice),
+      video: pool(proto.CallPool.video),
+      nextClaimAt: t.nextClaimAt,
+    );
+  }
+}
+
+/// What a Free account gets each day (the numbers the server enforces).
+abstract final class FreeCallTime {
+  static const voiceDaily = proto.CallTimeLimits.voiceDaily;
+  static const videoDaily = proto.CallTimeLimits.videoDaily;
+}

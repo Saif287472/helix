@@ -14,11 +14,13 @@ rounding error against a VPS's bandwidth.
 ## How the credentials work
 
 There are no user accounts on the TURN server. The server mints
-short-lived credentials on demand (`GET /v1/calls/turn`) using a shared
+short-lived credentials on demand (`POST /v1/calls/turn`, for one call) using a shared
 secret:
 
-- username: `<unix-expiry>:<random id>`, valid one hour (it never names an
-  account or a device: on plain `turn:` it crosses the network unencrypted)
+- username: `<unix-expiry>:<random id>` (it never names an account or a
+  device: on plain `turn:` it crosses the network unencrypted). A Free
+  caller's credential expires when the call time reserved for the call ends;
+  an unmetered call's after eight hours (ADR-036)
 - password: `base64(HMAC-SHA1(secret, username))`
 
 coturn's `use-auth-secret` mode verifies exactly that construction, which
@@ -64,7 +66,9 @@ sudo ufw allow 3478/tcp comment 'TURN'
 sudo ufw allow 3478/udp comment 'TURN'
 sudo ufw allow 5349/tcp comment 'TURN over TLS'
 sudo ufw allow 5349/udp comment 'TURN over TLS'
-sudo ufw allow 49160:49400/udp comment 'TURN relay range'
+sudo ufw allow 3479/tcp comment 'TURN voice relay'
+sudo ufw allow 3479/udp comment 'TURN voice relay'
+sudo ufw allow 49160:49800/udp comment 'TURN relay ranges (main and voice)'
 sudo ufw status
 ```
 
@@ -136,13 +140,14 @@ on the PC's LAN address and advertises the router's public one.
 1. **Install coturn in WSL:** `wsl -d Ubuntu -u root -- apt install -y coturn`.
 2. **Give the PC a fixed LAN address** (a DHCP reservation in the router),
    because the port forwards below point at it.
-3. **Forward on the router** to that LAN address: UDP 3478, TCP 3478, and
-   UDP 49160-49400 (the relay range in `turnserver.conf`).
+3. **Forward on the router** to that LAN address: UDP 3478 and 3479, TCP
+   3478 and 3479, and UDP 49160-49800 (the main relay uses 49160-49600, the
+   voice relay 49601-49800).
 4. **Allow them through Windows Firewall** (elevated PowerShell):
 
    ```powershell
-   New-NetFirewallRule -DisplayName 'Helix TURN (UDP)' -Direction Inbound -Protocol UDP -LocalPort 3478,49160-49400 -Action Allow
-   New-NetFirewallRule -DisplayName 'Helix TURN (TCP)' -Direction Inbound -Protocol TCP -LocalPort 3478 -Action Allow
+   New-NetFirewallRule -DisplayName 'Helix TURN (UDP)' -Direction Inbound -Protocol UDP -LocalPort 3478,3479,49160-49800 -Action Allow
+   New-NetFirewallRule -DisplayName 'Helix TURN (TCP)' -Direction Inbound -Protocol TCP -LocalPort 3478,3479 -Action Allow
    ```
 
 5. **Configure the server in `server/.env` only.** The server lets
@@ -154,6 +159,9 @@ on the PC's LAN address and advertises the router's public one.
    ```ini
    HELIX_TURN_URLS=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
    HELIX_TURN_SECRET=<openssl rand -hex 32>
+   # The voice relay (ADR-036): its own port and its own secret.
+   HELIX_TURN_VOICE_URLS=turn:helix.agiletechbd.com:3479?transport=udp,turn:helix.agiletechbd.com:3479?transport=tcp
+   HELIX_TURN_VOICE_SECRET=<a second openssl rand -hex 32, different>
    ```
 
    Restart the server after changing either value.
@@ -170,7 +178,11 @@ The script reads `HELIX_TURN_SECRET` (required) and, for the realm,
 host of `HELIX_PUBLIC_BASE_URL`, from the process environment or
 `server\.env`. If the server's `.env` is somewhere else, pass
 `-EnvFile <path>`. The script never prints the secret and never puts it on a
-command line. It serves plain `turn:` on 3478; `turns:` is optional (above)
+command line. With `HELIX_TURN_VOICE_SECRET` set it also starts the voice
+relay beside the main one: the same template, port 3479, its own secret, relay
+ports 49601-49800 and a per-session cap of 12000 bytes a second (a voice call
+fits, video does not). The server hands a voice call credentials for the voice
+relay only, so a call labelled voice cannot use the uncapped one. It serves plain `turn:` on 3478 and 3479; `turns:` is optional (above)
 and is not enabled by this script.
 
 The public IP is detected at each start. A home connection's public IP can

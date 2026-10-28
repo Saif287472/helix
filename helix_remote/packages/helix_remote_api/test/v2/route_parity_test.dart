@@ -97,6 +97,8 @@ void main() {
     Routes.account: (c) => c.identity.account(),
     Routes.setPassword: (c) =>
         c.identity.setPassword(SetPasswordRequest(password: password)),
+    Routes.callTime: (c) => c.billing.callTime(),
+    Routes.claimCallTime: (c) => c.billing.claimCallTime(),
     Routes.billingPlan: (c) => c.billing.plan(),
     Routes.submitPaymentRequest: (c) => c.billing.submitRequest(
       const SubmitPaymentRequest(
@@ -186,7 +188,13 @@ void main() {
       GroupMessageRequest(id: id, payload: bytes, devicesDigest: bytes),
     ),
     // calls
-    Routes.turnCredentials: (c) => c.calls.turnCredentials(),
+    Routes.turnCredentials: (c) => c.calls.turnCredentials(
+      const TurnRequest(
+        callId: 'call-12345678',
+        role: CallRole.caller,
+        media: CallPool.voice,
+      ),
+    ),
     Routes.sendCallSignal: (c) => c.calls.sendSignal(
       id,
       const CallSignalRequest(kind: CallSignalKind.offer, recipients: []),

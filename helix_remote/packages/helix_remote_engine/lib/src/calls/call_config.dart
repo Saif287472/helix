@@ -10,6 +10,7 @@ final class CallConfig {
     this.iceBatchDelay = const Duration(milliseconds: 80),
     this.maxQueuedCandidates = 64,
     this.signalTimeout = const Duration(seconds: 10),
+    this.callTimeWarning = const Duration(minutes: 2),
   });
 
   /// How long a call rings before it counts as unanswered: the caller gives
@@ -33,17 +34,23 @@ final class CallConfig {
   /// for the network before the local side moves on without them.
   final Duration signalTimeout;
 
+  /// How long before a metered call's time runs out the UI is told it is
+  /// ending soon (`CallSnapshot.endingSoon`).
+  final Duration callTimeWarning;
+
   CallConfig copyWith({
     Duration? ringTimeout,
     Duration? connectTimeout,
     Duration? iceBatchDelay,
     int? maxQueuedCandidates,
     Duration? signalTimeout,
+    Duration? callTimeWarning,
   }) => CallConfig(
     ringTimeout: ringTimeout ?? this.ringTimeout,
     connectTimeout: connectTimeout ?? this.connectTimeout,
     iceBatchDelay: iceBatchDelay ?? this.iceBatchDelay,
     maxQueuedCandidates: maxQueuedCandidates ?? this.maxQueuedCandidates,
     signalTimeout: signalTimeout ?? this.signalTimeout,
+    callTimeWarning: callTimeWarning ?? this.callTimeWarning,
   );
 }

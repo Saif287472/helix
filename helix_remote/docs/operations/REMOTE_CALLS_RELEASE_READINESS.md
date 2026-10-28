@@ -11,7 +11,7 @@ raw SDP, raw ICE candidates, private keys, private IPs, or media content.
 - API: `GET /v1/health/ready` reports `{"ready":true,...}` (database and storage).
 - WebSocket: `GET /v1/ops/metrics` (admin token or `HELIX_METRICS_TOKEN`) shows connected
   devices, and upgrade and reconnect rejections stay below the alert threshold.
-- TURN: an authenticated `GET /v1/calls/turn` returns credentials with the expected URLs
+- TURN: an authenticated `POST /v1/calls/turn` (body: a call id, `role`, `media`) returns credentials with the expected URLs
   (readiness does not check TURN), and `turnutils_uclient` allocates a relay.
 - Push: metrics show no dead-letter `messaging.push` or `calls.push` jobs
   (`V2_OPERABILITY.md`, "Jobs").
