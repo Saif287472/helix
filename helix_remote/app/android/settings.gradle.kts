@@ -26,7 +26,7 @@ plugins {
     // fails the build outright when the file is missing - and it is missing
     // in every checkout that has not been given deployment material,
     // including CI's Android debug build.
-    id("com.google.gms.google-services") version "4.4.2" apply false
+    id("com.google.gms.google-services") version "4.5.0" apply false
 }
 
 include(":app")
