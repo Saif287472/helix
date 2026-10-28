@@ -31,16 +31,19 @@ Not doing
 | Attachment quota | 4 GiB | 16 GiB |
 | Max size of one file | today's `HELIX_MAX_ATTACHMENT_BYTES` | 4x |
 | Attachment kept on server | 30 days | 90 days |
-| Full backup size | 100 MiB | 400 MiB |
+| Backup media, per file | 100 MiB | 400 MiB |
+| Backup media, total | 1 GiB | 4 GiB |
 | Voice call time | 100 min a day (see 5) | unlimited |
 | Video call time | 30 min a day (see 5) | unlimited |
 | Packs | Orbit and Orbit Night (built in) | every downloadable pack |
 
 Today every account may link 10 devices (`IdentityContext.maxDevices`), so Free dropping to 2 is a real
 change in code. The Free values for storage, file size and retention are today's values.
-**Verify:** the backup caps. `media/MODULE.md` lists a `backup` kind of 100 MiB with a 1 GiB quota, while
-the backup module caps a full-backup envelope at 64 MiB. Find out which cap actually limits a full backup
-and whether the 1 GiB backup quota must grow for Premium's 400 MiB.
+Backup limits (checked 2026-10-28): a full backup is a small encrypted record (at most 64 MiB, the constant
+`FullBackup.maxEnvelopeBytes` in the protocol package) plus `backup`-kind media files it points to (each at
+most 100 MiB, 1 GiB total per account, kept 90 days, refreshed by each full backup). The text-history backup
+is 16 MiB. Premium raises only the **media** limits (per file and total) in `media`; the 64 MiB record and
+16 MiB history stay the same for everyone, because every client checks those protocol constants.
 
 Plan definitions live in code as a typed, versioned catalogue (so they are reviewed and tested), with an
 admin per-account override for support cases.
@@ -103,7 +106,7 @@ Entitlements: a small immutable value type in `kernel/` (plan, limits, features)
 `BillingApi.entitlements(accountId)` and never read billing tables. Computed from the live subscription and
 overrides; nothing live means Free; cached briefly and invalidated by a bus event. Enforcement points,
 each reading the entitlement at the moment it decides (so downgrade needs no cron):
-`identity` (device cap), `media` (quota, max size, retention at upload), `backup` (envelope size).
+`identity` (device cap), `media` (attachment and backup-media quota, max size, retention at upload).
 Architecture rules: add `billing` to the module dependency list and `v2PackageDependencies` where needed.
 
 Routes (declared in `helix_remote_protocol` first, documented in `REST_V2.md`, one api-client method each):
@@ -137,19 +140,51 @@ Rules decided:
   message. A call cannot start with an empty pool (the screen says why before dialing).
 - Premium is unlimited.
 
-Mechanism (direction, **verify** against `calls` and `platform` before settling):
-- Calls are relay-only through the owner's TURN server, and the server issues the relay credentials
-  (random usernames). Make a Free caller's credentials short-lived and renewed against the balance: the
-  server debits as it renews and stops renewing when the pool is empty. This ends media without the
-  server seeing any call content. Precision is about the renewal interval, so minutes are charged per
-  started interval (to decide: per minute).
-- For a group call the starter's credentials gate the call; other members' legs follow the call id.
-- The day boundary (UTC or Dhaka time) must be decided.
-- Anti-farming: claims and trials are tied to a verified phone number, which already limits multiple
-  accounts.
+Mechanism (checked read-only against `calls/MODULE.md`, `deploy/coturn/turnserver.conf`, the engine and the
+ADR-034 group-call design on 2026-10-28; the points marked **verify** need a real test):
+
+What exists today: the server issues coturn REST credentials (`username = <expiry>:<random id>`, HMAC-SHA1),
+valid one hour, from `Routes.turnCredentials`, limited to 10 per device per hour. The username is
+random on purpose (it crosses the network in the clear, and must not tie an address to a person). coturn
+checks only the expiry and the signature, so the server cannot revoke a credential. The engine asks for
+credentials when a call or a group-call leg starts, not during the call. The server sees a call's offer,
+answer and end signals, so it can already time a call. A group call is a mesh of pairwise calls (ADR-034),
+so the server sees separate legs, with no room.
+
+Chosen design, as strict as possible (decided 2026-10-28):
+- **Credentials only for a call, with a reservation.** A credential request names a call id and a role. For a
+  Free caller the server reserves minutes from the right pool when the call starts and issues a credential
+  whose expiry is the end of the reserved time (capped, so no more than about the balance). The unused part
+  is refunded when the call ends. A request with no matching call is refused, for both sides, so a credential
+  cannot be used for a free relay outside a call. The callee's credential is allowed only for a call that
+  was offered to them, and is capped by the caller's reservation.
+- **Cut-off precision is coarse.** When the credential expires, coturn refuses the next allocation refresh
+  and the relay lapses, so the cut-off lands within the refresh interval (coturn's default allocation
+  lifetime is 10 minutes; **verify** how fast a lapsed credential actually ends media). The warning two
+  minutes before the end is therefore a client countdown against the reserved time; the app does not
+  guess. The reserved time is in whole minutes.
+- **Group calls.** The starter's reservation has a random id, and every leg of the room shows that id when it
+  asks for credentials. All legs share the starter's expiry and the starter is charged once per clock
+  minute. The server learns which legs belong to one call, which is a small new piece of metadata.
+- **Voice versus video.** The server cannot see media, and a modified app could call video "voice". To close
+  that: run **two coturn instances**. The voice one has a hard per-session bandwidth cap at voice quality
+  (coturn's per-session bps option; **verify** the exact option and that a capped session still carries
+  voice). Voice credentials work only on the voice relay, so mislabelled video is starved. Video credentials
+  work on the video relay. The credential's relay URL set tells the app which to use. Costs: a second
+  config and port to run, and the UDP range 49160-49400 split between the two.
+- **Calls with another server.** The caller's own server meters (decided). A Helix Global account answering a
+  call from a personal server is not metered, and uses your relay for it; those calls are rare (personal
+  servers are a hidden advanced feature). Premium and Free Helix Global callers are metered as normal.
+- **Already a problem today (verify):** credentials last one hour and the engine fetches them only when a
+  call starts, so a call longer than an hour may lose its relay. The metering work will fix this by
+  design, since a reservation can be longer or shorter than an hour.
+- **Day boundary** (UTC or Dhaka) is still to decide. **Anti-farming:** claims and trials are tied to a
+  verified phone number, which already limits multiple accounts.
 
 Tables: a per-account ledger of claims (kind, claimed day, minutes left, expiry) and a reservation record
-per call. Routes: claim, balance, and the credential renewal changes.
+per call (call id, room id, pool, reserved minutes, started, ended). Routes: claim, balance, and the
+credential request gains a call id and role (a protocol change with fixtures and an api-client change).
+Ops: the second coturn instance and its `.env` lines, in `deploy/coturn` for the Windows/WSL1 start script.
 
 **New metadata:** the server will know how long a Free caller's calls ran. That must go into
 `METADATA_INVENTORY.md`, `PRIVACY_POLICY.md` and the claim matrix honestly, and calls stay
@@ -209,7 +244,7 @@ signalled in the dark and relay-only.
 | 1b | Trial; payment requests; admin queue, grant and override; push and signal | billing 2 |
 | 1c | App plan page and pack locks | none |
 | 2a | Call-time ledger, Claim, balance | billing 3 |
-| 2b | Relay credential metering, warning and end at zero | calls or billing |
+| 2b | Per-call reserved relay credentials, group room id, second coturn (voice cap) with its start script and `.env` lines, warning and end at zero | calls or billing |
 | 2c | Call UI: balance, warning | none |
 
 Step 1 is sellable by itself. After each step I will report what changed, tests with real numbers, whether
@@ -221,7 +256,9 @@ a new APK is needed, whether the server must restart and migrate, and any `.env`
 |---|---|
 | Operator workload and mistakes with manual approval | one-tap queue, duplicate TrxID check, audit rows; merchant API later |
 | Fake or reused TrxIDs | unique check, operator matches amount and ID in their own history |
-| Free call limit is hard to enforce | relay credentials as the control point; verify before committing to step 2 |
+| Free call limit is hard to enforce | per-call reserved credentials, two coturn instances, no credential without a call; cut-off is coarse (minutes), and the coturn behaviour needs a real test before step 2 is committed to |
+| A second relay is more to run on your PC | one more config and port, the UDP range split; documented in `deploy/coturn` and `V2_SERVER_HANDOFF.md` |
+| Incoming calls from other servers are not metered | accepted: rare, personal servers are a hidden advanced feature |
 | New call-duration metadata | document it plainly; keep calls signalled in the dark and relay-only |
 | Many accounts to farm trials or minutes | phone verification, one trial per number, claims per account |
 | Paid user loses access by mistake | grace period, admin override, never destructive downgrade |
@@ -232,5 +269,6 @@ a new APK is needed, whether the server must restart and migrate, and any `.env`
 1. Day boundary for claims (UTC or Dhaka) and whether call time is charged per started minute.
 2. Grace length after Premium ends (proposed 3 days).
 3. Whether payment numbers and prices live in admin config (proposed) or env.
-4. Size of the Premium backup quota (see 2) once the real caps are checked.
+4. The two coturn options to verify (per-session bandwidth cap, behaviour at credential expiry), and the
+   split of the UDP range between the two relays.
 5. Designs for the plan, payment and claim screens, and the exact wording of the crossed-out price display.
