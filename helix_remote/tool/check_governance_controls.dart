@@ -252,7 +252,7 @@ const controls = <GovernanceControl>[
   GovernanceControl(
     'refused requests reach the anomaly log',
     'app/lib/core/engine/helix_runtime.dart',
-    'onRequestFailed: AnomalyLog.request',
+    'AnomalyLog.request(failure',
   ),
   GovernanceControl(
     'problem reports are masked on the device',

@@ -1,8 +1,8 @@
 # Orbit Premium: plan
 
-Status: **plan agreed in discussion, nothing built** (2026-10-27). Implementation is not expected for
-about a month. Scope: Helix Remote (Orbit) on Helix Global. Never `helix_local/`.
-Anything marked **verify** was not checked against the code and must be before work starts.
+Status: **all three phases built** (2026-10-28), switched off until the operator turns on `billing_enabled`.
+Scope: Helix Remote (Orbit) on Helix Global. Never `helix_local/`. The sections below are the design as agreed;
+where the build differs, section 0 and the as-built note in section 5 say so.
 
 ## 0. The three phases (decided 2026-10-28)
 
@@ -258,7 +258,7 @@ signalled in the dark and relay-only.
 
 ## 9. Order of work
 
-Phases 1 and 2 are built (see section 0). Phase 3 is the call-time work below; nothing in it has been started.
+All three phases are built (see section 0). Phase 3 was built in the steps below.
 
 | Step | Content | Migration |
 |---|---|---|
@@ -266,8 +266,8 @@ Phases 1 and 2 are built (see section 0). Phase 3 is the call-time work below; n
 | 3b | Per-call reserved relay credentials, group room id, second coturn (voice cap) with its start script and `.env` lines, warning and end at zero | calls or billing |
 | 3c | Call UI: balance, Claim button, low-minutes warning | none |
 
-Before 3b is committed to, the two coturn behaviours in section 11 must be tested for real. Phase 3 also needs
-its own ADR (ADR-036) and the metadata note about call durations.
+The two coturn behaviours in section 11 were tested against a real coturn before 3b was built. ADR-036 and the
+metadata notes are written.
 
 ## 10. Risks
 
@@ -285,6 +285,10 @@ its own ADR (ADR-036) and the metadata note about call durations.
 
 ## 11. Still to decide
 
-Nothing is open for the plan itself. Before step 2 is committed to, two coturn behaviours must be tested for
-real: the per-session bandwidth cap on the voice relay, and how quickly media ends after a credential
-expires. Their results can change the call-time design.
+Nothing is open for the plan. The two coturn behaviours were tested: `max-bps` caps a session, and a lapsed
+credential ends the relay only at the next stale nonce, so coturn runs with `stale-nonce=30`.
+
+Known gaps, left on purpose (small value now): the console has no screen or control for a person's call minutes
+(use limit overrides for other limits; there is none for call time); the daily amounts are code constants; the
+words "Terms of service" still need the owner's legal review for call time and plans; nothing here has been tried
+on real phones with a real coturn.
