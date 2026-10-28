@@ -546,6 +546,14 @@ log note below).
   header on a WebSocket, so the web build polls `GET /v1/admin/logs`
   every 3 seconds instead of following the stream.
 
+## Moving to a Linux VM
+
+The PC is the first home, not the last. `deploy/linux/` (systemd units, bash
+backup, health, drill, release and deploy scripts, a Caddyfile) and
+`docs/operations/VM_MIGRATION.md` (the dry run, the cutover, what changes, the
+rollback) are the way off it. Keep the same domain and move the `.env` and the
+data unchanged.
+
 ## Rotating secrets
 
 When a secret **leaked** (not a routine change), use `KEY_COMPROMISE_RUNBOOK.md`:

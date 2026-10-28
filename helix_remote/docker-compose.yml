@@ -10,7 +10,8 @@
 #
 #   docker compose --env-file server/.env up -d helix-turn
 #
-# Needs HELIX_TURN_SECRET and TURN_REALM; TURN_EXTERNAL_IP (the public IPv4)
+# Needs HELIX_TURN_SECRET (and HELIX_TURN_VOICE_SECRET for the voice relay) and
+# TURN_REALM; TURN_EXTERNAL_IP (the public IPv4)
 # on a VPS, and TURN_LOCAL_IP as well behind a NAT router.
 services:
   # TURN relay for WebRTC calls. Without it, a call between two clients that
@@ -34,6 +35,11 @@ services:
       TURN_REALM: ${TURN_REALM:?set TURN_REALM, for example helix.agiletechbd.com}
       TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
       TURN_LOCAL_IP: ${TURN_LOCAL_IP:-}
+      # The main relay (video and everything else): 3478/5349, ports 49160-49600.
+      TURN_PORT: "3478"
+      TURN_TLS_PORT: "5349"
+      TURN_MIN_PORT: "49160"
+      TURN_MAX_PORT: "49600"
     entrypoint: ["/usr/local/bin/helix-turn-entrypoint.sh"]
     volumes:
       - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf.template:ro
@@ -43,5 +49,36 @@ services:
       - ./turn-certs:/etc/coturn/certs:ro
     # The rendered config holds the shared secret, so it is written to
     # memory rather than to the container's writable layer.
+    tmpfs:
+      - /tmp
+
+  # The voice relay (ADR-036): the same image and template, its own secret
+  # (HELIX_TURN_VOICE_SECRET, which must differ from HELIX_TURN_SECRET), its own
+  # port and relay range, and a per-session bandwidth cap that fits a voice call
+  # and starves video. A voice call's credentials are signed with the voice
+  # secret, so they open this relay only. Start both with:
+  #   docker compose --env-file server/.env up -d helix-turn helix-turn-voice
+  # Needs the ports in ufw: 3478 and 3479 (tcp+udp), 49160-49800/udp
+  # (deploy/linux/install.sh opens them).
+  helix-turn-voice:
+    image: coturn/coturn:4.7-alpine
+    container_name: helix-turn-voice
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      HELIX_TURN_SECRET: ${HELIX_TURN_VOICE_SECRET:?set HELIX_TURN_VOICE_SECRET (a second secret, the same value as the server's)}
+      TURN_REALM: ${TURN_REALM:?set TURN_REALM, for example helix.agiletechbd.com}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      TURN_LOCAL_IP: ${TURN_LOCAL_IP:-}
+      TURN_PORT: "3479"
+      TURN_TLS_PORT: "5350"
+      TURN_MIN_PORT: "49601"
+      TURN_MAX_PORT: "49800"
+      TURN_MAX_BPS: "12000"
+    entrypoint: ["/usr/local/bin/helix-turn-entrypoint.sh"]
+    volumes:
+      - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf.template:ro
+      - ./deploy/coturn/entrypoint.sh:/usr/local/bin/helix-turn-entrypoint.sh:ro
+      - ./turn-certs:/etc/coturn/certs:ro
     tmpfs:
       - /tmp

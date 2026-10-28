@@ -99,6 +99,9 @@ helix_remote/                pub workspace (run commands from here)
   deploy/coturn/             TURN relay (Docker and Windows/WSL1 start script)
   deploy/windows/            the PC's backup task, restore drill and hardened
                              Caddyfile (the user installs and runs them)
+  deploy/linux/              the same for the Linux VM production will move to
+                             (systemd units, bash scripts, Caddyfile; see
+                             docs/operations/VM_MIGRATION.md)
   docs/                      Remote docs (architecture, protocol, security, product)
   scripts/verify.ps1|.sh     full local gate; coverage.sh the coverage ratchet
   tool/                      governance check, performance-budget check, SBOM
@@ -232,6 +235,12 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
   first if the change adds a migration; every node also migrates at start).
   After server changes, say so, and say which migration or `.env` line is
   new (and that the production `.env` is the one in the production folder).
+- Production will move from the PC to one Linux VPS
+  (`helix_remote/docs/operations/VM_MIGRATION.md`). Operations tooling and docs
+  stay portable: a change to `deploy/windows/` gets its twin in `deploy/linux/`
+  (and the reverse), paths and `.env` names stay the same, and nothing new may
+  depend on Windows (a drive letter, the Event Log, a scheduled task) without a
+  Linux counterpart.
 - Never hand-edit live state (the production database, `server/.env`); tell
   the user the exact line to add instead. Agents never handle Postgres
   passwords; the test database URL is the Windows user variable

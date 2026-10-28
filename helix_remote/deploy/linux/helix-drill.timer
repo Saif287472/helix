@@ -1,0 +1,10 @@
+[Unit]
+Description=Helix Global restore drill, monthly
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

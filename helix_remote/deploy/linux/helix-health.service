@@ -1,0 +1,11 @@
+[Unit]
+Description=Helix Global health check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=helix
+Group=helix
+EnvironmentFile=-/etc/helix/backup.env
+ExecStart=/opt/helix/ops/health-check.sh
+TimeoutStartSec=2min

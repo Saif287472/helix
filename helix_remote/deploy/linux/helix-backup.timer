@@ -1,0 +1,11 @@
+[Unit]
+Description=Helix Global backup, nightly
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=10min
+# A backup missed while the VM was off runs at the next boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,48 @@
+# Helix Global server (docs/operations/V2_SERVER_HANDOFF.md). Installed by
+# install.sh to /etc/systemd/system/helix-server.service.
+[Unit]
+Description=Helix Global server
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+# A crash loop is reported by the health check, not retried for ever at speed.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=helix
+Group=helix
+WorkingDirectory=/opt/helix
+# The settings live in /opt/helix/.env (mode 600, owned by helix), which the
+# server reads itself; nothing secret is in this unit or in `ps`.
+ExecStart=/opt/helix/bin/helix-server
+# SIGTERM is a graceful stop (the server drains requests and sockets).
+KillSignal=SIGTERM
+TimeoutStopSec=60
+Restart=always
+RestartSec=3
+# Exit code 78 is a bad setting: restarting would not fix it.
+RestartPreventExitStatus=78
+
+# --- Hardening: the server needs the network, its own folder and its blobs.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/helix/logs /var/lib/helix
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

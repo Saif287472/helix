@@ -1,0 +1,42 @@
+# Helix Global site block for Caddy on the VM (copy to /etc/caddy/Caddyfile, then
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy).
+# Caddy gets and renews the certificate by itself: the name must point at this
+# VM's public IP and ports 80 and 443 must be open (install.sh opens them).
+
+helix.agiletechbd.com {
+	header {
+		# Start with a day; after a week without trouble raise it to 31536000.
+		Strict-Transport-Security "max-age=86400"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# Access log for after an incident, without credentials in it.
+	log {
+		output file /var/log/caddy/helix-access.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+		format filter {
+			wrap json
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+			resp_headers>Set-Cookie delete
+		}
+	}
+
+	# The operator API and the metrics route answer only to the addresses in the
+	# list: on a VM there is no "home LAN", so name what you use. Your own fixed
+	# IP, or the VPN's range (Tailscale: 100.64.0.0/10; WireGuard: its subnet).
+	# Everyone else gets a plain 404. remote_ip is the address of the TCP
+	# connection, which a client cannot fake with a header.
+	@operatorOutside {
+		path /v1/admin* /v1/ops/metrics*
+		not remote_ip 127.0.0.1/8 ::1 203.0.113.10/32
+	}
+	respond @operatorOutside 404
+
+	reverse_proxy 127.0.0.1:8080
+}
