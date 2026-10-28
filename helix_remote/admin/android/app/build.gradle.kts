@@ -34,7 +34,7 @@ android {
     dependencies {
         // The launch themes are AppCompat-based, which local_auth's unlock
         // prompt needs (the same as the user app).
-        implementation("androidx.appcompat:appcompat:1.7.1")
+        implementation("androidx.appcompat:appcompat:1.8.0")
     }
 
     defaultConfig {
