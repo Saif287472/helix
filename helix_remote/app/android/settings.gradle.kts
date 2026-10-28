@@ -20,7 +20,7 @@ pluginManagement {
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.0.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.21" apply false
     // Declared but not applied here. app/build.gradle.kts applies it only
     // when google-services.json is actually present, because the plugin
     // fails the build outright when the file is missing - and it is missing
