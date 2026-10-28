@@ -2,15 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "helix-prototype",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["J:/Projects/helix/orbit/prototype/serve.py"],
-      "port": 5317
-    },
-    {
       "name": "orbit-compare",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5321", "--bind", "127.0.0.1", "--directory", "J:/Projects/helix/orbit/flutter/tools/compare"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5321",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "J:/Projects/helix/orbit/flutter/tools/compare"
+      ],
       "port": 5321
     }
   ]
