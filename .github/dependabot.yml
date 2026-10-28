@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # The GitHub Actions the workflow uses (mutable tags today; Dependabot opens
+  # a pull request when one moves, so the change is reviewed).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Android Gradle dependencies, which the OSV scan of the Dart lockfiles
+  # does not cover.
+  - package-ecosystem: gradle
+    directory: /helix_remote/app/android
+    schedule:
+      interval: weekly
+  - package-ecosystem: gradle
+    directory: /helix_remote/admin/android
+    schedule:
+      interval: weekly

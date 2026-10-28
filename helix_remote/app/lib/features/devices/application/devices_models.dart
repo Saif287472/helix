@@ -46,6 +46,7 @@ enum SecurityEventType {
   passwordChanged,
   recoveryUsed,
   identityChanged,
+  sessionReuse,
   other,
 }
 

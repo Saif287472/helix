@@ -12,6 +12,7 @@ const billingMigrations = [
   Migration(1, 'billing_baseline', _baseline),
   Migration(2, 'trial_and_overrides', _trialAndOverrides),
   callTimeMigration,
+  callRoomGroupMigration,
 ];
 
 String _trialAndOverrides(String s) =>

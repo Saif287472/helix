@@ -246,12 +246,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
     defaults:
       run:
         working-directory: helix_remote
     steps:
       - uses: actions/checkout@v4
+      - name: No keys or tokens in the tree
+        # Private keys and the key formats of the services Helix uses. The
+        # documented example key of the AWS docs (...EXAMPLE) is the one
+        # allowed hit, in a signing test.
+        working-directory: .
+        run: |
+          if git grep -nIE 'BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{36}|AKIA[0-9A-Z]{16}' -- . | grep -v EXAMPLE; then
+            echo '::error::A key or token looks committed (see above). Remove it and rotate it.'
+            exit 1
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable

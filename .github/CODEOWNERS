@@ -1,0 +1,7 @@
+# Review is required from the owner for what runs in production, what builds
+# it, and the rules the agents work under.
+/helix_remote/deploy/ @Saif287472
+/.github/ @Saif287472
+/AGENTS.md @Saif287472
+/helix_remote/server/lib/src/modules/identity/ @Saif287472
+/helix_remote/packages/helix_remote_crypto/ @Saif287472

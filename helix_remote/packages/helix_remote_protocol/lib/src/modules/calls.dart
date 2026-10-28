@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/src/content/bodies.dart';
 import 'package:helix_remote_protocol/src/envelope.dart';
+import 'package:helix_remote_protocol/src/ids.dart';
 import 'package:helix_remote_protocol/src/json.dart';
 import 'package:helix_remote_protocol/src/modules/messaging.dart';
 
@@ -45,6 +46,7 @@ final class TurnRequest {
     required this.role,
     required this.media,
     this.roomId,
+    this.groupId,
   });
 
   final String callId;
@@ -56,6 +58,11 @@ final class TurnRequest {
   /// the room know (it travels in the sealed call signal).
   final String? roomId;
 
+  /// The group a [roomId] belongs to. Required with a room: the server lets
+  /// only a member of that group start or join the room's call time, and a
+  /// room is bound to its group, so a room id alone opens nothing.
+  final String? groupId;
+
   /// A call id and a room id are 8 to 128 characters of `A-Za-z0-9._:-`.
   static final RegExp idPattern = RegExp(r'^[A-Za-z0-9._:-]{8,128}$');
 
@@ -64,15 +71,23 @@ final class TurnRequest {
     'role': role.wire,
     'media': media.wire,
     'room_id': roomId,
+    'group_id': groupId,
   });
 
   factory TurnRequest.fromJson(JsonReader json) {
     final callId = json.nonEmpty('call_id', maxLength: 128);
     final roomId = json.optString('room_id', maxLength: 128);
+    final groupId = json.optString('group_id', maxLength: 36);
     if (!idPattern.hasMatch(callId) ||
         (roomId != null && !idPattern.hasMatch(roomId))) {
       throw ProtocolFormatException(
         'a call or room id is 8 to 128 letters, digits and . _ : -',
+      );
+    }
+    if ((roomId == null) != (groupId == null) ||
+        (groupId != null && !Uuid.isValid(groupId))) {
+      throw ProtocolFormatException(
+        'a room needs the group it belongs to, and only a room does',
       );
     }
     return TurnRequest(
@@ -80,6 +95,7 @@ final class TurnRequest {
       role: json.enumValue('role', CallRole.values, orElse: CallRole.unknown),
       media: json.enumValue('media', CallPool.values, orElse: CallPool.unknown),
       roomId: roomId,
+      groupId: groupId,
     );
   }
 }

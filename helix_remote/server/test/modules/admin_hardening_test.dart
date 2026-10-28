@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 
 import '../support/harness.dart';
 import '../support/test_client.dart';
+import '../support/flows.dart';
 import '../support/test_database.dart';
 
 const adminPassword = 'correct horse battery staple';
@@ -97,6 +98,118 @@ void main() {
           );
         } finally {
           await listed.stop();
+        }
+      });
+    },
+  );
+
+  group(
+    'the first operator and the admin token',
+    skip: databaseTestSkipReason,
+    () {
+      test(
+        'first-time setup is closed to an address outside the network',
+        () async {
+          final h = await Harness.start(
+            extra: {'HELIX_TRUSTED_PROXIES': '127.0.0.1'},
+          );
+          try {
+            final body = const AdminPasswordRequest(
+              password: adminPassword,
+            ).toJson();
+            // Behind a listed proxy the client is who it says it forwards for.
+            final far = await h.api.call(
+              Routes.adminSetup,
+              headers: {'x-forwarded-for': '203.0.113.9'},
+              body: body,
+            );
+            expect(far.status, 403);
+            expect(
+              (await h.api.call(
+                Routes.adminSetupStatus,
+              )).json.boolean('configured'),
+              isFalse,
+            );
+            final near = await h.api.call(
+              Routes.adminSetup,
+              headers: {'x-forwarded-for': '192.168.1.20'},
+              body: body,
+            );
+            expect(near.status, 201, reason: near.body);
+          } finally {
+            await h.stop();
+          }
+        },
+      );
+
+      test(
+        'an operator token is not valid as a device token, nor the reverse',
+        () async {
+          final h = await Harness.start(
+            extra: {'HELIX_ADMIN_PASSWORD': adminPassword},
+          );
+          try {
+            final alice = await h.registerGlobal(aliceNumber);
+            final admin = AdminSession.fromJson(
+              (await h.api.call(
+                Routes.adminSignIn,
+                body: const AdminPasswordRequest(
+                  password: adminPassword,
+                ).toJson(),
+              )).json,
+            ).token;
+            expect(
+              (await h.api.call(Routes.adminAudit, bearer: admin)).status,
+              200,
+            );
+            expect(
+              (await h.api.call(
+                Routes.adminAudit,
+                bearer: alice.bearer,
+              )).status,
+              anyOf(401, 403),
+            );
+            expect(
+              (await h.api.call(Routes.account, bearer: admin)).status,
+              401,
+            );
+          } finally {
+            await h.stop();
+          }
+        },
+      );
+
+      test('guessing the password through a password change is locked like '
+          'sign-in', () async {
+        final h = await Harness.start(
+          extra: {'HELIX_ADMIN_PASSWORD': adminPassword},
+        );
+        try {
+          final admin = AdminSession.fromJson(
+            (await h.api.call(
+              Routes.adminSignIn,
+              body: const AdminPasswordRequest(
+                password: adminPassword,
+              ).toJson(),
+            )).json,
+          ).token;
+          Future<TestResponse> change() => h.api.call(
+            Routes.adminPassword,
+            bearer: admin,
+            body: const ChangeAdminPasswordRequest(
+              currentPassword: 'definitely not it!!',
+              newPassword: newPassword,
+            ).toJson(),
+          );
+          for (var i = 0; i < AdminModule.lockAfter; i++) {
+            expect((await change()).status, 401);
+          }
+          // Local addresses are exempt from the global cap but not from the
+          // per-address lock.
+          final locked = await change();
+          expect(locked.status, 429, reason: locked.body);
+        } finally {
+          await h.stop();
         }
       });
     },

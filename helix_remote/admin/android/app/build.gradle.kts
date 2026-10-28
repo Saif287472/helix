@@ -4,6 +4,23 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// The operator console never ships signed with the debug key (a well-known
+// default that sits on every developer machine, so an APK signed with it could
+// replace the real console on the operator's phone). Product-scoped names keep
+// the console's signing material apart from the app's.
+val releaseKeystoreFile = project.rootProject.file("helix_admin.keystore")
+val releaseStorePassword = System.getenv("HELIX_ADMIN_STORE_PASSWORD") ?: ""
+val releaseKeyAlias = System.getenv("HELIX_ADMIN_KEY_ALIAS") ?: ""
+val releaseKeyPassword = System.getenv("HELIX_ADMIN_KEY_PASSWORD") ?: ""
+val releaseSigningConfigured =
+    releaseKeystoreFile.exists() &&
+        releaseStorePassword.isNotBlank() &&
+        releaseKeyAlias.isNotBlank() &&
+        releaseKeyPassword.isNotBlank()
+val missingReleaseSigningMessage =
+    "Release build requires helix_admin.keystore and HELIX_ADMIN_STORE_PASSWORD, " +
+        "HELIX_ADMIN_KEY_ALIAS, HELIX_ADMIN_KEY_PASSWORD. Debug signing is forbidden for the operator console release."
+
 android {
     namespace = "com.helix.helix_admin"
     compileSdk = flutter.compileSdkVersion
@@ -31,12 +48,40 @@ android {
         versionName = flutter.versionName
     }
 
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            // As the user app: no debug metadata or unused resources in the
+            // artifact. Dart obfuscation is passed by the release gate.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseTaskRequested = allTasks.any { task ->
+        task.project == project && task.name.contains("Release")
+    }
+    if (releaseTaskRequested && !releaseSigningConfigured) {
+        throw org.gradle.api.GradleException(missingReleaseSigningMessage)
     }
 }
 

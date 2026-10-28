@@ -49,6 +49,10 @@ final class FederationModule extends ModuleBase
       clock: context.clock,
       httpClient: _http,
       log: log,
+      keyChanges: context.metrics.counter(
+        'helix_federation_peer_key_changes_total',
+        'A federation peer presented a different signing key than the cached one',
+      ),
     );
     authenticator = _ServerAuthenticator(this);
     final relay = _Relay(this);

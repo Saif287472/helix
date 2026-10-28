@@ -13,6 +13,7 @@ orbit.ActivityItem activityItemOf(SecurityEventView e) => orbit.ActivityItem(
     SecurityEventType.passwordChanged => orbit.OrbitIcons.password,
     SecurityEventType.recoveryUsed => orbit.OrbitIcons.key,
     SecurityEventType.identityChanged => orbit.OrbitIcons.key,
+    SecurityEventType.sessionReuse => orbit.OrbitIcons.shield,
     SecurityEventType.other => orbit.OrbitIcons.shield,
   },
   title: e.title,

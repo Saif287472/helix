@@ -1225,6 +1225,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
       role: CallRole.caller,
       media: CallPool.video,
       roomId: '0192a4f0-0000-7000-8000-000000000002',
+      groupId: '0192a4f0-0000-7000-8000-000000000003',
     ),
     (v) => v.toJson(),
     TurnRequest.fromJson,

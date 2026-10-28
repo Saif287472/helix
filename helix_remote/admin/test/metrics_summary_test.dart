@@ -40,6 +40,22 @@ void main() {
     expect(m.jobsFinished, {'ok': 10, 'dead': 2});
   });
 
+  test('reads the security signals', () {
+    final m = MetricsSummary.parse(
+      'helix_admin_auth_events_total{kind="sign_in_failed"} 3\n'
+      'helix_admin_auth_events_total{kind="password_change_failed"} 1\n'
+      'helix_admin_auth_events_total{kind="locked"} 2\n'
+      'helix_auth_events_total{kind="refresh_reuse"} 4\n'
+      'helix_auth_events_total{kind="revoked_device"} 9\n'
+      'helix_federation_peer_key_changes_total 1\n',
+    );
+
+    expect(m.adminSignInFailures, 4, reason: 'locks are not extra failures');
+    expect(m.reusedSignIns, 4);
+    expect(m.peerKeyChanges, 1);
+    expect(MetricsSummary.parse('').adminSignInFailures, 0);
+  });
+
   test('a missing family is null, never an invented zero', () {
     final m = MetricsSummary.parse('helix_ws_open 1\n');
 

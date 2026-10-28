@@ -1,7 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- The INTERNET permission is required for development. Specifically,
          the Flutter tool needs it to communicate with the running application
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug builds may talk to a server on this machine (the emulator's
+         10.0.2.2, localhost) over http; release builds never do. -->
+    <application
+        android:networkSecurityConfig="@xml/helix_admin_debug_network_security"
+        tools:replace="android:networkSecurityConfig" />
 </manifest>

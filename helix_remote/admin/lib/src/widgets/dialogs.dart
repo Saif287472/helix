@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_admin/src/features/common/format.dart';
@@ -304,8 +307,10 @@ Future<void> showCodeOnceDialog(
       actions: [
         TextButton.icon(
           onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: code));
-            if (context.mounted) showMessage(context, 'Code copied.');
+            await copySecret(code);
+            if (context.mounted) {
+              showMessage(context, 'Code copied. It is cleared in a minute.');
+            }
           },
           icon: const Icon(Icons.copy),
           label: const Text('Copy code'),
@@ -342,3 +347,25 @@ Future<void> showInfoDialog(
     ],
   ),
 );
+
+/// Puts a secret (a recovery code, good for 48 hours) on the clipboard and takes
+/// it back a minute later if the clipboard still holds it: Windows keeps a
+/// clipboard history, and any app may read the clipboard.
+/// How long [copySecret] leaves a secret on the clipboard (a test shortens it).
+@visibleForTesting
+Duration secretClipboardLifetime = const Duration(minutes: 1);
+
+Future<void> copySecret(String secret) async {
+  await Clipboard.setData(ClipboardData(text: secret));
+  // Not tied to the dialog: closing it must not leave the code there.
+  Timer(secretClipboardLifetime, () async {
+    try {
+      final held = await Clipboard.getData(Clipboard.kTextPlain);
+      if (held?.text == secret) {
+        await Clipboard.setData(const ClipboardData(text: ''));
+      }
+    } on Object {
+      // The platform may refuse a background read; the copy simply stays.
+    }
+  });
+}

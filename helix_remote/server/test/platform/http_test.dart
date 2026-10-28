@@ -176,6 +176,7 @@ void main() {
         expect(jsonDecode(await good.readAsString()), {'device': 'd1'});
         expect(good.headers['x-request-id'], isNotEmpty);
         expect(good.headers['cache-control'], 'no-store');
+        expect(good.headers['strict-transport-security'], contains('max-age='));
       },
     );
 

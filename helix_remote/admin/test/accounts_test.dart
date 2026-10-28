@@ -369,6 +369,13 @@ void main() {
 
       await tapText(tester, 'Copy code');
       expect(copied, ['HLX-REC-SECRET-CODE-acct-1']);
+      // The code does not stay on the clipboard.
+      await tester.pumpAndSettle();
+      expect(
+        clipboardNow,
+        '',
+        reason: 'a recovery code is cleared after a minute',
+      );
 
       await tapText(tester, 'Done');
       // Gone from the screen, and no screen in the console holds it.

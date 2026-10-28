@@ -39,7 +39,12 @@ final class IdentityModule extends ModuleBase
     _store = IdentityStore(schema);
     _credentials = CredentialStore(schema);
     final jwt = JwtCodec(keys: config.jwtKeys, activeKid: config.activeJwtKid);
+    final authEvents = context.metrics.counter(
+      'helix_auth_events_total',
+      'Refresh-token reuse and use of revoked devices or ended sessions',
+    );
     final sessions = SessionIssuer(
+      authEvents: authEvents,
       jwt: jwt,
       credentials: _credentials,
       clock: context.clock,
@@ -69,6 +74,7 @@ final class IdentityModule extends ModuleBase
       jwt: jwt,
       store: _store,
       clock: context.clock,
+      authEvents: authEvents,
     );
     api = _IdentityFacade(this);
     _adminStore = AdminStore(schema, phoneSeal: _ctx.phoneSeal);

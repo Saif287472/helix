@@ -66,6 +66,9 @@ metadata). The cryptography has **not been externally reviewed**
   shared with password change) and per-address limits. Every other device gets a security event
   and a `device_list_change` signal, and can revoke the new one (`revoke`, `revoke-others`,
   "lost or stolen").
+- **Detection (2026-10-28)**: a refresh token presented twice ends that device's sessions and
+  writes a `session_reuse` entry to the account's security log (shown on the Devices page), and
+  counts `helix_auth_events_total`; a refresh racing a sign-out cannot renew itself.
 - **Residual risk**: On Helix Global, whoever controls the phone number (a SIM swap) can sign in
   by SMS code. That path replaces the account identity (`replace_existing`) and signs every other
   device out, so it is visible to the user and to contacts as an identity-key change, but it is not
@@ -148,6 +151,11 @@ metadata). The cryptography has **not been externally reviewed**
   requesting account gets one one-time prekey per device an hour (review A-11, A-12). Every database
   transaction has a statement and lock timeout, and every background job a timeout, so one stuck
   query or job cannot stall a node (A-04, A-07).
+- **Operator console (2026-10-28)**: first-time setup is answered only from the local network; operator
+  tokens are signed with keys derived from the JWT ring, not the ring keys themselves; a password change
+  shares the sign-in lock; failures, locks and refused setups are counted and the dashboard shows a
+  banner. Still true: an operator token alone can issue a recovery code or change the payment numbers
+  (a password re-entry for those actions is proposed, not built).
 - **Residual risk**: A single PC node tops out near 80 sends per second (`docs/operations/LOAD_TESTING.md`);
   a determined flood is an availability problem, not a confidentiality one.
 

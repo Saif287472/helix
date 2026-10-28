@@ -28,6 +28,12 @@ final class CredentialStore {
   }
 
   /// Locks and returns a refresh token row.
+  /// The device a refresh token belongs to, without locking it.
+  Future<String?> refreshDevice(Tx tx, String id) async => (await tx.queryOne(
+    'SELECT device_id FROM $s.refresh_tokens WHERE id = @id:uuid',
+    {'id': id},
+  ))?.string('device_id');
+
   Future<Row?> refreshForUpdate(Tx tx, String id) => tx.queryOne(
     'SELECT id, device_id, secret_hash, expires_at, used_at, revoked_at '
     'FROM $s.refresh_tokens WHERE id = @id:uuid FOR UPDATE',

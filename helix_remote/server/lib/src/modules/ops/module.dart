@@ -383,7 +383,7 @@ CREATE TABLE $s.settings (
       );
     }
     _crashes.inc();
-    log.warn('client_crash', {
+    log.info('client_crash', {
       'name': report.name,
       'device_id': request.device.deviceId,
       'fields': {
@@ -414,7 +414,7 @@ CREATE TABLE $s.settings (
     final key = RegExp(r'^[a-z][a-z0-9_]{0,40}$');
     for (final e in report.entries) {
       _anomalies.inc();
-      log.warn('client_anomaly', {
+      log.info('client_anomaly', {
         'kind': cap(e.kind, 20),
         'where': cap(e.where, 200),
         'device_id': request.device.deviceId,

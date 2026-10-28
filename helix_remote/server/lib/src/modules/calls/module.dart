@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/crypto.dart';
 import 'package:helix_remote_server/src/modules/billing/api.dart';
+import 'package:helix_remote_server/src/modules/groups/api.dart';
 import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
@@ -97,6 +98,7 @@ final class CallsModule extends ModuleBase {
     required this.identity,
     required this.messaging,
     required this.billing,
+    required this.groups,
   }) : turn = TurnConfig.from(context.config) {
     _wakes = PushTrail(log, context.metrics);
     identity.onDeviceRevoked(
@@ -110,6 +112,7 @@ final class CallsModule extends ModuleBase {
   final IdentityApi identity;
   final MessagingApi messaging;
   final BillingApi billing;
+  final GroupsApi groups;
   final TurnConfig turn;
   late final CallsApi api = _CallsFacade(this);
   late final PushTrail _wakes;
@@ -267,6 +270,16 @@ CREATE TABLE $s.call_metrics (
     await _limit(_turnLimit, q.device.deviceId);
     final accountId = q.device.accountId;
 
+    // A room's call time belongs to its group: only a member may start or join
+    // it, whoever learns the room id (ADR-036).
+    final groupId = req.groupId;
+    if (groupId != null && !await groups.isMember(groupId, accountId)) {
+      throw const ApiError(
+        ErrorCode.forbidden,
+        message: 'you are not in that group',
+      );
+    }
+
     var callerIsRemote = false;
     if (req.role == CallRole.callee && await billing.enabled()) {
       // Only the person the offer was addressed to may answer it.
@@ -290,6 +303,7 @@ CREATE TABLE $s.call_metrics (
       role: req.role,
       pool: req.media,
       roomId: req.roomId,
+      groupId: groupId,
       callerIsRemote: callerIsRemote,
     );
 
@@ -535,7 +549,16 @@ CREATE TABLE $s.call_metrics (
       });
     } else if (kind == CallSignalKind.end) {
       // The call is over for whoever pays for it.
-      await billing.callEnded(callId);
+      final party = await context.db.queryOne(
+        'SELECT 1 FROM $schema.call_legs WHERE call_id = @c:text '
+        'AND (callee_account = @a:text OR caller_account = @a:text)',
+        {'c': callId, 'a': senderAccount},
+      );
+      await billing.callEnded(
+        callId,
+        by: senderAccount,
+        isParty: party != null,
+      );
       await _endPending(
         callId,
         notifyEnded: true,

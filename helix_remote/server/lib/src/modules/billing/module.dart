@@ -268,6 +268,7 @@ final class BillingModule extends ModuleBase
     required CallRole role,
     required CallPool pool,
     String? roomId,
+    String? groupId,
     bool callerIsRemote = false,
   }) async {
     // A server without plans does not meter, and keeps no record of calls.
@@ -284,13 +285,20 @@ final class BillingModule extends ModuleBase
       role: role,
       pool: pool,
       roomId: roomId,
+      groupId: groupId,
       callerIsRemote: callerIsRemote,
     );
   }
 
   @override
-  Future<void> callEnded(String callId) async {
-    if (await enabled()) await _calls.callEnded(callId);
+  Future<void> callEnded(
+    String callId, {
+    required String by,
+    bool isParty = false,
+  }) async {
+    if (await enabled()) {
+      await _calls.callEnded(callId, by: by, isParty: isParty);
+    }
   }
 
   Future<Response> _callTimeRoute(HelixRequest q) async =>

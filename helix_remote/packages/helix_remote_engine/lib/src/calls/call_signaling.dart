@@ -19,6 +19,7 @@ abstract interface class CallSignaling {
     required CallRole role,
     required bool video,
     String? roomId,
+    String? groupId,
   });
 
   /// Seals [payload] for the devices of [account] and posts it

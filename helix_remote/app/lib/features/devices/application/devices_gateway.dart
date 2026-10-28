@@ -145,6 +145,7 @@ final class EngineDevicesGateway implements DevicesGateway {
             SecurityEventKind.recoveryUsed => SecurityEventType.recoveryUsed,
             SecurityEventKind.identityChanged =>
               SecurityEventType.identityChanged,
+            SecurityEventKind.sessionReuse => SecurityEventType.sessionReuse,
             SecurityEventKind.unknown => SecurityEventType.other,
           },
           at: e.at,

@@ -30,6 +30,10 @@ abstract interface class GroupRelay {
 
 /// The groups module's facade for federation (ADR-026).
 abstract interface class GroupsApi {
+  /// Whether [accountId] is a member of the group [groupId] (a uuid) homed or
+  /// mirrored on this server.
+  Future<bool> isMember(String groupId, String accountId);
+
   void setRelay(GroupRelay relay);
 
   /// An action from a member on [domain] on a group homed here.

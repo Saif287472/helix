@@ -42,6 +42,7 @@ param(
     [string]$AgeExe = 'age.exe',
     [switch]$OffsitePlain,
     [switch]$OffsiteBlobs,
+    [switch]$NoOffsite,
     [ValidateRange(1, 3650)][int]$OffsiteKeep = 7,
     [string]$BlobDir,
     [string]$EnvFile,
@@ -62,6 +63,13 @@ $remoteRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $serverDir = Join-Path $remoteRoot 'server'
 if (-not $EnvFile) { $EnvFile = Join-Path $serverDir '.env' }
 $BackupDir = [IO.Path]::GetFullPath($BackupDir)
+
+# Backups that live only on the PC they protect are lost with it (theft,
+# ransomware, a dead disk). A copy off the PC is required; -NoOffsite says, on
+# purpose, that you accept that.
+if (-not $OffsiteDir -and -not $NoOffsite) {
+    throw 'Pass -OffsiteDir (a USB drive, another PC or a synced folder; with -AgeRecipient so it is encrypted), or -NoOffsite to run without a copy off this PC.'
+}
 
 # A process environment variable wins, otherwise the last matching line of
 # server\.env, as the server reads them (platform/config/env_file.dart).
@@ -228,7 +236,7 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatt
     -ExecutionTimeLimit (New-TimeSpan -Hours 3)
 $principal = New-ScheduledTaskPrincipal `
     -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-    -LogonType Interactive -RunLevel Limited
+    -LogonType S4U -RunLevel Limited # runs at its time with nobody logged on
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal -Force `
     -Description 'Helix Global: pg_dump of the helix database and a copy of the blobs (helix_remote/deploy/windows).' |

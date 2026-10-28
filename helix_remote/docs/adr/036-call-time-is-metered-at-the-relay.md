@@ -27,7 +27,13 @@ TURN allocation is valid.
    first) and the credential's expiry is the end of that reserved time.
    When the call ends (the server sees the `end` signal) unused whole minutes
    go back to the claims they came from. Charging is per started minute.
-2. **The caller pays.** The callee's credential is issued only for a call that
+2. **A room belongs to its group.** A credential request for a room names the
+   group; only a member may start or join the room's reservation, and the
+   reservation records the group so another group's request for the same room
+   id is refused. A call's metering ends only on an `end` from the reservation's
+   owner or a party of the call (`calls.call_legs`), never from anyone who
+   knows the call id.
+3. **The caller pays.** The callee's credential is issued only for a call that
    was offered to them (`calls.call_legs`, kept 12 hours) and ends with the
    caller's reservation. A group call's legs share the starter's reservation
    (`room_id`), charged once per clock minute.
@@ -99,6 +105,11 @@ A live one-to-one call can change kind, either way, with the pools kept apart:
   untested; if one does not, the switch fails and the call goes on as it was.
 - With no voice relay configured, voice calls still spend voice minutes but are
   not bandwidth-capped.
+- A pair of colluding accounts can use a credential for relay with no call
+  ever reported to the server (the server cannot see relay use); the reservation
+  is then refunded. Closing it needs relay-side accounting (coturn statistics),
+  not built. Honest unanswered calls must stay free, so the server does not
+  guess.
 - Group-call metering assumes the starter's device asks for credentials first;
   a late leg under an expired room reservation fails to relay.
 - Not tested on real phones against a real coturn with WebRTC; the server,

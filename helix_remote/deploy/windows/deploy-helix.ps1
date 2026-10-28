@@ -7,8 +7,12 @@ swap, migrate, start, check.
 Run it yourself when you decide to deploy; it stops production for the length
 of the swap (usually under a minute). Steps:
 
-1. Checks <Dest>\releases\<Tag> has the three executables and <Dest>\.env
-   exists.
+1. Checks <Dest>\releases\<Tag> has the three executables, that they are the
+   ones release-helix.ps1 built (the SHA-256 in VERSION), and <Dest>\.env
+   exists. Then takes a database backup (backup-helix.ps1 into -BackupDir or
+   %HELIX_BACKUP_DIR%) so a bad migration or release has a restore point from
+   minutes ago; a failed backup stops the deploy before anything changes. Pass
+   -SkipBackup to deploy without one.
 2. Asks the running server to stop gracefully by creating <Dest>\stop (the
    "Helix Server" task's wrapper then exits), and waits for the task to
    stop. With -Force it ends the task if it has not stopped in time.
@@ -30,6 +34,8 @@ param(
     [int]$Port = 8080,
     [int]$StopTimeoutSeconds = 60,
     [int]$ReadyTimeoutSeconds = 120,
+    [string]$BackupDir = $env:HELIX_BACKUP_DIR,
+    [switch]$SkipBackup,
     [switch]$Force,
     [switch]$NoTask
 )
@@ -41,6 +47,23 @@ foreach ($exe in $exes) {
     if (-not (Test-Path -LiteralPath (Join-Path $release $exe))) {
         throw "$release has no $exe. Build it with release-helix.ps1 -Tag $Tag."
     }
+}
+# The executables are the ones release-helix.ps1 built: their hashes were
+# written to VERSION when they were built.
+$versionFile = Join-Path $release 'VERSION'
+if (Test-Path -LiteralPath $versionFile) {
+    $recorded = @{}
+    foreach ($line in Get-Content -LiteralPath $versionFile) {
+        if ($line -match '^sha256-(\S+?)=([0-9a-f]{64})$') { $recorded[$Matches[1]] = $Matches[2] }
+    }
+    foreach ($exe in $exes) {
+        $want = $recorded[$exe]
+        if (-not $want) { throw "$versionFile has no hash for $exe. Build the release again with release-helix.ps1." }
+        $have = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $release $exe)).Hash.ToLowerInvariant()
+        if ($have -ne $want) { throw "$exe in $release is not the file that was built (hash differs). Nothing was changed." }
+    }
+} else {
+    throw "$release has no VERSION file. Build it with release-helix.ps1 -Tag $Tag."
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Dest '.env'))) {
     throw "No .env in $Dest. Copy server\.env there first (README, 'Moving production')."
@@ -69,6 +92,19 @@ function Wait-Ready {
         Start-Sleep -Seconds 2
     }
     return $false
+}
+
+# 1b. A restore point from minutes ago, before anything changes.
+if (-not $SkipBackup) {
+    if (-not $BackupDir) {
+        throw 'Pass -BackupDir (or set HELIX_BACKUP_DIR) so a backup is taken before the migration, or -SkipBackup to deploy without one.'
+    }
+    $backup = Join-Path $PSScriptRoot 'backup-helix.ps1'
+    if (-not (Test-Path -LiteralPath $backup)) { $backup = Join-Path $Dest 'backup-helix.ps1' }
+    if (-not (Test-Path -LiteralPath $backup)) { throw "backup-helix.ps1 was not found next to this script or in $Dest." }
+    Write-Host 'Taking a backup before the deploy...'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backup -BackupDir $BackupDir -SkipBlobs
+    if ($LASTEXITCODE -ne 0) { throw "The backup failed (exit $LASTEXITCODE). Nothing was changed; fix it, or deploy with -SkipBackup." }
 }
 
 # 1-2. Stop the running server gracefully.

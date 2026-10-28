@@ -76,6 +76,7 @@ List<ModuleFactory> allModules({
       identity: identity.api,
       messaging: messaging.api,
       billing: billing.api,
+      groups: groups.api,
     ),
     (c) => FederationModule(
       c,

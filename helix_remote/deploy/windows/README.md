@@ -232,3 +232,67 @@ curl.exe -s https://helix.agiletechbd.com/v1/admin/setup
   exists." That is the block working.
 
 To undo, copy `Caddyfile.before-hardening` back and reload.
+
+## Hardening changes of 2026-10-28 (read before the next deploy)
+
+Written from the security survey; **none of this was run on a Windows PC**, so
+try each step once while you can watch it.
+
+**Off-box alerts and the new health checks.** The health check now also looks
+at backup age, restore-drill age, the certificate, Postgres, Caddy and coturn,
+and can tell someone who is not at the PC. Add any of these lines to
+`<Dest>\.env` (the server ignores them; none is secret except the two URLs,
+which are as good as a password, so keep `.env` private):
+
+```ini
+# The folder the backup task writes to: the check then flags a dump older than
+# 36 hours, a backup run that ended with errors, and no passing restore drill
+# in 45 days.
+HELIX_BACKUP_DIR=F:\helix-backups
+# A dead-man's switch: create a check at healthchecks.io (or similar), paste its
+# ping URL. It is pinged on every healthy run (every 5 minutes); when the pings
+# stop for longer than you set there, it emails or messages you - even when this
+# PC is off or hung.
+HELIX_HEARTBEAT_URL=https://hc-ping.com/<your-uuid>
+# A plain-text POST on every change (a problem, or all clear). ntfy.sh works:
+# pick a long random topic and install the ntfy app on your phone.
+HELIX_ALERT_URL=https://ntfy.sh/<long-random-topic>
+```
+
+Then re-run `install-helix-tasks.ps1` once: the health check now also runs at
+boot, **whether or not anyone is logged on** (before, it ran only while you
+were), and the backup task (`install-backup-task.ps1`) runs the same way. A
+desktop toast needs someone logged on, so with nobody at the PC the Event Log
+entry and the off-box alert are what you get. The coturn task still starts at
+logon (WSL under a service-style task is untested): after a reboot with nobody
+logged in, calls do not connect until you log in. The health check now says so
+("coturn is not running in WSL"). A backup folder on a network share is not
+reachable from a task that runs while you are logged off; use a local or USB
+drive, or store the share's credentials with `cmdkey`.
+
+**Backups must leave the PC.** `install-backup-task.ps1` now refuses to
+install without `-OffsiteDir` (a USB drive, another PC, a synced folder) unless
+you pass `-NoOffsite` on purpose, and it wants `-AgeRecipient` (encrypt the
+copy) or `-OffsitePlain`. A thief or ransomware that gets this PC and its
+drives otherwise takes the live data and every backup together. Prefer a
+destination the server's Windows user cannot delete from (another PC with its
+own login, or storage with versions or object lock).
+The blob copy no longer overwrites a file that already exists in the copy: blobs
+never change, so a different file is damage, and last night's good copy is kept.
+
+**Deploys take a restore point first, and check the build.**
+`deploy-helix.ps1` takes a database backup before it changes anything (pass
+`-BackupDir`, or set `HELIX_BACKUP_DIR` once as a Windows user variable; a
+failed backup stops the deploy; `-SkipBackup` skips it), and refuses
+executables whose SHA-256 differs from the one `release-helix.ps1` wrote into
+`VERSION`. `release-helix.ps1` refuses a tag that is not on `origin/main`
+(`-AllowOffMain` overrides); `-RequireSignedTag` also demands a signed tag
+(`git tag -s`, with an SSH signing key: `git config gpg.format ssh`).
+
+**Caddy** (`Caddyfile.example`): security headers, `-Server`, and an access log
+with the Authorization header removed, in `logs\access.log` next to the
+Caddyfile (20 MiB, ten files kept). Narrow the operator-only range from
+`192.168.0.0/16` to this PC's address and your phones' reserved addresses when
+you can. **coturn** now also denies IPv4-in-IPv6 peers (`::ffff:`, NAT64,
+6to4) and drops root once started (`TURN_KEEP_ROOT=1` in the start script's
+environment turns that off if WSL1 refuses it).

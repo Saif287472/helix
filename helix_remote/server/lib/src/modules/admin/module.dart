@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/kernel/crypto.dart';
 import 'package:helix_remote_server/src/kernel/jwt.dart';
 import 'package:helix_remote_server/src/modules/admin/data/admin_store.dart';
 import 'package:helix_remote_server/src/modules/admin/domain/local_address.dart';
@@ -20,6 +22,7 @@ import 'package:helix_remote_server/src/platform/http/websocket_limits.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
+import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:helix_remote_server/src/version.dart';
 import 'package:shelf/shelf.dart';
@@ -40,13 +43,26 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     required this.billing,
   }) {
     _store = AdminStore(schema);
+    // The console's tokens are signed with keys derived from the ring, so a
+    // device-token key alone cannot mint an operator token (and the reverse).
     _jwt = HmacJwt(
-      keys: context.config.jwtKeys,
+      keys: {
+        for (final e in context.config.jwtKeys.entries)
+          e.key: _adminKey(e.value),
+      },
       activeKid: context.config.activeJwtKid,
+    );
+    _authEvents = context.metrics.counter(
+      'helix_admin_auth_events_total',
+      'Operator console sign-in failures, locks and refused setups',
     );
     _kdf = _kdfFrom(context.config.env, devMode: context.config.devMode);
     authenticator = _AdminAuthenticator(this);
   }
+
+  /// HMAC-SHA256(ring key, "helix.admin.v1"): a key of its own per ring key.
+  static Uint8List _adminKey(Uint8List ringKey) =>
+      hmacSha256(ringKey, utf8.encode('helix.admin.v1'));
 
   final IdentityApi identity;
   final PeopleApi people;
@@ -56,6 +72,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   late final AdminStore _store;
   late final HmacJwt _jwt;
   late final Argon2Params _kdf;
+  late final Counter _authEvents;
 
   @override
   late final Authenticator authenticator;
@@ -292,6 +309,17 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   );
 
   Future<Response> _setup(HelixRequest q) async {
+    // The first operator is claimed from this machine or the local network
+    // only; from elsewhere, `HELIX_ADMIN_PASSWORD` or `bin/admin_tool.dart`.
+    if (!isLocalNetworkAddress(q.clientIp) || q.clientIpUntrusted) {
+      _authEvents.inc({'kind': 'setup_refused'});
+      throw const ApiError(
+        ErrorCode.forbidden,
+        message:
+            'First-time setup is only open from this machine or its local '
+            'network. Set HELIX_ADMIN_PASSWORD or use bin/admin_tool.dart.',
+      );
+    }
     final req = q.json(AdminPasswordRequest.fromJson);
     _checkPassword(req.password, 'password');
     if (await _store.configured(context.db)) {
@@ -328,10 +356,28 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
         'peer_is_local': isLocalNetworkAddress(q.clientIp),
       });
     }
+    await _reserveAttempt(q, admin.id);
+    if (!await admin.password.verify(req.password)) {
+      _authEvents.inc({'kind': 'sign_in_failed'});
+      log.warn('admin_sign_in_failed');
+      throw const ApiError(ErrorCode.invalidCredentials);
+    }
+    await context.db.tx((tx) async {
+      await _store.recordSuccess(tx, admin.id, q.clientIp);
+      await _store.audit(tx, adminId: admin.id, action: 'admin.sign_in');
+    });
+    return jsonResponse(_issue(admin.id).toJson());
+  }
+
+  /// Counts a password attempt against the sign-in lock (per address, doubling,
+  /// and the global cap) and throws `password_locked` while it is shut. Sign-in
+  /// and a password change share it: a token alone cannot be used to guess the
+  /// operator's password here without the same lock.
+  Future<void> _reserveAttempt(HelixRequest q, String adminId) async {
     final locked = await context.db.tx(
       (tx) => _store.reserveAttempt(
         tx,
-        admin.id,
+        adminId,
         q.clientIp,
         perIp: lockAfter,
         firstLock: firstLock,
@@ -343,21 +389,13 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       ),
     );
     if (locked != null) {
+      _authEvents.inc({'kind': 'locked'});
       final wait = locked.difference(context.clock.now());
       throw ApiError(
         ErrorCode.passwordLocked,
         retryAfter: wait.isNegative ? Duration.zero : wait,
       );
     }
-    if (!await admin.password.verify(req.password)) {
-      log.warn('admin_sign_in_failed');
-      throw const ApiError(ErrorCode.invalidCredentials);
-    }
-    await context.db.tx((tx) async {
-      await _store.recordSuccess(tx, admin.id, q.clientIp);
-      await _store.audit(tx, adminId: admin.id, action: 'admin.sign_in');
-    });
-    return jsonResponse(_issue(admin.id).toJson());
   }
 
   /// Ends every session of this operator, this one included: the console's
@@ -409,9 +447,13 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     final req = q.json(ChangeAdminPasswordRequest.fromJson);
     _checkPassword(req.newPassword, 'new_password');
     final admin = (await _store.byId(context.db, q.admin.adminId))!;
+    await _reserveAttempt(q, admin.id);
     if (!await admin.password.verify(req.currentPassword)) {
+      _authEvents.inc({'kind': 'password_change_failed'});
+      log.warn('admin_password_change_failed');
       throw const ApiError(ErrorCode.invalidCredentials);
     }
+    await context.db.tx((tx) => _store.recordSuccess(tx, admin.id, q.clientIp));
     final hash = await PasswordHash.create(req.newPassword, _kdf);
     final now = context.clock.now();
     await context.db.tx((tx) async {

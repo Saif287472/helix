@@ -224,6 +224,7 @@ final class CallDevice implements CallSignaling {
     required CallRole role,
     required bool video,
     String? roomId,
+    String? groupId,
   }) async {
     turnRequests.add((callId, role, video, roomId));
     if (noCallTime && role == CallRole.caller) {

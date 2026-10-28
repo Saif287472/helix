@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release transport policy: no cleartext traffic. The console refuses
+     http:// itself except for a loopback host; debug builds override this. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

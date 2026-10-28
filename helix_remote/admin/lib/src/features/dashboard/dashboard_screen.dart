@@ -58,6 +58,23 @@ class DashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
+              if (server.metrics case final m?
+                  when (m.adminSignInFailures ?? 0) > 0 ||
+                      (m.peerKeyChanges ?? 0) > 0) ...[
+                ConsoleBanner(
+                  tone: ConsoleTone.warn,
+                  title: 'Security signals since this node started',
+                  message: [
+                    if ((m.adminSignInFailures ?? 0) > 0)
+                      '${m.adminSignInFailures} failed console sign-in or '
+                          'password attempts.',
+                    if ((m.peerKeyChanges ?? 0) > 0)
+                      '${m.peerKeyChanges} federation peer key changes.',
+                    'Check the audit log and the server log.',
+                  ].join(' '),
+                ),
+                const SizedBox(height: 12),
+              ],
               _Tiles(server: server),
               const SizedBox(height: 8),
               const Padding(
@@ -188,6 +205,16 @@ class _Tiles extends StatelessWidget {
             ? HelixConsoleColors.danger
             : HelixConsoleColors.text,
         icon: Icons.send_outlined,
+        accent: HelixConsoleColors.warn,
+      ),
+      ConsoleMetricTile(
+        title: 'Sign-ins used twice',
+        value: _count(m?.reusedSignIns),
+        subtitle: 'A retry, or a stolen sign-in copy',
+        subtitleColor: (m?.reusedSignIns ?? 0) > 0
+            ? HelixConsoleColors.onWarn
+            : HelixConsoleColors.onOk,
+        icon: Icons.lock_reset,
         accent: HelixConsoleColors.warn,
       ),
       ConsoleMetricTile(

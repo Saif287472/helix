@@ -98,13 +98,20 @@ Register-BootTask 'Helix Server' `
 $drives = $Drives -join ','
 $check = New-ScriptAction (Join-Path $Dest 'helix-health-check.ps1') "-Dest `"$Dest`" -Port $Port -Drives $drives"
 $every = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
+$boot = New-ScheduledTaskTrigger -AtStartup
+$boot.Delay = 'PT1M'
 $logon = New-ScheduledTaskTrigger -AtLogOn -User $user
+# S4U: runs whether or not anyone is logged on, so a reboot with nobody at the
+# PC does not leave the health check (and its off-box alert) silent. A desktop
+# toast needs a logged-on session and is skipped then; the Event Log entry and
+# the off-box alert (HELIX_HEARTBEAT_URL / HELIX_ALERT_URL in .env) are not.
+$s4u = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Limited
 $interactive = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $checkSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 2) `
-    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName 'Helix Health Check' -Action $check -Trigger @($every, $logon) `
-    -Principal $interactive -Settings $checkSettings -Force `
-    -Description 'Helix Global: ready, disk, dead jobs, backlog; Event Log and a notification on change.' | Out-Null
+    -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'Helix Health Check' -Action $check -Trigger @($every, $boot, $logon) `
+    -Principal $s4u -Settings $checkSettings -Force `
+    -Description 'Helix Global: ready, disk, dead jobs, backlog, backup and certificate age; Event Log, a notification and an off-box alert on change.' | Out-Null
 Write-Host 'Registered Helix Health Check'
 
 # 5. Caddy and coturn, when asked.

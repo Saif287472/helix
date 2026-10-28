@@ -73,6 +73,9 @@ identifiers into a ticket or chat without checking it first.
   | `helix_ws_open` | gauge | none | WebSockets open on this node. |
   | `helix_ws_connections_total` | counter | none | WebSockets opened since start. |
   | `helix_client_crash_reports_total` | counter | none | Opt-in crash reports received. |
+  | `helix_auth_events_total` | counter | `kind` (`refresh_reuse`, `revoked_refresh`, `revoked_device`, `ended_session`) | A refresh token used twice (a network retry, or a stolen copy; also written to the account's security log as `session_reuse`), a revoked one presented, and use of a revoked device or an ended session. A sudden rise of `refresh_reuse` or `revoked_device` is the signal. |
+  | `helix_admin_auth_events_total` | counter | `kind` (`sign_in_failed`, `password_change_failed`, `locked`, `setup_refused`) | Operator console sign-in and password-change failures, locks, and first-time setups refused from outside the network. Orbit Console's dashboard shows a banner when failures are above zero. |
+  | `helix_federation_peer_key_changes_total` | counter | none | A federation peer presented a signing key other than the cached one (a rotation, or a hostile server). |
   | `helix_jobs_dead` | gauge | none | Dead outbox jobs, cluster-wide (read from the database at scrape time). |
   | `helix_mailbox_backlog` | gauge | none | Undelivered envelopes, cluster-wide (counted up to 1,000,000 at scrape time). |
   | `helix_http_body_bytes_in_flight` | gauge | none | Request body bytes this node is buffering (limit `HELIX_MAX_INFLIGHT_BODY_BYTES`). |

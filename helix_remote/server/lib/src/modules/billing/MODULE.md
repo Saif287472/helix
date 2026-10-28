@@ -102,6 +102,8 @@ is false). Everyone else is unmetered and nothing is recorded.
 | `call_reservations` | minutes set aside for one call or one group-call room (`room_id`, unique): pool, `reserved`, `parts` (which claims they came from), `expires_at`, `answered_at`, `last_end_at`, `finalized_at`, `used` |
 | `call_reservation_calls` | the call ids under a reservation and their caller |
 
+`call_reservations.group_id` (migration 4) binds a room's reservation to its group: a request for the same room id from another group is a `conflict` (`room_group`), and the calls module only forwards a `group_id` the caller is a member of.
+
 | Route | Notes |
 |---|---|
 | `GET /v1/billing/call-time` | pools (`minutes`, `daily_minutes`, `cap_minutes`, oldest `expires_at`), `can_claim`, `next_claim_at`; `unlimited: true` when unmetered. Also while suspended. |

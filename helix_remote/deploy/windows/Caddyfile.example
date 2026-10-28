@@ -10,10 +10,35 @@
 helix.agiletechbd.com {
 	# HSTS: browsers refuse plain HTTP to this host for max-age seconds. Start
 	# with one day; after a week without trouble, raise it to 31536000.
-	header Strict-Transport-Security "max-age=86400"
+	header {
+		Strict-Transport-Security "max-age=86400"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# An access log for after an incident (who asked for what, from where) with
+	# the credentials taken out of it: Caddy's JSON log would otherwise carry the
+	# Authorization header of every request.
+	log {
+		output file logs/access.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+		format filter {
+			wrap json
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+			resp_headers>Set-Cookie delete
+		}
+	}
 
 	# The operator API (/v1/admin...) and the metrics route answer only to
-	# this PC and the home LAN (192.168.0.0/16 covers 192.168.0.x). Everyone
+	# this PC and the home LAN (192.168.0.0/16 covers 192.168.0.x). Narrow it
+	# when you can: replace 192.168.0.0/16 with this PC's own LAN address and the
+	# one or two phones you run the console from (their router reservations), so
+	# a guest, a smart TV or malware on the LAN cannot even reach the sign-in. Everyone
 	# else gets a plain 404. remote_ip is the address of the TCP connection,
 	# which a client cannot fake with a header. Caddy matches the decoded,
 	# cleaned path without regard to case, so /V1/%61dmin, //v1/admin and

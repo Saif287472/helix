@@ -406,6 +406,12 @@ INSERT INTO $s.account_usage (account_id, kind, bytes, objects)
     final id = q.uuidParam('media_id');
     final object = await _object(id);
     if (object == null) throw const ApiError(ErrorCode.notFound);
+    // A backup is its owner's alone (attachments and pictures are shared by
+    // id with the people they are sent to; a backup never is).
+    if (_kind(object) == MediaKind.backup &&
+        object.string('owner_account') != q.device.accountId) {
+      throw const ApiError(ErrorCode.notFound);
+    }
     final key = _key(_kind(object), id);
     final size = object.integer('size');
     if (object.isNull('completed_at')) {

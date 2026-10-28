@@ -302,9 +302,21 @@ final class IdentityStore {
   /// `SessionIssuer.endSessions`, which also tells every node's sockets.
   /// Returns the cut-off at the precision [authState] compares (null if
   /// there is no such device).
+  /// Takes the device's row lock. [invalidateSessions] takes it first, so a
+  /// refresh that holds it finishes before a sign-out or revoke ends the
+  /// sessions (which then end the session it minted), and one that comes
+  /// after sees the refresh token revoked.
+  Future<void> lockDevice(Tx tx, String deviceId) => tx.execute(
+    'SELECT 1 FROM $s.devices WHERE id = @d:uuid FOR UPDATE',
+    {'d': deviceId},
+  );
+
   Future<DateTime?> invalidateSessions(SqlSession db, String deviceId) async {
     final r = await db.queryOne(
-      'UPDATE $s.devices SET tokens_valid_after = now() WHERE id = @d:uuid '
+      // clock_timestamp(), not now(): now() is the start of the transaction,
+      // which may be earlier than a refresh this one waited for on the device
+      // row, and a session that refresh minted would then outlive the cut-off.
+      'UPDATE $s.devices SET tokens_valid_after = clock_timestamp() WHERE id = @d:uuid '
       "RETURNING date_trunc('milliseconds', tokens_valid_after) AS cut_off",
       {'d': deviceId},
     );

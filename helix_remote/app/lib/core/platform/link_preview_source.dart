@@ -54,10 +54,26 @@ bool isBlockedAddress(InternetAddress address) {
   if (address.type == InternetAddressType.IPv4) return _blockedV4(b);
   if (b.every((x) => x == 0)) return true; // ::
   if ((b[0] & 0xfe) == 0xfc) return true; // fc00::/7, unique local
+  if (b[0] == 0xfe && (b[1] & 0xc0) == 0xc0) return true; // fec0::/10
+  if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0 && b[3] == 0) {
+    return true; // 2001::/32, Teredo
+  }
   // ::ffff:a.b.c.d is an IPv4 address in IPv6 clothes.
-  final mapped =
-      b.sublist(0, 10).every((x) => x == 0) && b[10] == 0xff && b[11] == 0xff;
-  return mapped && _blockedV4(b.sublist(12));
+  final low = b.sublist(0, 10).every((x) => x == 0);
+  if (low && b[10] == 0xff && b[11] == 0xff) return _blockedV4(b.sublist(12));
+  // ::a.b.c.d, the old IPv4-compatible form.
+  if (low && b[10] == 0 && b[11] == 0) return _blockedV4(b.sublist(12));
+  // 64:ff9b::/96 (NAT64) and 2002::/16 (6to4) carry an IPv4 address that a
+  // gateway would connect to.
+  if (b[0] == 0x00 &&
+      b[1] == 0x64 &&
+      b[2] == 0xff &&
+      b[3] == 0x9b &&
+      b.sublist(4, 12).every((x) => x == 0)) {
+    return _blockedV4(b.sublist(12));
+  }
+  if (b[0] == 0x20 && b[1] == 0x02) return _blockedV4(b.sublist(2, 6));
+  return false;
 }
 
 bool _blockedV4(List<int> b) =>
@@ -68,6 +84,12 @@ bool _blockedV4(List<int> b) =>
     (b[0] == 169 && b[1] == 254) ||
     (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
     (b[0] == 192 && b[1] == 168) ||
+    (b[0] == 192 &&
+        b[1] == 0 &&
+        (b[2] == 0 || b[2] == 2)) || // 192.0.0/24, 192.0.2/24
+    (b[0] == 198 && (b[1] == 18 || b[1] == 19)) || // 198.18.0.0/15
+    (b[0] == 198 && b[1] == 51 && b[2] == 100) || // 198.51.100/24
+    (b[0] == 203 && b[1] == 0 && b[2] == 113) || // 203.0.113/24
     b[0] >= 224; // multicast and reserved
 
 /// The card's text from a page's HTML: Open Graph, then Twitter, then the
@@ -140,13 +162,18 @@ final class HttpLinkPreviewSource implements LinkPreviewSource {
     @visibleForTesting
     Future<List<InternetAddress>> Function(String host)? resolve,
   }) : _clientFactory = clientFactory ?? HttpClient.new,
-       _resolve = resolve ?? InternetAddress.lookup;
+       _resolve = resolve ?? InternetAddress.lookup,
+       _guardConnections = clientFactory == null;
 
   static const maxBytes = 256 * 1024;
   static const maxRedirects = 3;
   static const timeout = Duration(seconds: 6);
 
   final HttpClient Function() _clientFactory;
+
+  /// The real client connects through [_connectVetted]; a test's own client
+  /// does not.
+  final bool _guardConnections;
   final Future<List<InternetAddress>> Function(String host) _resolve;
 
   @override
@@ -170,10 +197,38 @@ final class HttpLinkPreviewSource implements LinkPreviewSource {
     return addresses.isNotEmpty && !addresses.any(isBlockedAddress);
   }
 
+  /// Connects to the address that was checked, not to a second answer from
+  /// DNS: the host is resolved once here, every address must be public, and
+  /// the TLS handshake still names the host (SNI and the certificate check).
+  /// Without this a name that answers a public address to the check and a LAN
+  /// address to the connection (DNS rebinding) would reach the phone's own
+  /// network.
+  Future<ConnectionTask<Socket>> _connectVetted(Uri uri) async {
+    final addresses = await _resolve(uri.host);
+    if (addresses.isEmpty || addresses.any(isBlockedAddress)) {
+      throw const SocketException('not a public address');
+    }
+    final port = uri.hasPort ? uri.port : 443;
+    final raw = await Socket.connect(
+      addresses.first,
+      port,
+      timeout: const Duration(seconds: 4),
+    );
+    return ConnectionTask.fromSocket(
+      SecureSocket.secure(raw, host: uri.host),
+      raw.destroy,
+    );
+  }
+
   Future<LinkPreviewData?> _fetch(Uri original) async {
     final client = _clientFactory()
       ..connectionTimeout = const Duration(seconds: 4)
       ..userAgent = 'Mozilla/5.0 (compatible; OrbitLinkPreview/1.0)';
+    if (_guardConnections) {
+      client
+        ..findProxy = ((_) => 'DIRECT')
+        ..connectionFactory = (uri, _, _) => _connectVetted(uri);
+    }
     try {
       var current = original;
       for (var hop = 0; hop <= maxRedirects; hop++) {

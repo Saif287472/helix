@@ -438,6 +438,28 @@ void main() {
       bearer: alice.bearer,
     );
 
+    test('a backup is downloadable by its owner only', () async {
+      final id = await upload([9, 8, 7]);
+      expect((await download(id)).status, 200);
+      final bob = await h.registerGlobal(bobNumber);
+      final other = await h.api.call(
+        Routes.downloadContent,
+        params: {'media_id': id},
+        bearer: bob.bearer,
+      );
+      expect(other.status, 404);
+      // An attachment, by contrast, is fetched by id by whoever it is sent to.
+      final attachment = await upload([1, 2, 3], kind: MediaKind.attachment);
+      expect(
+        (await h.api.call(
+          Routes.downloadContent,
+          params: {'media_id': attachment},
+          bearer: bob.bearer,
+        )).status,
+        200,
+      );
+    });
+
     test(
       'deleting a full backup deletes its media and frees the quota',
       () async {

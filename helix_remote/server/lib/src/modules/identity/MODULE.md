@@ -93,7 +93,14 @@ import.
   account (review A-01).
 - **Refresh rotation:** reusing an old refresh token ends every session of
   that device (theft response), and the cut-off is committed before the
-  error is returned.
+  error is returned. A token used twice also writes a `session_reuse` entry
+  to the account's security log and counts `helix_auth_events_total` (a token
+  that was only revoked by a sign-out is counted, not logged). A refresh takes
+  the device row lock first, as `invalidateSessions` does, so a refresh racing
+  a sign-out finishes first (and the sign-out then revokes the refresh token it
+  minted) or sees its token revoked; the cut-off is `clock_timestamp()`, the
+  time the lock was won. A 15-minute access token minted in the same
+  millisecond as the cut-off can survive it; its refresh token cannot.
 - **Ending sessions** (sign-out, refresh reuse) goes through
   `SessionIssuer.endSessions`: after commit it publishes
   `identity.sessions_ended` with the device and the cut-off (epoch ms), and

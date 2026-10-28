@@ -210,6 +210,8 @@ final securityEventsProvider =
               SecurityEventType.passwordChanged => 'Password changed',
               SecurityEventType.recoveryUsed => 'Recovery code used',
               SecurityEventType.identityChanged => 'Your account key was reset',
+              SecurityEventType.sessionReuse =>
+                'A sign-in was used twice and ended',
               SecurityEventType.other => 'Account activity',
             },
             detail: e.deviceName,

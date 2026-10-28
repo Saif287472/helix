@@ -1444,6 +1444,10 @@ final class _GroupsFacade implements GroupsApi {
   final GroupsModule _m;
 
   @override
+  Future<bool> isMember(String groupId, String accountId) async =>
+      await _m._store.role(_m.context.db, groupId, accountId) != null;
+
+  @override
   void setRelay(GroupRelay relay) => _m._relay = relay;
 
   @override

@@ -164,6 +164,7 @@ final class CallDevice implements CallSignaling {
     required CallRole role,
     required bool video,
     String? roomId,
+    String? groupId,
   }) async => turn;
 
   @override

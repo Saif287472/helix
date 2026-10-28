@@ -7,6 +7,13 @@ import 'package:helix_remote_server/src/platform/db/migrations.dart';
 /// Migration 3 of schema `billing`: the Free plan's call time (ADR-036).
 const callTimeMigration = Migration(3, 'call_time', _callTime);
 
+/// Migration 4: a room's reservation is bound to its group, so a room id alone
+/// cannot be joined from another group (ADR-036).
+const callRoomGroupMigration = Migration(4, 'call_room_group', _callRoomGroup);
+
+String _callRoomGroup(String s) =>
+    'ALTER TABLE $s.call_reservations ADD COLUMN group_id uuid;';
+
 String _callTime(String s) =>
     '''
 -- Minutes claimed once a day. A claim holds voice and video minutes and runs
@@ -69,6 +76,7 @@ final class ReservationRow {
     required this.expiresAt,
     required this.finalized,
     this.roomId,
+    this.groupId,
     this.answeredAt,
     this.lastEndAt,
   });
@@ -77,6 +85,7 @@ final class ReservationRow {
   final String accountId;
   final CallPool pool;
   final String? roomId;
+  final String? groupId;
   final bool metered;
   final int reserved;
   final List<({String claim, int minutes})> parts;
@@ -228,7 +237,7 @@ final class CallTimeStore {
   // ----------------------------------------------------------- reservations
 
   static const _columns =
-      'id, account_id, pool, room_id, metered, reserved, parts, created_at, '
+      'id, account_id, pool, room_id, group_id, metered, reserved, parts, created_at, '
       'expires_at, answered_at, last_end_at, finalized_at';
 
   ReservationRow _row(Row r) => ReservationRow(
@@ -236,6 +245,7 @@ final class CallTimeStore {
     accountId: r.string('account_id'),
     pool: CallPool.values.firstWhere((p) => p.wire == r.string('pool')),
     roomId: r.optString('room_id'),
+    groupId: r.optString('group_id'),
     metered: r.boolean('metered'),
     reserved: r.integer('reserved'),
     parts: [
@@ -285,15 +295,17 @@ final class CallTimeStore {
     required DateTime now,
     required DateTime expiresAt,
     String? roomId,
+    String? groupId,
   }) => tx.execute(
     'INSERT INTO $s.call_reservations '
-    '(id, account_id, pool, room_id, metered, reserved, parts, created_at, expires_at) '
-    'VALUES (@id:uuid, @a:uuid, @p:text, @room:text, @m:boolean, @r:int4, @parts:jsonb, @now:timestamptz, @e:timestamptz)',
+    '(id, account_id, pool, room_id, group_id, metered, reserved, parts, created_at, expires_at) '
+    'VALUES (@id:uuid, @a:uuid, @p:text, @room:text, @g:uuid, @m:boolean, @r:int4, @parts:jsonb, @now:timestamptz, @e:timestamptz)',
     {
       'id': id,
       'a': accountId,
       'p': pool.wire,
       'room': roomId,
+      'g': groupId,
       'm': metered,
       'r': reserved,
       'parts': [

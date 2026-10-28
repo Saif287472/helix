@@ -134,6 +134,9 @@ final class HttpPipeline {
         'x-content-type-options': 'nosniff',
         'cache-control': 'no-store',
         'referrer-policy': 'no-referrer',
+        // Honoured only over HTTPS; the proxy sets the same header, and an
+        // API client that ever spoke plain HTTP learns not to.
+        'strict-transport-security': 'max-age=31536000',
       },
     );
   };

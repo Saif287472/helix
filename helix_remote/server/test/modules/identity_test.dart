@@ -271,8 +271,54 @@ void main() {
           body: RefreshRequest(refreshToken: second.refreshToken).toJson(),
         );
         expect(secondRefresh.status, 401);
+        // The theft signal is recorded: a counter for the operator and an
+        // entry in the account's own security log.
+        expect(
+          h.env.platform.metrics.counter('helix_auth_events_total', '').value({
+            'kind': 'refresh_reuse',
+          }),
+          1,
+        );
+        final event = await h.env.platform.db.queryOne(
+          'SELECT kind FROM ${h.env.platform.schemas.of('identity')}.security_events '
+          "WHERE account_id = @a:uuid AND kind = 'session_reuse'",
+          {'a': device.accountId},
+        );
+        expect(event, isNotNull);
       },
     );
+
+    test('a refresh racing a sign-out never leaves a live session', () async {
+      for (var round = 0; round < 4; round++) {
+        final device = await h.registerGlobal('+88017110010$round');
+        final out = h.api.call(Routes.signOut, bearer: device.bearer);
+        final refreshed = h.api.call(
+          Routes.refreshSession,
+          body: RefreshRequest(
+            refreshToken: device.session!.refreshToken,
+          ).toJson(),
+        );
+        final results = await Future.wait([out, refreshed]);
+        expect(results[0].status, 204);
+        if (results[1].status == 200) {
+          // The refresh won the race: its refresh token must be dead too, so
+          // the session cannot be renewed. (Its 15-minute access token can
+          // survive when it was minted in the same millisecond as the sign-out's
+          // cut-off, which the cut-off's precision allows on purpose.)
+          final minted = Session.fromJson(results[1].json);
+          expect(
+            (await h.api.call(
+              Routes.refreshSession,
+              body: RefreshRequest(refreshToken: minted.refreshToken).toJson(),
+            )).status,
+            401,
+            reason: 'round $round: the new refresh token outlived the sign-out',
+          );
+        } else {
+          expect(results[1].status, 401);
+        }
+      }
+    });
 
     test('sign-out ends the session but keeps the device', () async {
       final device = await h.registerGlobal(alice);

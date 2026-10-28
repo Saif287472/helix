@@ -14,7 +14,13 @@ development checkout (review H-02). This script:
 4. compiles bin\server.dart, bin\migrate.dart and bin\admin_tool.dart into
    <Dest>\releases\<tag>\helix-server.exe, helix-migrate.exe and
    helix-admin-tool.exe, with a VERSION file (tag, commit, build time),
-5. removes the worktree.
+5. records the SHA-256 of each executable in VERSION (deploy-helix.ps1 checks
+   them again before it swaps anything),
+6. removes the worktree.
+
+It refuses a tag whose commit is not on origin/main (only merged work is
+deployed; -AllowOffMain overrides). With -RequireSignedTag the tag must carry
+a valid signature (git tag -s with an SSH or GPG signing key; git verify-tag).
 
 It never stops, starts or migrates anything: deploy-helix.ps1 switches the
 running server to a built release.
@@ -27,7 +33,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Tag,
     [string]$Dest = 'J:\Projects\Servers\helix_server\helix',
     [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path,
-    [string]$WorkRoot = 'J:\wt'
+    [string]$WorkRoot = 'J:\wt',
+    [switch]$AllowOffMain,
+    [switch]$RequireSignedTag
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,6 +47,18 @@ function Invoke-Native([string]$What, [scriptblock]$Command) {
 
 $commit = (git -C $Repo rev-parse --verify --quiet "refs/tags/$Tag^{commit}")
 if (-not $commit) { throw "No tag $Tag in $Repo (create it with: git tag $Tag)" }
+
+if ($RequireSignedTag) {
+    git -C $Repo verify-tag $Tag 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Tag $Tag has no valid signature (create it with: git tag -s $Tag)." }
+}
+if (-not $AllowOffMain) {
+    git -C $Repo fetch --quiet origin main 2>$null
+    git -C $Repo merge-base --is-ancestor $commit origin/main
+    if ($LASTEXITCODE -ne 0) {
+        throw "Tag $Tag ($commit) is not on origin/main. Merge it first, or pass -AllowOffMain."
+    }
+}
 
 $out = Join-Path $Dest "releases\$Tag"
 if (Test-Path -LiteralPath (Join-Path $out 'helix-server.exe')) {
@@ -66,11 +86,14 @@ try {
     } finally {
         Pop-Location
     }
+    $hashes = foreach ($exe in 'helix-server.exe', 'helix-migrate.exe', 'helix-admin-tool.exe') {
+        "sha256-$exe=$((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out $exe)).Hash.ToLowerInvariant())"
+    }
     @(
         "tag=$Tag",
         "commit=$commit",
         "built=$(Get-Date -Format o)"
-    ) | Set-Content -Path (Join-Path $out 'VERSION') -Encoding utf8
+    ) + $hashes | Set-Content -Path (Join-Path $out 'VERSION') -Encoding utf8
 } finally {
     git -C $Repo worktree remove --force $tree
 }

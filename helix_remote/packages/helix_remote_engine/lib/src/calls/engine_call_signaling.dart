@@ -38,6 +38,7 @@ final class EngineCallSignaling implements CallSignaling {
     required CallRole role,
     required bool video,
     String? roomId,
+    String? groupId,
   }) async {
     try {
       return await _ctx.api.calls.turnCredentials(
@@ -46,6 +47,7 @@ final class EngineCallSignaling implements CallSignaling {
           role: role,
           media: video ? CallPool.video : CallPool.voice,
           roomId: roomId,
+          groupId: groupId,
         ),
       );
     } on ApiException catch (e) {

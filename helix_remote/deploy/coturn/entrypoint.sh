@@ -142,4 +142,12 @@ if [ -z "$TURN_CERT_FILE" ]; then
     printf 'no-tls\nno-dtls\n' >> "$RENDERED"
 fi
 
+# coturn needs no privileges for ports above 1024, so it gives up root once it
+# has read its configuration, where the package made a `turnserver` user.
+# TURN_KEEP_ROOT=1 turns it off (if a WSL1 without setuid support refuses it).
+if [ "$(id -u)" = "0" ] && [ "${TURN_KEEP_ROOT:-}" != "1" ] && id turnserver >/dev/null 2>&1; then
+    printf 'proc-user=turnserver\nproc-group=turnserver\n' >> "$RENDERED"
+    chown turnserver "$RENDERED" 2>/dev/null || true
+fi
+
 exec turnserver -c "$RENDERED"

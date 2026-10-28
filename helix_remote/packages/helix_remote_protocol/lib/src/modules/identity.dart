@@ -1207,6 +1207,10 @@ enum SecurityEventKind implements WireEnum {
   passwordChanged('password_changed'),
   recoveryUsed('recovery_used'),
   identityChanged('identity_changed'),
+
+  /// A device's refresh token was presented twice, so its sessions were ended:
+  /// a network retry, or a copy of its sign-in in someone else's hands.
+  sessionReuse('session_reuse'),
   unknown('unknown');
 
   const SecurityEventKind(this.wire);

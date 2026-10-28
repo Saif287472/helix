@@ -140,10 +140,18 @@ abstract interface class BillingApi implements EntitlementSource {
     required CallRole role,
     required CallPool pool,
     String? roomId,
+    String? groupId,
     bool callerIsRemote = false,
   });
 
   /// A call (or one leg of a room) ended: settles a one-to-one call at once
   /// and a room a minute after its last leg.
-  Future<void> callEnded(String callId);
+  ///
+  /// Only the reservation's owner, or [isParty] (the calls module saw [by] as
+  /// a party of the call), can end it: a call id alone is not enough.
+  Future<void> callEnded(
+    String callId, {
+    required String by,
+    bool isParty = false,
+  });
 }

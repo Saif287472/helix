@@ -11,6 +11,7 @@ import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/ephemeral/ephemeral_store.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
+import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
@@ -86,8 +87,12 @@ final class PeerDirectory {
     required this.clock,
     required this.httpClient,
     required this.log,
+    this.keyChanges,
   });
 
+  /// `helix_federation_peer_key_changes_total`: a peer's signing key is not the
+  /// one cached. A rotation, or a hostile server; the operator checks which.
+  final Counter? keyChanges;
   final FederationConfig config;
   final FederationStore store;
   final Db db;
@@ -200,6 +205,7 @@ final class PeerDirectory {
     }
     if (cached != null &&
         !constantTimeEquals(cached.publicKey, fetched.publicKey)) {
+      keyChanges?.inc();
       log.warn('peer_key_changed', {'peer': domain});
     }
     return fetched;

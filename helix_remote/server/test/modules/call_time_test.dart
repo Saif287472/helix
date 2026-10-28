@@ -130,6 +130,7 @@ void main() {
       CallRole role = CallRole.caller,
       CallPool media = CallPool.voice,
       String? room,
+      String? group,
     }) => h.api.call(
       Routes.turnCredentials,
       bearer: d.bearer,
@@ -138,8 +139,25 @@ void main() {
         role: role,
         media: media,
         roomId: room,
+        groupId: room == null ? null : group,
       ).toJson(),
     );
+
+    /// A group made by [owner] with [members] in it; its id.
+    Future<String> makeGroup(TestDevice owner, List<TestDevice> members) async {
+      final id = Uuid.v7();
+      final r = await h.api.call(
+        Routes.createGroup,
+        bearer: owner.bearer,
+        body: CreateGroupRequest(
+          groupId: id,
+          encryptedState: bytes(40),
+          members: [for (final m in members) m.accountId],
+        ).toJson(),
+      );
+      expect(r.status, 201, reason: r.body);
+      return id;
+    }
 
     TurnCredentials creds(TestResponse r) {
       expect(r.status, 200, reason: r.body);
@@ -413,6 +431,21 @@ void main() {
         },
       );
 
+      test('only a party of the call can end its metering', () async {
+        await plansOn();
+        await claim(alice);
+        final id = newCall();
+        await turn(alice, id);
+        await signal(id, CallSignalKind.offer, alice, bob);
+        await turn(bob, id, role: CallRole.callee);
+        clock.advance(const Duration(minutes: 1));
+        // Carol knows the call id but is not in the call.
+        await signal(id, CallSignalKind.end, carol, alice);
+        expect(await voiceLeft(alice), 0, reason: 'still reserved');
+        await signal(id, CallSignalKind.end, bob, alice);
+        expect(await voiceLeft(alice), 100 - 1);
+      });
+
       test('an unanswered call costs nothing', () async {
         await plansOn();
         await claim(alice);
@@ -485,7 +518,7 @@ void main() {
             pool: CallPool.voice,
           );
           clock.advance(const Duration(minutes: 5));
-          await billing().callEnded(call);
+          await billing().callEnded(call, by: alice.accountId);
           t = await billing().callTime(id);
           expect(t.pool(CallPool.voice)!.minutes, 195);
         },
@@ -699,14 +732,15 @@ void main() {
         await plansOn();
         await claim(alice);
         const room = 'room-abcdef123456';
+        final g = await makeGroup(alice, [bob, carol]);
         final first = newCall();
-        final starter = creds(await turn(alice, first, room: room));
+        final starter = creds(await turn(alice, first, room: room, group: g));
         expect(starter.metered, isTrue);
 
         // Carol has no call time of her own and offers to the others as a
         // later arrival: she rides the room.
         final second = newCall();
-        final joined = creds(await turn(carol, second, room: room));
+        final joined = creds(await turn(carol, second, room: room, group: g));
         expect(joined.metered, isTrue);
         expect(joined.expiresAt, starter.expiresAt);
         expect((await time(carol)).pool(CallPool.voice)!.minutes, 0);
@@ -739,9 +773,58 @@ void main() {
         await plansOn();
         final dave = await h.registerGlobal('+8801711000004'); // trial
         const room = 'room-zyxwvu987654';
-        await turn(dave, newCall(), room: room);
-        final joined = creds(await turn(bob, newCall(), room: room));
+        final g = await makeGroup(dave, [bob]);
+        await turn(dave, newCall(), room: room, group: g);
+        final joined = creds(await turn(bob, newCall(), room: room, group: g));
         expect(joined.metered, isFalse);
+      });
+
+      test('a room opens only for members of its group', () async {
+        await plansOn();
+        await claim(alice);
+        const room = 'room-squat0123456';
+        final g = await makeGroup(alice, [bob]);
+        // Carol is not in the group: she can neither start nor join its room.
+        expect(
+          (await turn(carol, newCall(), room: room, group: g)).status,
+          403,
+        );
+        creds(await turn(alice, newCall(), room: room, group: g));
+        expect(
+          (await turn(carol, newCall(), room: room, group: g)).status,
+          403,
+        );
+      });
+
+      test('a room id does not open another group\'s call time', () async {
+        await plansOn();
+        await claim(alice);
+        const room = 'room-hijack012345';
+        final g1 = await makeGroup(alice, [bob]);
+        final g2 = await makeGroup(carol, [bob]);
+        creds(await turn(alice, newCall(), room: room, group: g1));
+        // Bob is in both groups, but the room is g1's.
+        final r = await turn(bob, newCall(), room: room, group: g2);
+        expect(r.status, 409);
+        expect(
+          creds(await turn(bob, newCall(), room: room, group: g1)).metered,
+          isTrue,
+        );
+      });
+
+      test('a room needs its group in the request', () async {
+        await plansOn();
+        final r = await h.api.call(
+          Routes.turnCredentials,
+          bearer: alice.bearer,
+          body: {
+            'call_id': newCall(),
+            'role': 'caller',
+            'media': 'voice',
+            'room_id': 'room-nogroup01234',
+          },
+        );
+        expect(r.status, 400);
       });
     });
 

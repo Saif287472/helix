@@ -128,7 +128,11 @@ function Copy-Blobs([string]$From, [string]$To, [string]$Label) {
     $t = Get-Date
     $robocopy = Join-Path $env:SystemRoot 'System32\robocopy.exe'
     $result = Invoke-Tool $robocopy @(
-        $From, $To, '/E', '/XJ', '/R:2', '/W:5', '/NP', '/NFL', '/NDL', "/LOG+:$robocopyLog"
+        # /XC /XN /XO: a file that already exists in the copy is never replaced.
+        # Blobs are written once under a random id and never change, so a file
+        # that differs from its copy was damaged (ransomware, a bad disk), and
+        # the next night's run must not overwrite the good copy with it.
+        $From, $To, '/E', '/XC', '/XN', '/XO', '/XJ', '/R:2', '/W:5', '/NP', '/NFL', '/NDL', "/LOG+:$robocopyLog"
     )
     # robocopy: 0 to 7 are success flags (copied, extra, mismatched); 8 and
     # up mean some files could not be copied.

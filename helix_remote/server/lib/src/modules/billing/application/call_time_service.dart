@@ -137,6 +137,7 @@ final class CallTimeService {
     required CallRole role,
     required CallPool pool,
     String? roomId,
+    String? groupId,
     required bool callerIsRemote,
   }) async {
     final now = clock.now();
@@ -191,6 +192,14 @@ final class CallTimeService {
       if (roomId != null) {
         final room = await store.forRoom(tx, roomId);
         if (room != null) {
+          // A room belongs to one group: its id opens nothing from another.
+          if (room.groupId != groupId) {
+            throw const ApiError(
+              ErrorCode.conflict,
+              message: 'That room belongs to another group.',
+              details: {'reason': 'room_group'},
+            );
+          }
           if (room.finalized) {
             throw const ApiError(
               ErrorCode.conflict,
@@ -223,6 +232,7 @@ final class CallTimeService {
           now: now,
           expiresAt: expires,
           roomId: roomId,
+          groupId: groupId,
         );
         await store.mapCall(
           tx,
@@ -261,6 +271,7 @@ final class CallTimeService {
         now: now,
         expiresAt: expires,
         roomId: roomId,
+        groupId: groupId,
       );
       await store.mapCall(
         tx,
@@ -347,11 +358,16 @@ final class CallTimeService {
     await store.markFinalized(tx, r.id, used, now);
   }
 
-  Future<void> callEnded(String callId) async {
+  Future<void> callEnded(
+    String callId, {
+    required String by,
+    required bool isParty,
+  }) async {
     final now = clock.now();
     await db.tx((tx) async {
       final r = await store.forCall(tx, callId);
       if (r == null || r.finalized) return;
+      if (!isParty && r.accountId != by) return;
       await store.markEnded(tx, r.id, now);
       // A one-to-one call is over; a group call waits for its other legs.
       if (r.roomId == null) {

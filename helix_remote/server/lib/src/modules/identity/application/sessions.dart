@@ -12,6 +12,7 @@ import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
+import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:shelf/shelf.dart';
 
 /// The only place sessions are minted (AGENTS.md security invariant;
@@ -22,12 +23,17 @@ final class SessionIssuer {
     required this.credentials,
     required this.clock,
     required this.bus,
+    this.authEvents,
   });
 
   final JwtCodec jwt;
   final CredentialStore credentials;
   final Clock clock;
   final EventBus bus;
+
+  /// `helix_auth_events_total{kind}`: refresh reuse and use of a revoked
+  /// device or an ended session, for an operator watching for theft.
+  final Counter? authEvents;
 
   Future<Session> issue(
     SqlSession db, {
@@ -89,6 +95,9 @@ final class SessionIssuer {
     // A reuse must *commit* the session cut-off before reporting the error,
     // so the transaction returns the error instead of throwing it.
     final (session, error) = await db.tx<(Session?, ApiError?)>((tx) async {
+      // The device first (as a sign-out does), then its refresh token.
+      final owner = await credentials.refreshDevice(tx, parsed.id);
+      if (owner != null) await identity.lockDevice(tx, owner);
       final row = await credentials.refreshForUpdate(tx, parsed.id);
       if (row == null ||
           !constantTimeEquals(
@@ -100,6 +109,20 @@ final class SessionIssuer {
       final deviceId = row.string('device_id');
       if (!row.isNull('used_at') || !row.isNull('revoked_at')) {
         await endSessions(tx, identity, deviceId);
+        // Used twice is the signal (a retry, or a stolen copy). A token that
+        // was only revoked by a sign-out is counted but says nothing new.
+        final reused = !row.isNull('used_at');
+        authEvents?.inc({'kind': reused ? 'refresh_reuse' : 'revoked_refresh'});
+        final stolen = reused ? await identity.deviceById(tx, deviceId) : null;
+        if (stolen != null) {
+          await identity.addEvent(
+            tx,
+            stolen.accountId,
+            SecurityEventKind.sessionReuse,
+            deviceId: deviceId,
+            deviceName: stolen.name,
+          );
+        }
         return (
           null,
           const ApiError(
@@ -147,8 +170,10 @@ final class IdentityAuthenticator implements Authenticator {
     required this.jwt,
     required this.store,
     required this.clock,
+    this.authEvents,
   });
 
+  final Counter? authEvents;
   final Db db;
   final JwtCodec jwt;
   final IdentityStore store;
@@ -159,8 +184,15 @@ final class IdentityAuthenticator implements Authenticator {
     final claims = jwt.verify(bearerToken, clock.now());
     if (claims == null) return null;
     final state = await store.authState(db, claims.deviceId);
-    if (state == null || !state.active) return null;
-    if (claims.issuedAt.isBefore(state.tokensValidAfter)) return null;
+    if (state == null) return null;
+    if (!state.active) {
+      authEvents?.inc({'kind': 'revoked_device'});
+      return null;
+    }
+    if (claims.issuedAt.isBefore(state.tokensValidAfter)) {
+      authEvents?.inc({'kind': 'ended_session'});
+      return null;
+    }
     await _touch(claims.deviceId);
     return DevicePrincipal(
       accountId: claims.accountId,

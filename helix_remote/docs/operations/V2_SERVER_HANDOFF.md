@@ -85,7 +85,7 @@ batch 9). The scripts are in `helix_remote/deploy/windows/`; its README,
 | Task "Helix Server" | At boot, whether or not anyone is logged on (S4U: your account, no stored password), runs `run-helix-server.ps1`, which starts the server in `<prod>` (so `<prod>\.env` is read) and starts it again when it stops: 5 s, doubling to 60 s. |
 | Stop file `<prod>\stop` | `HELIX_STOP_FILE` (set by the wrapper): the server stops gracefully, as on Ctrl+C, when the file appears; the wrapper then exits instead of starting it again. |
 | Start-up retry | `bin/server.dart` and `bin/migrate.dart` retry an unreachable database for a minute (`platform/startup.dart`), so a boot that starts the task before PostgreSQL is ready does not fail. |
-| Task "Helix Health Check" | Every 5 minutes while you are logged on: `ready`, the task's state, free disk, and (with `HELIX_METRICS_TOKEN`) dead jobs and the mailbox backlog. A change is written to the Application event log (source `Helix`) and shown as a Windows notification. |
+| Task "Helix Health Check" | Every 5 minutes and at boot, whether or not anyone is logged on: `ready`, the task's state, free disk, (with `HELIX_METRICS_TOKEN`) dead jobs and the mailbox backlog, and, from optional `.env` lines (`deploy/windows/README.md`, "Off-box alerts and the new checks"), backup and restore-drill age, the certificate, Postgres, Caddy and coturn. A change is written to the Application event log (source `Helix`), shown as a Windows notification when someone is logged on, and POSTed to `HELIX_ALERT_URL`; `HELIX_HEARTBEAT_URL` is pinged on every healthy run. |
 | Log file | `HELIX_LOG_FILE` rotates itself at midnight UTC into `<name>-YYYY-MM-DD<ext>` and keeps `HELIX_LOG_KEEP_DAYS` (default 14) days. The wrapper keeps the last run's stderr in `<prod>\logs\stderr-last-run.log`. |
 
 Optional tasks: "Helix Caddy" (Caddy at boot) and "Helix TURN" (coturn at
@@ -547,6 +547,9 @@ log note below).
   every 3 seconds instead of following the stream.
 
 ## Rotating secrets
+
+When a secret **leaked** (not a routine change), use `KEY_COMPROMISE_RUNBOOK.md`:
+its order of steps differs (for the JWT ring, drop the old key at once).
 
 - **JWT key:** add a new entry to `HELIX_JWT_KEYS`, set
   `HELIX_JWT_ACTIVE_KID` to it, restart every node, keep the old key for at

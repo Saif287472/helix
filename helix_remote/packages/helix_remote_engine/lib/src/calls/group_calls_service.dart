@@ -219,6 +219,7 @@ final class GroupCallsService {
         role: role,
         video: room.video,
         roomId: room.id,
+        groupId: GroupIds.groupIdOf(room.group),
       );
       if (turn == null) return const [];
       if (turn.metered) _meter(room, turn.expiresAt);

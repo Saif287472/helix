@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/src/app.dart';
+import 'package:helix_admin/src/widgets/dialogs.dart'
+    show secretClipboardLifetime;
 import 'package:helix_admin/src/services/admin_services.dart';
 import 'package:helix_admin/src/services/admin_settings.dart';
 import 'package:helix_admin/src/services/device_lock.dart';
@@ -247,14 +249,26 @@ Future<void> tapText(WidgetTester tester, String label) async {
 }
 
 /// Records what the app puts on the clipboard.
+/// What the mocked clipboard holds now (null: nothing was ever put there).
+String? clipboardNow;
+
 List<String> recordClipboard(WidgetTester tester) {
   final copied = <String>[];
+  // A secret is taken off the clipboard again; the test does not wait a minute.
+  secretClipboardLifetime = Duration.zero;
+  addTearDown(() => secretClipboardLifetime = const Duration(minutes: 1));
+  clipboardNow = null;
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     SystemChannels.platform,
     (call) async {
       if (call.method == 'Clipboard.setData') {
         final args = call.arguments as Map<Object?, Object?>;
-        copied.add(args['text']! as String);
+        final text = args['text']! as String;
+        clipboardNow = text;
+        if (text.isNotEmpty) copied.add(text);
+      }
+      if (call.method == 'Clipboard.getData') {
+        return clipboardNow == null ? null : {'text': clipboardNow};
       }
       return null;
     },

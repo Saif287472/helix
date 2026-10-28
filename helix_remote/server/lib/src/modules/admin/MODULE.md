@@ -93,10 +93,15 @@ deleted account by at most a year.
 
 ## Review notes
 
-First-run setup is public, as in v1: on a fresh public server the first
-caller of `POST /v1/admin/setup` becomes the operator. Set
-`HELIX_ADMIN_PASSWORD` before exposing a new server, or run setup
-straight away.
+First-run setup is answered only to this machine and the local network
+(`403` otherwise, counted as `helix_admin_auth_events_total{kind=setup_refused}`),
+so the first caller from the internet cannot become the operator. From
+elsewhere, set `HELIX_ADMIN_PASSWORD` or use `bin/admin_tool.dart`.
+Operator tokens are signed with keys derived from the JWT ring
+(HMAC of each ring key with `helix.admin.v1`), so a device-token key does not
+sign them as is. A password change counts its wrong attempts against the same
+per-address lock as sign-in. Failures, locks and refused setups are counted
+in `helix_admin_auth_events_total`; the console's dashboard shows a banner.
 
 ## Clients
 

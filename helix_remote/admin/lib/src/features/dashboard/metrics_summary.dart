@@ -14,6 +14,9 @@ final class MetricsSummary {
     this.mailboxBacklog,
     this.crashReports,
     this.jobsFinished,
+    this.adminSignInFailures,
+    this.reusedSignIns,
+    this.peerKeyChanges,
   });
 
   /// Requests this node has answered since it started.
@@ -35,6 +38,13 @@ final class MetricsSummary {
 
   /// Outbox jobs finished, by result (`ok`, `retry`, `dead`).
   final Map<String, int>? jobsFinished;
+
+  /// Security signals since this node started: console sign-ins and password
+  /// changes that failed, device sign-ins used twice (a retry or a stolen
+  /// copy), and federation peers whose signing key changed.
+  final int? adminSignInFailures;
+  final int? reusedSignIns;
+  final int? peerKeyChanges;
 
   /// Share of requests answered with a 5xx, 0 to 1; null before any request.
   double? get serverErrorShare {
@@ -58,6 +68,10 @@ final class MetricsSummary {
     var sawRequests = false;
     final byStatus = <String, double>{};
     final jobs = <String, double>{};
+    var adminFailures = 0.0;
+    var sawAdmin = false;
+    var reused = 0.0;
+    var sawAuth = false;
 
     for (final raw in text.split('\n')) {
       final line = raw.trim();
@@ -79,6 +93,15 @@ final class MetricsSummary {
           if (status != null) {
             byStatus[status] = (byStatus[status] ?? 0) + value;
           }
+        case 'helix_admin_auth_events_total':
+          sawAdmin = true;
+          if (labels['kind'] == 'sign_in_failed' ||
+              labels['kind'] == 'password_change_failed') {
+            adminFailures += value;
+          }
+        case 'helix_auth_events_total':
+          sawAuth = true;
+          if (labels['kind'] == 'refresh_reuse') reused += value;
         case 'helix_jobs_total':
           final result = labels['result'];
           if (result != null) jobs[result] = (jobs[result] ?? 0) + value;
@@ -86,6 +109,7 @@ final class MetricsSummary {
             'helix_ws_connections_total' ||
             'helix_jobs_dead' ||
             'helix_mailbox_backlog' ||
+            'helix_federation_peer_key_changes_total' ||
             'helix_client_crash_reports_total':
           single[name] = value;
       }
@@ -101,6 +125,10 @@ final class MetricsSummary {
       deadJobs: whole(gauge(single, 'helix_jobs_dead')),
       mailboxBacklog: whole(gauge(single, 'helix_mailbox_backlog')),
       crashReports: whole(gauge(single, 'helix_client_crash_reports_total')),
+      adminSignInFailures: sawAdmin ? adminFailures.round() : 0,
+      reusedSignIns: sawAuth ? reused.round() : 0,
+      peerKeyChanges:
+          whole(gauge(single, 'helix_federation_peer_key_changes_total')) ?? 0,
       jobsFinished: jobs.isEmpty
           ? null
           : {for (final e in jobs.entries) e.key: e.value.round()},
