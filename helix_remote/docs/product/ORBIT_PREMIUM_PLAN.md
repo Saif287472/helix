@@ -4,6 +4,32 @@ Status: **plan agreed in discussion, nothing built** (2026-10-27). Implementatio
 about a month. Scope: Helix Remote (Orbit) on Helix Global. Never `helix_local/`.
 Anything marked **verify** was not checked against the code and must be before work starts.
 
+## 0. Release 1 and what is deferred (decided 2026-10-28)
+
+Income is not a fact yet, so the first release is the smallest one that can charge money: about **8 working
+days**. Everything else in this document stays as the design for later and is marked *(deferred)*.
+
+Release 1 (build now)
+- Plans Free and Orbit Premium; one subscription per account.
+- Limits by plan: linked devices (2 / 10), attachment quota, max file size, attachment retention, backup media
+  per file and total.
+- Manual payment: the person sends a TrxID, the operator approves or rejects in Orbit Console, time stacks,
+  grace period of 3 days, admin grant and revoke.
+- The plan page in the app (plan comparison, price list, pay instructions, TrxID entry, request status shown
+  when the page is opened). Prices and payment numbers are console settings.
+- Only the privacy and legal docs that must change to stay true.
+
+Deferred (later releases, in this order of value)
+1. **Call time** (all of step 2): daily Claim, voice and video pools, per-call relay credentials, group-call
+   charging, the second coturn relay, port widening, call UI. Free calls stay **unlimited** until it ships.
+2. The 7-day **trial**.
+3. **Pack locks**: downloadable packs stay unlocked for everyone until then (the Premium table row below is
+   the target, not release 1).
+4. The push when a request is decided, the cross-device refresh signal, per-limit admin overrides and the
+   plan-count summary.
+5. The wider docs pass (threat model, metadata inventory rows for call durations).
+
+
 ## 1. What we are doing and what we are not
 
 Doing
@@ -33,9 +59,9 @@ Not doing
 | Attachment kept on server | 30 days | 90 days |
 | Backup media, per file | 100 MiB | 400 MiB |
 | Backup media, total | 1 GiB | 4 GiB |
-| Voice call time | 100 min a day (see 5) | unlimited |
-| Video call time | 30 min a day (see 5) | unlimited |
-| Packs | Orbit and Orbit Night (built in) | every downloadable pack |
+| Voice call time *(deferred)* | 100 min a day (see 5) | unlimited |
+| Video call time *(deferred)* | 30 min a day (see 5) | unlimited |
+| Packs *(deferred)* | Orbit and Orbit Night (built in) | every downloadable pack |
 
 Today every account may link 10 devices (`IdentityContext.maxDevices`), so Free dropping to 2 is a real
 change in code. The Free values for storage, file size and retention are today's values.
@@ -60,7 +86,7 @@ Bought time adds after the current end date (a lapsed plan starts at approval). 
 6x and 12x the monthly price, so the discount is real. The page shows each option as price, crossed-out price and
 "Save N%", with N worked out from the 6x and 12x prices, so it stays true when prices change in the console.
 
-### Trial
+### Trial *(deferred)*
 Each new account gets 7 days of Premium, once per phone number. The server already keeps a keyed hash of
 the number, so a deleted and re-created account does not get a second trial. There are no real users yet,
 so nothing special is needed for existing accounts (they are the owner's test numbers).
@@ -241,18 +267,22 @@ signalled in the dark and relay-only.
 
 ## 9. Order of work
 
-| Step | Content | Migration |
-|---|---|---|
-| 0 | Open decisions below, ADR-035 and ADR-036, change-log entry | none |
-| 1a | `billing` foundation: plans in code, `subscriptions`, entitlements, flag; device, media and backup limits read them; everyone Free | billing 1 |
-| 1b | Trial; payment requests; admin queue, grant and override; push and signal | billing 2 |
-| 1c | App plan page and pack locks | none |
-| 2a | Call-time ledger, Claim, balance | billing 3 |
-| 2b | Per-call reserved relay credentials, group room id, second coturn (voice cap) with its start script and `.env` lines, warning and end at zero | calls or billing |
-| 2c | Call UI: balance, warning | none |
+Release 1 (about 8 working days; estimates are rough, plus or minus 50%)
 
-Step 1 is sellable by itself. After each step I will report what changed, tests with real numbers, whether
-a new APK is needed, whether the server must restart and migrate, and any `.env` line to add.
+| Step | Content | Migration | Days |
+|---|---|---|---|
+| 0 | ADR-035 and your change-log entry; a short doc pass | none | 1 |
+| 1a | `billing` foundation: plans in code, `subscriptions`, entitlements, flag; device, media and backup-media limits read them; everyone Free | billing 1 | 3 |
+| 1b | Payment requests, TrxID checks, admin queue, grant and revoke, console price and number settings | billing 2 | 2-3 |
+| 1c | App plan page: comparison, prices, pay instructions, TrxID entry, status on open | none | 2 |
+
+Deferred, in order of value: **2a-2c call time** (ledger and Claim, per-call relay credentials with the second
+coturn, call UI; about 11-16 days), the trial, pack locks, the decision push and refresh signal, overrides and
+summary counts, and the wider docs pass. Each keeps the design written above, and ADR-036 is written only
+when call time starts.
+
+After each step I will report what changed, tests with real numbers, whether a new APK is needed, whether the
+server must restart and migrate, and any `.env` line to add.
 
 ## 10. Risks
 
