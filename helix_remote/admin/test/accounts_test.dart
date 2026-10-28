@@ -403,6 +403,50 @@ void main() {
       expect(find.text('Change a limit'), findsOneWidget);
     });
 
+    testWidgets('call time is shown and can be given with a reason', (
+      tester,
+    ) async {
+      await openAlice(tester);
+      await revealLimitButton(tester);
+      expect(find.text('VOICE MINUTES'), findsOneWidget);
+      expect(find.text('VIDEO MINUTES'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('Give call time'),
+        300,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tapText(tester, 'Give call time');
+      // Nothing to give yet: the button waits.
+      expect(
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Give')),
+        isA<FilledButton>().having((b) => b.onPressed, 'onPressed', isNull),
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Voice minutes'),
+        '60',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Why (for the next operator)'),
+        'dropped calls, ticket 9',
+      );
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Give'));
+      await tester.pumpAndSettle();
+
+      expect(
+        h.server.bodies['POST /v1/admin/accounts/acct-1/call-time/grant'],
+        [
+          {
+            'voice_minutes': 60,
+            'video_minutes': 0,
+            'reason': 'dropped calls, ticket 9',
+          },
+        ],
+      );
+      expect(find.text('Call time given.'), findsOneWidget);
+    });
+
     testWidgets('a limit can be changed for one account, then removed', (
       tester,
     ) async {

@@ -288,7 +288,7 @@ metadata notes are written.
 Nothing is open for the plan. The two coturn behaviours were tested: `max-bps` caps a session, and a lapsed
 credential ends the relay only at the next stale nonce, so coturn runs with `stale-nonce=30`.
 
-Known gaps, left on purpose (small value now): the console has no screen or control for a person's call minutes
-(use limit overrides for other limits; there is none for call time); the daily amounts are code constants; the
+Known gaps, left on purpose (small value now): the console shows an account's call minutes and can give more on the account sheet (reason required, three days, audited), but has no settings for the daily amounts
+(they are code constants); the
 words "Terms of service" still need the owner's legal review for call time and plans; nothing here has been tried
 on real phones with a real coturn.

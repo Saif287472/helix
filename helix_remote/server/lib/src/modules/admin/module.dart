@@ -178,6 +178,8 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       ..add(name, Routes.adminGrantPlan, _grantPlan)
       ..add(name, Routes.adminRevokePlan, _revokePlan)
       ..add(name, Routes.adminAccountPlan, _accountPlan)
+      ..add(name, Routes.adminAccountCallTime, _accountCallTime)
+      ..add(name, Routes.adminGrantCallTime, _grantCallTime)
       ..add(name, Routes.adminSetPlanOverride, _setPlanOverride)
       ..add(name, Routes.adminClearPlanOverride, _clearPlanOverride)
       ..add(name, Routes.adminBillingSummary, _billingSummary)
@@ -708,6 +710,42 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       throw const ApiError(ErrorCode.notFound);
     }
     return jsonResponse((await billing.accountPlan(context.db, id)).toJson());
+  }
+
+  Future<Response> _accountCallTime(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    if (await identity.admin.accountDetail(context.db, id) == null) {
+      throw const ApiError(ErrorCode.notFound);
+    }
+    return jsonResponse((await billing.callTime(id)).toJson());
+  }
+
+  Future<Response> _grantCallTime(HelixRequest q) async {
+    final id = q.uuidParam('account');
+    final req = q.json(GrantCallTimeRequest.fromJson);
+    await context.db.tx((tx) async {
+      if (await identity.admin.accountDetail(tx, id) == null) {
+        throw const ApiError(ErrorCode.notFound);
+      }
+      await billing.grantCallTime(
+        tx,
+        id,
+        voice: req.voiceMinutes,
+        video: req.videoMinutes,
+      );
+      await _audit(
+        tx,
+        q,
+        'call_time.grant',
+        target: id,
+        details: {
+          'voice': '${req.voiceMinutes}',
+          'video': '${req.videoMinutes}',
+          'reason': req.reason,
+        },
+      );
+    });
+    return noContent();
   }
 
   PlanLimitKey _limitKey(HelixRequest q) => PlanLimitKey.values.firstWhere(

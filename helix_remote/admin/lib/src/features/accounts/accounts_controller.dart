@@ -44,6 +44,7 @@ final class AccountDetailController extends FeatureController {
 
   AdminAccountDetail? _detail;
   AdminAccountPlan? _plan;
+  CallTime? _callTime;
   bool _loading = false;
   String? _error;
   bool _removed = false;
@@ -54,6 +55,9 @@ final class AccountDetailController extends FeatureController {
   /// The account's Orbit Premium state and overrides; null until read, or
   /// when this server has no plans to show.
   AdminAccountPlan? get plan => _plan;
+
+  /// The account's call minutes (ADR-036); null until read or when unknown.
+  CallTime? get callTime => _callTime;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -84,6 +88,11 @@ final class AccountDetailController extends FeatureController {
       _plan = await ctx.api.admin.accountPlan(accountId);
     } on Object {
       _plan = null;
+    }
+    try {
+      _callTime = await ctx.api.admin.accountCallTime(accountId);
+    } on Object {
+      _callTime = null;
     }
     notifyListeners();
   }
@@ -128,6 +137,21 @@ final class AccountDetailController extends FeatureController {
   /// Gives Orbit Premium time without a payment (ADR-035).
   Future<String?> grantPlan(int months) => _act('plan', () async {
     await ctx.api.admin.grantPlan(accountId, months);
+    await _loadPlan();
+  });
+
+  /// Gives free call minutes (three days, outside the daily caps).
+  Future<String?> grantCallTime({
+    required int voice,
+    required int video,
+    required String reason,
+  }) => _act('plan', () async {
+    await ctx.api.admin.grantCallTime(
+      accountId,
+      voiceMinutes: voice,
+      videoMinutes: video,
+      reason: reason,
+    );
     await _loadPlan();
   });
 

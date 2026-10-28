@@ -590,6 +590,45 @@ final class SetPlanOverrideRequest {
       );
 }
 
+/// `POST /v1/admin/accounts/{account}/call-time/grant`: free call minutes from
+/// the operator (ADR-036), kept three days like a claim.
+final class GrantCallTimeRequest {
+  const GrantCallTimeRequest({
+    required this.voiceMinutes,
+    required this.videoMinutes,
+    required this.reason,
+  });
+
+  final int voiceMinutes;
+  final int videoMinutes;
+  final String reason;
+
+  static const maxMinutes = 1000;
+  static const maxReasonLength = 200;
+
+  JsonMap toJson() => {
+    'voice_minutes': voiceMinutes,
+    'video_minutes': videoMinutes,
+    'reason': reason,
+  };
+
+  factory GrantCallTimeRequest.fromJson(JsonReader json) {
+    final voice = json.optIntIn('voice_minutes', 0, maxMinutes) ?? 0;
+    final video = json.optIntIn('video_minutes', 0, maxMinutes) ?? 0;
+    if (voice + video == 0) {
+      throw ProtocolFormatException(
+        'give at least one minute',
+        path: 'voice_minutes',
+      );
+    }
+    return GrantCallTimeRequest(
+      voiceMinutes: voice,
+      videoMinutes: video,
+      reason: json.nonEmpty('reason', maxLength: maxReasonLength),
+    );
+  }
+}
+
 /// `GET /v1/admin/billing/summary`: counts for the Payments page.
 final class BillingSummary {
   const BillingSummary({

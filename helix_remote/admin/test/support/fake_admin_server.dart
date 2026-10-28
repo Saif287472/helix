@@ -46,6 +46,9 @@ final class FakeAdminServer {
   /// Premium months the operator gave, by account.
   final Map<String, int> grantedMonths = {};
 
+  /// Call minutes the operator gave, as (voice, video).
+  final Map<String, (int, int)> callTimeGifts = {};
+
   /// Limits the operator changed, by account and wire key.
   final Map<String, Map<String, PlanOverride>> planOverrides = {};
 
@@ -326,6 +329,48 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
     }
     if (m == 'GET' && path == '/v1/admin/billing/summary') {
       return _json(billingSummary.toJson());
+    }
+    found = match(r'/v1/admin/accounts/([^/]+)/call-time');
+    if (found != null && m == 'GET') {
+      final id = found.group(1)!;
+      if (_account(id) == null) return _error(ErrorCode.notFound);
+      final premium = (grantedMonths[id] ?? 0) > 0;
+      final gift = callTimeGifts[id] ?? (0, 0);
+      return _json(
+        CallTime(
+          unlimited: premium,
+          canClaim: true,
+          pools: premium
+              ? const []
+              : [
+                  CallPoolBalance(
+                    media: CallPool.voice,
+                    minutes: gift.$1,
+                    dailyMinutes: 100,
+                    capMinutes: 300,
+                  ),
+                  CallPoolBalance(
+                    media: CallPool.video,
+                    minutes: gift.$2,
+                    dailyMinutes: 30,
+                    capMinutes: 90,
+                  ),
+                ],
+        ).toJson(),
+      );
+    }
+    found = match(r'/v1/admin/accounts/([^/]+)/call-time/grant');
+    if (found != null && m == 'POST') {
+      final id = found.group(1)!;
+      if (_account(id) == null) return _error(ErrorCode.notFound);
+      final body = _body(request);
+      final old = callTimeGifts[id] ?? (0, 0);
+      callTimeGifts[id] = (
+        old.$1 + (body['voice_minutes'] as int),
+        old.$2 + (body['video_minutes'] as int),
+      );
+      _record('call_time.grant', target: id);
+      return http.Response('', 204);
     }
     found = match(r'/v1/admin/accounts/([^/]+)/plan');
     if (found != null && m == 'GET') {

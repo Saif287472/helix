@@ -128,6 +128,22 @@ class _AccountDetailViewState extends State<AccountDetailView> {
     );
   }
 
+  Future<void> _giveCallTime() async {
+    final gift = await showDialog<_CallTimeGift>(
+      context: context,
+      builder: (_) => const _CallTimeDialog(),
+    );
+    if (gift == null || !mounted) return;
+    _report(
+      await _controller.grantCallTime(
+        voice: gift.voice,
+        video: gift.video,
+        reason: gift.reason,
+      ),
+      'Call time given.',
+    );
+  }
+
   Future<void> _clearLimit(PlanLimitKey key) async {
     _report(await _controller.clearOverride(key), 'Limit back to the plan.');
   }
@@ -486,7 +502,9 @@ class _AccountDetailViewState extends State<AccountDetailView> {
               _PlanCard(
                 plan: plan,
                 busy: _controller.isBusy('plan'),
+                callTime: _controller.callTime,
                 onChange: _changeLimit,
+                onGiveCallTime: _giveCallTime,
                 onClear: _clearLimit,
               ),
             ],
@@ -655,12 +673,16 @@ class _PlanCard extends StatelessWidget {
   const _PlanCard({
     required this.plan,
     required this.busy,
+    required this.callTime,
     required this.onChange,
+    required this.onGiveCallTime,
     required this.onClear,
   });
 
   final AdminAccountPlan plan;
   final bool busy;
+  final CallTime? callTime;
+  final VoidCallback onGiveCallTime;
   final VoidCallback onChange;
   final void Function(PlanLimitKey key) onClear;
 
@@ -702,6 +724,29 @@ class _PlanCard extends StatelessWidget {
             value: '${l.attachmentRetentionDays} days',
             mono: false,
           ),
+          if (callTime case final time?) ...[
+            if (time.unlimited)
+              const ConsoleProperty(
+                label: 'Call time',
+                value: 'Unlimited',
+                mono: false,
+              )
+            else ...[
+              ConsoleProperty(
+                label: 'Voice minutes',
+                value: '${time.pool(CallPool.voice)?.minutes ?? 0}',
+              ),
+              ConsoleProperty(
+                label: 'Video minutes',
+                value: '${time.pool(CallPool.video)?.minutes ?? 0}',
+              ),
+              ConsoleProperty(
+                label: "Today's claim",
+                value: time.canClaim ? 'Not taken' : 'Taken',
+                mono: false,
+              ),
+            ],
+          ],
           if (plan.overrides.isNotEmpty) ...[
             const SizedBox(height: 10),
             const ConsoleCardLabel('Changed for this account'),
@@ -737,6 +782,15 @@ class _PlanCard extends StatelessWidget {
             icon: const Icon(Icons.tune, size: 18),
             label: const Text('Change a limit'),
           ),
+          if (callTime case final time? when !time.unlimited) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: busy ? null : onGiveCallTime,
+              style: ConsoleButtons.outlined,
+              icon: const Icon(Icons.phone_in_talk_outlined, size: 18),
+              label: const Text('Give call time'),
+            ),
+          ],
         ],
       ),
     );
@@ -843,6 +897,105 @@ class _LimitDialogState extends State<_LimitDialog> {
             ? null
             : () => Navigator.pop(context, _read()),
         child: const Text('Save'),
+      ),
+    ],
+  );
+}
+
+/// Free call minutes as the operator typed them.
+class _CallTimeGift {
+  const _CallTimeGift(this.voice, this.video, this.reason);
+
+  final int voice;
+  final int video;
+  final String reason;
+}
+
+/// Voice and video minutes to give, and why.
+class _CallTimeDialog extends StatefulWidget {
+  const _CallTimeDialog();
+
+  @override
+  State<_CallTimeDialog> createState() => _CallTimeDialogState();
+}
+
+class _CallTimeDialogState extends State<_CallTimeDialog> {
+  final _voice = TextEditingController();
+  final _video = TextEditingController();
+  final _reason = TextEditingController();
+
+  @override
+  void dispose() {
+    _voice.dispose();
+    _video.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  int? _minutes(TextEditingController c) {
+    if (c.text.trim().isEmpty) return 0;
+    final n = int.tryParse(c.text.trim());
+    if (n == null || n < 0 || n > GrantCallTimeRequest.maxMinutes) return null;
+    return n;
+  }
+
+  _CallTimeGift? _read() {
+    final voice = _minutes(_voice);
+    final video = _minutes(_video);
+    if (voice == null ||
+        video == null ||
+        voice + video == 0 ||
+        _reason.text.trim().isEmpty) {
+      return null;
+    }
+    return _CallTimeGift(voice, video, _reason.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Give call time'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _voice,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Voice minutes'),
+            onChanged: (_) => setState(() {}),
+          ),
+          TextField(
+            controller: _video,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Video minutes'),
+            onChanged: (_) => setState(() {}),
+          ),
+          TextField(
+            controller: _reason,
+            maxLength: GrantCallTimeRequest.maxReasonLength,
+            decoration: const InputDecoration(
+              labelText: 'Why (for the next operator)',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const Text(
+            'The minutes last three days, like a daily claim, and do not '
+            'count against its caps.',
+            style: TextStyle(fontSize: 12.5),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _read() == null
+            ? null
+            : () => Navigator.pop(context, _read()),
+        child: const Text('Give'),
       ),
     ],
   );

@@ -589,6 +589,111 @@ void main() {
       });
     });
 
+    group('the operator', () {
+      Future<TestResponse> grant(TestDevice d, Map<String, Object?> body) =>
+          h.api.call(
+            Routes.adminGrantCallTime,
+            params: {'account': d.accountId},
+            bearer: admin,
+            body: body,
+          );
+
+      test(
+        'sees an account\'s minutes and gives more, outside the caps',
+        () async {
+          await plansOn();
+          await claim(alice);
+          final r = await grant(
+            alice,
+            const GrantCallTimeRequest(
+              voiceMinutes: 250,
+              videoMinutes: 5,
+              reason: 'ticket 9',
+            ).toJson(),
+          );
+          expect(r.status, 204, reason: r.body);
+
+          final seen = await h.api.call(
+            Routes.adminAccountCallTime,
+            params: {'account': alice.accountId},
+            bearer: admin,
+          );
+          final t = CallTime.fromJson(seen.json);
+          expect(t.pool(CallPool.voice)!.minutes, 350);
+          expect(t.pool(CallPool.video)!.minutes, 35);
+          // Gifts do not use up or block the daily claim.
+          expect(t.canClaim, isFalse);
+          expect((await time(alice)).pool(CallPool.voice)!.minutes, 350);
+        },
+      );
+
+      test('a gift expires after three days like a claim', () async {
+        await plansOn();
+        await grant(
+          alice,
+          const GrantCallTimeRequest(
+            voiceMinutes: 10,
+            videoMinutes: 0,
+            reason: 'x',
+          ).toJson(),
+        );
+        clock.advance(const Duration(days: 4));
+        final t = await billing().callTime(alice.accountId);
+        expect(t.pool(CallPool.voice)!.minutes, 0);
+      });
+
+      test('needs a reason, a minute and a known account', () async {
+        await plansOn();
+        expect(
+          (await grant(alice, {
+            'voice_minutes': 0,
+            'video_minutes': 0,
+            'reason': 'x',
+          })).status,
+          400,
+        );
+        expect(
+          (await grant(alice, {'voice_minutes': 5, 'reason': ''})).status,
+          400,
+        );
+        expect(
+          (await grant(alice, {'voice_minutes': 5000, 'reason': 'x'})).status,
+          400,
+        );
+        final gone = await h.api.call(
+          Routes.adminGrantCallTime,
+          params: {'account': Uuid.v7()},
+          bearer: admin,
+          body: const GrantCallTimeRequest(
+            voiceMinutes: 5,
+            videoMinutes: 0,
+            reason: 'x',
+          ).toJson(),
+        );
+        expect(gone.status, 404);
+      });
+
+      test('is audited, and a device cannot use the routes', () async {
+        await plansOn();
+        await grant(
+          alice,
+          const GrantCallTimeRequest(
+            voiceMinutes: 5,
+            videoMinutes: 0,
+            reason: 'audit me',
+          ).toJson(),
+        );
+        final audit = await h.api.call(Routes.adminAudit, bearer: admin);
+        expect(audit.body, contains('call_time.grant'));
+        final denied = await h.api.call(
+          Routes.adminAccountCallTime,
+          params: {'account': alice.accountId},
+          bearer: alice.bearer,
+        );
+        expect(denied.status, anyOf(401, 403));
+      });
+    });
+
     group('a group call', () {
       test('is paid once by whoever made the room, whoever joins', () async {
         await plansOn();

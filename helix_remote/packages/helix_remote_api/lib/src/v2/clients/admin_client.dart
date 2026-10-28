@@ -199,6 +199,29 @@ final class AdminClient {
     params: {'account': accountId},
   );
 
+  /// The account's call minutes as its own app shows them.
+  Future<CallTime> accountCallTime(String accountId) => _t.call(
+    Routes.adminAccountCallTime,
+    CallTime.fromJson,
+    params: {'account': accountId},
+  );
+
+  /// Gives free call minutes (three days, outside the daily caps).
+  Future<void> grantCallTime(
+    String accountId, {
+    required int voiceMinutes,
+    required int videoMinutes,
+    required String reason,
+  }) => _t.empty(
+    Routes.adminGrantCallTime,
+    params: {'account': accountId},
+    json: GrantCallTimeRequest(
+      voiceMinutes: voiceMinutes,
+      videoMinutes: videoMinutes,
+      reason: reason,
+    ).toJson(),
+  );
+
   /// Changes one limit for one account for [days] days, or until removed.
   Future<void> setPlanOverride(
     String accountId,

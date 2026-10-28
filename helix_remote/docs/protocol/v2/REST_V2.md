@@ -326,6 +326,8 @@ tokens never open each other's routes.
 | `GET /v1/admin/accounts/{account}/plan` | — → `AdminAccountPlan` | The plan, its source (`payment`, `admin`, `trial`), the end date, the limits in force (overrides applied) and the overrides. |
 | `PUT /v1/admin/accounts/{account}/plan/overrides/{key}` | `SetPlanOverrideRequest` → 204 | Changes one limit for one account (`key` is a `PlanLimitKey` wire name, the value inside its bounds), for `days` days or until removed. For support cases; the person is not told. Audited. |
 | `DELETE /v1/admin/accounts/{account}/plan/overrides/{key}` | — → 204 | `not_found` when there is none. |
+| `GET /v1/admin/accounts/{account}/call-time` | — → `CallTime` | The account's voice and video minutes now, as the app shows them (`unlimited: true` for Premium and while plans are off). |
+| `POST /v1/admin/accounts/{account}/call-time/grant` | `GrantCallTimeRequest` → 204 | Gives 0 to 1000 voice and video minutes (at least one) with a reason, kept three days like a claim and not counted against the 300 and 90 caps. For support cases; the person is not told. Audited (the reason is written to the audit row). |
 | `GET /v1/admin/billing/summary` | — → `BillingSummary` | Premium, grace and trial accounts, pending requests, and the approved requests and taka of the last 30 days. |
 | `GET /v1/admin/billing/settings` | — → `BillingSettings` | Prices in taka for 1, 6 and 12 months, and the bKash and Nagad numbers. |
 | `PUT /v1/admin/billing/settings` | `BillingSettings` → `BillingSettings` | Takes effect at once. Audited (the numbers are not written to the audit row). |

@@ -254,6 +254,14 @@ final class BillingModule extends ModuleBase
   Future<CallTime> claimCallTime(String accountId) => _calls.claim(accountId);
 
   @override
+  Future<void> grantCallTime(
+    Tx tx,
+    String accountId, {
+    required int voice,
+    required int video,
+  }) => _calls.gift(tx, accountId, voice: voice, video: video);
+
+  @override
   Future<CallGrant> grantCall({
     required String accountId,
     required String callId,

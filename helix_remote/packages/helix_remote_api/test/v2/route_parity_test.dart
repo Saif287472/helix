@@ -271,6 +271,13 @@ void main() {
     Routes.adminGrantPlan: (c) => c.admin.grantPlan(id, 1),
     Routes.adminRevokePlan: (c) => c.admin.revokePlan(id),
     Routes.adminAccountPlan: (c) => c.admin.accountPlan(id),
+    Routes.adminAccountCallTime: (c) => c.admin.accountCallTime(id),
+    Routes.adminGrantCallTime: (c) => c.admin.grantCallTime(
+      id,
+      voiceMinutes: 10,
+      videoMinutes: 0,
+      reason: 'test',
+    ),
     Routes.adminSetPlanOverride: (c) => c.admin.setPlanOverride(
       id,
       PlanLimitKey.maxDevices,

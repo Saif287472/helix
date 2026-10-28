@@ -96,6 +96,31 @@ final class CallTimeService {
     return balance(accountId);
   }
 
+  /// The operator's gift: a claim of its own (its own day key, so it never
+  /// blocks the daily one) that expires like any claim.
+  Future<void> gift(
+    Tx tx,
+    String accountId, {
+    required int voice,
+    required int video,
+  }) async {
+    final now = clock.now();
+    final today = CallTimeLimits.dhakaDay(now);
+    final id = Uuid.v7();
+    await store.insertClaim(
+      tx,
+      id: id,
+      accountId: accountId,
+      day: 'gift-$id',
+      now: now,
+      expiresAt: CallTimeLimits.startOf(
+        today.add(const Duration(days: CallTimeLimits.claimDays)),
+      ),
+      voice: voice,
+      video: video,
+    );
+  }
+
   // ------------------------------------------------------------------ grant
 
   CallGrant _of(ReservationRow r, DateTime now) => CallGrant(

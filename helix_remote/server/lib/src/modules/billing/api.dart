@@ -115,6 +115,15 @@ abstract interface class BillingApi implements EntitlementSource {
   /// The account's call time: its pools, or unlimited.
   Future<CallTime> callTime(String accountId);
 
+  /// The operator gives [voice] and [video] minutes (three days, outside the
+  /// daily caps), inside the caller's transaction.
+  Future<void> grantCallTime(
+    Tx tx,
+    String accountId, {
+    required int voice,
+    required int video,
+  });
+
   /// Takes today's minutes (Dhaka day). `conflict` (`details.reason:
   /// already_claimed`) when they were taken.
   Future<CallTime> claimCallTime(String accountId);

@@ -1005,6 +1005,18 @@ abstract final class Routes {
     module: 'admin',
     access: _adm,
   );
+  static const adminAccountCallTime = ApiRoute(
+    _get,
+    '/v1/admin/accounts/{account}/call-time',
+    module: 'admin',
+    access: _adm,
+  );
+  static const adminGrantCallTime = ApiRoute(
+    _post,
+    '/v1/admin/accounts/{account}/call-time/grant',
+    module: 'admin',
+    access: _adm,
+  );
   static const adminSetPlanOverride = ApiRoute(
     _put,
     '/v1/admin/accounts/{account}/plan/overrides/{key}',
@@ -1099,7 +1111,8 @@ abstract final class Routes {
     adminPaymentRequests, adminApprovePaymentRequest,
     adminRejectPaymentRequest, adminGrantPlan, adminRevokePlan,
     adminBillingSettings, adminSetBillingSettings, adminAccountPlan,
-    adminSetPlanOverride, adminClearPlanOverride, adminBillingSummary, //
+    adminSetPlanOverride, adminClearPlanOverride, adminBillingSummary,
+    adminAccountCallTime, adminGrantCallTime, //
     adminLogs, adminLogStream, adminPurge,
   ];
 }
