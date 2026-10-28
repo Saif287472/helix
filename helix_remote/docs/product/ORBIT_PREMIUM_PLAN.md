@@ -65,7 +65,7 @@ the number, so a deleted and re-created account does not get a second trial. The
 so nothing special is needed for existing accounts (they are the owner's test numbers).
 
 ### When Premium ends
-A short grace period (proposed 3 days), then Free limits apply. Existing files and backups are never deleted
+A grace period of **3 days** (decided), then Free limits apply. Existing files and backups are never deleted
 early; they only block new uploads over the Free limit and expire on their normal schedule (an object
 uploaded under Premium keeps the retention it was given). A device count above 2 is kept as it is; the
 account just cannot link another until it is under the limit. The selected pack falls back to the default
@@ -120,8 +120,8 @@ Routes (declared in `helix_remote_protocol` first, documented in `REST_V2.md`, o
 
 No new public route is needed. Realtime: an `account_signal` subtype tells the other devices to refresh the
 plan. Push: a new data-only wake kind (today `message`, `call`, `call_ended`) saying a plan request changed.
-Decision for the console: payment numbers and prices are editable config in the admin config (no restart)
-rather than env lines; **to confirm** when building.
+Decided: payment numbers and prices are settings in Orbit Console (admin config), applied at once with no
+restart or `.env` change, each change writing an `audit` row. They are shown in the app only to signed-in people.
 
 Privacy and security: the server never trusts a client claim of Premium; plan changes happen only through
 approval, trial or admin grant. Admin routes are limited to the operator. Account deletion purges billing
@@ -178,7 +178,7 @@ Chosen design, as strict as possible (decided 2026-10-28):
 - **Already a problem today (verify):** credentials last one hour and the engine fetches them only when a
   call starts, so a call longer than an hour may lose its relay. The metering work will fix this by
   design, since a reservation can be longer or shorter than an hour.
-- **Day boundary** (UTC or Dhaka) is still to decide. **Anti-farming:** claims and trials are tied to a
+- **Day boundary:** a new claim opens at midnight Dhaka time (UTC+6), decided. **Anti-farming:** claims and trials are tied to a
   verified phone number, which already limits multiple accounts.
 
 Tables: a per-account ledger of claims (kind, claimed day, minutes left, expiry) and a reservation record
@@ -266,9 +266,7 @@ a new APK is needed, whether the server must restart and migrate, and any `.env`
 
 ## 11. Still to decide
 
-1. Day boundary for claims (UTC or Dhaka) and whether call time is charged per started minute.
-2. Grace length after Premium ends (proposed 3 days).
-3. Whether payment numbers and prices live in admin config (proposed) or env.
-4. The two coturn options to verify (per-session bandwidth cap, behaviour at credential expiry), and the
+1. Whether call time is charged per started minute or per second (the reservation is in whole minutes).
+2. The two coturn options to verify (per-session bandwidth cap, behaviour at credential expiry), and the
    split of the UDP range between the two relays.
-5. Designs for the plan, payment and claim screens, and the exact wording of the crossed-out price display.
+3. Designs for the plan, payment and claim screens, and the exact wording of the crossed-out price display.
