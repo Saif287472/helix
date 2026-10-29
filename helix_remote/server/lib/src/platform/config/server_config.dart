@@ -257,6 +257,16 @@ final class ServerConfig {
         );
       }
     }
+    // Dev mode lowers the admin password-hash cost and allows plain-HTTP
+    // federation and recorded SMS. A server that people reach over HTTPS is
+    // production, so a leftover HELIX_DEV_MODE=true must stop it, not quietly
+    // weaken it.
+    if (devMode && base != null && base.scheme == 'https') {
+      problems.add(
+        'HELIX_DEV_MODE must not be set when HELIX_PUBLIC_BASE_URL is https '
+        '(remove it from .env)',
+      );
+    }
     final activeKid =
         read('HELIX_JWT_ACTIVE_KID') ??
         (jwtKeys.length == 1 ? jwtKeys.keys.single : '');

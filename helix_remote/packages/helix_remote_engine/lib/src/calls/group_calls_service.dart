@@ -465,8 +465,9 @@ final class GroupCallsService {
       ..state = GroupParticipantState.invited;
     if (room.phase == GroupCallPhase.ringing) {
       _publish(room);
-      if (room.links.length == 1)
+      if (room.links.length == 1) {
         _emit(IncomingGroupCallEvent(room.snapshot(self)));
+      }
       return;
     }
     // Already in the room: this person is answered at once.

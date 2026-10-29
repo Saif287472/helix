@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/util/ids.dart' show IdFactory;
 import 'package:helix_remote_engine/testing.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';

@@ -1,5 +1,4 @@
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';

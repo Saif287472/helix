@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:helix_remote_db/helix_remote_db.dart';
-import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:test/test.dart';
 
 import 'support/peers.dart';

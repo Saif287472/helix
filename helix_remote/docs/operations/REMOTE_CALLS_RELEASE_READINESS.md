@@ -15,6 +15,20 @@ raw SDP, raw ICE candidates, private keys, private IPs, or media content.
   (readiness does not check TURN), and `turnutils_uclient` allocates a relay.
 - Push: metrics show no dead-letter `messaging.push` or `calls.push` jobs
   (`V2_OPERABILITY.md`, "Jobs").
+- Voice relay: with `HELIX_TURN_VOICE_URLS` set, a `media: voice` credential names
+  the voice relay and a `media: video` one the video relay (with no voice relay
+  configured, both use the main relay and voice minutes are charged but not capped). Allocate on each and
+  confirm the voice relay stops near its `max-bps` cap (`deploy/coturn/README.md`).
+- Call time (when `billing_enabled` is on): `GET /v1/billing/call-time` shows the
+  day's claim, `POST /v1/billing/call-time/claim` grants it once per Dhaka day, and
+  a relayed call's credential expires at the end of the reserved time
+  (`stale-nonce=30` in coturn cuts the media within about 30 seconds). A call with no
+  minutes left is refused with `no_call_time` before the phone rings.
+- Voice to video switch: `POST /v1/calls/turn` with the other `media` settles the
+  old reservation and reserves from the other pool; the call keeps running if the
+  other pool is empty.
+- Security signals: `/v1/ops/metrics` carries the auth-event, session-reuse and
+  peer-key-change counters; the console dashboard shows the banner when they rise.
 - Diagnostics: `V2_OPERABILITY.md` lists the redacted log and metrics that replace the v1
   support export; there is no support-diagnostic route in v2.
 
@@ -24,6 +38,9 @@ Run these checks on the planned host connection and record date, network path,
 device models, OS versions, backend commit, Coturn commit/config checksum, and
 observed metrics.
 
+- A voice call and a video call each run to the end of their reserved time and are
+  cut there (a short account, such as a free one with a few minutes left).
+- A voice to video switch and back during a relayed call, on both phones.
 - Three simultaneous one-to-one audio calls between six devices/users.
 - Three simultaneous 720p video calls with relay-only ICE policy.
 - Coturn restart during an active relayed call.
@@ -63,6 +80,11 @@ Configure alerts for:
 - TURN unconfigured while production mode is enabled.
 - TURN reachability checks failing once live reachability is enabled.
 - Backup or rollback drill older than 30 days.
+- Session-reuse or peer-key-change counters rising fast (a stolen token or a hostile
+  peer; `KEY_COMPROMISE_RUNBOOK.md`).
+- Coturn voice relay down while the video relay is up (the server hands voice calls
+  the voice relay's address whenever it is configured, so they fail to relay; check
+  both containers, not one).
 
 ## Deployment Checklist
 
@@ -94,6 +116,8 @@ Configure alerts for:
   media payload appears in normal logs, diagnostics, notifications, or support
   exports.
 - Forced-TURN audio/video fails in the required matrix.
+- A call outlives its reserved time on the relay, or a refused call (`no_call_time`)
+  still rings the callee.
 - More than one target device can answer the same call.
 - Active calls leak camera, microphone, renderers, streams, or active markers.
 - Messaging availability depends on TURN availability.

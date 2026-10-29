@@ -525,6 +525,31 @@ void main() {
       expect(() => envFlag({'X': 'maybe'}, 'X'), throwsA(isA<ConfigError>()));
     });
 
+    test('dev mode is refused on a server reached over https', () {
+      expect(
+        () => ServerConfig.fromEnv({
+          ...base(),
+          'HELIX_DEV_MODE': 'true',
+          'HELIX_PUBLIC_BASE_URL': 'https://helix.example.com',
+        }),
+        throwsA(
+          isA<ConfigError>().having(
+            (e) => e.problems.single,
+            'problem',
+            contains('HELIX_DEV_MODE'),
+          ),
+        ),
+      );
+      expect(
+        ServerConfig.fromEnv({
+          ...base(),
+          'HELIX_DEV_MODE': 'true',
+          'HELIX_PUBLIC_BASE_URL': 'http://127.0.0.1:8080',
+        }).devMode,
+        isTrue,
+      );
+    });
+
     test('new settings have defaults and are validated', () {
       final config = ServerConfig.fromEnv(base());
       expect(config.dbPoolSize, 10);
