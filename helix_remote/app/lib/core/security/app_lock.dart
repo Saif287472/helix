@@ -124,6 +124,21 @@ abstract final class AppLock {
       return;
     }
     locked.value = true;
+    _forgetPicturesInMemory();
+  }
+
+  /// Locking puts the screen out of sight; the decoded pictures of the chats
+  /// that were open should not stay in memory behind it. Only what is held in
+  /// memory goes: the database and the files are untouched, and the pictures
+  /// decode again from them after the unlock.
+  static void _forgetPicturesInMemory() {
+    try {
+      PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages();
+    } on Object {
+      // No binding yet (a unit test): there is nothing held.
+    }
   }
 
   /// The call ended: a relock that came due during it applies now.

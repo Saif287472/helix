@@ -12,6 +12,20 @@ import 'support/orbit_theme.dart';
 
 /// H1: the app lock engages on a cold start, and "Lock again" means something.
 void main() {
+  test('locking empties the in-memory picture cache', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    AppLock.resetForTest();
+    AppLock.attach(read: () => (true, 60), callActive: () => false);
+    final cache = PaintingBinding.instance.imageCache;
+    cache.putIfAbsent('a picture', () => _FakeStream(), onError: (_, _) {});
+    expect(cache.statusForKey('a picture').untracked, isFalse);
+
+    AppLock.lockIfEnabled();
+    expect(AppLock.locked.value, isTrue);
+    expect(cache.statusForKey('a picture').untracked, isTrue);
+    AppLock.resetForTest();
+  });
+
   late StreamController<AppAuthState> auth;
   late List<String> prompts;
 
@@ -330,3 +344,6 @@ final class _Restore extends SessionRestoreNotifier {
   @override
   SessionRestore build() => _value;
 }
+
+/// A picture that never finishes, which is all the cache needs to hold it.
+final class _FakeStream extends ImageStreamCompleter {}

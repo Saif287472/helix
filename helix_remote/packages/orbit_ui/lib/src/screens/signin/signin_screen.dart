@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 
 import 'package:orbit_ui/src/brand/orbit_mark.dart';
 import 'package:orbit_ui/src/components/button.dart';
+import 'package:orbit_ui/src/components/bars.dart';
 import 'package:orbit_ui/src/components/fields.dart';
 import 'package:orbit_ui/src/components/icon_button.dart';
+import 'package:orbit_ui/src/components/list_rows.dart';
 import 'package:orbit_ui/src/components/overlays.dart';
 import 'package:orbit_ui/src/components/toggles.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
@@ -300,15 +302,19 @@ class _SignInScreenState extends State<SignInScreen> {
     showOrbitSheet(
       context,
       title: 'Country code',
-      items: [
-        for (final (code, name) in m.countries)
-          OrbitMenuItem(
-            icon: OrbitIcons.globeSimple,
-            label: '$name ($code)',
-            on: code == m.countryCode,
-            onTap: () => widget.actions.onCountryChanged?.call(code),
-          ),
-      ],
+      body: _CountryPicker(
+        countries: m.countries,
+        selected: m.countryCode,
+        onPick: (code) {
+          // Close the sheet first, then say what was chosen (as the other
+          // sheets do), so the page is not changing under it.
+          Navigator.of(context).pop();
+          Timer(
+            const Duration(milliseconds: 60),
+            () => widget.actions.onCountryChanged?.call(code),
+          );
+        },
+      ),
     );
   }
 
@@ -1187,6 +1193,95 @@ class _FootLink extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The country list with a box that filters it as you type: by the start of
+/// a word in the name ("kin" finds United Kingdom) or by the code ("+44" or
+/// "44").
+class _CountryPicker extends StatefulWidget {
+  const _CountryPicker({
+    required this.countries,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final List<(String, String)> countries;
+  final String selected;
+  final ValueChanged<String> onPick;
+
+  @override
+  State<_CountryPicker> createState() => _CountryPickerState();
+}
+
+class _CountryPickerState extends State<_CountryPicker> {
+  String _query = '';
+
+  /// The entries [query] matches, in the list's order.
+  static List<(String, String)> filter(
+    List<(String, String)> all,
+    String query,
+  ) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return all;
+    final digits = q.replaceAll(RegExp(r'[^0-9]'), '');
+    return [
+      for (final c in all)
+        if (_wordStartsWith(c.$2.toLowerCase(), q) ||
+            (digits.isNotEmpty && c.$1.substring(1).startsWith(digits)))
+          c,
+    ];
+  }
+
+  static bool _wordStartsWith(String name, String q) =>
+      name.startsWith(q) || name.contains(' $q') || name.contains('($q');
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    final shown = filter(widget.countries, _query);
+    // The sheet scrolls its body, so the list is given a height of its own:
+    // as tall as the rows need, up to half the screen.
+    final height = (shown.isEmpty ? 80.0 : shown.length * 54.0).clamp(
+      80.0,
+      MediaQuery.sizeOf(context).height * 0.5,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: OrbitSearchField(
+            hint: 'Search country or code',
+            onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        SizedBox(
+          height: height,
+          child: shown.isEmpty
+              ? Center(
+                  child: OrbitText(
+                    'No country matches that.',
+                    style: t.font.style(size: OrbitType.body, color: t.ink3),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: shown.length,
+                  itemBuilder: (context, i) {
+                    final (code, name) = shown[i];
+                    return OrbitListRow(
+                      key: ValueKey('country-$code-$name'),
+                      title: name,
+                      value: code,
+                      accent: code == widget.selected,
+                      minHeight: 54,
+                      onTap: () => widget.onPick(code),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }

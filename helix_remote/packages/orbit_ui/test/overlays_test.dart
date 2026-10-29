@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit_ui/orbit_ui.dart';
 
@@ -143,6 +144,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete this chat?'), findsNothing);
     expect(deleted, isFalse);
+  });
+
+  testWidgets('Escape closes a dialog, a sheet and a menu', (tester) async {
+    await page(
+      tester,
+      (context) => showOrbitDialog(
+        context,
+        title: 'Delete this chat?',
+        actions: [const OrbitDialogAction('Cancel')],
+      ),
+    );
+    expect(find.text('Delete this chat?'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Delete this chat?'), findsNothing);
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Delete this chat?'), findsNothing);
   });
 
   testWidgets('an input dialog gives back what was typed', (tester) async {
