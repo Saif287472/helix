@@ -27,6 +27,7 @@ String _describeApi(ApiException e, DateTime Function() now) {
   final text = switch (e.code) {
     ErrorCode.passwordLocked => _locked(e, now),
     ErrorCode.invalidCredentials => 'Wrong password.',
+    ErrorCode.stepUpRequired => 'Enter your password to do that.',
     ErrorCode.rateLimited => _rateLimited(e),
     ErrorCode.unauthenticated ||
     ErrorCode.tokenExpired => 'Your admin session has ended. Sign in again.',

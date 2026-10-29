@@ -299,5 +299,52 @@ void main() {
         throwsA(isA<SignedOutException>()),
       );
     });
+
+    test(
+      'a risky admin action asks for the password once, then goes on',
+      () async {
+        final (_, keys) = await register(aliceNumber);
+        final console = HelixAdminApi(baseUrl: h.server.baseUri);
+        addTearDown(console.close);
+        await console.admin.signIn(adminPassword);
+
+        // No way to ask: the action is refused as it is.
+        await expectLater(
+          console.admin.createRecoveryCode(keys.accountId),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.code,
+              'code',
+              ErrorCode.stepUpRequired,
+            ),
+          ),
+        );
+
+        var asked = 0;
+        console.admin.passwordPrompt = () async {
+          asked++;
+          return adminPassword;
+        };
+        expect(
+          (await console.admin.createRecoveryCode(keys.accountId)).recoveryCode,
+          isNotEmpty,
+        );
+        expect(
+          (await console.admin.createRecoveryCode(keys.accountId)).recoveryCode,
+          isNotEmpty,
+        );
+        expect(asked, 1, reason: 'the proof holds for its window');
+
+        // A declined prompt leaves the original refusal.
+        final other = HelixAdminApi(baseUrl: h.server.baseUri);
+        addTearDown(other.close);
+        await other.admin.signIn(adminPassword);
+        other.admin.passwordPrompt = () async => null;
+        await expectLater(
+          other.admin.createRecoveryCode(keys.accountId),
+          throwsA(isA<ApiException>()),
+        );
+      },
+    );
   });
 }

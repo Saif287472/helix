@@ -5,6 +5,7 @@ import 'package:helix_admin/src/features/shell/admin_shell.dart';
 import 'package:helix_admin/src/services/admin_services.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
 import 'package:helix_admin/src/session/admin_session_scope.dart';
+import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The operator console. Light theme only: there is no dark theme to ask
@@ -28,8 +29,14 @@ class _HelixAdminAppState extends State<HelixAdminApp>
     super.initState();
     _session = AdminSessionController(widget.services)
       ..addListener(_closeRoutesWhenSignedOut)
+      ..passwordPrompt = _askPassword
       ..start();
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  Future<String?> _askPassword() async {
+    final context = _navigator.currentContext;
+    return context == null ? null : showPasswordDialog(context);
   }
 
   /// App lock asks again after time in the background

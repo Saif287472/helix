@@ -114,6 +114,52 @@ void main() {
     expect(gateway.log, contains('retryAction:42'));
   });
 
+  chatTest('a message held for a changed safety number asks before it goes', (
+    tester,
+    gateway,
+  ) async {
+    final chat = (await tester.runAsync(() => gateway.chatWith('bob')))!;
+    final row = (await tester.runAsync(
+      () =>
+          gateway.outgoing(chat, 'see you at 5', status: MessageStatus.failed),
+    ))!;
+    gateway.keyHolds[row.localRowid] = 'bob';
+    await open(tester, gateway, chat);
+
+    await tester.tap(find.text('RETRY'));
+    await settle(tester, rounds: 5);
+    expect(find.text('Safety number changed'), findsOneWidget);
+    expect(gateway.log, isNot(contains('retry:${row.localRowid}')));
+
+    // Not now: nothing is sent, and it stays held.
+    await tester.tap(find.text('Not now'));
+    await settle(tester, rounds: 5);
+    expect(gateway.log.where((l) => l.startsWith('release:')), isEmpty);
+
+    await tester.tap(find.text('RETRY'));
+    await settle(tester, rounds: 5);
+    await tester.tap(find.text('Send anyway'));
+    await settle(tester, rounds: 5);
+    expect(gateway.log, contains('release:bob'));
+  });
+
+  chatTest('a message that failed for another reason retries at once', (
+    tester,
+    gateway,
+  ) async {
+    final chat = (await tester.runAsync(() => gateway.chatWith('bob')))!;
+    final row = (await tester.runAsync(
+      () =>
+          gateway.outgoing(chat, 'see you at 5', status: MessageStatus.failed),
+    ))!;
+    await open(tester, gateway, chat);
+
+    await tester.tap(find.text('RETRY'));
+    await settle(tester, rounds: 5);
+    expect(find.text('Safety number changed'), findsNothing);
+    expect(gateway.log, contains('retry:${row.localRowid}'));
+  });
+
   chatTest('the unread divider is drawn once and messages are marked read', (
     tester,
     gateway,

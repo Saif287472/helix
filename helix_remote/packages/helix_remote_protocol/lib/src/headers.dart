@@ -17,6 +17,10 @@ abstract final class HelixHeaders {
   /// gating and support, never for authorization.
   static const client = 'x-helix-client';
 
+  /// The admin step-up token (`POST /v1/admin/step-up`), on the risky admin
+  /// actions.
+  static const stepUp = 'x-helix-step-up';
+
   /// Seconds to wait, on `rate_limited` and `maintenance` responses.
   static const retryAfter = 'retry-after';
 

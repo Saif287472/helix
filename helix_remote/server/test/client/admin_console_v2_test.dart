@@ -53,6 +53,9 @@ void main() {
         clientName: 'admin/test',
         retry: RetryPolicy.none,
       );
+      // The console asks the operator when a risky action wants the password
+      // again; here the operator always answers.
+      api.admin.passwordPrompt = () async => password;
       opened.add(api);
       return api;
     }
@@ -120,12 +123,12 @@ void main() {
       );
       final session = await api.admin.setup(password);
       expect(session.token, isNotEmpty);
-      // The token lasts 7 days.
+      // The token lasts 12 hours.
       expect(
         session.expiresAt.difference(DateTime.now()),
         allOf(
-          greaterThan(const Duration(days: 6, hours: 23, minutes: 55)),
-          lessThan(const Duration(days: 7, minutes: 5)),
+          greaterThan(const Duration(hours: 11, minutes: 55)),
+          lessThan(const Duration(hours: 12, minutes: 5)),
         ),
       );
       expect((await api.admin.config()).serverName, isNotEmpty);

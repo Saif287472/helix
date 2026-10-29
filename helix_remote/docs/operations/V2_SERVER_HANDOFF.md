@@ -496,7 +496,7 @@ private key**. See "Backups" in `V2_OPERABILITY.md`.
   (log events `admin_seeded`, or `admin_seed_ignored` if the value is shorter
   than 12 characters). It never replaces an existing password. Remove the
   line from `.env` after the first start, then restart when convenient.
-- Passwords are 12 to 256 characters (Argon2id). Admin tokens last 7 days.
+- Passwords are 12 to 256 characters (Argon2id). Admin tokens last 12 hours, and the risky actions ask for the password again (a step-up token, 10 minutes).
   Five failed sign-ins lock the admin for 15 minutes, doubling up to 24 hours.
 - **There is no reset tool.** v1 had `bin/reset_admin_password.dart`; v2 has
   no equivalent yet. The recovery steps (a SQL change by the operator) are in
@@ -523,7 +523,7 @@ log note below).
 - **Signing in:** admin password only. After five wrong passwords from one
   address the server locks that address (15 minutes, doubling) and the
   console says how long to wait, from the `Retry-After` header. The token
-  lasts 7 days; after that, or after the admin password is changed
+  lasts 12 hours; after that, or after the admin password is changed
   elsewhere, the console returns to sign-in with a note.
 - **Saved session:** the console keeps the token in platform secure storage
   (Android Keystore, Windows credential store) and the server address in
@@ -561,7 +561,7 @@ its order of steps differs (for the JWT ring, drop the old key at once).
 
 - **JWT key:** add a new entry to `HELIX_JWT_KEYS`, set
   `HELIX_JWT_ACTIVE_KID` to it, restart every node, keep the old key for at
-  least 7 days (the longest token lifetime: admin tokens are 7 days,
+  least 7 days (the longest token lifetime: admin tokens were 7 days before step-up and are now 12 hours,
   device access tokens 15 minutes, and refresh tokens are not JWTs), then
   remove the old key. Nobody is signed out while the old key stays.
 - **Phone pepper:** do not rotate. It orphans stored phone hashes.

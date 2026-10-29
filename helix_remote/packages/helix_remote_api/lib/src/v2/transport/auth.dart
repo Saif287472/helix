@@ -220,7 +220,26 @@ final class AdminTokenAuth implements AuthProvider {
 
   void use(AdminSession session) => _session = session;
 
-  void forget() => _session = null;
+  void forget() {
+    _session = null;
+    _stepUp = null;
+  }
+
+  AdminSession? _stepUp;
+
+  /// The password re-entry the risky admin actions ask for, while it lasts.
+  /// The transport sends it as `x-helix-step-up` on every admin request.
+  String? get stepUpToken {
+    final s = _stepUp;
+    if (s == null) return null;
+    if (!s.expiresAt.isAfter(_now())) {
+      _stepUp = null;
+      return null;
+    }
+    return s.token;
+  }
+
+  void useStepUp(AdminSession token) => _stepUp = token;
 
   @override
   Future<String> accessToken() async {
@@ -235,6 +254,7 @@ final class AdminTokenAuth implements AuthProvider {
 
   Never _end() {
     _session = null;
+    _stepUp = null;
     const out = SignedOutException(SignedOutReason.sessionEnded);
     _signedOut.add(out);
     throw out;

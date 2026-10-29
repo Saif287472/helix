@@ -61,7 +61,7 @@ Test paths are relative to `helix_remote/`.
 | --- | --- | --- | --- |
 | Sessions can be remotely revoked | Implemented | Revoking a device ends its session, deletes its push token and prekeys and closes its socket on whichever node holds it (`server/test/modules/identity_test.dart` "revoking a device ends its session and removes it from bundles", `server/test/e2e/two_node_test.dart`) | Real-phone check |
 | Each device has independent device keys | Implemented | Each device generates its own identity and signing keys; its certificate is signed by the account identity key and verified by the server and by peers (`packages/helix_remote_crypto/test/v2/layout_test.dart`) | Same |
-| You are told when a new device signs in or a contact's key changes | Implemented | Security events and `device_list_change` signals reach the account's other devices; a changed identity key is announced in the chat and resets "verified" (`server/test/client/engine/security_test.dart`, `server/test/client/engine/devices_test.dart`) | Same |
+| You are told when a new device signs in or a contact's key changes | Implemented | Security events and `device_list_change` signals reach the account's other devices; a changed identity key is announced in the chat and resets "verified", and holds direct messages to a previously verified contact until the user checks or sends anyway (`server/test/client/engine/security_test.dart`, `server/test/client/engine/devices_test.dart`) | Same |
 
 ## Claims blocked for strong claim
 

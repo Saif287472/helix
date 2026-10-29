@@ -64,7 +64,19 @@ void main() {
       );
       expect(newBob.account, bobAccount);
 
+      // Alice had verified the old number, so the first message waits for her.
       await alice.engine.chats.sendText(chat.id, 'after the change');
+      late int heldRowid;
+      await settle(() async {
+        final held = (await messagesWith(
+          alice,
+          newBob,
+        )).where((m) => m.body == 'after the change');
+        expect(held.single.status, MessageStatus.failed);
+        heldRowid = held.single.localRowid;
+        expect(await alice.engine.chats.keyHoldOf(heldRowid), bobAccount);
+      });
+      await alice.engine.chats.releaseKeyHold(bobAccount);
       await waitForText(newBob, alice, 'after the change');
 
       final person = (await alice.db.peopleDao.byAccount(bobAccount))!;
@@ -92,6 +104,67 @@ void main() {
         devices.where((d) => d.trust == DeviceTrust.trusted).single.deviceId,
         newBob.device,
       );
+    });
+
+    Future<EngineUser> takeOverBob(EngineWorld world, Harness h) async {
+      final newBob = await world.create('bob-new');
+      final challenge = await newBob.engine.account.requestPhoneCode(bobNumber);
+      final verified = await newBob.engine.account.verifyPhone(
+        challenge.challengeId,
+        h.sms.lastCodeFor(bobNumber),
+      );
+      await newBob.engine.account.register(
+        verificationToken: verified.verificationToken,
+        accountId: verified.accountId,
+        replaceExisting: true,
+        phoneNumber: bobNumber,
+      );
+      return newBob;
+    }
+
+    test('a contact the user never verified is not held when the key '
+        'changes', () async {
+      final alice = await world.register('alice', aliceNumber);
+      final bob = await world.register('bob', bobNumber);
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'hello');
+      await waitForText(bob, alice, 'hello');
+
+      final newBob = await takeOverBob(world, h);
+      await alice.engine.chats.sendText(chat.id, 'after the change');
+      await waitForText(newBob, alice, 'after the change');
+    });
+
+    test('checking the new safety number ends the hold, and the held message '
+        'goes on a retry', () async {
+      final alice = await world.register('alice', aliceNumber);
+      final bob = await world.register('bob', bobNumber);
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'hello');
+      await waitForText(bob, alice, 'hello');
+      final bobAccount = bob.account;
+      await alice.engine.people.setVerified(bobAccount, verified: true);
+
+      final newBob = await takeOverBob(world, h);
+      await alice.engine.chats.sendText(chat.id, 'held');
+      late int rowid;
+      await settle(() async {
+        final held = (await messagesWith(
+          alice,
+          newBob,
+        )).where((m) => m.body == 'held');
+        expect(held.single.status, MessageStatus.failed);
+        rowid = held.single.localRowid;
+      });
+      // Nothing reached the new device while it was held.
+      expect(
+        (await messagesWith(newBob, alice)).where((m) => m.body == 'held'),
+        isEmpty,
+      );
+
+      await alice.engine.people.setVerified(bobAccount, verified: true);
+      await alice.engine.chats.retrySend(rowid);
+      await waitForText(newBob, alice, 'held');
     });
 
     test('a contact known only from a group is announced in the group '

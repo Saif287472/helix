@@ -211,6 +211,9 @@ final class OutboxService {
   });
 }
 
+/// The `last_error` of a message held because a verified contact's key changed.
+const keyChangeHeldCode = 'key_change_held';
+
 /// What to do with an op after an attempt failed.
 sealed class OpFailure {
   const OpFailure(this.code);
@@ -260,6 +263,8 @@ OpFailure classifyOpError(Object error) {
       return const RetryLater('transient');
     case UntrustedPeerException():
       return const GiveUp('untrusted_peer');
+    case KeyChangeHeldException():
+      return const GiveUp(keyChangeHeldCode);
     case GroupException():
       switch (error.reason) {
         case GroupFailure.notAMember:

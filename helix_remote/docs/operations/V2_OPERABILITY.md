@@ -56,7 +56,7 @@ identifiers into a ticket or chat without checking it first.
   Prometheus `Authorization: Bearer <that token>`
   (`authorization: {credentials: ...}` in the scrape config). The token
   opens this route only and is compared in constant time. Without it, the
-  route needs an admin token (`POST /v1/admin/sessions`, 7 days). (The
+  route needs an admin token (`POST /v1/admin/sessions`, 12 hours). (The
   plan said `/metrics`; the code serves `/v1/ops/metrics`.) With the
   hardened Caddy site (`deploy/windows/Caddyfile.example`), Caddy answers
   404 to this route and to `/v1/admin...` unless the caller is on the PC or

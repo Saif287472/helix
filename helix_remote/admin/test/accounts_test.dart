@@ -386,6 +386,50 @@ void main() {
       expect(find.text('account.recovery_code'), findsOneWidget);
     });
 
+    testWidgets('a risky action asks for the password and then goes through', (
+      tester,
+    ) async {
+      h.server.requireStepUp = true;
+      await openAlice(tester);
+      await tapText(tester, 'Recovery code');
+      await tapText(tester, 'Create code');
+
+      expect(find.text('Enter your password'), findsOneWidget);
+      expect(find.byKey(const Key('shown-once-code')), findsNothing);
+      await tester.enterText(
+        find.byKey(const Key('step-up-password')),
+        h.server.adminPassword!,
+      );
+      await tapText(tester, 'Continue');
+
+      expect(find.byKey(const Key('shown-once-code')), findsOneWidget);
+      expect(h.server.stepUps, hasLength(1));
+      await tapText(tester, 'Done');
+    });
+
+    testWidgets('a wrong or cancelled password changes nothing', (
+      tester,
+    ) async {
+      h.server.requireStepUp = true;
+      await openAlice(tester);
+      await tapText(tester, 'Recovery code');
+      await tapText(tester, 'Create code');
+      await tapText(tester, 'Cancel');
+      expect(find.byKey(const Key('shown-once-code')), findsNothing);
+      expect(h.server.stepUps, isEmpty);
+      expect(find.text('Enter your password to do that.'), findsOneWidget);
+
+      await tapText(tester, 'Recovery code');
+      await tapText(tester, 'Create code');
+      await tester.enterText(
+        find.byKey(const Key('step-up-password')),
+        'not it at all, no',
+      );
+      await tapText(tester, 'Continue');
+      expect(find.text('Wrong password.'), findsOneWidget);
+      expect(find.byKey(const Key('shown-once-code')), findsNothing);
+    });
+
     testWidgets('Premium can be given and then ended', (tester) async {
       await openAlice(tester);
       await tapText(tester, 'Give Premium');

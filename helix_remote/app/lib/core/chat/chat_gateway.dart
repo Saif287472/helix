@@ -345,6 +345,13 @@ class ChatGateway {
 
   Future<void> retrySend(int rowid) => _chats.retrySend(rowid);
 
+  /// The account whose changed safety number holds the failed message [rowid],
+  /// or null when it failed for another reason.
+  Future<String?> keyHoldOf(int rowid) => _chats.keyHoldOf(rowid);
+
+  /// Ends the hold on [account] ("Send anyway") and sends what waited.
+  Future<void> releaseKeyHold(String account) => _chats.releaseKeyHold(account);
+
   /// Actions of the chat that failed for good, live: the timeline shows each
   /// under its message with a retry (AUD-12i-1).
   Stream<List<FailedAction>> watchFailedActions(String conversationId) =>

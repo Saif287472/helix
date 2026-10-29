@@ -113,6 +113,17 @@ final class UntrustedPeerException extends EngineException {
   const UntrustedPeerException(super.message);
 }
 
+/// A message was not sent because the person's key changed and this account
+/// had verified the old one: it waits until the user checks the new safety
+/// number or chooses to send anyway (`PeopleService.releaseKeyHold`).
+final class KeyChangeHeldException extends EngineException {
+  const KeyChangeHeldException(this.account)
+    : super('the verified contact changed their key');
+
+  /// The account whose key changed.
+  final String account;
+}
+
 /// A call could not be placed or answered (`CallsService`). [reason] says
 /// why in terms a UI can show; the message never names a person or a device.
 final class CallFailedException extends EngineException {

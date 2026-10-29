@@ -253,6 +253,7 @@ void main() {
     Routes.adminSignOut: (c) => c.admin.signOut(),
     Routes.adminPassword: (c) =>
         c.admin.changePassword(current: 'a', next: 'b'),
+    Routes.adminStepUp: (c) => c.admin.stepUp('password'),
     Routes.adminAccounts: (c) => c.admin.accounts(),
     Routes.adminAccount: (c) => c.admin.account(id),
     Routes.adminSuspend: (c) => c.admin.suspend(id),

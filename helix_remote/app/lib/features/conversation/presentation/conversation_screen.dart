@@ -118,6 +118,36 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
 
   // ------------------------------------------------------------- helpers
 
+  /// "Retry" under a message that did not go. If a verified contact's key
+  /// changed, it did not go on purpose: ask first.
+  Future<void> _retry(int rowid) async {
+    final held = await _actions.heldContact(rowid);
+    if (held == null) return _actions.retry(rowid);
+    if (!mounted) return;
+    await showOrbitDialog(
+      context,
+      title: 'Safety number changed',
+      text:
+          'You had verified this contact, and their safety number has '
+          'changed. This can happen when they get a new phone, but it can '
+          'also mean someone else has their number. Messages wait until you '
+          'check the new number. Send anyway only if you know why it changed.',
+      actions: [
+        const OrbitDialogAction('Not now'),
+        OrbitDialogAction(
+          'Check number',
+          onPressed: () =>
+              unawaited(context.push(PeoplePaths.safetyNumber(held))),
+        ),
+        OrbitDialogAction(
+          'Send anyway',
+          kind: OrbitButtonKind.primary,
+          onPressed: () => unawaited(_actions.sendAnyway(held)),
+        ),
+      ],
+    );
+  }
+
   int? _rowid(String id) => _entries[id]?.messageRowid ?? int.tryParse(id);
 
   void _say(String? text) {
@@ -606,7 +636,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         },
         onRetry: (id) {
           final rowid = _rowid(id);
-          if (rowid != null) unawaited(_actions.retry(rowid));
+          if (rowid != null) unawaited(_retry(rowid));
         },
         onRetryAction: (id) {
           final rowid = _rowid(id);

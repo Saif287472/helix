@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:helix_remote_api/src/v2/realtime/socket.dart';
 import 'package:helix_remote_api/src/v2/transport/auth.dart';
+import 'package:helix_remote_api/src/v2/transport/errors.dart';
 import 'package:helix_remote_api/src/v2/transport/transport.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
@@ -22,6 +23,26 @@ final class AdminClient {
 
   final HelixTransport _t;
   final RealtimeSocketFactory _sockets;
+
+  /// Asked for the operator's password when a risky action answers
+  /// `step_up_required`; null (or an empty answer) means the operator
+  /// declined, and the original error is thrown.
+  Future<String?> Function()? passwordPrompt;
+
+  /// Runs a risky action; on `step_up_required` asks for the password once,
+  /// exchanges it for a step-up token and runs the action again.
+  Future<T> _risky<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on ApiException catch (e) {
+      final ask = passwordPrompt;
+      if (e.code != ErrorCode.stepUpRequired || ask == null) rethrow;
+      final password = await ask();
+      if (password == null || password.isEmpty) rethrow;
+      await stepUp(password);
+      return action();
+    }
+  }
 
   AdminTokenAuth get auth => _t.auth! as AdminTokenAuth;
 
@@ -63,6 +84,17 @@ final class AdminClient {
   Future<void> _signOutOnServer() async {
     await _t.empty(Routes.adminSignOut);
     auth.forget();
+  }
+
+  /// Re-enter the password for the risky actions: the token it returns is
+  /// kept in the auth and sent on every call until it expires.
+  Future<void> stepUp(String password) async {
+    final token = await _t.call(
+      Routes.adminStepUp,
+      AdminSession.fromJson,
+      json: AdminPasswordRequest(password: password).toJson(),
+    );
+    auth.useStepUp(token);
   }
 
   /// Ends every other admin session; this one continues with the returned
@@ -117,14 +149,17 @@ final class AdminClient {
       _t.empty(Routes.adminUnsuspend, params: {'account': accountId});
 
   /// Bans the phone number and deletes the account.
-  Future<void> ban(String accountId, {String? reason}) => _t.empty(
-    Routes.adminBan,
-    params: {'account': accountId},
-    json: AdminActionRequest(reason: reason).toJson(),
+  Future<void> ban(String accountId, {String? reason}) => _risky(
+    () => _t.empty(
+      Routes.adminBan,
+      params: {'account': accountId},
+      json: AdminActionRequest(reason: reason).toJson(),
+    ),
   );
 
-  Future<void> deleteAccount(String accountId) =>
-      _t.empty(Routes.adminDeleteAccount, params: {'account': accountId});
+  Future<void> deleteAccount(String accountId) => _risky(
+    () => _t.empty(Routes.adminDeleteAccount, params: {'account': accountId}),
+  );
 
   Future<void> revokeDevice(String accountId, String deviceId) => _t.empty(
     Routes.adminRevokeDevice,
@@ -132,10 +167,12 @@ final class AdminClient {
   );
 
   /// A single-use 48-hour recovery code, shown once.
-  Future<AdminRecoveryCode> createRecoveryCode(String accountId) => _t.call(
-    Routes.adminRecoveryCode,
-    AdminRecoveryCode.fromJson,
-    params: {'account': accountId},
+  Future<AdminRecoveryCode> createRecoveryCode(String accountId) => _risky(
+    () => _t.call(
+      Routes.adminRecoveryCode,
+      AdminRecoveryCode.fromJson,
+      params: {'account': accountId},
+    ),
   );
 
   // ----------------------------------------------------------------- invites
@@ -168,9 +205,11 @@ final class AdminClient {
   );
 
   /// Adds the request's months to the account's Premium.
-  Future<void> approvePaymentRequest(String requestId) => _t.empty(
-    Routes.adminApprovePaymentRequest,
-    params: {'request_id': requestId},
+  Future<void> approvePaymentRequest(String requestId) => _risky(
+    () => _t.empty(
+      Routes.adminApprovePaymentRequest,
+      params: {'request_id': requestId},
+    ),
   );
 
   /// The short [reason] is shown to the person.
@@ -182,15 +221,18 @@ final class AdminClient {
       );
 
   /// Gives Premium time without a payment.
-  Future<void> grantPlan(String accountId, int months) => _t.empty(
-    Routes.adminGrantPlan,
-    params: {'account': accountId},
-    json: GrantPlanRequest(months: months).toJson(),
+  Future<void> grantPlan(String accountId, int months) => _risky(
+    () => _t.empty(
+      Routes.adminGrantPlan,
+      params: {'account': accountId},
+      json: GrantPlanRequest(months: months).toJson(),
+    ),
   );
 
   /// Ends the account's Premium now.
-  Future<void> revokePlan(String accountId) =>
-      _t.empty(Routes.adminRevokePlan, params: {'account': accountId});
+  Future<void> revokePlan(String accountId) => _risky(
+    () => _t.empty(Routes.adminRevokePlan, params: {'account': accountId}),
+  );
 
   /// What the account has and may do now, with the operator's overrides.
   Future<AdminAccountPlan> accountPlan(String accountId) => _t.call(
@@ -212,14 +254,16 @@ final class AdminClient {
     required int voiceMinutes,
     required int videoMinutes,
     required String reason,
-  }) => _t.empty(
-    Routes.adminGrantCallTime,
-    params: {'account': accountId},
-    json: GrantCallTimeRequest(
-      voiceMinutes: voiceMinutes,
-      videoMinutes: videoMinutes,
-      reason: reason,
-    ).toJson(),
+  }) => _risky(
+    () => _t.empty(
+      Routes.adminGrantCallTime,
+      params: {'account': accountId},
+      json: GrantCallTimeRequest(
+        voiceMinutes: voiceMinutes,
+        videoMinutes: videoMinutes,
+        reason: reason,
+      ).toJson(),
+    ),
   );
 
   /// Changes one limit for one account for [days] days, or until removed.
@@ -229,14 +273,16 @@ final class AdminClient {
     required int value,
     required String reason,
     int? days,
-  }) => _t.empty(
-    Routes.adminSetPlanOverride,
-    params: {'account': accountId, 'key': key.wire},
-    json: SetPlanOverrideRequest(
-      value: value,
-      reason: reason,
-      days: days,
-    ).toJson(),
+  }) => _risky(
+    () => _t.empty(
+      Routes.adminSetPlanOverride,
+      params: {'account': accountId, 'key': key.wire},
+      json: SetPlanOverrideRequest(
+        value: value,
+        reason: reason,
+        days: days,
+      ).toJson(),
+    ),
   );
 
   Future<void> clearPlanOverride(String accountId, PlanLimitKey key) =>
@@ -252,10 +298,12 @@ final class AdminClient {
       _t.call(Routes.adminBillingSettings, BillingSettings.fromJson);
 
   Future<BillingSettings> setBillingSettings(BillingSettings settings) =>
-      _t.call(
-        Routes.adminSetBillingSettings,
-        BillingSettings.fromJson,
-        json: settings.toJson(),
+      _risky(
+        () => _t.call(
+          Routes.adminSetBillingSettings,
+          BillingSettings.fromJson,
+          json: settings.toJson(),
+        ),
       );
 
   // ----------------------------------------------------------------- reports
@@ -298,10 +346,12 @@ final class AdminClient {
   Future<FeatureFlags> featureFlags() =>
       _t.call(Routes.adminFeatureFlags, FeatureFlags.fromJson);
 
-  Future<void> setFeatureFlag(String name, {required bool enabled}) => _t.empty(
-    Routes.adminSetFeatureFlag,
-    params: {'name': name},
-    json: SetFeatureFlagRequest(enabled: enabled).toJson(),
+  Future<void> setFeatureFlag(String name, {required bool enabled}) => _risky(
+    () => _t.empty(
+      Routes.adminSetFeatureFlag,
+      params: {'name': name},
+      json: SetFeatureFlagRequest(enabled: enabled).toJson(),
+    ),
   );
 
   /// Recent redacted log lines of the answering node (1-500).
@@ -359,7 +409,7 @@ final class AdminClient {
 
   /// Dead jobs and expired identity rows.
   Future<PurgeResult> purge() =>
-      _t.call(Routes.adminPurge, PurgeResult.fromJson);
+      _risky(() => _t.call(Routes.adminPurge, PurgeResult.fromJson));
 
   /// Prometheus text (an `ops` route that needs the admin audience).
   Future<String> metrics() async => (await _t.send(Routes.metrics)).text;

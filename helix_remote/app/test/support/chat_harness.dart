@@ -413,6 +413,18 @@ class TestChatGateway extends ChatGateway {
   @override
   Future<void> retrySend(int rowid) async => log.add('retry:$rowid');
 
+  /// Message rowids held for a changed safety number, with their account.
+  final Map<int, String> keyHolds = {};
+
+  @override
+  Future<String?> keyHoldOf(int rowid) async => keyHolds[rowid];
+
+  @override
+  Future<void> releaseKeyHold(String account) async {
+    log.add('release:$account');
+    keyHolds.removeWhere((_, a) => a == account);
+  }
+
   /// What the timeline should show as failed actions (the real ones live in
   /// the outbox, which a test builds only when it needs to).
   final List<FailedAction> actionFailures = [];

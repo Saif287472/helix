@@ -29,7 +29,8 @@ metadata). The cryptography has **not been externally reviewed**
 - **Mitigation**: End-to-end encryption: one session per (local device, remote device) with
   X3DH and a full Double Ratchet (forward secrecy and post-compromise security), Sender Keys
   for groups. Every device key is certified by the account identity key (AIK); a changed AIK
-  is announced in the chat and resets "verified", and safety numbers can be compared out of
+  is announced in the chat and resets "verified" (and, for a contact the user had verified, holds
+  direct messages until the user checks the new number or sends anyway), and safety numbers can be compared out of
   band. Edits, reactions, receipts, deletes, typing, view-once state and timers are inside the
   encrypted content, so the server never routes them.
 - **Residual risk**: A server that swaps an unverified contact's keys at first contact is
@@ -154,8 +155,10 @@ metadata). The cryptography has **not been externally reviewed**
 - **Operator console (2026-10-28)**: first-time setup is answered only from the local network; operator
   tokens are signed with keys derived from the JWT ring, not the ring keys themselves; a password change
   shares the sign-in lock; failures, locks and refused setups are counted and the dashboard shows a
-  banner. Still true: an operator token alone can issue a recovery code or change the payment numbers
-  (a password re-entry for those actions is proposed, not built).
+  banner. Since 2026-10-29 operator tokens last 12 hours and the risky actions (ban, delete, recovery
+  codes, plan and call-time grants, payment approval, the payment numbers, flags, purge) need the password
+  again (a 10-minute step-up token, under the sign-in lock), so a stolen token alone can read but not do
+  those. A stolen token plus a keylogger on the operator's device still can.
 - **Residual risk**: A single PC node tops out near 80 sends per second (`docs/operations/LOAD_TESTING.md`);
   a determined flood is an availability problem, not a confidentiality one.
 

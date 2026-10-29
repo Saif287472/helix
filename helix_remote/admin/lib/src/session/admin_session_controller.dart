@@ -42,6 +42,10 @@ final class AdminSessionController extends ChangeNotifier {
 
   final AdminServices services;
 
+  /// Asks the operator for the password when a risky action needs it again
+  /// (set by the app, which owns the navigator).
+  Future<String?> Function()? passwordPrompt;
+
   SessionPhase _phase = SessionPhase.starting;
   AdminSettings? _settings;
 
@@ -345,6 +349,7 @@ final class AdminSessionController extends ChangeNotifier {
 
   void _enter(HelixAdminApi api, ServerAddress address, AdminSession session) {
     _api = api;
+    api.admin.passwordPrompt = () async => passwordPrompt?.call();
     _address = address;
     _session = session;
     _error = null;

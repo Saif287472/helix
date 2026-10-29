@@ -361,6 +361,14 @@ final class ConversationActions {
 
   Future<void> retry(int rowid) async => (await _gateway).retrySend(rowid);
 
+  /// The account whose changed (verified) safety number holds [rowid], if any.
+  Future<String?> heldContact(int rowid) async =>
+      (await _gateway).keyHoldOf(rowid);
+
+  /// "Send anyway": ends the hold on [account], and what waited goes out.
+  Future<void> sendAnyway(String account) async =>
+      (await _gateway).releaseKeyHold(account);
+
   /// Re-queues every action on [rowid] that failed for good (a delete for
   /// everyone the others never saw). The engine names the target on each
   /// action op, so the message's own retry does not find them.

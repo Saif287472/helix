@@ -138,6 +138,11 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
 
   // ------------------------------------------------------------- the router
 
+  /// When set, ban, delete and recovery codes answer `step_up_required` until
+  /// the request carries a token from `POST /v1/admin/step-up`.
+  bool requireStepUp = false;
+  final Set<String> stepUps = {};
+
   Future<http.Response> _handle(http.Request request) async {
     if (unreachable) throw http.ClientException('connection refused');
     final path = request.url.path;
@@ -162,6 +167,32 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
       final token = auth.startsWith('Bearer ') ? auth.substring(7) : '';
       if (!validTokens.contains(token)) {
         return _error(ErrorCode.unauthenticated);
+      }
+    }
+
+    if (requireStepUp) {
+      final risky =
+          (request.method == 'POST' &&
+              RegExp(
+                r'^/v1/admin/accounts/[^/]+/(ban|recovery-codes)$',
+              ).hasMatch(path)) ||
+          (request.method == 'DELETE' &&
+              RegExp(r'^/v1/admin/accounts/[^/]+$').hasMatch(path));
+      if (risky && !stepUps.contains(request.headers['x-helix-step-up'])) {
+        return _error(ErrorCode.stepUpRequired);
+      }
+      if (request.method == 'POST' && path == '/v1/admin/step-up') {
+        if (_body(request)['password'] != adminPassword) {
+          return _error(ErrorCode.invalidCredentials);
+        }
+        final token = 'step-up-${stepUps.length + 1}';
+        stepUps.add(token);
+        return _json(
+          AdminSession(
+            token: token,
+            expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+          ).toJson(),
+        );
       }
     }
 

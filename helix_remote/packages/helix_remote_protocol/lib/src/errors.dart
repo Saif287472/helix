@@ -49,6 +49,9 @@ enum ErrorCode implements WireEnum {
   invalidCredentials('invalid_credentials', 401),
   passwordLocked('password_locked', 429),
 
+  /// An admin action that needs the operator's password again.
+  stepUpRequired('step_up_required', 403),
+
   // 5xx
   internal('internal', 500),
   smsUnavailable('sms_unavailable', 503),

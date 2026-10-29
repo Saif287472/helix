@@ -861,6 +861,15 @@ abstract final class Routes {
     module: 'admin',
     access: _adm,
   );
+
+  /// Re-enter the password: returns a short-lived step-up token for the risky
+  /// admin actions (`x-helix-step-up`).
+  static const adminStepUp = ApiRoute(
+    _post,
+    '/v1/admin/step-up',
+    module: 'admin',
+    access: _adm,
+  );
   static const adminAccounts = ApiRoute(
     _get,
     '/v1/admin/accounts',
@@ -1102,7 +1111,12 @@ abstract final class Routes {
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,
     s2sGroupActions, s2sGroupSync, s2sCallSignals, //
-    adminSetupStatus, adminSetup, adminSignIn, adminSignOut, adminPassword,
+    adminSetupStatus,
+    adminSetup,
+    adminSignIn,
+    adminSignOut,
+    adminPassword,
+    adminStepUp,
     adminAccounts,
     adminAccount, adminSuspend, adminUnsuspend, adminBan, adminDeleteAccount,
     adminRevokeDevice, adminRecoveryCode, adminInvites, adminCreateInvite,

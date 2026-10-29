@@ -762,6 +762,40 @@ final class ChatsService {
     }
   }
 
+  /// The account whose changed safety number is holding message [rowid], or
+  /// null when it is not held (the chat then offers "Send anyway").
+  Future<String?> keyHoldOf(int rowid) async {
+    for (final op in await _db.outboxDao.forMessage(rowid)) {
+      if (op.state != OutboxState.failed || op.lastError != keyChangeHeldCode) {
+        continue;
+      }
+      final self = _ctx.identity.accountId;
+      for (final account in SendContentPayload.decode(op.payload).audience) {
+        if (account != self &&
+            await _db.settingsDao.get(PersonState.keyHold(account))) {
+          return account;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// The user chose to send to [account] although their verified safety number
+  /// changed: the hold ends and what was held goes out now.
+  Future<void> releaseKeyHold(String account) async {
+    await _db.settingsDao.set(
+      PersonState.keyHold(account),
+      false,
+      now: _ctx.now(),
+    );
+    final chat = directConversationId(account);
+    for (final op in await _db.outboxDao.forConversation(chat)) {
+      if (op.state == OutboxState.failed && op.lastError == keyChangeHeldCode) {
+        await _outbox.retry(op.id);
+      }
+    }
+  }
+
   /// The actions of [conversationId] that failed for good, newest first,
   /// live. Unlike a message (whose row turns `failed`), an action leaves no
   /// row to read, so the op in the outbox is what the chat shows the retry

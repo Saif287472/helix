@@ -45,6 +45,7 @@ final class MessageSender {
     bool urgent = true,
   }) async {
     final response = await sendSealed<SendMessageResponse>(
+      honourKeyHold: true,
       content: content,
       accounts: accounts,
       post: (recipients) => _ctx.api.messaging.send(
@@ -89,6 +90,7 @@ final class MessageSender {
     required Iterable<String> accounts,
     required Future<T> Function(List<Recipient> recipients) post,
     Set<String>? onlyDevices,
+    bool honourKeyHold = false,
   }) async {
     final audience = accounts.toSet().toList()..sort();
     var attempts = _ctx.config.staleListRetries + 1;
@@ -117,6 +119,15 @@ final class MessageSender {
           throw const UntrustedPeerException('recipient devices are gone');
         }
         continue;
+      }
+      if (honourKeyHold) {
+        // After the keys are fetched: a change is learned right there.
+        for (final account in plan.keys) {
+          if (account != _ctx.identity.accountId &&
+              await _ctx.db.settingsDao.get(PersonState.keyHold(account))) {
+            throw KeyChangeHeldException(account);
+          }
+        }
       }
       final payloads = await _crypto.encryptFor(
         devices,

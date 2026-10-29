@@ -91,7 +91,12 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   /// Audit rows older than this are deleted daily (the operator's choice).
   static const auditRetention = Duration(days: 365);
 
-  static const sessionLifetime = Duration(days: 7);
+  static const sessionLifetime = Duration(hours: 12);
+
+  /// How long a password re-entry keeps the risky actions open. The token it
+  /// gives is a different JWT type from the session, so it opens nothing alone.
+  static const stepUpLifetime = Duration(minutes: 10);
+  static const stepUpType = 'admin_step_up';
   static const audience = 'helix.admin';
   static const tokenType = 'admin';
 
@@ -173,6 +178,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       ..add(name, Routes.adminSignIn, _signIn, rateLimit: _signInLimit)
       ..add(name, Routes.adminSignOut, _signOut)
       ..add(name, Routes.adminPassword, _changePassword)
+      ..add(name, Routes.adminStepUp, _stepUp)
       ..add(name, Routes.adminAccounts, _accounts)
       ..add(name, Routes.adminAccount, _account)
       ..add(name, Routes.adminSuspend, _suspend)
@@ -398,6 +404,69 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     }
   }
 
+  /// Re-entering the password for the risky actions (ban, delete, recovery
+  /// codes, plan and call-time grants, payments, the pay-to numbers, flags,
+  /// purge). It shares the sign-in lock, so a stolen session token cannot be
+  /// used to guess the password any faster than sign-in allows.
+  Future<Response> _stepUp(HelixRequest q) async {
+    final req = q.json(AdminPasswordRequest.fromJson);
+    final admin = (await _store.byId(context.db, q.admin.adminId))!;
+    if (req.password.length > AdminPasswordRequest.maxLength) {
+      throw const ApiError(ErrorCode.invalidCredentials);
+    }
+    await _reserveAttempt(q, admin.id);
+    if (!await admin.password.verify(req.password)) {
+      _authEvents.inc({'kind': 'step_up_failed'});
+      log.warn('admin_step_up_failed');
+      throw const ApiError(ErrorCode.invalidCredentials);
+    }
+    await context.db.tx((tx) async {
+      await _store.recordSuccess(tx, admin.id, q.clientIp);
+      await _audit(tx, q, 'admin.step_up');
+    });
+    final now = context.clock.now();
+    final expires = now.add(stepUpLifetime);
+    return jsonResponse(
+      AdminSession(
+        token: _jwt.sign(
+          audience: audience,
+          type: stepUpType,
+          issuedAt: now,
+          expiresAt: expires,
+          claims: {'sub': admin.id},
+        ),
+        expiresAt: expires,
+      ).toJson(),
+    );
+  }
+
+  /// Refuses a risky action unless the request carries a live step-up token
+  /// of this operator, issued after their sessions were last ended.
+  Future<void> _requireStepUp(HelixRequest q) async {
+    final token = q.raw.headers[HelixHeaders.stepUp];
+    final payload = token == null
+        ? null
+        : _jwt.verify(
+            token,
+            audience: audience,
+            type: stepUpType,
+            now: context.clock.now(),
+          );
+    var ok = payload != null && payload['sub'] == q.admin.adminId;
+    if (ok) {
+      final admin = await _store.byId(context.db, q.admin.adminId);
+      ok =
+          admin != null &&
+          !HmacJwt.issuedAtOf(payload).isBefore(admin.tokensValidAfter);
+    }
+    if (!ok) {
+      throw const ApiError(
+        ErrorCode.stepUpRequired,
+        message: 'Enter your password to continue.',
+      );
+    }
+  }
+
   /// Ends every session of this operator, this one included: the console's
   /// "Sign out", and the way to cut off a token that may have leaked (review
   /// B-02). Open log streams close at once.
@@ -561,6 +630,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   Future<Response> _unsuspend(HelixRequest q) => _setSuspended(q, on: false);
 
   Future<Response> _ban(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     final reason = _reason(q);
     final found = await context.db.tx((tx) async {
@@ -579,6 +649,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _deleteAccount(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     final found = await context.db.tx((tx) async {
       if (await identity.account(tx, id) == null) return false;
@@ -611,6 +682,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _recoveryCode(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     final code = await context.db.tx((tx) async {
       final code = await identity.admin.issueRecoveryCode(tx, id);
@@ -686,6 +758,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _approvePayment(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('request_id');
     await context.db.tx((tx) async {
       final change = await billing.approve(tx, id);
@@ -717,6 +790,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _grantPlan(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     final req = q.json(GrantPlanRequest.fromJson);
     await context.db.tx((tx) async {
@@ -736,6 +810,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _revokePlan(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     await context.db.tx((tx) async {
       if (!await billing.revoke(tx, id)) {
@@ -763,6 +838,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _grantCallTime(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     final req = q.json(GrantCallTimeRequest.fromJson);
     await context.db.tx((tx) async {
@@ -796,6 +872,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   );
 
   Future<Response> _setPlanOverride(HelixRequest q) async {
+    await _requireStepUp(q);
     final id = q.uuidParam('account');
     final key = _limitKey(q);
     final req = q.json(SetPlanOverrideRequest.fromJson);
@@ -861,6 +938,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       jsonResponse((await billing.settings(context.db)).toJson());
 
   Future<Response> _setBillingSettings(HelixRequest q) async {
+    await _requireStepUp(q);
     final next = q.json(BillingSettings.fromJson);
     await context.db.tx((tx) async {
       await billing.setSettings(tx, next);
@@ -1012,6 +1090,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       jsonResponse(FeatureFlags(flags: (await ops.settings()).flags).toJson());
 
   Future<Response> _setFlag(HelixRequest q) async {
+    await _requireStepUp(q);
     final flag = q.param('name');
     if (!OpsApi.knownFlags.containsKey(flag)) {
       throw const ApiError(ErrorCode.notFound, message: 'unknown flag');
@@ -1077,6 +1156,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _purge(HelixRequest q) async {
+    await _requireStepUp(q);
     final removed = await context.db.tx((tx) async {
       final removed = {
         ...await identity.admin.purgeExpired(tx),

@@ -11,6 +11,7 @@ import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
+import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// Keys fetched for an account and verified (certificates under the AIK,
@@ -173,6 +174,15 @@ final class PeerDirectory {
     DateTime now,
   ) async {
     final dao = _ctx.db.peopleDao;
+    final wasVerified =
+        (await dao.byAccount(account))?.identityVerified ?? false;
+    if (wasVerified) {
+      await _ctx.db.settingsDao.set(
+        PersonState.keyHold(account),
+        true,
+        now: now,
+      );
+    }
     await dao.markDevicesStale(account);
     await dao.upsertPerson(
       PeopleCompanion.insert(

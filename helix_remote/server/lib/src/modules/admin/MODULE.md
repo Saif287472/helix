@@ -45,10 +45,18 @@ hash with its parameters, lockout counters, `tokens_valid_after`) and
   Quiet unlocked addresses are purged after two days
   (`admin.purge_sign_in_failures`).
 - **Tokens:** `HmacJwt` with audience `helix.admin`, type `admin`,
-  `sub` = admin id, valid for 7 days, on the server's JWT key ring. The
+  `sub` = admin id, valid for 12 hours, on the server's JWT key ring. The
   audience and type keep device and admin tokens apart in both
   directions. Changing the password sets `tokens_valid_after`, which ends
   every other session, and returns a new one.
+- **Step-up:** `POST /v1/admin/step-up` takes the password again (through the
+  same attempt lock as sign-in) and returns a 10-minute token of type
+  `admin_step_up`, sent as `x-helix-step-up`. Ban, delete account, recovery
+  code, approve payment, grant or revoke a plan, grant call time, plan override,
+  billing settings, feature flag and purge answer `step_up_required` (403)
+  without a live one. A step-up token issued before `tokens_valid_after` is
+  dead, so sign-out and a password change revoke it too. The console asks for
+  the password in a dialog and retries once; `AdminClient.passwordPrompt`.
 - **Sign-out:** `DELETE /v1/admin/sessions` sets `tokens_valid_after` to
   now: every token of the operator stops working, the caller's and any
   copy of it (the way to cut off a token that may have leaked). The console's

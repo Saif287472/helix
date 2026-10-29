@@ -634,6 +634,7 @@ void main() {
           'account.ban',
           'device.revoke',
           'recovery_code.issue',
+          'admin.step_up',
           'account.unsuspend',
           'account.suspend',
           'admin.setup',

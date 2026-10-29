@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_admin/src/features/common/format.dart';
 import 'package:helix_admin/src/session/admin_session_scope.dart';
+import 'package:helix_admin/src/widgets/password_field.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -327,6 +328,67 @@ Future<void> showCodeOnceDialog(
     ),
   ),
 );
+
+/// Asks for the operator's password again before a risky action (ban, delete,
+/// recovery code, grants, payments, pay-to numbers, flags, purge). The answer
+/// goes straight to the server for a step-up token and is not kept. Null when
+/// cancelled.
+Future<String?> showPasswordDialog(BuildContext context) => showDialog<String>(
+  context: context,
+  builder: (context) => const _PasswordDialog(),
+);
+
+class _PasswordDialog extends StatefulWidget {
+  const _PasswordDialog();
+
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Enter your password'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'This action needs your admin password again. It stays open for '
+          '10 minutes.',
+        ),
+        const SizedBox(height: 12),
+        PasswordField(
+          key: const Key('step-up-password'),
+          controller: _password,
+          label: 'Admin password',
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => Navigator.pop(context, _password.text),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const Key('step-up-continue'),
+        onPressed: () => Navigator.pop(context, _password.text),
+        child: const Text('Continue'),
+      ),
+    ],
+  );
+}
 
 /// Plain information with one button.
 Future<void> showInfoDialog(

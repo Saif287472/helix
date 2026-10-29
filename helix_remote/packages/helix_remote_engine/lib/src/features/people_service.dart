@@ -689,14 +689,24 @@ final class PeopleService {
   }
 
   /// The user compared safety numbers (or scanned the code).
-  Future<void> setVerified(String account, {required bool verified}) =>
-      _db.peopleDao.upsertPerson(
-        PeopleCompanion.insert(
-          accountId: account,
-          identityVerified: Value(verified),
-          updatedAt: _ctx.now(),
-        ),
+  Future<void> setVerified(String account, {required bool verified}) async {
+    await _db.peopleDao.upsertPerson(
+      PeopleCompanion.insert(
+        accountId: account,
+        identityVerified: Value(verified),
+        updatedAt: _ctx.now(),
+      ),
+    );
+    // Checking the new number is the other way out of a key-change hold; what
+    // was held goes out when the user next retries it.
+    if (verified) {
+      await _db.settingsDao.set(
+        PersonState.keyHold(account),
+        false,
+        now: _ctx.now(),
       );
+    }
+  }
 
   /// Devices of [account] with their trust state (CRYPTO_V2.md §2): a
   /// device is `trusted` while its certificate verifies under the pinned

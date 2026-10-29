@@ -305,6 +305,13 @@ void main() {
 
       // Inside the week nothing expires and the operator can still approve.
       clock.advance(const Duration(days: 6));
+      // The operator's session lasts hours, so they sign in again.
+      admin = AdminSession.fromJson(
+        (await h.api.call(
+          Routes.adminSignIn,
+          body: const AdminPasswordRequest(password: adminPassword).toJson(),
+        )).json,
+      ).token;
       await job.run();
       expect(await statusOf(mine.requestId), 'pending');
       expect((await approve(mine.requestId)).status, 204);

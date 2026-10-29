@@ -60,7 +60,12 @@ u32(spk_id) ‖ SPK_pub)`.
 **AIK pinning.** The first AIK seen for an account is pinned (trust on first
 use). A different AIK later is a **key change**: the client stops using old
 sessions, shows "Safety number changed" in every conversation with that
-account, and resets its verified flag (§10). The server keeps no record of
+account, and resets its verified flag (§10). If the user had verified the old
+number, direct messages to that account are **held** (client-local setting
+`people.key_hold:<account>`, nothing on the wire): they fail as "Not sent" and
+the retry asks whether to check the new number or send anyway; verifying the
+new number also ends the hold. Group messages and calls are not held (the
+group chats show the notice). The server keeps no record of
 who talks to whom, so it cannot announce key changes to contacts. Clients
 detect them when a bundle's AIK differs from the pinned one, or when a
 prekey message arrives whose device certificate verifies only under a new

@@ -167,6 +167,10 @@ final class TestApi {
   final Uri base;
   final http.Client _client = http.Client();
 
+  /// Step-up tokens by admin bearer, so the many admin tests need not each
+  /// re-enter the password (the step-up tests pass `stepUp: false`).
+  final Map<String, String> _stepUps = {};
+
   Future<TestResponse> call(
     ApiRoute route, {
     Map<String, String> params = const {},
@@ -174,6 +178,56 @@ final class TestApi {
     String? bearer,
     Map<String, String> query = const {},
     Map<String, String> headers = const {},
+    bool stepUp = true,
+  }) async {
+    final first = await _send(
+      route,
+      params: params,
+      body: body,
+      bearer: bearer,
+      query: query,
+      headers: {
+        if (stepUp && _stepUps[bearer] != null)
+          'x-helix-step-up': _stepUps[bearer]!,
+        ...headers,
+      },
+    );
+    if (!stepUp ||
+        bearer == null ||
+        route.access != RouteAccess.admin ||
+        first.status != 403 ||
+        !first.body.contains('step_up_required')) {
+      return first;
+    }
+    final up = await _send(
+      Routes.adminStepUp,
+      params: const {},
+      body: const AdminPasswordRequest(
+        password: 'correct horse battery staple',
+      ).toJson(),
+      bearer: bearer,
+      query: const {},
+      headers: const {},
+    );
+    if (up.status != 200) return first;
+    _stepUps[bearer] = AdminSession.fromJson(up.json).token;
+    return _send(
+      route,
+      params: params,
+      body: body,
+      bearer: bearer,
+      query: query,
+      headers: {'x-helix-step-up': _stepUps[bearer]!, ...headers},
+    );
+  }
+
+  Future<TestResponse> _send(
+    ApiRoute route, {
+    required Map<String, String> params,
+    required Map<String, Object?>? body,
+    required String? bearer,
+    required Map<String, String> query,
+    required Map<String, String> headers,
   }) async {
     final uri = base.replace(
       path: route.expand(params),

@@ -264,6 +264,98 @@ void main() {
       return (socket, closed.future.timeout(const Duration(seconds: 5)));
     }
 
+    group('step-up', () {
+      Future<TestResponse> purge(String bearer, {String? stepUpToken}) =>
+          h.api.call(
+            Routes.adminPurge,
+            bearer: bearer,
+            stepUp: false,
+            headers: {'x-helix-step-up': ?stepUpToken},
+          );
+
+      Future<TestResponse> stepUp(String bearer, String password) => h.api.call(
+        Routes.adminStepUp,
+        bearer: bearer,
+        stepUp: false,
+        body: AdminPasswordRequest(password: password).toJson(),
+      );
+
+      test('a risky action needs the password again, then works for ten '
+          'minutes', () async {
+        final console = await token();
+        final refused = await purge(console);
+        expect(refused.status, 403);
+        expect(refused.body, contains('step_up_required'));
+
+        final up = await stepUp(console, adminPassword);
+        expect(up.status, 200);
+        final proof = AdminSession.fromJson(up.json);
+        expect(
+          proof.expiresAt.difference(DateTime.now().toUtc()),
+          lessThanOrEqualTo(AdminModule.stepUpLifetime),
+        );
+        expect((await purge(console, stepUpToken: proof.token)).status, 200);
+        expect(
+          (await purge(console, stepUpToken: proof.token)).status,
+          200,
+          reason: 'it holds for its whole window',
+        );
+        expect(await auditActions(console), contains('admin.step_up'));
+      });
+
+      test(
+        'a wrong password gives nothing, and shares the sign-in lock',
+        () async {
+          final console = await token();
+          final wrong = await stepUp(console, 'not the password at all');
+          expect(wrong.status, 401);
+          expect((await purge(console)).status, 403);
+          for (var i = 0; i < AdminModule.lockAfter; i++) {
+            await stepUp(console, 'not the password at all');
+          }
+          expect((await stepUp(console, adminPassword)).status, 429);
+        },
+      );
+
+      test('a session token is no step-up token, and the reverse', () async {
+        final console = await token();
+        final proof = AdminSession.fromJson(
+          (await stepUp(console, adminPassword)).json,
+        ).token;
+        expect(
+          (await purge(console, stepUpToken: console)).status,
+          403,
+          reason: 'the session token cannot stand in for the proof',
+        );
+        expect(
+          await configStatus(proof),
+          401,
+          reason: 'the proof opens nothing as a session',
+        );
+      });
+
+      test('signing out kills a proof already given', () async {
+        final console = await token();
+        final proof = AdminSession.fromJson(
+          (await stepUp(console, adminPassword)).json,
+        ).token;
+        await h.api.call(Routes.adminSignOut, bearer: console);
+        final again = await token();
+        expect(
+          (await purge(again, stepUpToken: proof)).status,
+          403,
+          reason: 'it was issued before the sessions were ended',
+        );
+      });
+
+      test('a session lasts hours, not days', () {
+        expect(
+          AdminModule.sessionLifetime,
+          lessThanOrEqualTo(const Duration(hours: 12)),
+        );
+      });
+    });
+
     test('signing out ends every session of the operator and closes its log '
         'streams', () async {
       final console = await token();

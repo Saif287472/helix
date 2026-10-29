@@ -218,6 +218,9 @@ final class HelixTransport {
             HelixHeaders.authorization: ?(token == null
                 ? null
                 : 'Bearer $token'),
+            HelixHeaders.stepUp: ?(usesAudience && auth is AdminTokenAuth
+                ? (auth! as AdminTokenAuth).stepUpToken
+                : null),
             ...headers,
           },
           body: body,

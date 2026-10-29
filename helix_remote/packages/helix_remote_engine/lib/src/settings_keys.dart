@@ -37,6 +37,13 @@ abstract final class PersonState {
   static Setting<bool> blocksMe(String account) =>
       Setting<bool>('people.blocks_me:$account', false);
 
+  /// [account] had a verified safety number and then changed key: messages to
+  /// them wait (`KeyChangeHeldException`) until the user verifies the new
+  /// number or sends anyway. Direct chats only; a group message still goes out
+  /// and the group chat shows the change.
+  static Setting<bool> keyHold(String account) =>
+      Setting<bool>('people.key_hold:$account', false);
+
   /// Sets [blocksMe] for [account], writing only when it changes (every send
   /// reports it).
   static Future<void> markBlocksMe(
