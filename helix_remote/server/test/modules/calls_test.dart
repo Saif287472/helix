@@ -262,6 +262,31 @@ void main() {
       );
     });
 
+    test('only the people a call was offered between can signal in it', () async {
+      final carol = await h.registerGlobal('+8801711000003');
+      final callId = 'call-${Uuid.v7()}';
+      await signal(callId, CallSignalKind.offer, {
+        bob1.accountId: [bob1.id],
+      });
+      Future<int> reached(TestDevice from, TestDevice to) async {
+        final socket = await TestSocket.connect(h.server.baseUri, to.bearer);
+        await socket.hello();
+        while (!await socket.silent(const Duration(milliseconds: 300))) {}
+        final r = CallSignalResponse.fromJson(
+          (await signal(callId, CallSignalKind.update, {
+            to.accountId: [to.id],
+          }, from: from)).json,
+        );
+        await socket.close();
+        return r.delivered.length;
+      }
+
+      expect(await reached(carol, bob1), 0, reason: 'a stranger');
+      expect(await reached(carol, alice), 0, reason: 'a stranger, either way');
+      expect(await reached(bob1, alice), 1, reason: 'the callee answers back');
+      expect(await reached(alice, bob1), 1, reason: 'the caller');
+    });
+
     test('only the parties can clear or replace a pending offer', () async {
       final carol = await h.registerGlobal('+8801711000003');
       final callId = 'call-${Uuid.v7()}';

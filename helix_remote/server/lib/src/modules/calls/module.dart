@@ -359,6 +359,21 @@ CREATE TABLE $s.call_metrics (
     // signal before any local device rings.
     final relay = _relay;
     for (final entry in parsed.remote.entries) {
+      if (req.kind == CallSignalKind.offer) {
+        // The callee's server keeps the leg for its side; this server keeps
+        // one too, so the callee's later signals back are known here.
+        for (final r in entry.value) {
+          await context.db.execute(
+            'INSERT INTO $schema.call_legs (call_id, callee_account, caller_account) '
+            'VALUES (@c:text, @a:text, @s:text) ON CONFLICT DO NOTHING',
+            {
+              'c': callId,
+              'a': AccountAddress.local(r.account).qualified(entry.key),
+              's': me.accountId,
+            },
+          );
+        }
+      }
       final answer = await relay!.relayCall(
         entry.key,
         callId,
@@ -442,6 +457,26 @@ CREATE TABLE $s.call_metrics (
     return _ParsedSignal(addressed, payloads, remote);
   }
 
+  /// The accounts [account] may signal under [callId]: the other side of every
+  /// leg it is in, and itself (its other devices) when it is in any. A leg is
+  /// recorded for each offer, by the callee's server, and by the caller's
+  /// server for a callee on another server (see [_signal]).
+  Future<Set<String>> _partners(String callId, String account) async {
+    final rows = await context.db.query(
+      'SELECT callee_account, caller_account FROM $schema.call_legs '
+      'WHERE call_id = @c:text AND (callee_account = @a:text OR caller_account = @a:text)',
+      {'c': callId, 'a': account},
+    );
+    if (rows.isEmpty) return const {};
+    return {
+      account,
+      for (final r in rows)
+        r.string('callee_account') == account
+            ? r.string('caller_account')
+            : r.string('callee_account'),
+    };
+  }
+
   Future<CallSignalResponse> _deliverLocal(
     String callId, {
     required String senderAccount,
@@ -480,6 +515,18 @@ CREATE TABLE $s.call_metrics (
     }
     for (final account in blockers) {
       addressed[account]!.forEach(payloads.remove);
+    }
+
+    if (kind != CallSignalKind.offer) {
+      // Only the people a call was offered between may signal each other
+      // under its id; anyone else's signal is dropped without a word, so
+      // the answer does not tell a stranger whether a call id exists.
+      final allowed = await _partners(callId, senderAccount);
+      for (final account in addressed.keys) {
+        if (!allowed.contains(account)) {
+          addressed[account]!.forEach(payloads.remove);
+        }
+      }
     }
 
     if (kind == CallSignalKind.offer) {
