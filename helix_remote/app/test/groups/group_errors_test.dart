@@ -72,7 +72,7 @@ void main() {
         const ApiException(
           status: 429,
           code: ErrorCode.rateLimited,
-          retryAfter: const Duration(minutes: 5),
+          retryAfter: Duration(minutes: 5),
         ),
       ),
       contains('5 minutes'),
