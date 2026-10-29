@@ -42,7 +42,10 @@ import.
   expiry or its use (the last two were reachable only from the operator's
   purge button, so a public server accumulated every self-issued invite for
   ever). The operator's purge (`data/admin_store.dart`) counts the same four
-  kinds and runs its own harsher token and challenge windows.
+  kinds and runs its own harsher token and challenge windows. A *spent*
+  refresh token (`used_at` set) is the exception: its row is what recognises a
+  replay and ends the device's sessions, so both purges keep it until a year
+  past its expiry (`CredentialStore.spentRefreshRetention`, AUD F-6).
 - **Revoking a device:** sets `tokens_valid_after`, revokes its refresh
   tokens and deletes its push token, inside one transaction with the
   `onDeviceRevoked` hooks (keys purge prekeys). It also publishes
@@ -73,6 +76,17 @@ import.
   `sign_in`; a password change or ownership check `sign_in`, `reset_password`
   and `register` (clients still send `register` as the default). A code asked
   for to recover cannot change a password (AUD-2-8).
+- **A verification token is spent once, atomically:** a flow that acts on it
+  runs inside `IdentityContext.spendingVerification`, which `take`s the token
+  (one `DELETE ... RETURNING`) before the transaction commits, so of two
+  concurrent uses one gets `invalid_code`; if the transaction then fails the
+  token is put back for a retry. Ownership proofs use `takeVerification`
+  (AUD F-4). Reading with `verificationFor` first is only for early checks.
+- **A password change ends the other devices' sessions:** in the same
+  transaction `Accounts.setPassword` calls `SessionIssuer.endSessions` for
+  every other active device (id order, the device lock a refresh also takes),
+  so a stolen access or refresh token stops working. The caller stays signed
+  in; the others are signed out, not revoked (AUD F-1).
 - **Seen-today write:** `Sessions.device` writes `last_seen_on` once a day per
   device and node (an in-process map, cleared when the day turns), not on
   every authenticated request (AUD-2-4). A link long-poll reads the ephemeral

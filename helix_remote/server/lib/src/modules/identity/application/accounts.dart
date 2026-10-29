@@ -106,8 +106,19 @@ final class Accounts {
         }
       }
     }
-    await c.db.tx((tx) async {
+    Future<void> commit() => c.db.tx((tx) async {
       await c.storePassword(tx, me.accountId, req.password);
+      // The other devices' sessions end with the old password (AUD F-1): a
+      // stolen access or refresh token must not outlive the change. Each
+      // device is signed out, not revoked, and the device that changed the
+      // password stays signed in. Locked in id order, like `revokeAll`.
+      final others = [
+        for (final d in await c.store.activeDevices(tx, me.accountId))
+          if (d.id != me.deviceId) d.id,
+      ]..sort();
+      for (final deviceId in others) {
+        await c.sessions.endSessions(tx, c.store, deviceId);
+      }
       await c.store.addEvent(
         tx,
         me.accountId,
@@ -125,6 +136,14 @@ final class Accounts {
         exceptDevice: me.deviceId,
       );
     });
+    // Only a token that authorized the change is spent atomically; one sent
+    // beside the current password is deleted without being relied on.
+    final tokenAuthorized = existing != null && req.currentAuthKey == null;
+    if (tokenAuthorized) {
+      await c.spendingVerification(req.verificationToken, commit);
+      return;
+    }
+    await commit();
     if (req.verificationToken != null) {
       await c.spendVerification(req.verificationToken!);
     }
@@ -160,8 +179,8 @@ final class Accounts {
         purposes: _ownershipPurposes,
       );
       if (verified != null &&
-          constantTimeEquals(verified.phoneHash, phoneHash)) {
-        await c.spendVerification(verificationToken);
+          constantTimeEquals(verified.phoneHash, phoneHash) &&
+          await c.takeVerification(verificationToken)) {
         return;
       }
     }

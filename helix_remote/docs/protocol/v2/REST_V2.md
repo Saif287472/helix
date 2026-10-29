@@ -70,7 +70,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `POST /v1/auth/recovery/redeem` | `RecoveryRedeemRequest` → `Session` | New AIK; other devices revoked; history backup deleted; `key_change` to contacts. |
 | `DELETE /v1/auth/sessions/current` | — → 204 | Sign out this device's tokens (device stays registered); its socket closes (4001) on whichever node holds it. Other devices get `account_signal`/`signed_out`. |
 | `GET /v1/account` | — → `AccountInfo` | |
-| `PUT /v1/account/password` | `SetPasswordRequest` → 204 | Needs the current auth key or a fresh verification token. A wrong current auth key counts towards password sign-in's lockout (`password_locked`). 10 per hour per account. Other devices get `password_changed`. |
+| `PUT /v1/account/password` | `SetPasswordRequest` → 204 | Needs the current auth key or a fresh verification token. A wrong current auth key counts towards password sign-in's lockout (`password_locked`). 10 per hour per account. The account's other devices are signed out (their access and refresh tokens end; they stay registered) and get `password_changed`; the calling device keeps its session. A verification token is spent once, even under concurrent requests. |
 | `PUT /v1/account/helix-name` | `SetHelixNameRequest` → 204 | `name_taken` on conflict. |
 | `DELETE /v1/account/helix-name` | — → 204 | |
 | `PUT /v1/account/phone-number` | `SetPhoneNumberRequest` → 204 | This account's own number, for the operator console (ADR-030). It must hash to the account's verified phone hash, else `invalid_field`. Kept sealed under `HELIX_PHONE_KEY` (AES-256-GCM, bound to the account); without that key nothing is kept. Apps send it once after signing in. |

@@ -1,4 +1,5 @@
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/identity/data/credential_store.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/phone_seal.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/paging.dart';
@@ -212,8 +213,12 @@ final class AdminStore {
   /// version of the job's own sweeps.
   Future<Map<String, int>> purgeExpired(SqlSession db) async => {
     'refresh_tokens': await db.execute(
-      "DELETE FROM $s.refresh_tokens WHERE expires_at < now() - interval '1 day' "
-      "OR revoked_at < now() - interval '1 day'",
+      // A spent token is kept for replay detection, as in the periodic job.
+      "DELETE FROM $s.refresh_tokens WHERE (used_at IS NULL AND "
+      "(expires_at < now() - interval '1 day' "
+      "OR revoked_at < now() - interval '1 day')) "
+      "OR (used_at IS NOT NULL "
+      "AND expires_at < now() - ${CredentialStore.spentRefreshRetention})",
     ),
     'phone_challenges': await db.execute(
       "DELETE FROM $s.phone_challenges WHERE expires_at < now() - interval '1 day'",

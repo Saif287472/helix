@@ -200,8 +200,48 @@ final class IdentityContext {
     return verified;
   }
 
+  /// Deletes a token nothing relied on (one sent alongside another proof).
+  /// A token that authorized something goes through [spendingVerification]
+  /// or [takeVerification] instead.
   Future<void> spendVerification(String token) =>
       ephemeral.delete('$verificationPrefix${tokenKey(token)}');
+
+  /// Spends [token] in one atomic step, so of any number of concurrent uses
+  /// exactly one gets true (AUD F-4: a read followed by a delete after the
+  /// commit let two requests act on one token).
+  Future<bool> takeVerification(String token) async =>
+      await ephemeral.take('$verificationPrefix${tokenKey(token)}') != null;
+
+  /// Runs [commit], which acts on [token] (already read with [verificationFor]),
+  /// after spending the token atomically. A concurrent use that lost the race
+  /// is answered `invalid_code` before it commits anything. When [commit]
+  /// fails the token is put back, so an error that is not the token's fault
+  /// (a full device list, a database hiccup) can be retried with it. A null
+  /// [token] runs [commit] alone.
+  Future<T> spendingVerification<T>(
+    String? token,
+    Future<T> Function() commit,
+  ) async {
+    if (token == null) return commit();
+    final key = '$verificationPrefix${tokenKey(token)}';
+    final raw = await ephemeral.take(key);
+    if (raw == null) {
+      throw const ApiError(
+        ErrorCode.invalidCode,
+        message: 'verification expired or unknown',
+      );
+    }
+    try {
+      return await commit();
+    } on Object {
+      await ephemeral.putIfAbsent(
+        key,
+        raw,
+        IdentityConfig.verificationLifetime,
+      );
+      rethrow;
+    }
+  }
 
   /// Validates a password setup from a client (CRYPTO_V2.md §11).
   void checkPasswordSetup(PasswordSetup p) {
@@ -280,7 +320,7 @@ final class IdentityContext {
     );
     // The same counter and the same lock, in the shared ephemeral store.
     final key = '$_decoyPasswordPrefix${_hex(phoneHash)}';
-    for (var attempt = 0; attempt < 3; attempt++) {
+    for (var attempt = 0; attempt < _decoyCasAttempts; attempt++) {
       final raw = await ephemeral.get(key);
       final state = _DecoyFailures.parse(raw);
       final until = state.lockedUntil;
@@ -300,10 +340,26 @@ final class IdentityContext {
             ? _locked(lock)
             : const ApiError(ErrorCode.invalidCredentials);
       }
-      // Another node wrote between the read and the write: read again.
+      // Another request wrote between the read and the write: read again,
+      // after a short random pause so a burst does not collide in lockstep.
+      await Future<void>.delayed(
+        Duration(milliseconds: 1 + _jitter.nextInt(8)),
+      );
     }
-    return const ApiError(ErrorCode.invalidCredentials);
+    // Never answer "wrong password" for an attempt that was not counted
+    // (AUD F-5): a burst could otherwise take more guesses than the lock
+    // allows, and the number would lock later than a real account does.
+    return const ApiError(
+      ErrorCode.rateLimited,
+      retryAfter: Duration(seconds: 1),
+    );
   }
+
+  /// Compare-and-set tries per decoy failure. Each lost round means another
+  /// request won it, so a burst of N needs at most N rounds; this covers any
+  /// burst the sign-in rate limit lets through.
+  static const _decoyCasAttempts = 64;
+  static final _jitter = math.Random();
 
   /// Checks [authKey] against the account's password. Password sign-in and
   /// password change share one failure counter and lockout: 5 failures

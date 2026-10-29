@@ -66,47 +66,47 @@ final class Registration {
       device: req.device,
     );
 
-    final session = await c.db.tx((tx) async {
-      if (existing != null) {
-        await _replaceIdentity(tx, existing.id, req);
-      } else {
-        await c.store.insertAccount(
-          tx,
-          id: accountId,
-          identityKey: req.identityKey,
-          phoneHash: verified?.phoneHash,
-          discoveryIndex: verified?.discoveryIndex,
-          phoneLast4: verified?.last4,
-        );
-      }
-      if (!c.config.globalMode &&
-          !await c.credentials.redeemInvite(
+    final session = await c.spendingVerification(
+      req.verificationToken,
+      () => c.db.tx((tx) async {
+        if (existing != null) {
+          await _replaceIdentity(tx, existing.id, req);
+        } else {
+          await c.store.insertAccount(
             tx,
-            hashToken(req.inviteCode!),
-            accountId,
-          )) {
-        throw const ApiError(
-          ErrorCode.invalidCode,
-          message: 'invite is not valid',
+            id: accountId,
+            identityKey: req.identityKey,
+            phoneHash: verified?.phoneHash,
+            discoveryIndex: verified?.discoveryIndex,
+            phoneLast4: verified?.last4,
+          );
+        }
+        if (!c.config.globalMode &&
+            !await c.credentials.redeemInvite(
+              tx,
+              hashToken(req.inviteCode!),
+              accountId,
+            )) {
+          throw const ApiError(
+            ErrorCode.invalidCode,
+            message: 'invite is not valid',
+          );
+        }
+        if (req.password != null) {
+          await c.storePassword(tx, accountId, req.password!);
+        }
+        return c.addDevice(
+          tx,
+          accountId: accountId,
+          device: req.device,
+          prekeys: req.prekeys,
+          event: existing == null
+              ? SecurityEventKind.deviceAdded
+              : SecurityEventKind.signedIn,
+          notifyOthers: false,
         );
-      }
-      if (req.password != null) {
-        await c.storePassword(tx, accountId, req.password!);
-      }
-      return c.addDevice(
-        tx,
-        accountId: accountId,
-        device: req.device,
-        prekeys: req.prekeys,
-        event: existing == null
-            ? SecurityEventKind.deviceAdded
-            : SecurityEventKind.signedIn,
-        notifyOthers: false,
-      );
-    });
-    if (req.verificationToken != null) {
-      await c.spendVerification(req.verificationToken!);
-    }
+      }),
+    );
     c.log.info('account_registered', {
       'account_id': accountId,
       'device_id': req.device.deviceId,
@@ -190,7 +190,8 @@ final class Registration {
       hashToken(req.recoveryCode),
     );
     if (accountId == null) throw const ApiError(ErrorCode.invalidCode);
-    if (await _needsVerification(accountId)) {
+    final needsVerification = await _needsVerification(accountId);
+    if (needsVerification) {
       final verified = await c.verificationFor(
         req.verificationToken,
         purposes: const {
@@ -213,7 +214,9 @@ final class Registration {
       accountIdentityKey: req.identityKey,
       device: req.device,
     );
-    final session = await c.db.tx((tx) async {
+    // A token only counts when the redeem needed it; one sent anyway is
+    // deleted without being relied on.
+    Future<Session> commit() => c.db.tx((tx) async {
       if (await c.credentials.consumeRecoveryCode(
             tx,
             hashToken(req.recoveryCode),
@@ -239,6 +242,10 @@ final class Registration {
         notifyOthers: false,
       );
     });
+    if (needsVerification) {
+      return c.spendingVerification(req.verificationToken, commit);
+    }
+    final session = await commit();
     if (req.verificationToken != null) {
       await c.spendVerification(req.verificationToken!);
     }

@@ -54,8 +54,17 @@ final class CredentialStore {
     );
   }
 
+  /// Rows that can no longer matter. A token that was *spent* stays much
+  /// longer than one that never was: its row is what recognises a replay of it
+  /// (a stolen copy) and ends the device's sessions, and a device that renews
+  /// every few minutes outlives the refresh life many times over (AUD F-6).
+  /// After a year past expiry a replay would no longer be believable theft.
+  static const spentRefreshRetention = "interval '365 days'";
+
   Future<int> purgeExpiredRefresh(SqlSession db) => db.execute(
-    "DELETE FROM $s.refresh_tokens WHERE expires_at < now() - interval '7 days'",
+    "DELETE FROM $s.refresh_tokens WHERE "
+    "(used_at IS NULL AND expires_at < now() - interval '7 days') "
+    "OR (used_at IS NOT NULL AND expires_at < now() - $spentRefreshRetention)",
   );
 
   // --------------------------------------------------------------- passwords

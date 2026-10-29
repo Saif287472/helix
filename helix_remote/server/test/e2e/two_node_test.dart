@@ -469,11 +469,9 @@ void main() {
           });
           expect(r.status, 200, reason: '$r');
           final response = CallSignalResponse.fromJson(r.json);
-          expect(
-            response.delivered,
-            [bob2.id],
-            reason: 'only the device on the living node is rung',
-          );
+          expect(response.delivered, [
+            bob2.id,
+          ], reason: 'only the device on the living node is rung');
           expect(response.pending, unorderedEquals([bob1.id, bob3.id]));
           expect((await live.envelope()).callId, callId);
           expect(
@@ -689,11 +687,14 @@ void main() {
             ).toJson(),
           );
           expect(changed.status, 204, reason: '$changed');
-          final told = await envelopeWhere(
-            other,
-            (e) => e.kind == EnvelopeKind.accountSignal,
+          // The change signs the account's other devices out (AUD F-1): node
+          // B closes the socket (4001) and the old token no longer works
+          // there, so the device learns by being cut off.
+          expect(await other.closed, RealtimeCloseCode.unauthorized);
+          expect(
+            (await b.api.call(Routes.account, bearer: bob2.bearer)).status,
+            401,
           );
-          expect(signalOf(told).signal, AccountSignalKind.passwordChanged);
 
           Future<TestResponse> signIn(int keySeed) => b.api.call(
             Routes.passwordSignIn,
@@ -704,7 +705,6 @@ void main() {
           );
           expect((await signIn(9)).errorCode, 'invalid_credentials');
           expect((await signIn(11)).status, 200);
-          await other.close();
         },
       );
 
