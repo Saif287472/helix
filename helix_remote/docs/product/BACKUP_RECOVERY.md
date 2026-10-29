@@ -29,7 +29,7 @@ for every active device of every member, including the sender's own other device
   travels through the server sealed. Each device registers its own keys, certified by the
   account identity key.
 - Every other device gets a security event and a device-list signal and can revoke the new one.
-- The app opens on one Helix Global page (phone number, then password or SMS code, then name and
+- The app opens on one Orbit Home page (phone number, then password or SMS code, then name and
   terms for new accounts). A personal server is reached through the hidden advanced mode (three taps
   in the bottom-right corner reveal an "Advanced mode" button; a fourth opens it) or a shared link
   `https://helix.agiletechbd.com/open#HLX-...`. A recovery code (`HLX-REC-`) names the server and
@@ -87,7 +87,7 @@ for the person (accept, decline, pause, resume); nothing downloads by itself.
 ## What cannot be recovered
 
 - The server cannot recover a forgotten password, a recovery secret or a backup key. Without the
-  password, SMS sign-in on Helix Global (including "Forgot password") moves the account onto the new
+  password, SMS sign-in on Orbit Home (including "Forgot password") moves the account onto the new
   device with a new identity key: the other devices are signed out, and the old wrapped key and the
   history backup become undecryptable and are deleted.
 - Media and attachments are not in the automatic history backup. Attachments also expire from the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly backup of Helix Global: a verified database dump, the blobs, and an
+# Nightly backup of Orbit Home: a verified database dump, the blobs, and an
 # encrypted copy off this VM. Run by helix-backup.timer as the `helix` user.
 #
 # Settings (/etc/helix/backup.env, or the environment):

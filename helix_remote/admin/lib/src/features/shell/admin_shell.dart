@@ -13,7 +13,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 /// The console's places. Everything before Configuration is what an operator
 /// does to the server's people day after day; Configuration is where the
 /// server itself is read and set, and where sign-out lives. Invites exist
-/// only on servers that register people by invite code; Helix Global signs
+/// only on servers that register people by invite code; Orbit Home signs
 /// people up by phone number.
 enum AdminPlace {
   overview('Overview', 'Overview', Icons.dashboard_outlined, Icons.dashboard),

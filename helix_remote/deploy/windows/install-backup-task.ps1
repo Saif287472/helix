@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-One-time setup of the daily Helix Global backup: checks, an optional
+One-time setup of the daily Orbit Home backup: checks, an optional
 pgpass.conf entry, a copy of backup-helix.ps1 next to the backups, and a Task
 Scheduler task that runs it.
 
@@ -52,7 +52,7 @@ param(
     [string]$DbUser = 'helix',
     [string]$DbName = 'helix',
     [string]$PostgresService = 'postgresql-x64-17',
-    [string]$TaskName = 'Helix Global backup',
+    [string]$TaskName = 'Orbit Home backup',
     [switch]$WritePgPass,
     [switch]$RunNow
 )
@@ -239,7 +239,7 @@ $principal = New-ScheduledTaskPrincipal `
     -LogonType S4U -RunLevel Limited # runs at its time with nobody logged on
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal -Force `
-    -Description 'Helix Global: pg_dump of the helix database and a copy of the blobs (helix_remote/deploy/windows).' |
+    -Description 'Orbit Home: pg_dump of the helix database and a copy of the blobs (helix_remote/deploy/windows).' |
     Out-Null
 Write-Host "Task '$TaskName' runs daily at $At. Log: $(Join-Path $BackupDir 'backup.log')" -ForegroundColor Green
 

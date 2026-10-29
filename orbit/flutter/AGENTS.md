@@ -42,7 +42,7 @@ turns each table into Dart exactly as written (`<Name>Model`, `<Name>Actions`,
   approved it.
 - **Keep batches small** and stop at each review.
 - After the owner approves a batch, commit all uncommitted work. Never push.
-- **Never stop or restart production.** Helix Global runs on the owner's PC;
+- **Never stop or restart production.** Orbit Home runs on the owner's PC;
   never run a deploy, install or release script.
 
 ## Themes are data

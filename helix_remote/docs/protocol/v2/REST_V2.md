@@ -52,11 +52,11 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/auth/phone/challenges` | `PhoneChallengeRequest` → `PhoneChallengeResponse` | Helix Global only. 6-digit code, 10 min, 5 attempts; per number 5/hour, per IP limits. The number is hashed; only the last 4 digits are kept. |
+| `POST /v1/auth/phone/challenges` | `PhoneChallengeRequest` → `PhoneChallengeResponse` | Orbit Home only. 6-digit code, 10 min, 5 attempts; per number 5/hour, per IP limits. The number is hashed; only the last 4 digits are kept. |
 | `POST /v1/auth/phone/verify` | `PhoneVerifyRequest` → `PhoneVerifyResponse` | Consumes the code; returns a single-use 15-minute `verification_token`, and the existing `account_id` when the number has an account (needed to certify a device for `replace_existing`). |
 | `POST /v1/auth/account-status` | `AccountStatusRequest` → `AccountStatusResponse` | Asked before any code is texted, so the app can send a new number to the code and an account with a password to the password (ADR-032). Answers `account_exists` and `has_password` to an unauthenticated caller — the deliberate enumeration trade in that ADR; rate-limited per IP, no account id and no last four digits, and it grants nothing, since `register` still demands a phone verification and password sign-in still demands the auth key. |
 | `POST /v1/auth/invites/lookup` | `InviteLookupRequest` → `InviteLookupResponse` | Rate-limited per IP. |
-| `POST /v1/auth/invites/self-issue` | — → `InviteSelfIssueResponse` | Helix Global only; 3/hour per IP. |
+| `POST /v1/auth/invites/self-issue` | — → `InviteSelfIssueResponse` | Orbit Home only; 3/hour per IP. |
 | `POST /v1/auth/register` | `RegisterRequest` → `RegisterResponse` | Verifies the device certificate (AIK) and proof (DSK). Global: needs `verification_token`; existing account → `account_exists` unless `replace_existing`. Personal: needs `invite_code`, redeemed last. |
 | `POST /v1/auth/password/params` | `PasswordParamsRequest` → `PasswordParamsResponse` | Decoy parameters for numbers without a password. |
 | `POST /v1/auth/password/sign-in` | `PasswordSignInRequest` → `PasswordSignInResponse` | Lockout: 5 failures → 15 min, doubling to 24 h (`password_locked`, `details.locked_until`), shared with `PUT /v1/account/password`. Wrong password and unknown number both give `invalid_credentials`. |

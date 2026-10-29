@@ -1,5 +1,5 @@
 [Unit]
-Description=Helix Global restore drill, monthly
+Description=Orbit Home restore drill, monthly
 
 [Timer]
 OnCalendar=monthly

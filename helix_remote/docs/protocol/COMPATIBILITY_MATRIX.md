@@ -188,7 +188,7 @@ decision), not an oversight, since there were no real users on v2 at the time
 of the cut.
 
 v3 registration requires `phone_hash`, `otp_code`, and `invite_code` (personal
-servers only; Helix Global takes no invite but requires `tos_version`) in place
+servers only; Orbit Home takes no invite but requires `tos_version`) in place
 of v2's `username`, and the registration transcript
 (`helix.remote.registration.v3` in the signed payload) binds all three plus
 the account/device key material together, so a signature cannot be replayed

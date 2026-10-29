@@ -288,7 +288,7 @@ final class _Worker {
     });
   }
 
-  /// The real Helix Global sign-up: phone challenge, verify, register with
+  /// The real Orbit Home sign-up: phone challenge, verify, register with
   /// a certified device and real prekeys (signed + one-time).
   Future<void> _register(_Device d) async {
     final keygen = Stopwatch()..start();

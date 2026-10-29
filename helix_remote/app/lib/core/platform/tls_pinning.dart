@@ -8,7 +8,7 @@ import 'package:helix_remote_api/v2.dart'
     show RealtimeSocketFactory, defaultSocketFactory;
 import 'package:helix_remote_crypto/v2.dart' show Sha256Accumulator;
 
-/// Certificate pinning for Helix Global, in Dart. **Off by default**: a build
+/// Certificate pinning for Orbit Home, in Dart. **Off by default**: a build
 /// pins nothing unless `--dart-define=HELIX_GLOBAL_PINS=<base64>,<base64>` is
 /// passed at build time (see [TlsPinPolicy.fromDefinedPins]). The mechanism
 /// and its tests stay so the pin can be turned on again without new code.
@@ -46,7 +46,7 @@ import 'package:helix_remote_crypto/v2.dart' show Sha256Accumulator;
 /// certificate is renewed with a new key, which Caddy may do). The pin is the
 /// **leaf** key (the only certificate a Dart callback sees). Once a build is
 /// pinned and the server's certificate is renewed with a key that build does
-/// not know, Helix Global is unreachable from it - that is the fail-closed
+/// not know, Orbit Home is unreachable from it - that is the fail-closed
 /// behaviour, not a bug. No pin is built in, because a stale pin would lock
 /// every release build out.
 ///
@@ -85,7 +85,7 @@ final class TlsPinPolicy {
   /// `--dart-define=HELIX_GLOBAL_PINS=...`.
   static const _definedPins = String.fromEnvironment('HELIX_GLOBAL_PINS');
 
-  /// The hosts that are Helix Global.
+  /// The hosts that are Orbit Home.
   static const globalHosts = {'helix.agiletechbd.com', 'hr.agiletechbd.com'};
 
   final Set<String> hosts;

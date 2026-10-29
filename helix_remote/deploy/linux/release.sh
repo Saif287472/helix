@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds a Helix Global server release from a git tag, without touching any
+# Builds an Orbit Home server release from a git tag, without touching any
 # running server. Run it where Flutter/Dart is installed (CI, a build machine),
 # not necessarily on the VM, then copy the folder to the VM
 # (rsync -a releases/<tag>/ vm:/opt/helix/releases/<tag>/) and run deploy.sh there.

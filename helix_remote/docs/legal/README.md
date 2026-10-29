@@ -1,7 +1,7 @@
-# Helix Global legal documents
+# Orbit Home legal documents
 
 The documents in this directory are the product-specific Terms of Service and
-Privacy Policy shipped for the Helix Global deployment.
+Privacy Policy shipped for the Orbit Home deployment.
 
 - [Terms of Service](terms_of_service.md)
 - [Privacy Policy](privacy_policy.md)
@@ -16,6 +16,6 @@ client shows the runtime copy; the server keeps its own copy in
 Keep the two copies and their versions in step when the documents change.
 
 These documents are an operator-ready starting point, not a substitute for
-review by qualified counsel. Before public launch, the Helix Global operator
+review by qualified counsel. Before public launch, the Orbit Home operator
 should confirm the contact addresses, governing-law language, retention
 commitments, and any jurisdiction-specific requirements.

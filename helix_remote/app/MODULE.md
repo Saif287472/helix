@@ -158,7 +158,7 @@ path and the personal-server path cannot drift apart.
 The rules that were true in v1 and are still true (each has a test in
 `test/sign_in_flow_test.dart` or `test/product_rules_test.dart`):
 
-- Opens on the plain **Helix Global** page: a phone number, `Next`, and a
+- Opens on the plain **Orbit Home** page: a phone number, `Next`, and a
   `Terms & Privacy` link. No back button (nothing precedes it), and no
   host-your-own-server copy anywhere.
 - **Personal servers are hidden.** Three taps in the bottom-right corner within
@@ -168,13 +168,13 @@ The rules that were true in v1 and are still true (each has a test in
 - A shared link (`https://…/open#HLX-…` - exactly `/open`, over https - or
   `helix://open?code=…`) opens advanced mode with its code. The code travels in
   the **fragment**, so a browser never sends it to the server. **Any code or
-  link that names a server other than Helix Global stops at a confirmation**
+  link that names a server other than Orbit Home stops at a confirmation**
   ("This code wants to sign you in on <host>"): no request is made until the
   person agrees, the host (not the server's self-chosen name) is shown on every
   page that follows, and a link is only applied when the device is known to be
   signed out (`SessionRestore` settled, auth not ready); it is dropped when
   anyone signs in or out.
-- Only Helix Global asks for the Terms. A personal server has its own operator
+- Only Orbit Home asks for the Terms. A personal server has its own operator
   policies.
 - Sign-in pages use `HelixThemes.signIn()` (the app icon's blue) as a local
   `Theme`; the rest of the app stays on `HelixThemes.light()`.
@@ -317,7 +317,7 @@ no engine, database or network.
 - Router: the three feature route lists are spread in, and `refreshListenable`
   now follows `authStateProvider` and `postSignInProvider` (before, `redirect`
   only ran on navigation, so a finished sign-in did not leave the sign-in page).
-  Sign-in also falls back to Helix Global when no server has been chosen.
+  Sign-in also falls back to Orbit Home when no server has been chosen.
 - Engine: `AccountService.changePassword` (additive; covered by
   `server/test/client/engine/devices_test.dart`).
 
@@ -481,8 +481,8 @@ Proximity/earpiece playback is not done.
   (SHA-256 of the leaf SPKI; list the next key's pin too). Android's network
   security config does not govern Dart sockets, so its release file carries no
   pin (it only forbids cleartext), and no pin is built in: a stale one would lock
-  every release build out of Helix Global. When pins are defined (release builds
-  only; debug is never pinned), a runtime for Helix Global is built under
+  every release build out of Orbit Home. When pins are defined (release builds
+  only; debug is never pinned), a runtime for Orbit Home is built under
   `HttpOverrides` with a context that trusts no CA, and the pin decides in
   `badCertificateCallback`, for REST and the realtime socket (via the api
   package's existing `sockets` injection; no api change). Fail closed: a

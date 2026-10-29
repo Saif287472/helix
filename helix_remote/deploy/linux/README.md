@@ -1,4 +1,4 @@
-# Helix Global on a Linux VM
+# Orbit Home on a Linux VM
 
 The Linux twin of `deploy/windows/`, for the day production moves off the PC
 (`docs/operations/VM_MIGRATION.md`). One Ubuntu 22.04+/Debian 12 VPS: the server

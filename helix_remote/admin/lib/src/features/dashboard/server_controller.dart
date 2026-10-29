@@ -64,7 +64,7 @@ final class ServerController extends FeatureController {
   /// `flag:<name>`, `name`, `purge`) is running.
   bool isBusy(String key) => _busy.contains(key);
 
-  /// Helix Global signs people up by phone number; invite codes only matter
+  /// Orbit Home signs people up by phone number; invite codes only matter
   /// on servers that register by invite.
   bool get usesInvites {
     final mode = _config?.registration;

@@ -1,7 +1,7 @@
-# Helix Global server (docs/operations/V2_SERVER_HANDOFF.md). Installed by
+# Orbit Home server (docs/operations/V2_SERVER_HANDOFF.md). Installed by
 # install.sh to /etc/systemd/system/helix-server.service.
 [Unit]
-Description=Helix Global server
+Description=Orbit Home server
 After=network-online.target postgresql.service
 Wants=network-online.target
 Requires=postgresql.service

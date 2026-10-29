@@ -242,7 +242,7 @@ enum PhonePurpose implements WireEnum {
   final String wire;
 }
 
-/// `POST /v1/auth/phone/challenges` (Helix Global). The number is sent over
+/// `POST /v1/auth/phone/challenges` (Orbit Home). The number is sent over
 /// TLS because the server must text it; the server keeps only a keyed hash
 /// and the last four digits.
 final class PhoneChallengeRequest {
@@ -477,7 +477,7 @@ final class InviteSelfIssueResponse {
 /// `POST /v1/auth/register`. Creates the account and its first device and
 /// returns a [Session].
 ///
-/// Helix Global requires [verificationToken] (phone verified). Personal
+/// Orbit Home requires [verificationToken] (phone verified). Personal
 /// servers require [inviteCode]. If the verified phone already has an
 /// account the server answers `account_exists` unless [replaceExisting] is
 /// set, in which case the account moves to this device: its AIK becomes
@@ -508,7 +508,7 @@ final class RegisterRequest {
   final String? inviteCode;
   final PasswordSetup? password;
 
-  /// The terms version the user accepted (Helix Global).
+  /// The terms version the user accepted (Orbit Home).
   final String? termsVersion;
   final bool replaceExisting;
 

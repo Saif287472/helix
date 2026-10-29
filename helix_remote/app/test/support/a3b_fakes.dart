@@ -650,7 +650,7 @@ class FakeSettingsGateway implements SettingsGateway {
   );
   var prefs = const PrivacyPrefs();
   var details = const ServerDetails(
-    name: 'Helix Global',
+    name: 'Orbit Home',
     host: 'helix.example.org',
     version: '2.0.0',
     openRegistration: true,
@@ -660,10 +660,10 @@ class FakeSettingsGateway implements SettingsGateway {
     features: {'crash_reporting_upload': true, 'group_calls': false},
   );
   var legalText = const LegalText(
-    termsTitle: 'Helix Global Terms of Service',
+    termsTitle: 'Orbit Home Terms of Service',
     termsVersion: '2026-09-25',
     terms: 'These are the terms.',
-    privacyTitle: 'Helix Global Privacy Policy',
+    privacyTitle: 'Orbit Home Privacy Policy',
     privacyVersion: '2026-09-25',
     privacy: 'This is the privacy policy.',
     fromServer: true,

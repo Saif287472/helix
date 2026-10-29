@@ -622,7 +622,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
     InviteLookupRequest.fromJson,
   ),
   'identity_invite_lookup_response': _dto(
-    const InviteLookupResponse(valid: true, serverName: 'Helix Global'),
+    const InviteLookupResponse(valid: true, serverName: 'Orbit Home'),
     (v) => v.toJson(),
     InviteLookupResponse.fromJson,
   ),
@@ -753,7 +753,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
     const RecoveryLookupResponse(
       valid: true,
       verificationRequired: true,
-      serverName: 'Helix Global',
+      serverName: 'Orbit Home',
       accountId: accountA,
     ),
     (v) => v.toJson(),
@@ -1365,7 +1365,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
   ),
   'ops_server_info': _dto(
     const ServerInfo(
-      name: 'Helix Global',
+      name: 'Orbit Home',
       version: '2.4.0',
       registration: RegistrationMode.phone,
       maxAttachmentBytes: 4294967296,
@@ -1623,7 +1623,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
   ),
   'admin_config': _dto(
     const AdminConfig(
-      serverName: 'Helix Global',
+      serverName: 'Orbit Home',
       version: '2.4.0',
       registration: RegistrationMode.phone,
       maintenance: false,
@@ -1642,7 +1642,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
   ),
   'admin_config_patch': _dto(
     const AdminConfigPatch(
-      serverName: 'Helix Global (beta)',
+      serverName: 'Orbit Home (beta)',
       maintenance: true,
       federationEnabled: false,
     ),

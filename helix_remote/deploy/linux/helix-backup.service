@@ -1,5 +1,5 @@
 [Unit]
-Description=Helix Global backup (database dump, blobs, off-box copy)
+Description=Orbit Home backup (database dump, blobs, off-box copy)
 After=postgresql.service
 
 [Service]

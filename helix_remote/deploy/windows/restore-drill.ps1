@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Restore drill: restores a Helix Global dump into a throwaway database
+Restore drill: restores an Orbit Home dump into a throwaway database
 (helix_drill), starts one server node on it on 127.0.0.1, checks
 /v1/health/ready, then removes everything again.
 

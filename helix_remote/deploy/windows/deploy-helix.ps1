@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Switches Helix Global to a release built by release-helix.ps1: graceful stop,
+Switches Orbit Home to a release built by release-helix.ps1: graceful stop,
 swap, migrate, start, check.
 
 .DESCRIPTION
@@ -161,7 +161,7 @@ if ($NoTask) {
 # 5. Start and check.
 Start-ScheduledTask -TaskName $TaskName
 if (Wait-Ready) {
-    Write-Host "Helix Global is running $Tag and ready."
+    Write-Host "Orbit Home is running $Tag and ready."
 } else {
     Write-Warning "Not ready after $ReadyTimeoutSeconds s. Look at $Dest\logs (stderr-last-run.log, wrapper.log) and the Application event log."
     Write-Warning "To go back: .\deploy-helix.ps1 -Tag <previous tag>"

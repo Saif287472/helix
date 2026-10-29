@@ -1,15 +1,15 @@
-# Helix Global Terms of Service
+# Orbit Home Terms of Service
 
 **Effective date:** September 25, 2026  
 **Version:** `2026-09-25`
 
-These Terms of Service ("Terms") govern your use of the Helix Global service,
+These Terms of Service ("Terms") govern your use of the Orbit Home service,
 the Helix Remote mobile application, and related hosted features that Helix
 makes available at the Global service address. A self-hosted Helix server is
 operated by its own administrator; its administrator's terms and policies
 govern that deployment.
 
-By creating an account or using Helix Global, you agree to these Terms and the
+By creating an account or using Orbit Home, you agree to these Terms and the
 Privacy Policy. If you do not agree, do not create an account or use the
 service. You must be legally able to enter into this agreement. If local law
 requires parental or guardian consent, you must obtain that consent before using
@@ -19,7 +19,7 @@ the service.
 
 You must provide accurate information, keep your account credentials and
 recovery codes confidential, and use only an account you are authorized to
-control. Helix Global permits one account per verified phone number. If a number
+control. Orbit Home permits one account per verified phone number. If a number
 already belongs to an account, you must use the account's authorized recovery
 process rather than attempting to create a replacement account.
 
@@ -31,7 +31,7 @@ not share them.
 
 ## 2. Acceptable use
 
-You may not use Helix Global to:
+You may not use Orbit Home to:
 
 - break the law or facilitate violence, abuse, harassment, exploitation, or
   infringement of another person's rights;
@@ -44,7 +44,7 @@ You may not use Helix Global to:
 - reverse engineer, bypass security controls, or misuse the service except
   where applicable law expressly permits such activity despite these
   restrictions; or
-- use the service to build or operate a competing service from Helix Global data
+- use the service to build or operate a competing service from Orbit Home data
   without written permission.
 
 We may investigate suspected abuse and may take reasonable steps to protect the
@@ -60,11 +60,11 @@ and permissions for content you send or receive.
 
 Helix Remote is designed to encrypt end-to-end message and attachment content on
 supported paths. Keys and decrypted content are not intended to be available to
-Helix Global. Encryption does not remove obligations under these Terms and does
+Orbit Home. Encryption does not remove obligations under these Terms and does
 not guarantee that a compromised device, recovery code, or account cannot reveal
 content.
 
-Do not use Helix Global as the only copy of important data. We may remove
+Do not use Orbit Home as the only copy of important data. We may remove
 content that violates these Terms or applicable law, and we may retain or
 disclose information where required by law or necessary to protect the service
 and its users.

@@ -1,6 +1,6 @@
-# Helix Global on the Windows PC: backups and the Caddy site
+# Orbit Home on the Windows PC: backups and the Caddy site
 
-Operator scripts and config for the PC that runs Helix Global
+Operator scripts and config for the PC that runs Orbit Home
 (`docs/operations/V2_SERVER_HANDOFF.md` describes the PC,
 `docs/operations/V2_OPERABILITY.md` the day-to-day work). **You install and
 run them.** Agents write and test them, but never run them against
@@ -56,7 +56,7 @@ then two commands.
 5. **Switch**: stop the console server (Ctrl+C in its window), then
    `.\deploy-helix.ps1 -Tag server-2026-10-14`. It installs the release,
    migrates and starts the task, and waits for `ready`.
-6. Reboot once when convenient and check that Helix Global comes back by
+6. Reboot once when convenient and check that Orbit Home comes back by
    itself (the event log, source `Helix`, and `logs\wrapper.log` show the
    starts).
 
@@ -136,7 +136,7 @@ What it does:
   then `server\.env`; only the two blob settings are read). Pass `-BlobDir`
   to choose it yourself.
 - Copies `backup-helix.ps1` to `F:\helix-backups\backup-helix.ps1` and
-  registers the task **Helix Global backup**: daily at 03:30 (`-At`), while
+  registers the task **Orbit Home backup**: daily at 03:30 (`-At`), while
   you are signed in to Windows. If the PC was off at 03:30, it runs as soon
   as it can. Run the installer again after `backup-helix.ps1` changes.
 - `-RunNow` runs the task once and shows the log.

@@ -1,17 +1,17 @@
-# Helix Global Privacy Policy
+# Orbit Home Privacy Policy
 
 **Effective date:** September 25, 2026  
 **Version:** `2026-10-23` (revised to say what the service keeps of your phone
 number and why; the terms version is unchanged)
 
-This Privacy Policy explains how Helix Global handles information when you use
-the Helix Remote app and the hosted Helix Global service. It does not govern a
+This Privacy Policy explains how Orbit Home handles information when you use
+the Helix Remote app and the hosted Orbit Home service. It does not govern a
 self-hosted Helix server operated by another person; that operator controls
 that deployment's information.
 
 ## 1. Information we process
 
-Depending on the features you use, Helix Global may process:
+Depending on the features you use, Orbit Home may process:
 
 - account information: a client-generated account identifier, a salted one-way
   phone-number hash, display name, profile details, account status,
@@ -39,7 +39,7 @@ stored outside the database, so a copy of the database or a backup does not
 give numbers up.
 
 We keep it for one reason: abuse is reported and acted on by the number it
-came from. A report to Helix Global names an account, and the number is what
+came from. A report to Orbit Home names an account, and the number is what
 lets the operator tell which account it was, take action (suspend the account,
 ban the number) and answer the person who reported it. Your number is shown to
 that operator in the admin console and to no one else: it is not in your
@@ -105,7 +105,7 @@ passwords, recovery codes, or unnecessary message content.
 
 ## 7. International users and children
 
-Helix Global may be accessed from different countries. Information may be
+Orbit Home may be accessed from different countries. Information may be
 processed in countries other than your own, subject to the legal and contractual
 protections that apply there. By using the service, you consent to that
 processing where required by law.

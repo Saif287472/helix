@@ -214,7 +214,7 @@ and the checklist cover them too.
    - app lock when it is off.
 6. The privacy preview's name → **your most recent chat,** or "Someone".
 7. The theme before sign-in → **a device setting,** so it survives sign-out.
-   Packs are hosted on Helix Global and signed with your key (both decided).
+   Packs are hosted on Orbit Home and signed with your key (both decided).
 8. Ringtone → **keep "Phone's ringtone" as a choice** next to the bundled
    default.
 9. Biggest chats and freeing space → **build** (E2, E3).

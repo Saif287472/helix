@@ -86,7 +86,7 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
     lock and pay its fan-out budget continuously.
   - A send proxied to another home server is charged there, and the
     local delivery to this server's members after it is not charged again
-    (federation is off on Helix Global).
+    (federation is off on Orbit Home).
 - **Retries:** use `Idempotency-Key`. A stored group message is also
   idempotent by its own `id`: `messaging.sends` records it inside the
   transaction that stores the fan-out, so a retry answers the original

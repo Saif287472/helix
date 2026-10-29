@@ -3,7 +3,7 @@ import 'package:helix_remote/core/platform/phone_numbers.dart';
 
 /// Which entry the person came in by.
 ///
-/// Helix Global is the default and the only one advertised; a personal server
+/// Orbit Home is the default and the only one advertised; a personal server
 /// is behind the hidden corner or a shared link. See
 /// the screen (`orbit_ui` `SignInScreen`) for how the corner works.
 enum SignInMode { global, advanced }
@@ -46,7 +46,7 @@ final class SignInState {
     this.remember = true,
   });
 
-  /// Bangladesh, because that is where Helix Global starts.
+  /// Bangladesh, because that is where Orbit Home starts.
   static const defaultCountryCode = '+880';
 
   final SignInMode mode;
@@ -75,7 +75,7 @@ final class SignInState {
 
   /// The address of the personal server this sign-in is on, as the person is
   /// asked to recognise it (host and non-standard port). Shown on every page
-  /// while it is not Helix Global: the name above is the server's own claim,
+  /// while it is not Orbit Home: the name above is the server's own claim,
   /// this is where the traffic goes.
   final String? serverHost;
 
@@ -116,7 +116,7 @@ final class SignInState {
   /// SMS code that was just verified.
   bool get isNewAccount => !accountExists;
 
-  /// Only Helix Global asks for the Terms and Privacy Policy. A personal
+  /// Only Orbit Home asks for the Terms and Privacy Policy. A personal
   /// server has its own operator policies and its own legal documents.
   bool get requiresTerms => !isAdvanced;
 
@@ -124,7 +124,7 @@ final class SignInState {
   ///
   /// Exactly [requiresTerms], and deliberately **not**
   /// `isNewAccount && requiresTerms`: [SignInController.completeSetup] demands
-  /// the Terms on Helix Global whatever the account's history is, so a screen
+  /// the Terms on Orbit Home whatever the account's history is, so a screen
   /// that hides the box for a take-over leaves "Forgot password?" unable to
   /// finish. The two were once written separately and drifted; this is the one
   /// place that says it.

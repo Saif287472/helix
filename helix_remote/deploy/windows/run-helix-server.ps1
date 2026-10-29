@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Runs the Helix Global server and starts it again when it stops, until asked
+Runs the Orbit Home server and starts it again when it stops, until asked
 to stop.
 
 .DESCRIPTION

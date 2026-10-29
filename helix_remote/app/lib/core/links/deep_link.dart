@@ -25,7 +25,7 @@ enum HelixDeepLinkKind {
   personLink,
 }
 
-/// The host of shared invite and recovery links. Always Helix Global's, even
+/// The host of shared invite and recovery links. Always Orbit Home's, even
 /// for a personal server's code: the code travels in the URL fragment, which
 /// a browser never sends to the server, and it names its own server.
 const kHelixLinkHost = 'helix.agiletechbd.com';

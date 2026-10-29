@@ -5,7 +5,7 @@ Two privacy-focused messengers in one repository.
 - **Helix Remote** (`helix_remote/`): an internet messenger with persistent,
   end-to-end encrypted chats, groups, calls and multi-device accounts, for
   Android and Windows. This is the product under active development.
-  It talks to **Helix Global** (run by the project owner) or to a personal
+  It talks to **Orbit Home** (run by the project owner) or to a personal
   server anyone can run.
 - **Helix Local** (`helix_local/`): a LAN-only, ephemeral messenger. Dormant;
   a separate app with its own workspace.
@@ -62,7 +62,7 @@ cd helix_remote/app   && flutter run -d windows     # or a connected phone
 cd helix_remote/admin && flutter run -d windows
 ```
 
-The app opens on the Helix Global sign-in page; a personal server is reached
+The app opens on the Orbit Home sign-in page; a personal server is reached
 through the hidden advanced mode (three taps bottom-right, then a fourth) or a
 shared link. Building APKs is done by hand, not by scripts or agents.
 
@@ -71,7 +71,7 @@ shared link. Building APKs is done by hand, not by scripts or agents.
 the server tests (they need `HELIX_TEST_DATABASE_URL`) and the governance
 check. CI runs the same on Linux with a Postgres service.
 
-## Running Helix Global
+## Running Orbit Home
 
 Operating the server (environment variables, Caddy, coturn, push, SMS, backups,
 the cutover checklist): [`helix_remote/docs/operations/V2_SERVER_HANDOFF.md`](helix_remote/docs/operations/V2_SERVER_HANDOFF.md)

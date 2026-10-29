@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Switches Helix Global to a release in /opt/helix/releases/<tag> (copied from
+# Switches Orbit Home to a release in /opt/helix/releases/<tag> (copied from
 # release.sh): checks the hashes, takes a backup, stops the server gracefully,
 # swaps the executables, migrates, starts, checks /v1/health/ready. If the
 # migration fails the previous version is put back.
@@ -49,7 +49,7 @@ fi
 systemctl start helix-server
 for _ in $(seq 1 60); do
     if curl -fs -m 5 "http://127.0.0.1:$port/v1/health/ready" >/dev/null; then
-        echo "Helix Global is running $tag and ready."
+        echo "Orbit Home is running $tag and ready."
         exit 0
     fi
     sleep 2

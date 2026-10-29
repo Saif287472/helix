@@ -247,7 +247,7 @@ final class AccountsNotifier extends Notifier<AccountSlots> {
   /// listed there to come back to.
   void addAccount() => leave();
 
-  /// No account on screen: the next screen is sign-in on Helix Global. A
+  /// No account on screen: the next screen is sign-in on Orbit Home. A
   /// slot whose sign-in never finished is dropped (its folder goes at the
   /// next start).
   void leave() => state = state.signedInOnly();

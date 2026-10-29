@@ -5,7 +5,7 @@
   There is deliberately no certificate pin here. Android applies this file only
   to the platform's own HTTP stack; the app's REST and WebSocket traffic runs on
   Dart's own sockets and trust store, so a pin set in this file would protect
-  none of it and only look like protection. Pinning for Helix Global is done in
+  none of it and only look like protection. Pinning for Orbit Home is done in
   Dart (lib/core/platform/tls_pinning.dart) and is off unless a build sets
   the build-time define HELIX_GLOBAL_PINS (see docs/operations/V2_SERVER_HANDOFF.md).
   Debug builds override this file for local emulator development.

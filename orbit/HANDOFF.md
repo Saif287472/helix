@@ -880,7 +880,7 @@ one exception: the owner had `orbit-ui` pushed on 2026-10-20.
   - After the owner approves a batch, commit all uncommitted work, with
     `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
   - Never push.
-- **Never touch `helix_local/`.** Production (Helix Global) runs on the
+- **Never touch `helix_local/`.** Production (Orbit Home) runs on the
   owner's PC: never stop or restart it, and never run deploy scripts.
 
 ### Gotchas found the hard way

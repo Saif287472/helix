@@ -1,4 +1,4 @@
-# Helix Global site block for Caddy on the VM (copy to /etc/caddy/Caddyfile, then
+# Orbit Home site block for Caddy on the VM (copy to /etc/caddy/Caddyfile, then
 #   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy).
 # Caddy gets and renews the certificate by itself: the name must point at this
 # VM's public IP and ports 80 and 443 must be open (install.sh opens them).

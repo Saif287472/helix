@@ -416,7 +416,7 @@ void main() {
   });
 
   group('the terms', () {
-    test('are required before an account is created on Helix Global', () async {
+    test('are required before an account is created on Orbit Home', () async {
       final container = _container();
       final notifier = container.read(signInControllerProvider.notifier);
 
@@ -435,7 +435,7 @@ void main() {
 
     test('are asked for when an existing account is taken over', () async {
       // "Forgot password?" moves an existing account to this phone with the
-      // verified SMS code. That is still Helix Global, so `completeSetup`
+      // verified SMS code. That is still Orbit Home, so `completeSetup`
       // demands the Terms - and the page has to offer the box, or the take-over
       // can never finish.
       final takenOver = const SignInState().copyWith(
@@ -452,7 +452,7 @@ void main() {
       );
     });
 
-    testWidgets('the box is on the last page on Helix Global', (tester) async {
+    testWidgets('the box is on the last page on Orbit Home', (tester) async {
       final container = await pumpScreen(tester);
       container.read(signInControllerProvider.notifier).showSetupPageForTest();
       await tester.pumpAndSettle();

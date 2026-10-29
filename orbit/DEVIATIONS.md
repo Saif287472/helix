@@ -392,7 +392,7 @@ changes below, so none of them moved a pixel in the compared states.
   - **Owner:** pending (Part B batch 1).
 - **The server badge shows on every personal-server step** (SMS code,
   password, name, take-over), as the app does; the prototype draws it on
-  the phone step only. Helix Global steps never show it. (Contract
+  the phone step only. Orbit Home steps never show it. (Contract
   "keep" row.)
   - **Owner:** pending (Part B batch 1).
 - **Tap targets report their real size.** `OrbitTapArea` already answered
@@ -1315,7 +1315,7 @@ identical at 1x).
     so it is a publish-time choice, not a code change.
   - **Answered 2026-10-25: all nine went out as packs.** The owner kept the
     built-in line at Orbit and Orbit Night and had the nine published from
-    `tool/theme_pack_tool.dart` on Helix Global, so the three are now on the app
+    `tool/theme_pack_tool.dart` on Orbit Home, so the three are now on the app
     side of the divide - see the next section.
 
 ## Appearance lists the themes this device holds (2026-10-25)

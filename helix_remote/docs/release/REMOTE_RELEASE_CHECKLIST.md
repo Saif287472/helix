@@ -51,7 +51,7 @@ user asks.
   video playback, the lock-screen incoming-call screen, audio routing, app lock
   after the app was swiped away).
 - Sign-out paths: revoke one device, revoke all others, and an SMS-OTP sign-in
-  on Helix Global signing the other devices out.
+  on Orbit Home signing the other devices out.
 - Push and notifications, on a real Android phone with a build that includes
   `google-services.json` (no automated test reaches FCM or the notification
   shade; added after the 2026-10-09 review, E-01 and E-02):
@@ -103,7 +103,7 @@ user asks.
   parity test (`packages/helix_remote_api`).
 - `docs/operations/V2_SERVER_HANDOFF.md` is current: the environment table was
   re-checked against the code and `server/.env.example` is complete.
-- `GET /v1/packs` lists what the release intends to offer. Helix Global has
+- `GET /v1/packs` lists what the release intends to offer. Orbit Home has
   `HELIX_PACKS_DIR=J:\Projects\Servers\helix_server\packs` (live 2026-10-25) and
   nine theme packs at revision 1 - arcade, bloom, field, jungle, metal, mochi,
   ocean, papyrus, terminal - staged and published with

@@ -70,12 +70,12 @@ void main() {
     await show(
       tester,
       const RingtoneGalleryScreen(
-        model: RingtoneGalleryModel(ringtones: ringtones, host: 'Helix Global'),
+        model: RingtoneGalleryModel(ringtones: ringtones, host: 'Orbit Home'),
       ),
     );
     // A group title is an eyebrow, and an eyebrow is drawn upper case.
     expect(find.text('ON THIS PHONE', findRichText: true), findsOneWidget);
-    expect(find.text('ON HELIX GLOBAL', findRichText: true), findsOneWidget);
+    expect(find.text('ON ORBIT HOME', findRichText: true), findsOneWidget);
     expect(find.text('Ringtones'), findsOneWidget);
     expect(find.text('In use'), findsOneWidget);
     // A sound pack has no name of its own: the id the publisher signed is it.

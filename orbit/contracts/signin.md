@@ -25,7 +25,7 @@ by these screens. It guards approving a new device and turning the lock on
 
 Dart: `SignInScreen`, `SignInModel`, `SignInActions`.
 
-One screen with eight steps, `SignInStep`: `phone` (Helix Global),
+One screen with eight steps, `SignInStep`: `phone` (Orbit Home),
 `serverPhone` (`signin-join`), `smsCode`, `password`, `newAccount` (the name
 step), `takeOver`, `serverCode` (`signin-advanced*`), `serverConfirm`
 (`signin-server`). The controller is `signInControllerProvider` →
@@ -45,9 +45,9 @@ its state `SignInState` (`sign_in_state.dart`).
 | setupCode | `String` | have | `SignInState.codeString` | |
 | setupCodeKind | `SetupCodeKind` (`none`, `invite`, `recovery`) | derive | `isHelixInviteCode` / `isHelixRecoveryCode` on `SignInState.codeString` (`core/links/helix_code.dart`) | The line under the field. The prototype detects while typing; today `SignInState.codeType` is set only after a successful check |
 | isRecovery | `bool` | have | `SignInState.isRecovery` | "Recover your account" or "Join the server" |
-| serverBadge | `String?` | derive | `SignInState.pendingServerHost ?? serverHost`, then `serverName`, as `_ServerBadge` builds it | `chat.rahman.family (Rahman Family)`; null on Helix Global |
+| serverBadge | `String?` | derive | `SignInState.pendingServerHost ?? serverHost`, then `serverName`, as `_ServerBadge` builds it | `chat.rahman.family (Rahman Family)`; null on Orbit Home |
 | pendingServerHost | `String?` | have | `SignInState.pendingServerHost` | The host in "This code wants to sign you in on …" |
-| showTerms | `bool` | derive | `SignInState.isNewAccount && requiresTerms` (`_NamePage`) | Helix Global only. See the take-over row below |
+| showTerms | `bool` | derive | `SignInState.isNewAccount && requiresTerms` (`_NamePage`) | Orbit Home only. See the take-over row below |
 | termsAccepted | `bool` | have | `SignInState.tosAccepted` | |
 | busy | `bool` | have | `SignInState.isLoading` | Spinner in the primary button |
 | error | `String?` | have | `SignInState.errorMessage` (always a `SignInCopy` sentence, never exception text) | The line under the fields |
@@ -108,10 +108,10 @@ None.
 | While the database opens (`AppAuthState.starting`, or still loading), the router stays on `/sign-in`, so a signed-in person briefly sees the phone step. `StartupScreen` ("Opening Helix…"), `StartupErrorScreen` and `EngineBusy` exist but nothing uses them | `_redirectFor`; `shared/widgets/startup_screen.dart` | Add a startup state to the design (open question) |
 | When an invite fails for a number that already has an account, the controller can switch to a recovery code (`beginPhoneRecovery`, `SignInState.showPhoneRecoveryPrompt`), but no button calls it | `sign_in_controller.dart` | Add "Use a recovery code" under that error, or drop |
 | Back from `password` goes to `takeOver`, whose Continue signs the other devices out. Back from `newAccount` goes to `phone` | `SignInController.goBack` | The prototype returns to the previous step. Suggest `phone` for both, because the SMS code is already used (open question) |
-| `takeOver` on Helix Global cannot finish: `completeSetup` requires the Terms, and the step has no checkbox. The prototype has none either (`SCREENS.md` lists it as a bug). "Forgot password?" leads here | `completeSetup`, `_NamePage` | Add the checkbox to `takeOver` (open question) |
+| `takeOver` on Orbit Home cannot finish: `completeSetup` requires the Terms, and the step has no checkbox. The prototype has none either (`SCREENS.md` lists it as a bug). "Forgot password?" leads here | `completeSetup`, `_NamePage` | Add the checkbox to `takeOver` (open question) |
 | A number that is too short is still sent; the server's refusal shows "Could not reach the server…" | `submitPhone`, `SignInCopy.connectFailure` | Add the prototype's length check (`onPhoneNext`) |
 | The legal sheet's version line shows "┬╖" (a mis-encoded "·") | `features/sign_in/presentation/widgets/legal_documents_sheet.dart`, line 73 | Fix in the port |
-| Copy: the legal documents. The prototype has placeholder text, versions "3" and "4", and "1 September 2026". The app has the real Helix Global documents, version "2026-09-25", effective "September 25, 2026" | `HelixLegalDocuments` | Keep the app's documents: they are what people agree to (`termsVersion` is sent at registration) |
+| Copy: the legal documents. The prototype has placeholder text, versions "3" and "4", and "1 September 2026". The app has the real Orbit Home documents, version "2026-09-25", effective "September 25, 2026" | `HelixLegalDocuments` | Keep the app's documents: they are what people agree to (`termsVersion` is sent at registration) |
 | Copy: the take-over warning. The prototype says "Continuing moves your account to this phone and signs your other devices out." The app says it only in the password step's note | `_NamePage` | Prototype wins |
 | Copy: resend. The prototype confirms with "A new code is on its way"; the app shows nothing | `resendOtp` | Prototype wins |
 

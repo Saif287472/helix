@@ -19,7 +19,7 @@ import 'package:helix_remote/features/sign_in/application/sign_in_countries.dart
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show AccountStatusResponse;
 
-/// The Helix Global server. Sign-in opens here and nowhere else unless a
+/// The Orbit Home server. Sign-in opens here and nowhere else unless a
 /// code, a link or the hidden corner says otherwise.
 final kHelixGlobalServer = kGlobalServerUrl;
 
@@ -607,11 +607,11 @@ final class SignInController extends Notifier<SignInState> {
     return ref.read(runtimeProvider.future);
   }
 
-  /// Points this sign-in at its server. Sign-in opens on Helix Global, so a
+  /// Points this sign-in at its server. Sign-in opens on Orbit Home, so a
   /// device that has not chosen another server (a first install, or one that
   /// just signed out) is pointed at it before anything is asked.
   ///
-  /// The Global page is Helix Global, always: a personal server a person once
+  /// The Global page is Orbit Home, always: a personal server a person once
   /// approved (and backed out of) must not keep receiving what they type here.
   void _chooseServer() {
     final current = ref.read(serverUrlProvider);

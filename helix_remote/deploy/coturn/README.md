@@ -129,7 +129,7 @@ The server reads the TURN settings at startup (Ctrl+C, then
 
 ## Windows home PC (behind a router)
 
-Helix Global runs on a Windows PC rather than a VPS. coturn has
+Orbit Home runs on a Windows PC rather than a VPS. coturn has
 no native Windows build, so `windows/start-turn.ps1` runs it in WSL1 (which
 shares Windows' network stack) using the same template and entrypoint as
 above. The router is what makes this different from the VPS: coturn listens

@@ -11,7 +11,7 @@ across the public internet.
   groups, and audio/video calling (1:1; group calls are not built).
 - **Audience**: Long-term remote collaboration and private user-to-user communications.
 - **Infrastructure**: A stateless Dart server (REST and WebSocket) over PostgreSQL 17, organised as
-  one module per area, run as one or more nodes behind a reverse proxy. Helix Global runs on the
+  one module per area, run as one or more nodes behind a reverse proxy. Orbit Home runs on the
   operator's PC; anyone can run a personal server.
 
 ## 2. Retention and persistence policy

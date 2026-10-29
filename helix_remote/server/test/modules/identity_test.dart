@@ -15,7 +15,7 @@ const alice = '+8801711000001';
 const bob = '+8801711000002';
 
 void main() {
-  group('identity on Helix Global', skip: databaseTestSkipReason, () {
+  group('identity on Orbit Home', skip: databaseTestSkipReason, () {
     late Harness h;
 
     setUp(() async => h = await Harness.start());
@@ -1264,7 +1264,7 @@ void main() {
       expect(
         (await h.api.call(Routes.inviteSelfIssue)).errorCode,
         'forbidden',
-        reason: 'only Helix Global self-issues invites',
+        reason: 'only Orbit Home self-issues invites',
       );
     });
   });

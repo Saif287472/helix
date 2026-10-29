@@ -6,7 +6,7 @@ import 'package:helix_remote_server/src/platform/observability/log.dart';
 
 /// Runs [open] until it succeeds, for up to [wait], pausing [every] between
 /// tries. After a reboot the server's scheduled task can start before
-/// PostgreSQL accepts connections; giving up at once would leave Helix Global
+/// PostgreSQL accepts connections; giving up at once would leave Orbit Home
 /// down until someone noticed (review H-03). A [ConfigError] is not retried:
 /// waiting does not fix a wrong setting. The last failure is rethrown.
 Future<T> retryStartup<T>(

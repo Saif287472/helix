@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-One-time setup of the scheduled tasks that keep Helix Global running after a
+One-time setup of the scheduled tasks that keep Orbit Home running after a
 reboot or a crash (review H-03), plus the health check (H-05).
 
 .DESCRIPTION
@@ -92,7 +92,7 @@ function Register-BootTask([string]$Name, $Action, [string]$Description) {
 # 3. The server.
 Register-BootTask 'Helix Server' `
     (New-ScriptAction (Join-Path $Dest 'run-helix-server.ps1') "-Dest `"$Dest`"") `
-    'Helix Global: runs bin\helix-server.exe and starts it again when it stops (deploy\windows\README.md).'
+    'Orbit Home: runs bin\helix-server.exe and starts it again when it stops (deploy\windows\README.md).'
 
 # 4. The health check.
 $drives = $Drives -join ','
@@ -111,7 +111,7 @@ $checkSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan 
     -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName 'Helix Health Check' -Action $check -Trigger @($every, $boot, $logon) `
     -Principal $s4u -Settings $checkSettings -Force `
-    -Description 'Helix Global: ready, disk, dead jobs, backlog, backup and certificate age; Event Log, a notification and an off-box alert on change.' | Out-Null
+    -Description 'Orbit Home: ready, disk, dead jobs, backlog, backup and certificate age; Event Log, a notification and an off-box alert on change.' | Out-Null
 Write-Host 'Registered Helix Health Check'
 
 # 5. Caddy and coturn, when asked.
@@ -119,7 +119,7 @@ if ($CaddyExe) {
     if (-not $Caddyfile) { throw '-CaddyExe needs -Caddyfile.' }
     $caddy = New-ScheduledTaskAction -Execute $CaddyExe -WorkingDirectory (Split-Path $CaddyExe) `
         -Argument "run --config `"$Caddyfile`""
-    Register-BootTask 'Helix Caddy' $caddy 'Caddy in front of Helix Global.'
+    Register-BootTask 'Helix Caddy' $caddy 'Caddy in front of Orbit Home.'
 }
 if ($TurnScript) {
     $turn = New-ScheduledTaskAction -Execute $powershell `

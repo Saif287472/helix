@@ -125,11 +125,11 @@ void main() {
       expect(find.text('No invites yet'), findsOneWidget);
     });
 
-    testWidgets('Helix Global (phone sign-up) has no Invites place', (
+    testWidgets('Orbit Home (phone sign-up) has no Invites place', (
       tester,
     ) async {
       h.server.config = const AdminConfig(
-        serverName: 'Helix Global',
+        serverName: 'Orbit Home',
         version: '2.0.0-test',
         registration: RegistrationMode.phone,
         maintenance: false,

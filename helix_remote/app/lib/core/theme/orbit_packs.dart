@@ -637,7 +637,7 @@ enum PackChange {
   alreadyCurrent,
 }
 
-/// The host the app asks for a pack's bytes: Helix Global, or the personal
+/// The host the app asks for a pack's bytes: Orbit Home, or the personal
 /// server this account runs on. `helix_remote_api`'s ops client is the one
 /// implementation that talks; a fake answers it in tests.
 abstract interface class PackSource {

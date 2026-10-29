@@ -114,7 +114,7 @@ const controls = <GovernanceControl>[
     'enforce: !debug && pins.isNotEmpty',
     because:
         'no pin is built in (a stale one locks every release build out of '
-        'Helix Global); HELIX_GLOBAL_PINS turns pinning on at build time.',
+        'Orbit Home); HELIX_GLOBAL_PINS turns pinning on at build time.',
   ),
 
   // --- Screenshots are allowed (product rule, 2026-09-30) ------------------

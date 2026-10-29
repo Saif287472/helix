@@ -3,7 +3,7 @@
 > **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`V2_OPERABILITY.md`](V2_OPERABILITY.md) (health, metrics, logs, jobs, backups and restore, disaster recovery, upgrades) and [`V2_SERVER_HANDOFF.md`](V2_SERVER_HANDOFF.md). The SQLite backup and restore steps below do not apply to the Postgres server.
 
 Status: Phase 19 repository baseline. This document defines the solo-owner
-operating model and production runbooks. Current production (Helix Global) is
+operating model and production runbooks. Current production (Orbit Home) is
 a single Windows PC: SQLite, attachments on local disk, FCM push, coturn in
 WSL1, Caddy in front. Sections about object storage, Redis, regional fallback
 and PITR describe controls that do not exist on that host yet.
@@ -93,7 +93,7 @@ variables win. Never commit or paste real values.
 | `HELIX_REMOTE_ADMIN_TOKEN` | No | none | Legacy name, read only when `HELIX_REMOTE_ADMIN_PASSWORD` is unset. |
 | `HELIX_REMOTE_PUBLIC_BASE_URL` | No | empty | Public URL of this server (e.g. `https://helix.agiletechbd.com`); recorded on Global auto-issued invites and used to derive the signed-challenge audience. |
 | `HELIX_REMOTE_SERVER_AUDIENCE` | No | derived from the public base URL | Audience bound into signed login/link challenges; overrides the client-sent Host header. |
-| `HELIX_REMOTE_GLOBAL_INSTANCE_MODE` | No | not `true` | `true` only on Helix Global: no invites, SMS OTP is the sign-up credential, ToS acceptance required. Read once at startup. |
+| `HELIX_REMOTE_GLOBAL_INSTANCE_MODE` | No | not `true` | `true` only on Orbit Home: no invites, SMS OTP is the sign-up credential, ToS acceptance required. Read once at startup. |
 | `HELIX_REMOTE_SMS_API_KEY` | Group | none | BulkSMSBD API key. All-or-nothing with the sender ID; a partial pair is fatal. Unset -> OTP requests get 503. |
 | `HELIX_REMOTE_SMS_SENDER_ID` | Group | none | BulkSMSBD sender ID. |
 | `HELIX_REMOTE_FCM_PROJECT_ID` | Group | none | Firebase project for push wake. Needs exactly one of the two credentials below; project ID alone is fatal. |
@@ -110,7 +110,7 @@ variables win. Never commit or paste real values.
 
 ### Start / stop server
 
-Helix Global runs on the user's Windows PC: Caddy terminates TLS and proxies to
+Orbit Home runs on the user's Windows PC: Caddy terminates TLS and proxies to
 `127.0.0.1:8080`, the backend runs from this working copy, and coturn runs in
 WSL1 (see `docs/history/helix-remote-v1-server-handoff.md` and
 `deploy/coturn/README.md`). That process is live production; deploying a change

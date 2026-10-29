@@ -44,7 +44,7 @@ usage: helix_v2 [--home DIR] [--server URL] [--json] <command> [arguments]
 
 Account
   register --phone +E164 [--password-env VAR] [--code-env VAR] [--replace]
-                                   Create an account (Helix Global). The SMS
+                                   Create an account (Orbit Home). The SMS
                                    code is read from the variable or a prompt.
   register --invite-env VAR        Create an account on a personal server.
   login --phone +E164 [--password-env VAR] [--device-name NAME]

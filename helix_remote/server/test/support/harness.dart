@@ -103,7 +103,7 @@ final class Harness {
     return PhoneVerifyResponse.fromJson(verify.json);
   }
 
-  /// Registers a new account on Helix Global with [number]; returns its
+  /// Registers a new account on Orbit Home with [number]; returns its
   /// first device (with a session).
   Future<TestDevice> registerGlobal(
     String number, {

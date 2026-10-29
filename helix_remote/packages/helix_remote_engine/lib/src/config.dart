@@ -85,7 +85,7 @@ final class EngineConfig {
 
   /// An op that has not been sent after this long is given up on (the
   /// message is shown as failed). 30 days, as long as the server keeps an
-  /// undelivered message: Helix Global is a PC that is not always on, and a
+  /// undelivered message: Orbit Home is a PC that is not always on, and a
   /// long weekend with it off must not fail every message written meanwhile
   /// (review H-06; it was 3 days).
   final Duration outboxMaxAge;

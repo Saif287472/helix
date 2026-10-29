@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Checks Helix Global and tells you when something changes: the Windows
+Checks Orbit Home and tells you when something changes: the Windows
 Application log (source Helix) and a desktop notification.
 
 .DESCRIPTION
@@ -241,11 +241,11 @@ function Write-HelixEvent([string]$Message, [string]$Type, [int]$Id) {
 if ($changed) {
     if ($problems.Count -gt 0) {
         $text = $problems -join ' '
-        Write-HelixEvent "Helix Global health check: $text" 'Error' 2001
-        Show-Toast 'Helix Global needs attention' $text
+        Write-HelixEvent "Orbit Home health check: $text" 'Error' 2001
+        Show-Toast 'Orbit Home needs attention' $text
     } else {
-        Write-HelixEvent 'Helix Global health check: all clear again.' 'Information' 2000
-        Show-Toast 'Helix Global is healthy again' 'Every check passes.'
+        Write-HelixEvent 'Orbit Home health check: all clear again.' 'Information' 2000
+        Show-Toast 'Orbit Home is healthy again' 'Every check passes.'
     }
 }
 # Off-box: a heartbeat on every healthy run (a dead-man's switch: when the pings
@@ -263,7 +263,7 @@ function Send-OffBox([string]$Url, [string]$Method, [string]$Body) {
 }
 $alertUrl = $settings['HELIX_ALERT_URL']
 if ($changed -and $alertUrl) {
-    $message = if ($problems.Count -gt 0) { 'Helix Global needs attention: ' + ($problems -join ' ') } else { 'Helix Global is healthy again.' }
+    $message = if ($problems.Count -gt 0) { 'Orbit Home needs attention: ' + ($problems -join ' ') } else { 'Orbit Home is healthy again.' }
     Send-OffBox $alertUrl 'Post' $message
 }
 $heartbeatUrl = $settings['HELIX_HEARTBEAT_URL']

@@ -120,7 +120,7 @@ final class ServerConfig {
   final Topology topology;
   final bool devMode;
 
-  /// Helix Global (phone sign-up) rather than a personal server (invites).
+  /// Orbit Home (phone sign-up) rather than a personal server (invites).
   final bool globalMode;
   final String serverName;
 

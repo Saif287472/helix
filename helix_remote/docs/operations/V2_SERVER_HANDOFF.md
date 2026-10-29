@@ -4,7 +4,7 @@ Status: final, Phase X (2026-10). Written in Phase S7 (2026-10-01) from the code
 its environment table re-checked against the code at Phase X. The v2 server
 replaces the v1 backend (`helix_remote/backend`, SQLite, deleted from the
 repository) on the cutover day, which **the user performs** (checklist below).
-Until that day Helix Global still runs v1; the v1 handoff
+Until that day Orbit Home still runs v1; the v1 handoff
 (`docs/history/helix-remote-v1-server-handoff.md`, now historical for the
 backend, still accurate for Caddy, the router and WSL1 coturn) describes the
 PC. After the cutover, this file describes production.
@@ -158,7 +158,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_PORT` | no | `8080` | no | no | Listen port, 0 to 65535. For a second node on the same PC, use another port. |
 | `HELIX_PUBLIC_BASE_URL` | no | `http://<host>:<port>` | no | no | The public URL, `https://helix.agiletechbd.com` in production. It must be an absolute URL. Its host must be a DNS name or IPv4 address (checked at start even if federation is off). The host (and port, if any) is this server's federation domain. Also used by the `/open` page and `federation_domain`. |
 | `HELIX_TOPOLOGY` | no | `single_host` | no | no | `single_host` or `cluster`. `cluster` only adds one rule: it refuses local object storage outside dev mode (it needs `HELIX_BLOB_STORE=s3`). Nothing else reads it. |
-| `HELIX_GLOBAL_MODE` | no | `false` | no | no | `true` on Helix Global: sign-up by phone and SMS code. `false` is a personal server: invites only. `true` refuses to start without a configured SMS provider. |
+| `HELIX_GLOBAL_MODE` | no | `false` | no | no | `true` on Orbit Home: sign-up by phone and SMS code. `false` is a personal server: invites only. `true` refuses to start without a configured SMS provider. |
 | `HELIX_SERVER_NAME` | no | `Helix` | no | no | The starting server name. The operator can change it later (stored in `ops.settings`, which then wins). |
 | `HELIX_NODE_ID` | no | random UUIDv7 per process | no | no | A name for this node, used in logs, job leases and WebSocket routes. Keep it unique among running nodes. |
 | `HELIX_JWT_KEYS` | yes | none | no | **yes** | JSON object of key id to base64url secret, each at least 32 bytes: `{"2026-10":"<generate: 32 random bytes, base64url>"}`. Verifies device tokens and admin tokens. Every node needs the same value. |
@@ -195,7 +195,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_SMS_PROVIDER` | no | `none` | no | no | `none` or `bulksmsbd`. Required to be `bulksmsbd` when `HELIX_GLOBAL_MODE=true`. |
 | `HELIX_SMS_API_KEY` | if `bulksmsbd` | none | no | **yes** | BulkSMSBD API key. |
 | `HELIX_SMS_SENDER_ID` | if `bulksmsbd` | none | no | no | BulkSMSBD approved sender id. |
-| `HELIX_TERMS_VERSION` | no | the built-in terms version | no | no | Overrides the terms version reported to apps. On Helix Global, registration must name this version. |
+| `HELIX_TERMS_VERSION` | no | the built-in terms version | no | no | Overrides the terms version reported to apps. On Orbit Home, registration must name this version. |
 | `HELIX_OTP_RESEND_SECONDS` | no | `30` | no | no | Minimum gap between two codes to one number, 0 to 600. |
 | `HELIX_SMS_DAILY_LIMIT` | no | `500` | no | no | Codes the whole server texts in a day, 1 to 1000000 (a token bucket that refills over the day, so at most twice this in any 24 hours). Over it, code requests get 429 `rate_limited` and the log says `sms_budget_exhausted`. Stops SMS pumping from spending the provider balance. |
 | `HELIX_SMS_COUNTRIES` | no | `880` | no | no | Calling codes that may receive codes, comma separated, without `+` (`880`, `880,971`), or `*` for every country. Other numbers get 503 `sms_unavailable` before anything is stored or charged. |
@@ -385,7 +385,7 @@ local Caddy 2.11 on 2026-10-09.
 
 ## TLS pinning (app)
 
-Pinning Helix Global's certificate key in the app is **off by default**. The
+Pinning Orbit Home's certificate key in the app is **off by default**. The
 app pins nothing unless the build passes
 `--dart-define=HELIX_GLOBAL_PINS=<base64 sha256>,<backup>` (the values are the
 SHA-256 of the certificate's public key, base64; the next key's pin goes in the
@@ -425,7 +425,7 @@ platform HTTP stack, so it would protect none of the app's Dart traffic
 ## SMS (BulkSMSBD)
 
 - Set `HELIX_SMS_PROVIDER=bulksmsbd`, `HELIX_SMS_API_KEY`,
-  `HELIX_SMS_SENDER_ID`. Helix Global needs it; personal servers can run
+  `HELIX_SMS_SENDER_ID`. Orbit Home needs it; personal servers can run
   with `none`.
 - The server sends to `https://bulksmsbd.net/api/smsapi` and treats
   `response_code` 202 as success (the gateway answers HTTP 200 even for
@@ -623,7 +623,7 @@ HELIX_PORT=8080
 HELIX_PUBLIC_BASE_URL=https://helix.agiletechbd.com
 HELIX_TOPOLOGY=single_host
 HELIX_GLOBAL_MODE=true
-HELIX_SERVER_NAME=Helix Global
+HELIX_SERVER_NAME=Orbit Home
 HELIX_JWT_KEYS={"2026-10":"<generate: 32 random bytes, base64url>"}
 HELIX_JWT_ACTIVE_KID=2026-10
 HELIX_BLOB_STORE=local

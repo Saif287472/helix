@@ -36,7 +36,7 @@ final class AccountService {
 
   // ------------------------------------------------------ phone codes
 
-  /// Texts a 6-digit code to [phoneNumber] (Helix Global).
+  /// Texts a 6-digit code to [phoneNumber] (Orbit Home).
   Future<PhoneChallengeResponse> requestPhoneCode(
     String phoneNumber, {
     PhonePurpose purpose = PhonePurpose.register,
@@ -64,7 +64,7 @@ final class AccountService {
   /// Creates an account (or, with [replaceExisting], takes over the
   /// number's account under a new identity key) and signs this device in.
   ///
-  /// Helix Global needs a [verificationToken] from [verifyPhone]; a
+  /// Orbit Home needs a [verificationToken] from [verifyPhone]; a
   /// personal server needs an [inviteCode]. A [password] is optional but
   /// lets the account be recovered on a new device without another device
   /// (it wraps the identity key; the server only learns the derived auth

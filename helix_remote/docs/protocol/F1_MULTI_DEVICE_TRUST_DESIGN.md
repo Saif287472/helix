@@ -80,7 +80,7 @@ device.
 
 Wrong passwords count toward a lockout (5 failures -> 15 minutes, doubling up to
 24 hours) shared with `POST /api/v1/accounts/password/verify` and password
-changes. Nobody else is signed out. By contrast, on Helix Global an SMS-OTP
+changes. Nobody else is signed out. By contrast, on Orbit Home an SMS-OTP
 sign-in to an existing account (and "Forgot password") moves the account onto
 the new device: the identity key rotates and the other devices are signed out.
 

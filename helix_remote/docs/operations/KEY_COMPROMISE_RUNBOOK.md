@@ -1,4 +1,4 @@
-# Key compromise runbook (Helix Global)
+# Key compromise runbook (Orbit Home)
 
 What to do when a secret may have leaked, in the order to do it. The routine
 rotations (nothing leaked) are in `V2_SERVER_HANDOFF.md`, "Rotating secrets";

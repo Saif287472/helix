@@ -1,5 +1,5 @@
 [Unit]
-Description=Helix Global health check
+Description=Orbit Home health check
 After=network-online.target
 
 [Service]

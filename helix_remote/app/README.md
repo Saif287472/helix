@@ -44,7 +44,7 @@ other `run_remote_*` scripts run it on an emulator or a phone. Point it at a
 local server (`dart run bin/server.dart` in `../server`) in the hidden advanced
 mode: three taps in the bottom-right corner of the sign-in page, then a fourth.
 
-TLS pinning for Helix Global is off unless a build passes
+TLS pinning for Orbit Home is off unless a build passes
 `--dart-define=HELIX_GLOBAL_PINS=...` (see `MODULE.md`, "Pinning").
 
 **Agents: do not build APKs (`flutter build apk`) unless the user asks.** The

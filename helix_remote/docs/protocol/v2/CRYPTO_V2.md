@@ -37,7 +37,7 @@ derivations. `‖` is byte concatenation; `u32(x)`/`u64(x)` are big-endian.
 
 | Key | Type | Where | Lifetime |
 |---|---|---|---|
-| **AIK** account identity key | Ed25519 | every device of the account; a password-wrapped copy on the server (§11) | until rotation (SMS takeover on Helix Global, recovery redeem) |
+| **AIK** account identity key | Ed25519 | every device of the account; a password-wrapped copy on the server (§11) | until rotation (SMS takeover on Orbit Home, recovery redeem) |
 | **DIK** device identity key | X25519 | one device | the device's life |
 | **DSK** device signing key | Ed25519 | one device | the device's life |
 | **SPK** signed prekey | X25519 | one device; public part on server | rotated every 7 days; private kept 30 days after rotation |

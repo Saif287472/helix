@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Health of Helix Global, every 5 minutes (helix-health.timer): tells you when
+# Health of Orbit Home, every 5 minutes (helix-health.timer): tells you when
 # something changes, on the journal, and, off the VM, at HELIX_ALERT_URL.
 #
 # Checks: the server answers /v1/health/ready; the services run (helix-server,
@@ -119,10 +119,10 @@ printf '%s\n' "$current" >"$STATE"
 alert=$(setting HELIX_ALERT_URL)
 if [ "$current" != "$previous" ]; then
     if [ "${#problems[@]}" -gt 0 ]; then
-        text="Helix Global needs attention: ${problems[*]}"
+        text="Orbit Home needs attention: ${problems[*]}"
         logger -t helix-health -p user.err "$text"
     else
-        text="Helix Global is healthy again."
+        text="Orbit Home is healthy again."
         logger -t helix-health -p user.info "$text"
     fi
     notify_post "$alert" "$text"

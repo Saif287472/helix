@@ -82,7 +82,7 @@ final class EngineWorld {
     return user;
   }
 
-  /// A registered, running engine for [number] (Helix Global phone flow).
+  /// A registered, running engine for [number] (Orbit Home phone flow).
   Future<EngineUser> register(
     String name,
     String number, {

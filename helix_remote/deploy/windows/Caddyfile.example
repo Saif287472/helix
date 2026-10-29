@@ -1,4 +1,4 @@
-# Helix Global site block for Caddy (checked with Caddy 2.11).
+# Orbit Home site block for Caddy (checked with Caddy 2.11).
 #
 # Install: copy this over J:\Projects\Servers\helix_server\Caddyfile (keep a
 # copy of the old file), then from that folder:

@@ -1,5 +1,5 @@
 [Unit]
-Description=Helix Global backup, nightly
+Description=Orbit Home backup, nightly
 
 [Timer]
 OnCalendar=*-*-* 03:30:00

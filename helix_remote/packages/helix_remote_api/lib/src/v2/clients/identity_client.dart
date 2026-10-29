@@ -15,7 +15,7 @@ final class IdentityClient {
 
   // ---------------------------------------------------------- public routes
 
-  /// Texts a code to the number (Helix Global only).
+  /// Texts a code to the number (Orbit Home only).
   Future<PhoneChallengeResponse> phoneChallenge(
     PhoneChallengeRequest request,
   ) => _t.call(

@@ -89,7 +89,7 @@ void main() {
         const RecoveryLookupResponse(
           valid: true,
           verificationRequired: true,
-          serverName: 'Helix Global',
+          serverName: 'Orbit Home',
           accountId: accountA,
         ),
         (v) => v.toJson(),
@@ -476,7 +476,7 @@ void main() {
       );
       expectRoundTrip(
         const ServerInfo(
-          name: 'Helix Global',
+          name: 'Orbit Home',
           version: '2.0.0',
           registration: RegistrationMode.phone,
           maxAttachmentBytes: 100 << 20,

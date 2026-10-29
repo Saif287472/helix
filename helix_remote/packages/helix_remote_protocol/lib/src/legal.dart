@@ -9,42 +9,42 @@ abstract final class HelixLegalDocuments {
   static const termsVersion = '2026-09-25';
   static const privacyVersion = '2026-10-23';
   static const effectiveDate = 'September 25, 2026';
-  static const termsTitle = 'Helix Global Terms of Service';
-  static const privacyTitle = 'Helix Global Privacy Policy';
+  static const termsTitle = 'Orbit Home Terms of Service';
+  static const privacyTitle = 'Orbit Home Privacy Policy';
 
   static const termsOfService = '''
-Helix Global Terms of Service
+Orbit Home Terms of Service
 
 Effective date: September 25, 2026
 Version: 2026-09-25
 
 1. Agreement and scope
-These Terms of Service ("Terms") govern your use of the Helix Global service, the Helix Remote mobile application, and related hosted features that Helix makes available at the Global service address. A self-hosted Helix server is operated by its own administrator; its administrator's terms and policies govern that deployment.
+These Terms of Service ("Terms") govern your use of the Orbit Home service, the Helix Remote mobile application, and related hosted features that Helix makes available at the Global service address. A self-hosted Helix server is operated by its own administrator; its administrator's terms and policies govern that deployment.
 
-By creating an account or using Helix Global, you agree to these Terms and the Privacy Policy. If you do not agree, do not create an account or use the service. You must be legally able to enter into this agreement. If local law requires parental or guardian consent, you must obtain that consent before using the service.
+By creating an account or using Orbit Home, you agree to these Terms and the Privacy Policy. If you do not agree, do not create an account or use the service. You must be legally able to enter into this agreement. If local law requires parental or guardian consent, you must obtain that consent before using the service.
 
 2. Accounts and phone numbers
-You must provide accurate information, keep your account credentials and recovery codes confidential, and use only an account you are authorized to control. Helix Global permits one account per verified phone number. If a number already belongs to an account, you must use the account's authorized recovery process rather than attempting to create a replacement account.
+You must provide accurate information, keep your account credentials and recovery codes confidential, and use only an account you are authorized to control. Orbit Home permits one account per verified phone number. If a number already belongs to an account, you must use the account's authorized recovery process rather than attempting to create a replacement account.
 
 You are responsible for activity performed through your account and devices. Tell us promptly if you believe an account or device has been compromised. Recovery codes and device links are bearer credentials: anyone who obtains one may be able to take over the associated account, so store them securely and do not share them.
 
 3. Acceptable use
-You may not use Helix Global to:
+You may not use Orbit Home to:
 - break the law or facilitate violence, abuse, harassment, exploitation, or infringement of another person's rights;
 - distribute malware, spam, phishing material, unsolicited advertising, or abusive automated traffic;
 - impersonate another person, evade access controls, probe or attack the service without authorization, or interfere with other users or the service's operation;
 - upload malicious, illegal, infringing, or excessively large material;
 - reverse engineer, bypass security controls, or misuse the service except where applicable law expressly permits such activity despite these restrictions; or
-- use the service to build or operate a competing service from Helix Global data without written permission.
+- use the service to build or operate a competing service from Orbit Home data without written permission.
 
 We may investigate suspected abuse and may take reasonable steps to protect the service, other users, and the public, including rate limiting or temporarily blocking abusive traffic.
 
 4. Messages, content, and encryption
 You retain ownership of content you submit. You give Helix only the limited rights needed to host, transmit, synchronize, back up, and display that content so the service can operate. You are responsible for having the necessary rights and permissions for content you send or receive.
 
-Helix Remote is designed to encrypt end-to-end message and attachment content on supported paths. Keys and decrypted content are not intended to be available to Helix Global. Encryption does not remove obligations under these Terms and does not guarantee that a compromised device, recovery code, or account cannot reveal content.
+Helix Remote is designed to encrypt end-to-end message and attachment content on supported paths. Keys and decrypted content are not intended to be available to Orbit Home. Encryption does not remove obligations under these Terms and does not guarantee that a compromised device, recovery code, or account cannot reveal content.
 
-Do not use Helix Global as the only copy of important data. We may remove content that violates these Terms or applicable law, and we may retain or disclose information where required by law or necessary to protect the service and its users.
+Do not use Orbit Home as the only copy of important data. We may remove content that violates these Terms or applicable law, and we may retain or disclose information where required by law or necessary to protect the service and its users.
 
 5. Attachments, storage, and availability
 The Global service currently provides a 100 MB maximum attachment size, a 5 GB account storage quota, and a default 30-day retention period for completed attachments that are no longer referenced. These limits may be changed for security, abuse prevention, or operational reasons. The limits returned by the service control where they differ from this description.
@@ -72,16 +72,16 @@ If a provision is unenforceable, the remaining provisions remain in effect. A wa
 ''';
 
   static const privacyPolicy = '''
-Helix Global Privacy Policy
+Orbit Home Privacy Policy
 
 Effective date: September 25, 2026
 Version: 2026-10-23
 
 1. Who this policy covers
-This Privacy Policy explains how Helix Global handles information when you use the Helix Remote app and the hosted Helix Global service. It does not govern a self-hosted Helix server operated by another person; that operator controls that deployment's information.
+This Privacy Policy explains how Orbit Home handles information when you use the Helix Remote app and the hosted Orbit Home service. It does not govern a self-hosted Helix server operated by another person; that operator controls that deployment's information.
 
 2. Information we process
-Depending on the features you use, Helix Global may process:
+Depending on the features you use, Orbit Home may process:
 - account information: a client-generated account identifier, a salted one-way phone-number hash, display name, profile details, account status, cryptographic public keys, and the phone number you signed up with once your app reports it back to us (kept sealed, as described below);
 - authentication information: phone verification challenges, hashed verification codes, invite and recovery-code hashes, device records, session and refresh-token records, account-recovery events, and limited audit events;
 - service content: encrypted messages, calls, group data, attachments, and the metadata needed to route, synchronize, back up, and delete that content;
@@ -91,7 +91,7 @@ Depending on the features you use, Helix Global may process:
 
 Your phone number verifies the account, and the account is looked up by a salted hash of it rather than by the number itself. The number reaches us when we send you an SMS code and, when configured, goes to the SMS provider for delivery. It also reaches us once more when your app confirms the number it signed in with, and we keep that report - sealed with AES-256-GCM under a key stored outside the database, so a copy of the database or a backup does not give numbers up.
 
-We keep it for one reason: abuse is reported and acted on by the number it came from. A report to Helix Global names an account, and the number is what lets the operator tell which account it was, take action (suspend the account, ban the number) and answer the person who reported it. Your number is shown to that operator in the admin console and to no one else: it is not in your profile, it is never given to another user, and it is never in our logs. A server that does not hold the sealing key keeps no number at all, and its console shows only the last four digits.
+We keep it for one reason: abuse is reported and acted on by the number it came from. A report to Orbit Home names an account, and the number is what lets the operator tell which account it was, take action (suspend the account, ban the number) and answer the person who reported it. Your number is shown to that operator in the admin console and to no one else: it is not in your profile, it is never given to another user, and it is never in our logs. A server that does not hold the sealing key keeps no number at all, and its console shows only the last four digits.
 
 The app may store your normalized phone number locally in secure device storage so it can restore your session.
 
@@ -115,7 +115,7 @@ Depending on where you live, you may have rights to access, correct, export, del
 To make a privacy request, contact privacy@helix.agiletechbd.com. We may need to verify your identity before completing a request. Do not email private keys, passwords, recovery codes, or unnecessary message content.
 
 8. International users
-Helix Global may be accessed from different countries. Information may be processed in countries other than your own, subject to the legal and contractual protections that apply there. By using the service, you consent to that processing where required by law.
+Orbit Home may be accessed from different countries. Information may be processed in countries other than your own, subject to the legal and contractual protections that apply there. By using the service, you consent to that processing where required by law.
 
 9. Children
 The service is not directed to children who cannot legally enter into this agreement or provide the required consent. If you believe a child submitted information without appropriate authorization, contact us so we can investigate.

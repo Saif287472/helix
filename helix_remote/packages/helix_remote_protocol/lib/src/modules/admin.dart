@@ -296,7 +296,7 @@ final class AdminInvite {
 
   final String inviteId;
 
-  /// `admin` or `self` (Helix Global self-issued).
+  /// `admin` or `self` (Orbit Home self-issued).
   final String issuer;
   final InviteStatus status;
   final DateTime createdAt;

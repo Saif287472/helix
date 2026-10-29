@@ -26,7 +26,7 @@ abstract final class ServerPolicy {
   static ServerUrlProblem? check(Uri url, {bool? debug}) =>
       ServerAddressRule.check(url, allowDevelopmentHttp: debug ?? kDebugMode);
 
-  /// Whether [url] is Helix Global's own address.
+  /// Whether [url] is Orbit Home's own address.
   static bool isGlobal(Uri url) => sameServer(url, kGlobalServerUrl);
 
   /// Whether two addresses name the same server (scheme, host and port).

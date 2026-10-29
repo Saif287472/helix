@@ -12,6 +12,11 @@ For any non-trivial Helix Remote change, use the project skills:
 report) and `helix-verify` (analyze, test, separate new failures from known
 ones).
 
+**Names.** The product is **Orbit**; the server the user hosts for everyone is
+**Orbit Home** (renamed from "Helix Global" on 2026-10-29, display text only:
+the env var names such as `HELIX_GLOBAL_MODE` and `HELIX_GLOBAL_PINS`, code
+identifiers, the domain and `helix_*` packages keep their names).
+
 **Never change anything under `helix_local/`** - it is a separate app.
 
 ## Architecture (v2, live since the Phase X cutover)
@@ -50,7 +55,7 @@ Two separate Dart/Flutter workspaces; there is no root `pubspec.yaml`.
 
 ```
 helix_remote/                pub workspace (run commands from here)
-  server/                    Dart shelf server (Helix Global and personal servers)
+  server/                    Dart shelf server (Orbit Home and personal servers)
     bin/server.dart          one node: reads server/.env, migrates, serves
     bin/migrate.dart         apply migrations and exit (deploy step)
     lib/src/platform/        infrastructure, no business logic (PLATFORM.md):
@@ -175,7 +180,7 @@ instructions. `docs/codebase/` is a gitignored code dump - never read it.
   someone writes the name to the phone's contacts too. Search for people lives
   in the Chats and Calls tabs (`features/people/`). Home is three swipeable
   tabs: Chats, Calls, Settings.
-- Sign-in always opens on the simple Helix Global page. Personal servers are
+- Sign-in always opens on the simple Orbit Home page. Personal servers are
   behind the hidden advanced mode (3 taps bottom-right, 2 s apart, reveal it;
   a 4th opens it) or a shared link `https://helix.agiletechbd.com/open#HLX-…`.
   There is no host-your-own-server guide in the app.
@@ -218,7 +223,7 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ## Deployment
 
-- Helix Global runs on the user's PC: Caddy (`J:\Projects\Servers\helix_server`)
+- Orbit Home runs on the user's PC: Caddy (`J:\Projects\Servers\helix_server`)
   in front of the server, against the PostgreSQL 17 service
   `postgresql-x64-17` (role `helix`, database `helix`), with local object
   storage and coturn in WSL1 (`deploy/coturn/windows/start-turn.ps1`). The

@@ -745,7 +745,7 @@ reuse that effect.
      is not this machine's ordinary backups, and paste the publisher key into the
      app's trust anchor, which step 3 adds with the download page. Until then
      the format and the tool are the whole of it, and nothing is downloadable.
-2. **A server endpoint on Helix Global** that lists and serves packs, built
+2. **A server endpoint on Orbit Home** that lists and serves packs, built
    with the `helix-feature` process.
    - For now it runs on your PC. A separate file host can come later if
      users grow.

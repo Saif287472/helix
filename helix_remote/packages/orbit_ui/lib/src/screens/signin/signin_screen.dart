@@ -18,7 +18,7 @@ import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 
 /// The steps of [SignInScreen] (`contracts/signin.md`).
 enum SignInStep {
-  /// Helix Global: your phone number.
+  /// Orbit Home: your phone number.
   phone,
 
   /// A personal server: your phone number, with the server's badge
@@ -89,7 +89,7 @@ class SignInModel {
   /// "Recover your account" rather than "Join the server".
   final bool isRecovery;
 
-  /// "chat.rahman.family (Rahman Family)"; null on Helix Global.
+  /// "chat.rahman.family (Rahman Family)"; null on Orbit Home.
   final String? serverBadge;
   final String? pendingServerHost;
   final bool termsAccepted;
@@ -102,7 +102,7 @@ class SignInModel {
   /// has an account on a personal server).
   final bool showRecoveryOffer;
 
-  /// The Terms checkbox on the name and take-over steps. Helix Global asks
+  /// The Terms checkbox on the name and take-over steps. Orbit Home asks
   /// for them; a personal server has its own policies (the app's
   /// `SignInState.showsTerms`).
   final bool showTerms;

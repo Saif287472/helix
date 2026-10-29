@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Builds a Helix Global server release from a git tag, without touching the
+Builds an Orbit Home server release from a git tag, without touching the
 running server.
 
 .DESCRIPTION

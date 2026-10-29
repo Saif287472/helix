@@ -184,7 +184,7 @@ void main() {
       expect(opened, hasLength(1));
     });
 
-    test('Helix Global itself needs no question', () async {
+    test('Orbit Home itself needs no question', () async {
       final c = container();
       final controller = c.read(signInControllerProvider.notifier);
       await controller.openWithCode(invite('https://helix.agiletechbd.com'));
@@ -227,7 +227,7 @@ void main() {
       expect(c.read(signInControllerProvider).serverHost, isNull);
     });
 
-    test('the Global page is Helix Global even after a personal server was '
+    test('the Global page is Orbit Home even after a personal server was '
         'approved and abandoned', () async {
       final c = container();
       final controller = c.read(signInControllerProvider.notifier);
@@ -242,7 +242,7 @@ void main() {
 
       await controller.submitPhone();
       // The number alone opens nothing; the first request (a code here) goes
-      // to Helix Global.
+      // to Orbit Home.
       await controller.useCodeInstead();
       expect(opened, [kGlobalServerUrl]);
     });

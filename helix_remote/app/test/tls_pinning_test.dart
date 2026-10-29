@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/platform/tls_pinning.dart';
 import 'package:helix_remote_api/v2.dart' show RealtimeUpgradeException;
 
-/// M1: certificate pinning for Helix Global, exercised against a real TLS
+/// M1: certificate pinning for Orbit Home, exercised against a real TLS
 /// server on loopback with a throwaway certificate (never a real Helix key).
 void main() {
   late HttpServer server;
@@ -131,7 +131,7 @@ void main() {
   });
 
   group('the policy', () {
-    test('pins Helix Global hosts and nothing else', () {
+    test('pins Orbit Home hosts and nothing else', () {
       final pinned = TlsPinPolicy.fromDefinedPins(_certPin, debug: false);
       expect(pinned.enforce, isTrue);
       expect(

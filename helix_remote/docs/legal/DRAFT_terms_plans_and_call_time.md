@@ -19,7 +19,7 @@ the wording and its fit with Bangladeshi law are for qualified counsel.
 
 ## Proposed section: Plans, call time and payments
 
-**Plans.** Helix Global offers a Free plan and a paid plan called Orbit Premium. Messaging, end-to-end encryption,
+**Plans.** Orbit Home offers a Free plan and a paid plan called Orbit Premium. Messaging, end-to-end encryption,
 calls within the call time below, backup and restore, and account export and deletion are available on Free.
 Premium raises storage, file-size, retention, device and backup limits, removes the call-time limits, and unlocks
 downloadable theme, ringtone and animation packs. The limits that apply to your account are shown in the

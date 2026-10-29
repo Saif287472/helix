@@ -1,6 +1,6 @@
 # helix_remote_server
 
-The Helix Remote server: Helix Global and personal servers run this one
+The Helix Remote server: Orbit Home and personal servers run this one
 program. It is a stateless Dart (shelf) node over PostgreSQL 17, built from one
 module per area (ADR-025, ADR-026; plan of record
 [`../docs/architecture/ARCHITECTURE_V2_PLAN.md`](../docs/architecture/ARCHITECTURE_V2_PLAN.md)).

@@ -55,7 +55,7 @@ is authenticated — afterwards there is no way to reach it).
 Status: updated at Phase X for the v2 server (the v1 `HELIX_REMOTE_FCM_*`
 variables and `backend/.env` no longer exist).
 
-Helix Global runs on the user's PC (Caddy + `dart run bin/server.dart` in
+Orbit Home runs on the user's PC (Caddy + `dart run bin/server.dart` in
 `helix_remote/server`), not a VPS or Docker. Set in `helix_remote/server/.env`
 (the server loads it itself at startup; process environment variables override
 it):

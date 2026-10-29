@@ -10,7 +10,7 @@ credentials and customer data are never used.
 
 > Status (2026-09): only the load baseline has a checked-in tool
 > (`helix_remote/backend/tool/load_smoke.dart`). The other drills are manual.
-> Helix Global runs on the user's PC with SQLite and attachments on local disk
+> Orbit Home runs on the user's PC with SQLite and attachments on local disk
 > (no object store); "DB failover" means restoring a copy of
 > `helix_remote/backend/remote_backend.db`. Remote-specific DR steps are in
 > `helix_remote/docs/operations/REMOTE_OPERABILITY_AND_DR.md`.

@@ -13,7 +13,7 @@ OS-assigned port. It uses the test database `HELIX_TEST_DATABASE_URL`, and the
 tool refuses any database whose name does not contain `test`. Every run gets a
 fresh schema prefix (`ld…_`), which is dropped at the end. The tool then:
 
-1. **Provisions** N devices, one account each, through the real Helix Global
+1. **Provisions** N devices, one account each, through the real Orbit Home
    flow: phone challenge, verify, then register with an AIK-certified
    device, DSK proof, signed prekey and one-time prekeys. This is not a fast
    path. The recording SMS provider (dev mode only) hands the codes to the

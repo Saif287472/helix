@@ -979,7 +979,7 @@ void main() {
       );
       await settle(tester);
       expect(find.text('Version 2.0.0'), findsOneWidget);
-      expect(find.text('Helix Global (helix.example.org)'), findsOneWidget);
+      expect(find.text('Orbit Home (helix.example.org)'), findsOneWidget);
       expect(find.text('Open-source licences'), findsOneWidget);
       // Problem reports are always sent, so there is no switch to offer.
       expect(find.text('Problem reports'), findsOneWidget);
@@ -1000,7 +1000,7 @@ void main() {
         overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
       );
       await settle(tester);
-      expect(find.text('Helix Global Terms of Service'), findsOneWidget);
+      expect(find.text('Orbit Home Terms of Service'), findsOneWidget);
       expect(
         find.textContaining(RegExp('version 2026-09-25', caseSensitive: false)),
         findsOneWidget,

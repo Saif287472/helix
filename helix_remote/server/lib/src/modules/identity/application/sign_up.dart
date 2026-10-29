@@ -221,7 +221,7 @@ final class SignUp {
   }
 
   /// Creates an invite and returns its code (shown once). Admin console
-  /// (Phase S6) and Helix Global self-issue use this.
+  /// (Phase S6) and Orbit Home self-issue use this.
   Future<({String id, String code, DateTime expiresAt})> issueInvite(
     SqlSession db, {
     String issuer = 'admin',

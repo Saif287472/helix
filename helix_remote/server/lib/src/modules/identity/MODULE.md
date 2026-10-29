@@ -208,7 +208,7 @@ envelopes; backup (S4) drops the AIK-keyed history backup on key change.
 | `HELIX_SMS_COUNTRIES` | calling codes that may get codes, `880,971` style, or `*` for all (default `880`) |
 | `HELIX_DEVICE_INACTIVE_DAYS` | revoke devices unused for longer (14 to 3650); 0 or unset, the default: never |
 
-Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
+Orbit Home (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
 
 ## Operator actions (`IdentityAdminApi`, `api.admin`)
 

@@ -6,7 +6,7 @@ rather than in a widget.
 
 ## What it is for
 
-A person either signs in to **Helix Global** (the default, and the only server
+A person either signs in to **Orbit Home** (the default, and the only server
 the app ever advertises) or joins a **personal server** behind a hidden corner
 or a shared link. After a v2 change to the protocol's `PhoneVerifyResponse` the
 flow learned something v1 could not know up front: whether the number already

@@ -1,5 +1,5 @@
 [Unit]
-Description=Helix Global health check, every 5 minutes
+Description=Orbit Home health check, every 5 minutes
 
 [Timer]
 OnBootSec=1min

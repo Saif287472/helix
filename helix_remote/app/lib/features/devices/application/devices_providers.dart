@@ -532,7 +532,7 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
     _session?.cancel();
     state = const LinkThisDeviceState();
     try {
-      // Sign-in opens on Helix Global: a device that has not chosen another
+      // Sign-in opens on Orbit Home: a device that has not chosen another
       // server links to that one.
       if (ref.read(serverUrlProvider) == null) {
         ref.read(accountsProvider.notifier).useServer(kGlobalServerUrl);

@@ -1,4 +1,4 @@
-# Moving Helix Global from the PC to a Linux VM
+# Moving Orbit Home from the PC to a Linux VM
 
 Written 2026-10-28 for the day the owner moves production off the Windows PC
 (`deploy/windows/`) to one Ubuntu or Debian VPS (`deploy/linux/`). Nothing here
@@ -8,7 +8,7 @@ the production database: every step is yours.
 
 ## What stays the same, and what must not change
 
-The apps and every other server know Helix Global by **its name**
+The apps and every other server know Orbit Home by **its name**
 (`helix.agiletechbd.com`), not its address. So:
 
 - **Keep the same domain.** Only the DNS record's IP changes. A different name
@@ -110,7 +110,7 @@ restoring it on the PC first.
 
 ## 4. After the move
 
-- Disable the Windows tasks (Helix Server, Caddy, TURN, Health Check, Helix Global
+- Disable the Windows tasks (Helix Server, Caddy, TURN, Health Check, Orbit Home
   backup) so two servers never run on one name. Keep the PC's data for a few
   weeks, read-only, as a last resort; then delete the disk contents safely.
 - Federation peers cache your signing key (it did not change) and your name (it

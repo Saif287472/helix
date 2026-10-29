@@ -70,7 +70,7 @@ metadata). The cryptography has **not been externally reviewed**
 - **Detection (2026-10-28)**: a refresh token presented twice ends that device's sessions and
   writes a `session_reuse` entry to the account's security log (shown on the Devices page), and
   counts `helix_auth_events_total`; a refresh racing a sign-out cannot renew itself.
-- **Residual risk**: On Helix Global, whoever controls the phone number (a SIM swap) can sign in
+- **Residual risk**: On Orbit Home, whoever controls the phone number (a SIM swap) can sign in
   by SMS code. That path replaces the account identity (`replace_existing`) and signs every other
   device out, so it is visible to the user and to contacts as an identity-key change, but it is not
   prevented.

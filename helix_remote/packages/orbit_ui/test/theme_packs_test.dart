@@ -80,12 +80,12 @@ void main() {
     await show(
       tester,
       const ThemeGalleryScreen(
-        model: ThemeGalleryModel(themes: themes, host: 'Helix Global'),
+        model: ThemeGalleryModel(themes: themes, host: 'Orbit Home'),
       ),
     );
     // A group title is an eyebrow, and an eyebrow is drawn upper case.
     expect(find.text('ON THIS PHONE', findRichText: true), findsOneWidget);
-    expect(find.text('ON HELIX GLOBAL', findRichText: true), findsOneWidget);
+    expect(find.text('ON ORBIT HOME', findRichText: true), findsOneWidget);
     expect(find.text('Orbit'), findsOneWidget);
     expect(find.text('In use'), findsOneWidget);
     expect(find.text('Built in'), findsOneWidget);

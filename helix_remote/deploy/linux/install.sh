@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup of a Helix Global VM (Ubuntu 22.04+/Debian 12+), run as root
+# One-time setup of an Orbit Home VM (Ubuntu 22.04+/Debian 12+), run as root
 # from this folder:  sudo ./install.sh [--domain helix.example.com]
 #
 # It does the parts that are safe to automate and says what it did:

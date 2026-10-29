@@ -1,7 +1,7 @@
 # Orbit Premium: plan
 
 Status: **all three phases built** (2026-10-28), switched off until the operator turns on `billing_enabled`.
-Scope: Helix Remote (Orbit) on Helix Global. Never `helix_local/`. The sections below are the design as agreed;
+Scope: Helix Remote (Orbit) on Orbit Home. Never `helix_local/`. The sections below are the design as agreed;
 where the build differs, section 0 and the as-built note in section 5 say so.
 
 ## 0. The three phases (decided 2026-10-28)
@@ -22,7 +22,7 @@ ringtone choice is cleared, but the choice of a theme is kept); the wake-up is a
 ## 1. What we are doing and what we are not
 
 Doing
-- Two plans on Helix Global: **Free** and **Orbit Premium**.
+- Two plans on Orbit Home: **Free** and **Orbit Premium**.
 - Premium sells capacity (devices, storage, file size, retention, backup size), unlimited calls, and the
   downloadable theme, ringtone and animation packs.
 - Free is a complete messenger with limited call time. Chats are unlimited on every plan.
@@ -192,9 +192,9 @@ Chosen design, as strict as possible (decided 2026-10-28):
   config and port to run. The relay UDP range is **widened** (decided) instead of split: both relays get a large
   range (for example 49160-49800, exact numbers to be set when building), which is a router and Windows
   Firewall change for you to make by hand, and an update to `deploy/coturn` and `V2_SERVER_HANDOFF.md`.
-- **Calls with another server.** The caller's own server meters (decided). A Helix Global account answering a
+- **Calls with another server.** The caller's own server meters (decided). An Orbit Home account answering a
   call from a personal server is not metered, and uses your relay for it; those calls are rare (personal
-  servers are a hidden advanced feature). Premium and Free Helix Global callers are metered as normal.
+  servers are a hidden advanced feature). Premium and Free Orbit Home callers are metered as normal.
 - **Already a problem today (verify):** credentials last one hour and the engine fetches them only when a
   call starts, so a call longer than an hour may lose its relay. The metering work will fix this by
   design, since a reservation can be longer or shorter than an hour.

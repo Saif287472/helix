@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Backs up Helix Global: a pg_dump of the helix database, a copy of the blob
+Backs up Orbit Home: a pg_dump of the helix database, a copy of the blob
 directory, and (optionally) an off-PC copy of the dump.
 
 .DESCRIPTION

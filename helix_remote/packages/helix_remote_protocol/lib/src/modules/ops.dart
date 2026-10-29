@@ -36,7 +36,7 @@ final class ReadyResponse {
 }
 
 enum RegistrationMode implements WireEnum {
-  /// Helix Global: phone number verification.
+  /// Orbit Home: phone number verification.
   phone('phone'),
 
   /// Personal servers: an invite code from the operator.

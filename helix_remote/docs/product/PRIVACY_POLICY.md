@@ -2,7 +2,7 @@
 
 Status: updated at Phase X (2026-10) for the v2 server; still a draft for product/release review
 
-> The canonical, versioned Helix Global Privacy Policy is maintained at
+> The canonical, versioned Orbit Home Privacy Policy is maintained at
 > [`docs/legal/privacy_policy.md`](../legal/privacy_policy.md). This document
 > remains an implementation-evidence checklist for the product and is not the
 > text shown to Global registrants. The table-by-table inventory is

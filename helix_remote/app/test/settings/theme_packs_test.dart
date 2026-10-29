@@ -867,7 +867,7 @@ void main() {
               name: 'Hologram',
             ),
           ]),
-          host: 'Helix Global',
+          host: 'Orbit Home',
         );
         expect(
           await container.read(themePackActionsProvider).install('synthwave'),
@@ -875,7 +875,7 @@ void main() {
         );
 
         final model = await gallery(container);
-        expect(model.host, 'Helix Global');
+        expect(model.host, 'Orbit Home');
         expect(model.status, ListStatus.ready);
         final byId = themesById(model.themes);
         expect(byId.keys, ['orbit', 'night', 'synthwave', 'hologram']);

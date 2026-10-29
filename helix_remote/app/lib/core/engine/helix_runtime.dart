@@ -60,7 +60,7 @@ final class HelixRuntime {
   /// stops ([leaseLost]) so the two never write ratchet state at once; whoever
   /// opens the next runtime gets the database back.
   ///
-  /// A runtime for Helix Global is certificate-pinned ([TlsPinPolicy]); the
+  /// A runtime for Orbit Home is certificate-pinned ([TlsPinPolicy]); the
   /// REST client and the realtime socket both go through the pinned client.
   ///
   /// [blobs] is where attachments live (`AppBlobStore` in the app);
