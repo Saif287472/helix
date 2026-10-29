@@ -102,6 +102,7 @@ final class ServerConfig {
     required this.logKeepDays,
     required this.logMaxBytesPerDay,
     required this.dbPoolSize,
+    required this.migrationLockTimeout,
     required this.maxInFlightBodyBytes,
     required this.metricsToken,
     required this.storageBudgetBytes,
@@ -166,6 +167,12 @@ final class ServerConfig {
   /// `HELIX_DB_POOL_SIZE`: connections in the main Postgres pool (the
   /// ephemeral store and the bus `LISTEN` have their own).
   final int dbPoolSize;
+
+  /// `HELIX_MIGRATION_LOCK_TIMEOUT_SECONDS`: how long a migration may wait
+  /// for a table lock at start (default 0: no bound, as a migration may
+  /// rewrite a table). A positive bound makes a blocked migration fail and
+  /// roll back instead of waiting behind a long transaction.
+  final Duration migrationLockTimeout;
 
   /// `HELIX_MAX_INFLIGHT_BODY_BYTES`: request body bytes this node buffers
   /// at once across all requests; over it requests get `unavailable`.
@@ -350,6 +357,12 @@ final class ServerConfig {
       min: 1024,
     );
     final dbPoolSize = integer('HELIX_DB_POOL_SIZE', 10, min: 2, max: 200);
+    final migrationLockSeconds = integer(
+      'HELIX_MIGRATION_LOCK_TIMEOUT_SECONDS',
+      0,
+      min: 0,
+      max: 3600,
+    );
     final logKeepDays = integer('HELIX_LOG_KEEP_DAYS', 14, min: 1, max: 3650);
     final logMaxBytesPerDay = integer(
       'HELIX_LOG_MAX_BYTES_PER_DAY',
@@ -414,6 +427,7 @@ final class ServerConfig {
       logKeepDays: logKeepDays,
       logMaxBytesPerDay: logMaxBytesPerDay,
       dbPoolSize: dbPoolSize,
+      migrationLockTimeout: Duration(seconds: migrationLockSeconds),
       maxInFlightBodyBytes: maxInFlightBodyBytes,
       metricsToken: metricsToken,
       storageBudgetBytes: storageBudgetBytes,

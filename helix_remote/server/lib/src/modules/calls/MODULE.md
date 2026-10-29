@@ -16,6 +16,12 @@
     A row is refreshed only by the same caller device (`ON CONFLICT … WHERE`
     the caller matches); anyone else's offer under that call id is not
     stored and pushes nothing.
+  - Every other signal (`answer`, `ice`, `update`, `end`) is relayed only to
+    the other side of a `call_legs` row the sender is in (and to the sender's
+    own other devices), so a stranger who knows a call id reaches nobody; the
+    rest are dropped without an error. A leg is written by the callee's server
+    when it routes the offer, and by the caller's server for a callee on
+    another server.
   - `end` clears the pending rows the sender is in (as caller, or as the
     callee device's account) and pushes `call_ended`, so ringing
     notifications stop. A third party knowing a call id clears nothing.

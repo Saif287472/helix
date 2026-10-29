@@ -45,7 +45,11 @@ final class HelixServer {
       if (!names.add(m.name)) throw StateError('module ${m.name} added twice');
     }
 
-    await MigrationRunner(platform.db, platform.schemas).run([
+    await MigrationRunner(
+      platform.db,
+      platform.schemas,
+      lockTimeout: platform.config.migrationLockTimeout,
+    ).run([
       platformMigrations,
       for (final m in modules)
         MigrationSet(module: m.name, migrations: m.migrations),

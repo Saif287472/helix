@@ -171,5 +171,13 @@ each remote server is relayed to through `MessageRelay` (the federation
 module), then the local part is stored. Stale device lists from several
 servers come back together, accounts qualified. Sends relayed by another
 server enter through `MessagingApi.receive` and follow the same path
-(`_accept`). Foreign senders are stored qualified: `sender_account` is
+(`_accept`). A send that reaches several servers is not atomic: a remote server may store
+its part before a later server answers `device_list_stale`, or before the local
+store commits. It converges by retry, not by rollback: the sender re-sends the
+same message id, each server keeps the first copy it accepted (`recordSend`,
+answered as `replayed`), and the servers that refused take the fresh one.
+Ephemeral frames (typing, call signals) check presence, not the device row, so
+a device revoked a moment ago may still get one until its socket closes on the
+`device.revoked` event; durable delivery locks the active device rows.
+Foreign senders are stored qualified: `sender_account` is
 `text` since migration 2.

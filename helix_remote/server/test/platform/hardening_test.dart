@@ -553,16 +553,19 @@ void main() {
     test('new settings have defaults and are validated', () {
       final config = ServerConfig.fromEnv(base());
       expect(config.dbPoolSize, 10);
+      expect(config.migrationLockTimeout, Duration.zero);
       expect(config.maxInFlightBodyBytes, 256 * 1024 * 1024);
       expect(config.trustRealIp, isFalse);
       expect(config.metricsToken, isNull);
       final custom = ServerConfig.fromEnv({
         ...base(),
         'HELIX_DB_POOL_SIZE': '25',
+        'HELIX_MIGRATION_LOCK_TIMEOUT_SECONDS': '30',
         'HELIX_TRUST_X_REAL_IP': 'yes',
         'HELIX_METRICS_TOKEN': 'm' * 32,
       });
       expect(custom.dbPoolSize, 25);
+      expect(custom.migrationLockTimeout, const Duration(seconds: 30));
       expect(custom.trustRealIp, isTrue);
       expect(custom.metricsToken, 'm' * 32);
       try {

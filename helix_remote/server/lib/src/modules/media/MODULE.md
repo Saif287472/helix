@@ -16,6 +16,14 @@ backup media of 400 MiB each and 4 GiB in all. An object keeps the retention it 
 created with, so a lapsed Premium deletes nothing early. With the flag off the
 table above is exact.
 
+**Who may download.** A `backup` object is its owner's alone. An `attachment` or
+`persistent` object is a bearer capability: any signed-in account that holds its
+(random, unguessable) id may fetch the bytes. This is deliberate. The server
+cannot know a message's recipients under end-to-end encryption, and the bytes
+are ciphertext whose key travels only inside the encrypted message. A leaked id
+therefore costs bandwidth and tells a stranger the object exists, not its
+content. Never log or display a media id.
+
 The object cap (`maxObjectsPerKind`) is independent of bytes: the smallest
 legal object is one byte, so without it a 4 GiB quota can become millions of
 rows that a sweep then deletes one blob at a time (AUD-5-3). Both the bytes

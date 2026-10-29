@@ -52,10 +52,17 @@ final class MigrationIntegrityError extends Error {
 /// Applies module migrations in order. Safe to run on every node at start:
 /// an advisory lock lets one node migrate while the others wait.
 final class MigrationRunner {
-  MigrationRunner(this.db, this.schemas);
+  MigrationRunner(
+    this.db,
+    this.schemas, {
+    this.lockTimeout = Duration.zero,
+  });
 
   final Db db;
   final SchemaNames schemas;
+
+  /// How long a migration statement may wait for a lock; zero waits for ever.
+  final Duration lockTimeout;
 
   static const _lockKey = 7240001;
 
@@ -63,7 +70,7 @@ final class MigrationRunner {
 
   Future<MigrationReport> run(List<MigrationSet> sets) async {
     _validate(sets);
-    // No statement or lock timeout: a migration builds indexes and rewrites
+    // No statement timeout, and no lock timeout unless one is set: a migration builds indexes and rewrites
     // tables, which may take minutes. The pool's connect timeout still
     // applies, and one advisory lock still decides which node migrates.
     return db.tx(
@@ -123,7 +130,7 @@ final class MigrationRunner {
       },
       retries: 0,
       statementTimeout: Duration.zero,
-      lockTimeout: Duration.zero,
+      lockTimeout: lockTimeout,
     );
   }
 

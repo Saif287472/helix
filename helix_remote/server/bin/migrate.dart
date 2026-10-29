@@ -19,7 +19,11 @@ Future<void> main() async {
     );
     final context = platform.moduleContext();
     final modules = [for (final create in allModules()) create(context)];
-    final report = await MigrationRunner(platform.db, platform.schemas).run([
+    final report = await MigrationRunner(
+      platform.db,
+      platform.schemas,
+      lockTimeout: platform.config.migrationLockTimeout,
+    ).run([
       platformMigrations,
       for (final m in modules)
         MigrationSet(module: m.name, migrations: m.migrations),
