@@ -66,9 +66,17 @@ void main() {
       groupErrorText(api(ErrorCode.deviceListStale)),
       contains('member list changed'),
     );
+    expect(groupErrorText(api(ErrorCode.rateLimited)), contains('too often'));
     expect(
-      groupErrorText(api(ErrorCode.rateLimited)),
-      contains('Too many attempts'),
+      groupErrorText(
+        const ApiException(
+          status: 429,
+          code: ErrorCode.rateLimited,
+          retryAfter: const Duration(minutes: 5),
+        ),
+      ),
+      contains('5 minutes'),
+      reason: 'the wait the server named, in minutes',
     );
     expect(
       groupErrorText(api(ErrorCode.federationUnavailable)),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/plans/server_retention.dart';
 import 'package:helix_remote/core/platform/account_slots.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
 import 'package:helix_remote/core/platform/storage_usage.dart';
@@ -928,6 +929,40 @@ void main() {
       );
     });
 
+    youTest('says how long the server keeps what you send', (tester) async {
+      useTallWindow(tester);
+      await pumpPage(
+        tester,
+        const StoragePage(),
+        overrides: [
+          ...a3bOverrides(settingsGateway: FakeSettingsGateway()),
+          serverRetentionProvider.overrideWith(_FixedRetention.new),
+        ],
+      );
+      await settle(tester);
+      expect(
+        find.textContaining('stay on the server for 30 days'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Orbit Premium keeps them 90 days'),
+        findsOneWidget,
+      );
+    });
+
+    youTest('says nothing about retention until the plan is known', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      await pumpPage(
+        tester,
+        const StoragePage(),
+        overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
+      );
+      await settle(tester);
+      expect(find.textContaining('stay on the server'), findsNothing);
+    });
+
     youTest('says when the figures cannot be read', (tester) async {
       useTallWindow(tester);
       final gateway = FakeSettingsGateway()
@@ -1051,4 +1086,10 @@ void main() {
       expect(find.text('Try again'), findsOneWidget);
     });
   });
+}
+
+final class _FixedRetention extends ServerRetention {
+  @override
+  ServerRetentionTerms? build() =>
+      const ServerRetentionTerms(days: 30, premiumDays: 90);
 }

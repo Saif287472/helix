@@ -95,6 +95,7 @@ class StoragePage extends ConsumerWidget {
         ),
         backupOverMobile:
             ref.watch(backupOverMobileSettingProvider).value ?? false,
+        serverNote: ref.watch(storageServerNoteProvider),
       ),
       actions: orbit.StorageActions(
         onFreeMedia: (chatId) => free(StorageFreeKind.photosVideos, chatId),

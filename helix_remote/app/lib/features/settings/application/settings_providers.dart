@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/notification_permission.dart';
+import 'package:helix_remote/core/plans/server_retention.dart';
 export 'package:helix_remote/core/push/push_registration.dart'
     show pushAvailableProvider, pushWakeupsProvider;
 import 'package:helix_remote/core/platform/account_slots.dart';
@@ -280,3 +281,9 @@ final class NotificationPermission extends AsyncNotifier<bool> {
     state = AsyncData(await source.request());
   }
 }
+
+/// What Storage says about how long the server keeps the files this account
+/// sends; empty until the plan has been read (the You page reads it).
+final storageServerNoteProvider = Provider<String>(
+  (ref) => ref.watch(serverRetentionProvider)?.note ?? '',
+);

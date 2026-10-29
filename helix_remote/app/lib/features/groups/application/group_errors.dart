@@ -40,6 +40,9 @@ String groupErrorText(
         GroupFailure.badMention => 'That person is not in the group.',
       };
     case ApiException(:final code):
+      // Too often: the server says how long, and the shared wording turns it
+      // into minutes.
+      if (code == ErrorCode.rateLimited) return describeFailure(error).message;
       return _apiText(code, context);
     case NetworkException() || SignedOutException():
       // Offline and signed out read the same on every screen.

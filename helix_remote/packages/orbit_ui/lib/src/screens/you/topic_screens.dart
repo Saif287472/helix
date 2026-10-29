@@ -1631,6 +1631,7 @@ class StorageModel {
     this.chats = const [],
     this.downloadSummary = '',
     this.backupOverMobile = false,
+    this.serverNote = '',
   });
 
   final StorageStatus status;
@@ -1646,6 +1647,10 @@ class StorageModel {
   final List<StorageChatItem> chats;
   final String downloadSummary;
   final bool backupOverMobile;
+
+  /// How long files you send stay on the server ("Files you send stay on the
+  /// server for 30 days..."); empty until the plan is known.
+  final String serverNote;
 }
 
 class StorageActions {
@@ -1856,6 +1861,7 @@ class StorageScreen extends StatelessWidget {
             ),
           ],
         ),
+        if (m.serverNote.isNotEmpty) _foot(m.serverNote),
       ],
     );
   }

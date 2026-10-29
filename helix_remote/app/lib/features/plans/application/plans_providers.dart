@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
+import 'package:helix_remote/core/plans/server_retention.dart';
 import 'package:helix_remote/core/push/push_wake_tick.dart';
 import 'package:helix_remote/core/theme/packs_locked.dart';
 import 'package:helix_remote/features/plans/application/plan_models.dart';
@@ -19,6 +20,20 @@ final billingPlanProvider = FutureProvider.autoDispose<PlanView>((ref) async {
   // Downloadable packs are Orbit Premium's while plans are on (ADR-035). Read
   // here, so the You page's row, the plan page and a wake-up all keep it true.
   ref.read(packsLockedProvider.notifier).set(plan.enabled && !plan.isPremium);
+  final more = plan.premiumLimits.attachmentRetentionDays;
+  ref
+      .read(serverRetentionProvider.notifier)
+      .set(
+        ServerRetentionTerms(
+          days: plan.limits.attachmentRetentionDays,
+          premiumDays:
+              plan.enabled &&
+                  !plan.isPremium &&
+                  more > plan.limits.attachmentRetentionDays
+              ? more
+              : null,
+        ),
+      );
   return plan;
 });
 
