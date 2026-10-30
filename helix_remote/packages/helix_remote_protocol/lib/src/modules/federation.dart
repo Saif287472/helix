@@ -69,17 +69,21 @@ final class AccountAddress {
 
 /// The bytes a server signs for an S2S request (Ed25519, header
 /// `x-helix-s2s-signature`, base64url):
-/// `helix-s2s-v1|<server>|<timestamp ms>|<METHOD>|<path?query>|<base64url(sha256(body))>`.
+/// `helix-s2s-v2|<server>|<audience>|<timestamp ms>|<METHOD>|<path?query>|<base64url(sha256(body))>`.
+/// [server] is the signing server's domain and [audience] the domain it is
+/// calling, so a request signed for one server is no good at another.
 List<int> s2sSigningInput({
   required String server,
+  required String audience,
   required int timestampMs,
   required String method,
   required String pathAndQuery,
   required List<int> body,
 }) => utf8.encode(
   [
-    'helix-s2s-v1',
+    'helix-s2s-v2',
     server,
+    audience,
     '$timestampMs',
     method.toUpperCase(),
     pathAndQuery,

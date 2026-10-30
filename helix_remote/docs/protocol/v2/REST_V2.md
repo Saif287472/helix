@@ -262,7 +262,7 @@ server relays.
 
 Every S2S request is signed. The headers are `x-helix-s2s-server` (the
 caller's domain), `x-helix-s2s-timestamp` (ms) and `x-helix-s2s-signature`:
-base64url Ed25519 over `helix-s2s-v1|<server>|<timestamp>|<METHOD>|<path?query>|<base64url(sha256(body))>`
+base64url Ed25519 over `helix-s2s-v2|<server>|<audience>|<timestamp>|<METHOD>|<path?query>|<base64url(sha256(body))>`
 (`s2sSigningInput`). The receiving server rejects a skew of more than
 ±5 minutes and any reused signature. The caller's key comes from
 `https://<domain>/.well-known/helix-server`. S2S clients never follow

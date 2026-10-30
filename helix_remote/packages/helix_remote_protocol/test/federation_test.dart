@@ -43,6 +43,7 @@ void main() {
   test('the signing input binds every part of a request', () {
     String input({
       String server = 'a.example',
+      String audience = 'b.example',
       int ts = 1,
       String method = 'post',
       String path = '/v1/s2s/messages',
@@ -50,6 +51,7 @@ void main() {
     }) => utf8.decode(
       s2sSigningInput(
         server: server,
+        audience: audience,
         timestampMs: ts,
         method: method,
         pathAndQuery: path,
@@ -57,8 +59,9 @@ void main() {
       ),
     );
     final base = input();
-    expect(base, startsWith('helix-s2s-v1|a.example|1|POST|/v1/s2s/messages|'));
-    expect(input(server: 'b.example'), isNot(base));
+    expect(base, startsWith('helix-s2s-v2|a.example|b.example|1|POST|/v1/s2s/messages|'));
+    expect(input(server: 'c.example'), isNot(base));
+    expect(input(audience: 'c.example'), isNot(base), reason: 'the receiver');
     expect(input(ts: 2), isNot(base));
     expect(input(method: 'GET'), isNot(base));
     expect(input(path: '/v1/s2s/keys/x'), isNot(base));

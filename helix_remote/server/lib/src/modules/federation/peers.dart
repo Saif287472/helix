@@ -423,15 +423,20 @@ final class FederationClient {
   static const answerMaxBytes = 8 * 1024 * 1024;
 
   /// The S2S headers for a request (also used by tests).
+  ///
+  /// [audience] is the domain the request is for; it is signed, and the
+  /// receiver refuses a signature made for another server.
   Future<Map<String, String>> sign(
     String method,
     String pathAndQuery,
-    List<int> body,
-  ) async {
+    List<int> body, {
+    required String audience,
+  }) async {
     final ts = clock.now().millisecondsSinceEpoch;
     final signature = await signer.sign(
       s2sSigningInput(
         server: config.localDomain,
+        audience: audience.toLowerCase(),
         timestampMs: ts,
         method: method,
         pathAndQuery: pathAndQuery,
@@ -466,7 +471,7 @@ final class FederationClient {
       ..headers.addAll({
         'accept': 'application/json',
         if (body != null) 'content-type': 'application/json',
-        ...await sign(method, signedPath, bytes),
+        ...await sign(method, signedPath, bytes, audience: domain),
       })
       ..bodyBytes = bytes;
     final http.Response response;

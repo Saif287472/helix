@@ -375,3 +375,21 @@ as a claim that they have. The residual risk "the server can roll group state
 back within an epoch" above is closed by binding the state version into the
 blob's AAD; a hostile server can still forge the attribution of a membership
 change.
+
+## Server-to-server signature audience, 2026-10-30
+
+A second-pass static audit found that the S2S signing input
+(`helix-s2s-v1|server|timestamp|METHOD|path?query|body hash`) named the signer
+but not the receiver. A malicious peer that received a request signed for it
+could forward the same bytes to a third server, which would verify them as the
+signer's and, because its replay cache had not seen them, accept them once (for
+a key fetch, that spends one of its account's one-time prekeys). Public key
+material only: no plaintext follows. The input is now
+`helix-s2s-v2|server|audience|timestamp|METHOD|path?query|body hash`, the
+sender signs the domain it is calling and the receiver verifies against its
+own `localDomain`; v1 is no longer accepted, so every federated server must
+upgrade together. Tests: `packages/helix_remote_protocol/test/federation_test.dart`
+(the input binds the audience) and `server/test/modules/federation_test.dart`
+(a signature for another server is refused with 401). This is a wire change
+between servers only; no client or APK change. The crypto remains unreviewed
+by a third party.

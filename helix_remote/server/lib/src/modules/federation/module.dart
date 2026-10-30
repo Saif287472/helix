@@ -488,6 +488,7 @@ final class FederationModule extends ModuleBase
     final uri = request.requestedUri;
     final input = s2sSigningInput(
       server: server,
+      audience: config.localDomain,
       timestampMs: ts,
       method: request.method,
       pathAndQuery: uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path,

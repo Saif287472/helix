@@ -206,6 +206,7 @@ void main() {
           'POST',
           Routes.s2sMessages.path,
           body,
+          audience: b.domain,
         );
         expect((await post(b, headers, body)).statusCode, 200);
         expect(
@@ -219,6 +220,18 @@ void main() {
           'POST',
           Routes.s2sMessages.path,
           other,
+          audience: b.domain,
+        );
+        final forThirdServer = await a.federation.client.sign(
+          'POST',
+          Routes.s2sMessages.path,
+          other,
+          audience: 'c.example',
+        );
+        expect(
+          (await post(b, forThirdServer, other)).statusCode,
+          401,
+          reason: 'a signature made for another server is refused here',
         );
         final tampered = [...other]..[other.length - 3] ^= 1;
         expect((await post(b, signed, tampered)).statusCode, 401);
@@ -227,6 +240,7 @@ void main() {
           'POST',
           Routes.s2sMessages.path,
           other,
+          audience: b.domain,
         );
         final stale = {
           ...old,
@@ -243,6 +257,7 @@ void main() {
           'POST',
           Routes.s2sMessages.path,
           body,
+          audience: b.domain,
         );
         final response = await post(b, headers, body);
         expect(response.statusCode, 403);
@@ -261,6 +276,7 @@ void main() {
             'POST',
             Routes.s2sMessages.path,
             body,
+            audience: b.domain,
           );
           // Spend the whole minute's budget, twice: the second hit is the one
           // that finds the bucket empty, so the peer's next body has nothing

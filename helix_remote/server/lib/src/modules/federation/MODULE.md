@@ -71,7 +71,11 @@ certificate.
 
 Every S2S request carries `x-helix-s2s-server`, `x-helix-s2s-timestamp` (ms)
 and `x-helix-s2s-signature`: Ed25519 over `s2sSigningInput`, which is
-`helix-s2s-v1|server|timestamp|METHOD|path?query|base64url(sha256(body))`.
+`helix-s2s-v2|server|audience|timestamp|METHOD|path?query|base64url(sha256(body))`,
+where `audience` is the receiving server's domain: the sender signs the domain
+it is calling and the receiver uses its own, so a request signed for one peer
+fails at any other (a peer cannot forward it on). v1 (no audience) is not
+accepted; every federated server must run this version.
 
 - **Clock skew:** at most ±5 minutes.
 - **Replay:** each signature is accepted once. The ephemeral store remembers
